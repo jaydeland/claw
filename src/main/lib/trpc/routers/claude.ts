@@ -102,13 +102,16 @@ function getClaudeCodeToken(): string | null {
 }
 
 /**
- * Get Claude Code custom settings (binary path, env vars, config dir, MCP settings)
+ * Get Claude Code custom settings (binary path, env vars, config dir, MCP settings, auth)
  */
 function getClaudeCodeSettings(): {
   customBinaryPath: string | null
   customEnvVars: Record<string, string>
   customConfigDir: string | null
   mcpServerSettings: Record<string, { enabled: boolean }>
+  authMode: "oauth" | "aws" | "apiKey"
+  apiKey: string | null
+  bedrockRegion: string | null
 } {
   try {
     const db = getDatabase()
@@ -119,7 +122,15 @@ function getClaudeCodeSettings(): {
       .get()
 
     if (!settings) {
-      return { customBinaryPath: null, customEnvVars: {}, customConfigDir: null, mcpServerSettings: {} }
+      return {
+        customBinaryPath: null,
+        customEnvVars: {},
+        customConfigDir: null,
+        mcpServerSettings: {},
+        authMode: "oauth",
+        apiKey: null,
+        bedrockRegion: "us-east-1",
+      }
     }
 
     const customEnvVars = settings.customEnvVars
@@ -130,15 +141,60 @@ function getClaudeCodeSettings(): {
       ? JSON.parse(settings.mcpServerSettings)
       : {}
 
+    // Decrypt API key if present
+    let apiKey: string | null = null
+    if (settings.apiKey) {
+      try {
+        if (!safeStorage.isEncryptionAvailable()) {
+          apiKey = Buffer.from(settings.apiKey, "base64").toString("utf-8")
+        } else {
+          const buffer = Buffer.from(settings.apiKey, "base64")
+          apiKey = safeStorage.decryptString(buffer)
+        }
+      } catch (error) {
+        console.error("[claude] Failed to decrypt API key:", error)
+      }
+    }
+
     return {
       customBinaryPath: settings.customBinaryPath,
       customEnvVars,
       customConfigDir: settings.customConfigDir,
       mcpServerSettings,
+      authMode: (settings.authMode || "oauth") as "oauth" | "aws" | "apiKey",
+      apiKey,
+      bedrockRegion: settings.bedrockRegion || "us-east-1",
     }
   } catch (error) {
     console.error("[claude] Error getting Claude Code settings:", error)
-    return { customBinaryPath: null, customEnvVars: {}, customConfigDir: null, mcpServerSettings: {} }
+    return {
+      customBinaryPath: null,
+      customEnvVars: {},
+      customConfigDir: null,
+      mcpServerSettings: {},
+      authMode: "oauth",
+      apiKey: null,
+      bedrockRegion: "us-east-1",
+    }
+  }
+}
+
+/**
+ * Check if AWS credentials are available
+ */
+function hasAwsCredentials(): boolean {
+  // Check for AWS environment variables
+  if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    return true
+  }
+
+  // Check for AWS credentials file
+  const awsCredsPath = path.join(os.homedir(), ".aws", "credentials")
+  try {
+    const stats = require("fs").statSync(awsCredsPath)
+    return stats.isFile() && stats.size > 0
+  } catch {
+    return false
   }
 }
 
@@ -414,7 +470,7 @@ export const claudeRouter = router({
             // Use custom config dir if provided, otherwise use per-subchat isolated
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
             // cross-chat contamination when multiple chats use the same project folder
-            const { customBinaryPath, customEnvVars, customConfigDir } = getClaudeCodeSettings()
+            const { customBinaryPath, customEnvVars, customConfigDir, authMode, apiKey, bedrockRegion } = getClaudeCodeSettings()
             const claudeConfigDir = customConfigDir || path.join(
               app.getPath("userData"),
               "claude-sessions",
@@ -458,15 +514,33 @@ export const claudeRouter = router({
               }
             }
 
-            // Build final env - only add OAuth token if we have one
-            const finalEnv = {
+            // Build final env - use appropriate auth method based on mode
+            const finalEnv: Record<string, string> = {
               ...claudeEnv,
               ...customEnvVars, // User-configured env vars (e.g., for Claude settings.json)
-              ...(claudeCodeToken && {
-                CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
-              }),
               // Use custom or isolated Claude config directory
               CLAUDE_CONFIG_DIR: claudeConfigDir,
+            }
+
+            // Add authentication based on mode
+            if (authMode === "oauth") {
+              // OAuth mode: get token from storage
+              if (claudeCodeToken) {
+                finalEnv.CLAUDE_CODE_OAUTH_TOKEN = claudeCodeToken
+              }
+            } else if (authMode === "apiKey" && apiKey) {
+              // API key mode: use API key directly
+              finalEnv.ANTHROPIC_API_KEY = apiKey
+              console.log("[claude] Using API key authentication mode")
+            } else if (authMode === "aws") {
+              // AWS mode: ensure AWS SDK can find credentials
+              const hasCreds = hasAwsCredentials()
+              if (!hasCreds) {
+                console.warn("[claude] AWS mode selected but no credentials found in env vars or ~/.aws/credentials")
+              }
+              // Set AWS region for Bedrock
+              finalEnv.AWS_REGION = bedrockRegion || "us-east-1"
+              console.log(`[claude] Using AWS Bedrock authentication mode (region: ${finalEnv.AWS_REGION})`)
             }
 
             // Use custom binary path if provided, otherwise use bundled binary
