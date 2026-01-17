@@ -33,6 +33,10 @@ export function AgentsClaudeCodeTab() {
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
   const [authCode, setAuthCode] = useState("")
   const [copied, setCopied] = useState(false)
+  // Advanced settings state
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [customBinaryPath, setCustomBinaryPath] = useState("")
+  const [envVarsText, setEnvVarsText] = useState("")
   const { trigger: triggerHaptic } = useHaptic()
 
   const utils = trpc.useUtils()
@@ -44,6 +48,24 @@ export function AgentsClaudeCodeTab() {
     error,
     refetch,
   } = trpc.claudeCode.getIntegration.useQuery()
+
+  // Query Claude Code settings
+  const {
+    data: claudeSettings,
+    isLoading: settingsLoading,
+    refetch: refetchSettings,
+  } = trpc.claudeSettings.getSettings.useQuery()
+
+  // Update settings mutation
+  const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
+    onSuccess: () => {
+      toast.success("Settings saved")
+      refetchSettings()
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to save settings")
+    },
+  })
 
   // Start auth mutation
   const startAuth = trpc.claudeCode.startAuth.useMutation({
@@ -120,6 +142,18 @@ export function AgentsClaudeCodeTab() {
     }
   }, [authStatus, flowState])
 
+  // Sync form with settings
+  useEffect(() => {
+    if (claudeSettings) {
+      setCustomBinaryPath(claudeSettings.customBinaryPath || "")
+      setEnvVarsText(
+        Object.entries(claudeSettings.customEnvVars)
+          .map(([k, v]) => `${k}=${v}`)
+          .join("\n") || ""
+      )
+    }
+  }, [claudeSettings])
+
   const handleStartAuth = () => {
     setFlowState({ step: "starting" })
     startAuth.mutate()
@@ -155,6 +189,24 @@ export function AgentsClaudeCodeTab() {
 
   const handleDisconnect = () => {
     disconnect.mutate()
+  }
+
+  // Parse env vars from text format (KEY=VALUE, one per line)
+  const parseEnvVars = (text: string): Record<string, string> => {
+    const result: Record<string, string> = {}
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith("#")) continue
+      const eqIndex = trimmed.indexOf("=")
+      if (eqIndex > 0) {
+        const key = trimmed.slice(0, eqIndex).trim()
+        const value = trimmed.slice(eqIndex + 1).trim()
+        if (key) {
+          result[key] = value
+        }
+      }
+    }
+    return result
   }
 
   if (isLoading) {
@@ -348,6 +400,70 @@ export function AgentsClaudeCodeTab() {
             </div>
           )}
         </div>
+
+        {/* Advanced Settings Section */}
+        {isConnected && (
+          <div className="bg-background rounded-lg border border-border overflow-hidden">
+            <button
+              onClick={() => setSettingsExpanded(!settingsExpanded)}
+              className="w-full p-4 flex items-center justify-between text-left hover:bg-muted/50 transition-colors"
+            >
+              <span className="text-sm font-medium">Advanced Settings</span>
+              <span className="text-muted-foreground">
+                {settingsExpanded ? "▼" : "▶"}
+              </span>
+            </button>
+            {settingsExpanded && (
+              <div className="p-4 pt-0 space-y-4 border-t border-border">
+                {/* Custom Binary Path */}
+                <div className="space-y-2">
+                  <Label className="text-sm">Custom Claude Binary Path</Label>
+                  <Input
+                    value={customBinaryPath}
+                    onChange={(e) => setCustomBinaryPath(e.target.value)}
+                    placeholder="/usr/local/bin/claude or leave empty for bundled"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to use the bundled Claude binary. Specify an absolute path to use your own build.
+                  </p>
+                </div>
+
+                {/* Custom Environment Variables */}
+                <div className="space-y-2">
+                  <Label className="text-sm">Custom Environment Variables</Label>
+                  <textarea
+                    value={envVarsText}
+                    onChange={(e) => setEnvVarsText(e.target.value)}
+                    placeholder="ANTHROPIC_MODEL=claude-sonnet-4-5-20250514&#10;CLAUDE_DEFAULT_MODEL=claude-sonnet-4-5-20250514"
+                    className="w-full min-h-[100px] p-2 text-sm font-mono bg-muted rounded-md border border-border resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    One variable per line in KEY=VALUE format. These affect Claude's settings.json behavior.
+                  </p>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => {
+                      updateSettings.mutate({
+                        customBinaryPath: customBinaryPath || null,
+                        customEnvVars: parseEnvVars(envVarsText),
+                      })
+                    }}
+                    disabled={updateSettings.isPending}
+                  >
+                    {updateSettings.isPending && (
+                      <IconSpinner className="h-4 w-4 mr-2" />
+                    )}
+                    Save Settings
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
