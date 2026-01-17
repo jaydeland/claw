@@ -33,12 +33,16 @@ export const claudeSettingsRouter = router({
           id: "default",
           customBinaryPath: null,
           customEnvVars: "{}",
+          customConfigDir: null,
+          mcpServerSettings: "{}",
         })
         .run()
       settings = {
         id: "default",
         customBinaryPath: null,
         customEnvVars: "{}",
+        customConfigDir: null,
+        mcpServerSettings: "{}",
         updatedAt: new Date(),
       }
     }
@@ -47,6 +51,11 @@ export const claudeSettingsRouter = router({
       customBinaryPath: settings.customBinaryPath,
       customEnvVars: parseJsonSafely<Record<string, string>>(
         settings.customEnvVars,
+        {}
+      ),
+      customConfigDir: settings.customConfigDir,
+      mcpServerSettings: parseJsonSafely<Record<string, { enabled: boolean }>>(
+        settings.mcpServerSettings ?? "{}",
         {}
       ),
     }
@@ -60,6 +69,8 @@ export const claudeSettingsRouter = router({
       z.object({
         customBinaryPath: z.string().nullable().optional(),
         customEnvVars: z.record(z.string()).optional(),
+        customConfigDir: z.string().nullable().optional(),
+        mcpServerSettings: z.record(z.object({ enabled: z.boolean() })).optional(),
       })
     )
     .mutation(({ input }) => {
@@ -82,6 +93,12 @@ export const claudeSettingsRouter = router({
             ...(input.customEnvVars !== undefined && {
               customEnvVars: JSON.stringify(input.customEnvVars),
             }),
+            ...(input.customConfigDir !== undefined && {
+              customConfigDir: input.customConfigDir,
+            }),
+            ...(input.mcpServerSettings !== undefined && {
+              mcpServerSettings: JSON.stringify(input.mcpServerSettings),
+            }),
             updatedAt: new Date(),
           })
           .where(eq(claudeCodeSettings.id, "default"))
@@ -93,6 +110,8 @@ export const claudeSettingsRouter = router({
             id: "default",
             customBinaryPath: input.customBinaryPath ?? null,
             customEnvVars: JSON.stringify(input.customEnvVars ?? {}),
+            customConfigDir: input.customConfigDir ?? null,
+            mcpServerSettings: JSON.stringify(input.mcpServerSettings ?? {}),
             updatedAt: new Date(),
           })
           .run()
