@@ -2,7 +2,7 @@
 
 **Last Updated:** 2025-01-17
 **Current Phase:** 03-claude-settings
-**Current Plan:** 03-claude-settings-01 (COMPLETE)
+**Current Plan:** 03-claude-settings-02 (COMPLETE)
 
 ## Completed Work
 
@@ -24,6 +24,16 @@
     - `src/renderer/features/agents/components/settings-tabs/agents-claude-code-tab.tsx` - Added Advanced Settings UI
   - Migration generated: `drizzle/0005_bouncy_sister_grimm.sql`
   - SUMMARY.md created at `.planning/phases/03-claude-settings/03-claude-settings-01-SUMMARY.md`
+
+- Plan 02: **03-claude-settings-02** - Complete
+  - All 6 tasks executed successfully
+  - 4 files modified + 1 migration created:
+    - `src/main/lib/db/schema/index.ts` - Added customConfigDir and mcpServerSettings fields
+    - `src/main/lib/trpc/routers/claude-settings.ts` - Updated router for new fields, added listMcpServers
+    - `src/main/lib/trpc/routers/claude.ts` - Uses custom config dir when provided
+    - `src/renderer/features/agents/components/settings-tabs/agents-claude-code-tab.tsx` - Added Config Directory input and MCP Servers list
+  - Migration generated: `drizzle/0006_rainy_the_watchers.sql`
+  - SUMMARY.md created at `.planning/phases/03-claude-settings/03-claude-settings-02-SUMMARY.md`
 
 ## Codebase Status
 
@@ -48,12 +58,14 @@
 - User ID stored as null
 - **NEW:** Users can configure custom Claude binary path via Advanced Settings
 - **NEW:** Users can set custom environment variables (e.g., ANTHROPIC_MODEL)
+- **NEW:** Users can specify custom Claude config directory (defaults to isolated per-subchat)
+- **NEW:** Users can view and enable/disable MCP servers from ~/.claude/
 - Settings persist in SQLite database (`claude_code_settings` table)
 
 ## Next Steps
 
 ### Phase 03: Claude Settings
-- Plan 01 is complete
+- Plans 01 and 02 are complete
 - Additional plans may be added for further Claude Code configuration options
 
 ### Phase Directory
