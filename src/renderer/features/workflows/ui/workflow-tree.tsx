@@ -10,6 +10,8 @@ import {
   workflowsTreeExpandedNodesAtom,
   workflowsToggleNodeAtom,
   selectedWorkflowNodeAtom,
+  workflowContentPathAtom,
+  workflowsPreviewOpenAtom,
   type WorkflowNode,
 } from "../atoms"
 
@@ -169,6 +171,8 @@ export function WorkflowTree() {
   const expandedNodes = useAtomValue(workflowsTreeExpandedNodesAtom)
   const toggleNode = useSetAtom(workflowsToggleNodeAtom)
   const setSelectedNode = useSetAtom(selectedWorkflowNodeAtom)
+  const setWorkflowContentPath = useSetAtom(workflowContentPathAtom)
+  const setWorkflowsPreviewOpen = useSetAtom(workflowsPreviewOpenAtom)
 
   const { data, isLoading } = trpc.workflows.getWorkflowGraph.useQuery()
 
@@ -185,6 +189,9 @@ export function WorkflowTree() {
       name: agent.name,
       sourcePath: agent.sourcePath,
     })
+    // Open preview with the agent's source file
+    setWorkflowContentPath(agent.sourcePath)
+    setWorkflowsPreviewOpen(true)
   }
 
   const handleSelectCommand = (command: CommandMetadata) => {
@@ -194,6 +201,9 @@ export function WorkflowTree() {
       name: command.name,
       sourcePath: command.sourcePath,
     })
+    // Open preview with the command's source file
+    setWorkflowContentPath(command.sourcePath)
+    setWorkflowsPreviewOpen(true)
   }
 
   const handleSelectSkill = (skill: SkillMetadata) => {
@@ -203,6 +213,9 @@ export function WorkflowTree() {
       name: skill.name,
       sourcePath: skill.sourcePath,
     })
+    // Open preview with the skill's source file
+    setWorkflowContentPath(skill.sourcePath)
+    setWorkflowsPreviewOpen(true)
   }
 
   if (isLoading) {
