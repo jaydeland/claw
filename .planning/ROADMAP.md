@@ -11,7 +11,7 @@ None
 ## Phases
 
 - [x] **Phase 1: Discovery Layer** — SDK/file parsing to find agents, commands, skills
-- [ ] **Phase 2: Tree Visualization** — Sidebar entries + nested dependency tree UI
+- [x] **Phase 2: Tree Visualization** — Sidebar entries + nested dependency tree UI
 - [ ] **Phase 3: Content Preview** — Full source code/file content on node click
 
 ## Phase Details
@@ -27,16 +27,15 @@ Plans:
 - [x] 01-01: Claude config directory integration + Agent and command discovery
 - [x] 01-02: Dependency extraction (skills → tools → MCP → calls)
 
-### Phase 2: Tree Visualization
+### Phase 2: Tree Visualization ✅
 **Goal**: Build sidebar UI with Agents/Commands entries and nested tree view of dependencies
 **Depends on**: Phase 1
 **Research**: Unlikely (standard React tree components; project has UI patterns established)
-**Plans**: TBD
+**Plans**: 2 (consolidated from 3 during planning for quick depth)
 
 Plans:
-- [ ] 02-01: Workflows sidebar section (Agents/Commands entries)
-- [ ] 02-02: Dependency tree component with nested rendering
-- [ ] 02-03: Node selection state management
+- [x] 02-01: Workflows state management (atoms for tree state, expand/collapse, selection)
+- [x] 02-02: Dependency tree component with nested rendering and sidebar integration
 
 ### Phase 3: Content Preview
 **Goal**: Show full source code/file content when clicking any node in the tree
@@ -54,5 +53,5 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Discovery Layer | 2/2 | Complete | 2025-01-18 |
-| 2. Tree Visualization | 0/3 | Not started | - |
+| 2. Tree Visualization | 2/2 | Complete | 2025-01-18 |
 | 3. Content Preview | 0/3 | Not started | - |
