@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process"
 import os from "node:os"
+import { getDevyardConfig } from "../devyard-config"
 
 export const FALLBACK_SHELL = os.platform() === "win32" ? "cmd.exe" : "/bin/sh"
 export const SHELL_CRASH_THRESHOLD_MS = 1000
@@ -207,6 +208,9 @@ const ALLOWED_ENV_VARS = new Set([
   "AWS_REGION",
   "AWS_CONFIG_FILE",
   "AWS_SHARED_CREDENTIALS_FILE",
+  "AWS_PROFILE_OPERATIONS", // Devyard: Operations account profile
+  "AWS_PROFILE_STAGING", // Devyard: Staging account profile
+  "AWS_STAGING_CLUSTER", // Devyard: EKS cluster ARN
 
   // Docker configuration
   "DOCKER_HOST",
@@ -218,6 +222,10 @@ const ALLOWED_ENV_VARS = new Set([
   // Kubernetes configuration
   "KUBECONFIG",
   "KUBE_CONFIG_PATH",
+
+  // Claude Code configuration (Devyard)
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_PLUGIN_DIR",
 
   // Cloud CLI tools
   "CLOUDSDK_CONFIG",
@@ -321,6 +329,13 @@ export function buildTerminalEnv(params: {
     AGENTS_WORKSPACE_NAME: workspaceName || "",
     AGENTS_WORKSPACE_PATH: workspacePath || "",
     AGENTS_ROOT_PATH: rootPath || "",
+  }
+
+  // Add Devyard configuration (if available)
+  const devyardConfig = getDevyardConfig()
+  if (devyardConfig.enabled && devyardConfig.env) {
+    console.log("[terminal-env] Adding Devyard configuration")
+    Object.assign(env, devyardConfig.env)
   }
 
   return env

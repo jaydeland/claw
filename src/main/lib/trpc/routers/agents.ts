@@ -10,6 +10,7 @@ import {
   VALID_AGENT_MODELS,
   type FileAgent,
 } from "./agent-utils"
+import { getScanLocations } from "./devyard-scan-helper"
 
 // Shared procedure for listing agents
 const listAgentsProcedure = publicProcedure
@@ -21,21 +22,21 @@ const listAgentsProcedure = publicProcedure
       .optional(),
   )
   .query(async ({ input }) => {
-    const userAgentsDir = path.join(os.homedir(), ".claude", "agents")
-    const userAgentsPromise = scanAgentsDirectory(userAgentsDir, "user")
+    const locations = getScanLocations("agents", input?.cwd)
 
-    let projectAgentsPromise = Promise.resolve<FileAgent[]>([])
-    if (input?.cwd) {
-      const projectAgentsDir = path.join(input.cwd, ".claude", "agents")
-      projectAgentsPromise = scanAgentsDirectory(projectAgentsDir, "project")
-    }
-
-    const [userAgents, projectAgents] = await Promise.all([
-      userAgentsPromise,
-      projectAgentsPromise,
+    // Scan all three directories in parallel
+    const [userAgents, projectAgents, devyardAgents] = await Promise.all([
+      scanAgentsDirectory(locations.userDir, "user"),
+      locations.projectDir
+        ? scanAgentsDirectory(locations.projectDir, "project")
+        : Promise.resolve<FileAgent[]>([]),
+      locations.devyardDir
+        ? scanAgentsDirectory(locations.devyardDir, "devyard")
+        : Promise.resolve<FileAgent[]>([]),
     ])
 
-    return [...projectAgents, ...userAgents]
+    // Return all agents, priority: project > devyard > user
+    return [...projectAgents, ...devyardAgents, ...userAgents]
   })
 
 export const agentsRouter = router({
@@ -57,19 +58,12 @@ export const agentsRouter = router({
   get: publicProcedure
     .input(z.object({ name: z.string(), cwd: z.string().optional() }))
     .query(async ({ input }) => {
+      const scanLocs = getScanLocations("agents", input.cwd)
+
       const locations = [
-        {
-          dir: path.join(os.homedir(), ".claude", "agents"),
-          source: "user" as const,
-        },
-        ...(input.cwd
-          ? [
-              {
-                dir: path.join(input.cwd, ".claude", "agents"),
-                source: "project" as const,
-              },
-            ]
-          : []),
+        { dir: scanLocs.userDir, source: "user" as const },
+        ...(scanLocs.projectDir ? [{ dir: scanLocs.projectDir, source: "project" as const }] : []),
+        ...(scanLocs.devyardDir ? [{ dir: scanLocs.devyardDir, source: "devyard" as const }] : []),
       ]
 
       for (const { dir, source } of locations) {

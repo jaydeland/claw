@@ -1,6 +1,14 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 
+// Export new workflow content atoms
+export {
+  selectedWorkflowCategoryAtom,
+  workflowFileListWidthAtom,
+  workflowFileListSearchAtom,
+  workflowViewModeAtom,
+} from "./workflows-content-atoms"
+
 // ============================================
 // WORKFOWS SIDEBAR STATE
 // ============================================
@@ -177,10 +185,12 @@ export const workflowsRefreshTriggerAtom = atom<number>(0)
 /**
  * Controls the open/closed state of the workflows preview panel
  * Persisted to localStorage as "workflows:preview-open"
+ * NOTE: This is deprecated - keeping for backward compatibility
+ * The new workflow UI uses WorkflowsContent with integrated detail panel
  */
 export const workflowsPreviewOpenAtom = atomWithStorage<boolean>(
   "workflows:preview-open",
-  false, // Default: closed initially
+  false, // Default: closed (deprecated)
   undefined,
   { getOnInit: true },
 )

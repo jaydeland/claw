@@ -4,11 +4,12 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { getScanLocations } from "./devyard-scan-helper"
 
 interface FileSkill {
   name: string
   description: string
-  source: "user" | "project"
+  source: "user" | "project" | "devyard"
   path: string
 }
 
@@ -33,7 +34,7 @@ function parseSkillMd(content: string): { name?: string; description?: string } 
  */
 async function scanSkillsDirectory(
   dir: string,
-  source: "user" | "project",
+  source: "user" | "project" | "devyard",
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
 
@@ -90,22 +91,21 @@ const listSkillsProcedure = publicProcedure
       .optional(),
   )
   .query(async ({ input }) => {
-    const userSkillsDir = path.join(os.homedir(), ".claude", "skills")
-    const userSkillsPromise = scanSkillsDirectory(userSkillsDir, "user")
+    const locations = getScanLocations("skills", input?.cwd)
 
-    let projectSkillsPromise = Promise.resolve<FileSkill[]>([])
-    if (input?.cwd) {
-      const projectSkillsDir = path.join(input.cwd, ".claude", "skills")
-      projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project")
-    }
-
-    // Scan both directories in parallel
-    const [userSkills, projectSkills] = await Promise.all([
-      userSkillsPromise,
-      projectSkillsPromise,
+    // Scan all three directories in parallel
+    const [userSkills, projectSkills, devyardSkills] = await Promise.all([
+      scanSkillsDirectory(locations.userDir, "user"),
+      locations.projectDir
+        ? scanSkillsDirectory(locations.projectDir, "project")
+        : Promise.resolve<FileSkill[]>([]),
+      locations.devyardDir
+        ? scanSkillsDirectory(locations.devyardDir, "devyard")
+        : Promise.resolve<FileSkill[]>([]),
     ])
 
-    return [...projectSkills, ...userSkills]
+    // Return all skills, priority: project > devyard > user
+    return [...projectSkills, ...devyardSkills, ...userSkills]
   })
 
 export const skillsRouter = router({

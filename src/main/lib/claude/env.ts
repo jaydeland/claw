@@ -4,6 +4,7 @@ import path from "node:path"
 import os from "node:os"
 import { app } from "electron"
 import { stripVTControlCharacters } from "node:util"
+import { getDevyardConfig } from "../devyard-config"
 
 // Cache the shell environment
 let cachedShellEnv: Record<string, string> | null = null
@@ -161,7 +162,7 @@ export function getClaudeShellEnvironment(): Record<string, string> {
 
 /**
  * Build the complete environment for Claude SDK.
- * Merges shell environment, process.env, and custom overrides.
+ * Merges shell environment, process.env, Devyard config, and custom overrides.
  */
 export function buildClaudeEnv(options?: {
   ghToken?: string
@@ -195,7 +196,14 @@ export function buildClaudeEnv(options?: {
   if (!env.SHELL) env.SHELL = "/bin/zsh"
   if (!env.TERM) env.TERM = "xterm-256color"
 
-  // 4. Add custom overrides
+  // 4. Add Devyard configuration (if available)
+  const devyardConfig = getDevyardConfig()
+  if (devyardConfig.enabled && devyardConfig.env) {
+    console.log("[claude-env] Adding Devyard configuration")
+    Object.assign(env, devyardConfig.env)
+  }
+
+  // 5. Add custom overrides
   if (options?.ghToken) {
     env.GH_TOKEN = options.ghToken
   }
@@ -209,7 +217,7 @@ export function buildClaudeEnv(options?: {
     }
   }
 
-  // 5. Mark as SDK entry
+  // 6. Mark as SDK entry
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts"
 
   return env

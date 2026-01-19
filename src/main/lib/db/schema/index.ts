@@ -106,7 +106,7 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   customEnvVars: text("custom_env_vars").notNull().default("{}"), // JSON object of custom env vars
   customConfigDir: text("custom_config_dir"), // Path to Claude config dir (null = use per-subchat isolated)
   mcpServerSettings: text("mcp_server_settings").notNull().default("{}"), // JSON object of MCP server overrides
-  authMode: text("auth_mode").notNull().default("oauth"), // "oauth" | "aws" | "apiKey"
+  authMode: text("auth_mode").notNull().default("oauth"), // "oauth" | "aws" | "apiKey" | "devyard"
   apiKey: text("api_key"), // API key for apiKey mode (encrypted)
   bedrockRegion: text("bedrock_region").notNull().default("us-east-1"), // AWS region for Bedrock
   anthropicBaseUrl: text("anthropic_base_url"), // Custom Anthropic API base URL (for API key mode)

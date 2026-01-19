@@ -46,7 +46,7 @@ export function AgentsClaudeCodeTab() {
     enabled: boolean
   }>>([])
   // Auth mode state
-  const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey">("oauth")
+  const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey" | "devyard">("oauth")
   const [apiKey, setApiKey] = useState("")
   const [bedrockRegion, setBedrockRegion] = useState("us-east-1")
   const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("")
@@ -71,6 +71,9 @@ export function AgentsClaudeCodeTab() {
 
   // Query MCP servers
   const { data: mcpData, refetch: refetchMcp } = trpc.claudeSettings.listMcpServers.useQuery()
+
+  // Query Devyard availability
+  const { data: devyardStatus } = trpc.claudeSettings.checkDevyard.useQuery()
 
   // Update settings mutation
   const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
@@ -279,11 +282,10 @@ export function AgentsClaudeCodeTab() {
             {/* Auth Mode Selector */}
             <div className="space-y-3 pb-4 border-b border-border">
               <Label className="text-sm font-medium">Authentication Mode</Label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant={authMode === "oauth" ? "default" : "outline"}
                   onClick={() => setAuthMode("oauth")}
-                  className="flex-1"
                   size="sm"
                 >
                   OAuth
@@ -291,7 +293,6 @@ export function AgentsClaudeCodeTab() {
                 <Button
                   variant={authMode === "aws" ? "default" : "outline"}
                   onClick={() => setAuthMode("aws")}
-                  className="flex-1"
                   size="sm"
                 >
                   AWS Bedrock
@@ -299,10 +300,16 @@ export function AgentsClaudeCodeTab() {
                 <Button
                   variant={authMode === "apiKey" ? "default" : "outline"}
                   onClick={() => setAuthMode("apiKey")}
-                  className="flex-1"
                   size="sm"
                 >
                   API Key
+                </Button>
+                <Button
+                  variant={authMode === "devyard" ? "default" : "outline"}
+                  onClick={() => setAuthMode("devyard")}
+                  size="sm"
+                >
+                  Devyard
                 </Button>
               </div>
 
@@ -454,6 +461,48 @@ export function AgentsClaudeCodeTab() {
                       Enter an API key above to continue
                     </p>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Devyard Mode Status */}
+            {authMode === "devyard" && flowState.step === "idle" && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                    <Check className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Devyard Mode
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Using Devyard AWS/Kubernetes configuration
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-muted rounded-lg space-y-1 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">VIDYARD_PATH:</span>
+                    <span className="truncate ml-2">{devyardStatus?.path || "Not set"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status:</span>
+                    <span>{devyardStatus?.available ? "✓ Available" : "✗ Not available"}</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-border/50">
+                    <span className="text-muted-foreground">Config Dir:</span>
+                    <span className="truncate ml-2">{devyardStatus?.claudeConfigDir || "~/devyard/claude"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plugin Dir:</span>
+                    <span className="truncate ml-2">{devyardStatus?.claudePluginDir || "~/devyard/claude/plugin"}</span>
+                  </div>
+                </div>
+                {!devyardStatus?.available && (
+                  <p className="text-xs text-destructive">
+                    Devyard not detected. Set VIDYARD_PATH environment variable.
+                  </p>
                 )}
               </div>
             )}

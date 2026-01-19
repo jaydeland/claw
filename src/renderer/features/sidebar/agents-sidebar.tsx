@@ -24,6 +24,7 @@ import {
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
+import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
@@ -214,6 +215,7 @@ export function AgentsSidebar({
   onChatSelect,
 }: AgentsSidebarProps) {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
+  const setSelectedCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const [isSidebarHovered, setIsSidebarHovered] = useState(false)
@@ -750,6 +752,10 @@ export function AgentsSidebar({
     // In multi-select mode, clicking on the item still navigates to the chat
     // Only clicking on the checkbox toggles selection
     setSelectedChatId(chatId)
+
+    // Clear workflow category when chat is selected (to show chat view)
+    setSelectedCategory(null)
+
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()

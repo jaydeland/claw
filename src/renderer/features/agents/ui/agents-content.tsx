@@ -49,6 +49,8 @@ import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null }) // Desktop mock
 import { Button } from "../../../components/ui/button"
+import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
+import { WorkflowsContent } from "../../workflows/ui/workflows-content"
 import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
@@ -60,6 +62,15 @@ const useIsAdmin = () => false
 // Main Component
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
+  const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
+
+  // Debug logging
+  useEffect(() => {
+    console.log("[agents-content] selectedChatId:", selectedChatId)
+    console.log("[agents-content] selectedWorkflowCategory:", selectedWorkflowCategory)
+    console.log("[agents-content] Should show workflows?", selectedWorkflowCategory && !selectedChatId)
+  }, [selectedChatId, selectedWorkflowCategory])
+
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [previewSidebarOpen, setPreviewSidebarOpen] = useAtom(
@@ -915,6 +926,11 @@ export function AgentsContent() {
   }
 
   // Desktop layout
+  // If workflow category is selected, show workflow browser (takes priority over chat)
+  if (selectedWorkflowCategory) {
+    return <WorkflowsContent />
+  }
+
   return (
     <>
       <div className="flex h-full">

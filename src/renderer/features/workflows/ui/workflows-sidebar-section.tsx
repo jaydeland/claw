@@ -1,57 +1,91 @@
 "use client"
 
 import React from "react"
-import { motion, AnimatePresence } from "motion/react"
-import { ChevronDown, Workflow } from "lucide-react"
-import { useAtom, useAtomValue } from "jotai"
+import { Network, Workflow, Cpu } from "lucide-react"
+import { useAtom } from "jotai"
 import { cn } from "../../../lib/utils"
-import { workflowsSidebarOpenAtom } from "../atoms"
-import { WorkflowTree } from "./workflow-tree"
+import { selectedWorkflowCategoryAtom } from "../atoms"
 
 interface WorkflowsSidebarSectionProps {
   className?: string
 }
 
-export function WorkflowsSidebarSection({ className }: WorkflowsSidebarSectionProps) {
-  const [isOpen, setIsOpen] = useAtom(workflowsSidebarOpenAtom)
+export function WorkflowsSidebarSection({
+  className,
+}: WorkflowsSidebarSectionProps) {
+  const [selectedCategory, setSelectedCategory] = useAtom(
+    selectedWorkflowCategoryAtom
+  )
+
+  const handleCategoryClick = (
+    category: "agents" | "commands" | "skills"
+  ) => {
+    console.log("[workflow-category] Button clicked:", category)
+    console.log("[workflow-category] Current category:", selectedCategory)
+
+    // Toggle: if clicking the active category, deselect it
+    if (selectedCategory === category) {
+      console.log("[workflow-category] Deselecting category")
+      setSelectedCategory(null)
+    } else {
+      console.log("[workflow-category] Setting category to:", category)
+      setSelectedCategory(category)
+    }
+  }
 
   return (
-    <div className={cn("border-t border-border/50", className)}>
-      {/* Section Header */}
+    <div className={cn("border-t border-border/50 py-2 space-y-1", className)}>
+      {/* Debug indicator */}
+      {selectedCategory && (
+        <div className="px-3 py-1 mx-2 mb-2 text-xs bg-purple-500 text-white rounded">
+          Selected: {selectedCategory}
+        </div>
+      )}
+
+      {/* Agents Button */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => handleCategoryClick("agents")}
         className={cn(
-          "flex w-full items-center gap-2 px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/50",
+          "flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors rounded-md mx-2",
+          selectedCategory === "agents"
+            ? "bg-accent text-accent-foreground font-medium"
+            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
         )}
       >
-        <motion.div
-          animate={{ rotate: isOpen ? 0 : -90 }}
-          transition={{ duration: 0.15 }}
-          className="flex-shrink-0"
-        >
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </motion.div>
-        <Workflow className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        <span className="flex-1 text-left">Workflows</span>
+        <Network className="h-4 w-4 flex-shrink-0" />
+        <span className="flex-1 text-left">Agents</span>
       </button>
 
-      {/* Section Content */}
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="overflow-hidden"
-          >
-            <div className="px-2 pb-2">
-              <WorkflowTree />
-            </div>
-          </motion.div>
+      {/* Commands Button */}
+      <button
+        type="button"
+        onClick={() => handleCategoryClick("commands")}
+        className={cn(
+          "flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors rounded-md mx-2",
+          selectedCategory === "commands"
+            ? "bg-accent text-accent-foreground font-medium"
+            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
         )}
-      </AnimatePresence>
+      >
+        <Workflow className="h-4 w-4 flex-shrink-0" />
+        <span className="flex-1 text-left">Commands</span>
+      </button>
+
+      {/* Skills Button */}
+      <button
+        type="button"
+        onClick={() => handleCategoryClick("skills")}
+        className={cn(
+          "flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors rounded-md mx-2",
+          selectedCategory === "skills"
+            ? "bg-accent text-accent-foreground font-medium"
+            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+        )}
+      >
+        <Cpu className="h-4 w-4 flex-shrink-0" />
+        <span className="flex-1 text-left">Skills</span>
+      </button>
     </div>
   )
 }

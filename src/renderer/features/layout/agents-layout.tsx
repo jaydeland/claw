@@ -17,6 +17,7 @@ import { selectedAgentChatIdAtom, selectedProjectAtom } from "../agents/atoms"
 import {
   workflowsPreviewOpenAtom,
   workflowsPreviewWidthAtom,
+  selectedWorkflowCategoryAtom,
 } from "../workflows/atoms"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
@@ -95,6 +96,7 @@ export function AgentsLayout() {
   const [sidebarWidth, setSidebarWidth] = useAtom(agentsSidebarWidthAtom)
   const [previewOpen, setPreviewOpen] = useAtom(workflowsPreviewOpenAtom)
   const [previewWidth, setPreviewWidth] = useAtom(workflowsPreviewWidthAtom)
+  const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const [settingsOpen, setSettingsOpen] = useAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [shortcutsOpen, setShortcutsOpen] = useAtom(
@@ -102,9 +104,27 @@ export function AgentsLayout() {
   )
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
+  const [selectedCategory, setSelectedCategory] = useAtom(selectedWorkflowCategoryAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
+
+  // Close old workflow preview panel when using new workflow UI
+  // Also close it on initial mount to prevent it from showing up
+  useEffect(() => {
+    if (selectedCategory || previewOpen) {
+      setPreviewOpen(false)
+    }
+  }, [selectedCategory, previewOpen, setPreviewOpen])
+
+  // Force close preview panel on mount
+  useEffect(() => {
+    setPreviewOpen(false)
+  }, [])
+
+  // Note: We DON'T clear workflow category when chat is selected anymore
+  // The workflow view takes priority when category is selected
+  // User can return to chat by clicking category button again (toggle off)
 
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =

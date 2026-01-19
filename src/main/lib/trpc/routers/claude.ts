@@ -16,6 +16,7 @@ import {
 import { chats, claudeCodeCredentials, claudeCodeSettings, getDatabase, subChats } from "../../db"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
+import { getDevyardConfig } from "../../devyard-config"
 
 /**
  * Parse @[agent:name] and @[skill:name] mentions from prompt text
@@ -109,7 +110,7 @@ function getClaudeCodeSettings(): {
   customEnvVars: Record<string, string>
   customConfigDir: string | null
   mcpServerSettings: Record<string, { enabled: boolean }>
-  authMode: "oauth" | "aws" | "apiKey"
+  authMode: "oauth" | "aws" | "apiKey" | "devyard"
   apiKey: string | null
   bedrockRegion: string | null
   anthropicBaseUrl: string | null
@@ -158,12 +159,25 @@ function getClaudeCodeSettings(): {
       }
     }
 
+    // Determine config directory based on auth mode
+    let configDir = settings.customConfigDir
+    const authMode = (settings.authMode || "oauth") as "oauth" | "aws" | "apiKey" | "devyard"
+
+    // If Devyard mode is active, use Devyard's Claude config directory
+    if (authMode === "devyard" && !configDir) {
+      const devyardConfig = getDevyardConfig()
+      if (devyardConfig.enabled && devyardConfig.claudeConfigDir) {
+        configDir = devyardConfig.claudeConfigDir
+        console.log(`[claude] Using Devyard Claude config: ${configDir}`)
+      }
+    }
+
     return {
       customBinaryPath: settings.customBinaryPath,
       customEnvVars,
-      customConfigDir: settings.customConfigDir,
+      customConfigDir: configDir,
       mcpServerSettings,
-      authMode: (settings.authMode || "oauth") as "oauth" | "aws" | "apiKey",
+      authMode,
       apiKey,
       bedrockRegion: settings.bedrockRegion || "us-east-1",
       anthropicBaseUrl: settings.anthropicBaseUrl || null,

@@ -17,7 +17,7 @@
       "claude-code": {
         "pkg-path": "claude-code",
         "pkg-group": "claude-code",
-        "version": "2.1.9"
+        "version": "2.1.5"
       },
       "devspace": {
         "pkg-path": "devspace",
@@ -89,6 +89,10 @@
       "pyright": {
         "pkg-path": "pyright"
       },
+      "python311": {
+        "pkg-path": "python311",
+        "priority": 10
+      },
       "python313": {
         "pkg-path": "python313"
       },
@@ -131,9 +135,13 @@
       "AWS_PROFILE_STAGING": "SSO-Staging-075505783641",
       "AWS_REGION": "us-east-1",
       "AWS_STAGING_CLUSTER": "arn:aws:eks:us-east-1:075505783641:cluster/staging-cluster",
-      "FLOX_ENVIRONMENT": "1"
+      "ELECTRON_OVERRIDE_DIST_PATH": "/nix/store/29ac4qwh9nri55cla2fhgbjqvhpamgzk-electron-33.0.2/Applications",
+      "FLOX_ENVIRONMENT": "1",
+      "VERCEL": "1"
     },
-    "hook": {},
+    "hook": {
+      "on-activate": "  # Setup electron for Flox-provided Electron binary\n  if [ -d \"$FLOX_ENV_PROJECT/node_modules/electron\" ]; then\n    # Create path.txt\n    echo -n \"Electron.app/Contents/MacOS/Electron\" > \"$FLOX_ENV_PROJECT/node_modules/electron/path.txt\"\n    # Create symlink to Electron.app (if not exists)\n    if [ ! -e \"$FLOX_ENV_PROJECT/node_modules/electron/dist\" ]; then\n      ln -s /nix/store/29ac4qwh9nri55cla2fhgbjqvhpamgzk-electron-33.0.2/Applications \"$FLOX_ENV_PROJECT/node_modules/electron/dist\"\n    fi\n  fi\n"
+    },
     "profile": {
       "common": "  export FLOX_ENVIRONMENT=1\n  export BASE_PLT_DIR=${VIDYARD_PATH}/devyard\n  export AWS_SHARED_CREDENTIALS_FILE=\"${BASE_PLT_DIR}/.aws-creds\"\n  export AWS_CONFIG_FILE=\"${BASE_PLT_DIR}/.aws-profile\"\n  export KUBECONFIG=\"${BASE_PLT_DIR}/.kube.config\"\n  export VY_GH_PKG_TOKEN=$(gh auth token)\n\n  # Ensure the NAMESAPCE ENV var is correctly set\n\tif [ -z \"$NAMESPACE\" ]; then\n\t\texport NAMESPACE=$(echo \"${DEVELOPER_EMAIL:-$(git config --get user.email)}\" | cut -d '@' -f 1 | tr -d '.')\n\tfi\n\n  # Update the RC file with the devyard source\n  if [ -f \"$HOME/.zshrc\" ]; then\n      RC_FILE=\"$HOME/.zshrc\"\n  elif [ -f $HOME/.bashrc ]; then\n      RC_FILE=\"$HOME/.bashrc\"\n  else\n      gum style --padding \"1 4\" --border double --border-foreground 57 --align center \"Unsupported shell. Please add the following to your profile RC file\" \"source \\\"$VIDYARD_PATH/devyard/.devyard_bashrc\\\"\"\n      exit 1\n  fi\n  RC_LINE='source \"${VIDYARD_PATH}/devyard/.devyard_bashrc\"'\n  if ! grep -Fxq \"$RC_LINE\" \"$RC_FILE\"; then\n      echo \"$RC_LINE\" >> \"$RC_FILE\"\n      source \"${VIDYARD_PATH}/devyard/.devyard_bashrc\"\n  fi\n\n\n  # Skip electron binary download from npm (prevents duplication)\n  export ELECTRON_SKIP_BINARY_DOWNLOAD=1\n\n  # Helpful activation message\n  echo \"✓ 1Code development environment activated\"\n  echo \"  Bun: $(bun --version)\"\n  echo \"  Electron: $(electron --version)\"\n  echo \"  TypeScript LSP: $(which typescript-language-server) (via devyard)\"\n"
     },
@@ -266,27 +274,28 @@
     {
       "attr_path": "claude-code",
       "broken": false,
-      "derivation": "/nix/store/85sv3r7acgajma4qlij65bpmg6sbjxnk-claude-code-2.1.9.drv",
+      "derivation": "/nix/store/6mgvszpwhc9l4163a8vdhar6b2f3xzp8-claude-code-2.1.5.drv",
       "description": "Agentic coding tool that lives in your terminal, understands your codebase, and helps you code faster",
       "install_id": "claude-code",
       "license": "Unfree",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
-      "name": "claude-code-2.1.9",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=1412caf7bf9e660f2f962917c14b1ea1c3bc695e",
+      "name": "claude-code-2.1.5",
       "pname": "claude-code",
-      "rev": "e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
-      "rev_count": 928726,
-      "rev_date": "2026-01-16T12:01:49Z",
-      "scrape_date": "2026-01-17T03:20:15.460959Z",
+      "rev": "1412caf7bf9e660f2f962917c14b1ea1c3bc695e",
+      "rev_count": 927018,
+      "rev_date": "2026-01-13T12:03:11Z",
+      "scrape_date": "2026-01-16T03:15:54.005267Z",
       "stabilities": [
+        "staging",
         "unstable"
       ],
       "unfree": true,
-      "version": "2.1.9",
+      "version": "2.1.5",
       "outputs_to_install": [
         "out"
       ],
       "outputs": {
-        "out": "/nix/store/9mcg6zhx1m176zxafbqf83njpq58a5v9-claude-code-2.1.9"
+        "out": "/nix/store/qrhycd79pm7vp5a7qvbzxlmqv5vcbp55-claude-code-2.1.5"
       },
       "system": "aarch64-darwin",
       "group": "claude-code",
@@ -295,27 +304,28 @@
     {
       "attr_path": "claude-code",
       "broken": false,
-      "derivation": "/nix/store/7z39lqwg1jbjq53ssbyd7aqm40k41zis-claude-code-2.1.9.drv",
+      "derivation": "/nix/store/646fps25mjbsgfj1n9c2m5z72wbk7xyn-claude-code-2.1.5.drv",
       "description": "Agentic coding tool that lives in your terminal, understands your codebase, and helps you code faster",
       "install_id": "claude-code",
       "license": "Unfree",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
-      "name": "claude-code-2.1.9",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=1412caf7bf9e660f2f962917c14b1ea1c3bc695e",
+      "name": "claude-code-2.1.5",
       "pname": "claude-code",
-      "rev": "e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
-      "rev_count": 928726,
-      "rev_date": "2026-01-16T12:01:49Z",
-      "scrape_date": "2026-01-17T03:59:48.558575Z",
+      "rev": "1412caf7bf9e660f2f962917c14b1ea1c3bc695e",
+      "rev_count": 927018,
+      "rev_date": "2026-01-13T12:03:11Z",
+      "scrape_date": "2026-01-16T03:51:11.080826Z",
       "stabilities": [
+        "staging",
         "unstable"
       ],
       "unfree": true,
-      "version": "2.1.9",
+      "version": "2.1.5",
       "outputs_to_install": [
         "out"
       ],
       "outputs": {
-        "out": "/nix/store/lga3ikk364kx3sl7fcf0lhqj1995bddb-claude-code-2.1.9"
+        "out": "/nix/store/wypylwm24gcm2gk9i85a187gxa721dg6-claude-code-2.1.5"
       },
       "system": "aarch64-linux",
       "group": "claude-code",
@@ -324,27 +334,28 @@
     {
       "attr_path": "claude-code",
       "broken": false,
-      "derivation": "/nix/store/cqwca5s4mp0kzcci7bvbbh1wxxx8xg0d-claude-code-2.1.9.drv",
+      "derivation": "/nix/store/qj0sqyb6swiq7ra28w3vkp9qidb55kzp-claude-code-2.1.5.drv",
       "description": "Agentic coding tool that lives in your terminal, understands your codebase, and helps you code faster",
       "install_id": "claude-code",
       "license": "Unfree",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
-      "name": "claude-code-2.1.9",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=1412caf7bf9e660f2f962917c14b1ea1c3bc695e",
+      "name": "claude-code-2.1.5",
       "pname": "claude-code",
-      "rev": "e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
-      "rev_count": 928726,
-      "rev_date": "2026-01-16T12:01:49Z",
-      "scrape_date": "2026-01-17T04:36:58.919483Z",
+      "rev": "1412caf7bf9e660f2f962917c14b1ea1c3bc695e",
+      "rev_count": 927018,
+      "rev_date": "2026-01-13T12:03:11Z",
+      "scrape_date": "2026-01-16T04:22:53.000986Z",
       "stabilities": [
+        "staging",
         "unstable"
       ],
       "unfree": true,
-      "version": "2.1.9",
+      "version": "2.1.5",
       "outputs_to_install": [
         "out"
       ],
       "outputs": {
-        "out": "/nix/store/p9hisnklrasx1k2ja9vkys3si6pwyqlv-claude-code-2.1.9"
+        "out": "/nix/store/7n798c2arpwlnfzzqm3688wnfifpc5df-claude-code-2.1.5"
       },
       "system": "x86_64-darwin",
       "group": "claude-code",
@@ -353,27 +364,28 @@
     {
       "attr_path": "claude-code",
       "broken": false,
-      "derivation": "/nix/store/rlv4d2l8l7d0xxfp5v4bhiwcw7815b21-claude-code-2.1.9.drv",
+      "derivation": "/nix/store/1d9nj60l58lnwgf2gsny3v53k7ksd386-claude-code-2.1.5.drv",
       "description": "Agentic coding tool that lives in your terminal, understands your codebase, and helps you code faster",
       "install_id": "claude-code",
       "license": "Unfree",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
-      "name": "claude-code-2.1.9",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=1412caf7bf9e660f2f962917c14b1ea1c3bc695e",
+      "name": "claude-code-2.1.5",
       "pname": "claude-code",
-      "rev": "e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
-      "rev_count": 928726,
-      "rev_date": "2026-01-16T12:01:49Z",
-      "scrape_date": "2026-01-17T05:18:17.712887Z",
+      "rev": "1412caf7bf9e660f2f962917c14b1ea1c3bc695e",
+      "rev_count": 927018,
+      "rev_date": "2026-01-13T12:03:11Z",
+      "scrape_date": "2026-01-16T04:59:40.938002Z",
       "stabilities": [
+        "staging",
         "unstable"
       ],
       "unfree": true,
-      "version": "2.1.9",
+      "version": "2.1.5",
       "outputs_to_install": [
         "out"
       ],
       "outputs": {
-        "out": "/nix/store/rrlr9kyddqin3db6bsj101d6c01p4vm6-claude-code-2.1.9"
+        "out": "/nix/store/6fwrn0by48704rddgz87v6ssig88pdnl-claude-code-2.1.5"
       },
       "system": "x86_64-linux",
       "group": "claude-code",
@@ -1812,6 +1824,242 @@
       "priority": 5
     },
     {
+      "attr_path": "uv",
+      "broken": false,
+      "derivation": "/nix/store/gdwhs1agkjqcwvf2lp1819r37223myb7-uv-0.8.23.drv",
+      "description": "Extremely fast Python package installer and resolver, written in Rust",
+      "install_id": "uv",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "name": "uv-0.8.23",
+      "pname": "uv",
+      "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "rev_count": 888552,
+      "rev_date": "2025-11-02T19:18:41Z",
+      "scrape_date": "2025-11-04T00:37:39.426966Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.8.23",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/3q234qjj0cvdb8yjaiq64gk2q7r1nwcx-uv-0.8.23"
+      },
+      "system": "aarch64-darwin",
+      "group": "uv",
+      "priority": 5
+    },
+    {
+      "attr_path": "uv",
+      "broken": false,
+      "derivation": "/nix/store/n2z9jrgjrzc7qwmkbz8gas7s64c2gnwh-uv-0.8.23.drv",
+      "description": "Extremely fast Python package installer and resolver, written in Rust",
+      "install_id": "uv",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "name": "uv-0.8.23",
+      "pname": "uv",
+      "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "rev_count": 888552,
+      "rev_date": "2025-11-02T19:18:41Z",
+      "scrape_date": "2025-11-05T16:32:06.863960Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.8.23",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/ymbshk79amchwmhvnh8xh5f1608a3p80-uv-0.8.23"
+      },
+      "system": "aarch64-linux",
+      "group": "uv",
+      "priority": 5
+    },
+    {
+      "attr_path": "uv",
+      "broken": false,
+      "derivation": "/nix/store/sgkrry1qcip83fwplpa1v7i7alv809in-uv-0.8.23.drv",
+      "description": "Extremely fast Python package installer and resolver, written in Rust",
+      "install_id": "uv",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "name": "uv-0.8.23",
+      "pname": "uv",
+      "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "rev_count": 888552,
+      "rev_date": "2025-11-02T19:18:41Z",
+      "scrape_date": "2025-11-05T16:57:12.042584Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.8.23",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/lnl1zz7f97pqj6bqzqpglf0lhgcy5pk0-uv-0.8.23"
+      },
+      "system": "x86_64-darwin",
+      "group": "uv",
+      "priority": 5
+    },
+    {
+      "attr_path": "uv",
+      "broken": false,
+      "derivation": "/nix/store/d4xl0ip2nr9diprwv6grvkwdh14ai4xd-uv-0.8.23.drv",
+      "description": "Extremely fast Python package installer and resolver, written in Rust",
+      "install_id": "uv",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "name": "uv-0.8.23",
+      "pname": "uv",
+      "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "rev_count": 888552,
+      "rev_date": "2025-11-02T19:18:41Z",
+      "scrape_date": "2025-11-05T17:24:14.572070Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.8.23",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/n6chrdybb91npp8gvf8mjk55smx4sn8s-uv-0.8.23"
+      },
+      "system": "x86_64-linux",
+      "group": "uv",
+      "priority": 5
+    },
+    {
+      "attr_path": "vault",
+      "broken": false,
+      "derivation": "/nix/store/8mbfkrl37cs9pxfbnpx5zkhczwzv566w-vault-1.12.3.drv",
+      "description": "A tool for managing secrets",
+      "install_id": "vault",
+      "license": "MPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=7f5639fa3b68054ca0b062866dc62b22c3f11505",
+      "name": "vault-1.12.3",
+      "pname": "vault",
+      "rev": "7f5639fa3b68054ca0b062866dc62b22c3f11505",
+      "rev_count": 458394,
+      "rev_date": "2023-02-26T10:26:41Z",
+      "scrape_date": "2024-08-16T01:52:50Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.12.3",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/cf4a9gcp0a1gnwlidkmnrd59lw6wlvd1-vault-1.12.3"
+      },
+      "system": "aarch64-darwin",
+      "group": "vault",
+      "priority": 5
+    },
+    {
+      "attr_path": "vault",
+      "broken": false,
+      "derivation": "/nix/store/ik6vvb9d9zl14q2wldpmxa0cc1dizs63-vault-1.12.3.drv",
+      "description": "A tool for managing secrets",
+      "install_id": "vault",
+      "license": "MPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=7f5639fa3b68054ca0b062866dc62b22c3f11505",
+      "name": "vault-1.12.3",
+      "pname": "vault",
+      "rev": "7f5639fa3b68054ca0b062866dc62b22c3f11505",
+      "rev_count": 458394,
+      "rev_date": "2023-02-26T10:26:41Z",
+      "scrape_date": "2024-08-16T01:52:50Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.12.3",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/pq2p3fcsrcqa8lrx9fn5ni2ygx9z3whp-vault-1.12.3"
+      },
+      "system": "aarch64-linux",
+      "group": "vault",
+      "priority": 5
+    },
+    {
+      "attr_path": "vault",
+      "broken": false,
+      "derivation": "/nix/store/79xwrs3j0q6nj5727lzkj55nha8l5541-vault-1.12.3.drv",
+      "description": "A tool for managing secrets",
+      "install_id": "vault",
+      "license": "MPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=7f5639fa3b68054ca0b062866dc62b22c3f11505",
+      "name": "vault-1.12.3",
+      "pname": "vault",
+      "rev": "7f5639fa3b68054ca0b062866dc62b22c3f11505",
+      "rev_count": 458394,
+      "rev_date": "2023-02-26T10:26:41Z",
+      "scrape_date": "2024-08-16T01:52:50Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.12.3",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/p5miz6cf2g3hzm30m44m4a53nssaqhm7-vault-1.12.3"
+      },
+      "system": "x86_64-darwin",
+      "group": "vault",
+      "priority": 5
+    },
+    {
+      "attr_path": "vault",
+      "broken": false,
+      "derivation": "/nix/store/bmrlxkfqaqs5mddxsfcxdhhiz6pdgcic-vault-1.12.3.drv",
+      "description": "A tool for managing secrets",
+      "install_id": "vault",
+      "license": "MPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=7f5639fa3b68054ca0b062866dc62b22c3f11505",
+      "name": "vault-1.12.3",
+      "pname": "vault",
+      "rev": "7f5639fa3b68054ca0b062866dc62b22c3f11505",
+      "rev_count": 458394,
+      "rev_date": "2023-02-26T10:26:41Z",
+      "scrape_date": "2024-08-16T01:52:50Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.12.3",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/qmqras6gis3zdfi0hv3lmfbkaaz44d8l-vault-1.12.3"
+      },
+      "system": "x86_64-linux",
+      "group": "vault",
+      "priority": 5
+    },
+    {
       "attr_path": "amazon-ecr-credential-helper",
       "broken": false,
       "derivation": "/nix/store/9kbx4fb2030dfwmlbf3k5llffk4pqk3q-amazon-ecr-credential-helper-0.10.1.drv",
@@ -2748,6 +2996,126 @@
       "priority": 5
     },
     {
+      "attr_path": "python311",
+      "broken": false,
+      "derivation": "/nix/store/bfjyp0lsc2hzv0iz2v7jn2wwn5yby81z-python3-3.11.14.drv",
+      "description": "High-level dynamically-typed programming language",
+      "install_id": "python311",
+      "license": "Python-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=2fad6eac6077f03fe109c4d4eb171cf96791faa4",
+      "name": "python3-3.11.14",
+      "pname": "python311",
+      "rev": "2fad6eac6077f03fe109c4d4eb171cf96791faa4",
+      "rev_count": 903292,
+      "rev_date": "2025-11-27T11:14:36Z",
+      "scrape_date": "2025-11-29T03:00:59.176985Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "python3-3.11.14",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/ymffyssaavagb5jc1hbx1pkdq21gh16b-python3-3.11.14"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 10
+    },
+    {
+      "attr_path": "python311",
+      "broken": false,
+      "derivation": "/nix/store/3y3k5y0i2xf74768r2wcw0iz7jfi4aia-python3-3.11.14.drv",
+      "description": "High-level dynamically-typed programming language",
+      "install_id": "python311",
+      "license": "Python-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=2fad6eac6077f03fe109c4d4eb171cf96791faa4",
+      "name": "python3-3.11.14",
+      "pname": "python311",
+      "rev": "2fad6eac6077f03fe109c4d4eb171cf96791faa4",
+      "rev_count": 903292,
+      "rev_date": "2025-11-27T11:14:36Z",
+      "scrape_date": "2025-11-29T03:16:56.669819Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "python3-3.11.14",
+      "outputs_to_install": [
+        "out",
+        "out"
+      ],
+      "outputs": {
+        "debug": "/nix/store/y8il90w9kvh1anv432rj8vz3nf7316w5-python3-3.11.14-debug",
+        "out": "/nix/store/kbyysxq0ry8vqbpkdwld118fi92wvqsf-python3-3.11.14"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 10
+    },
+    {
+      "attr_path": "python311",
+      "broken": false,
+      "derivation": "/nix/store/dfy83bwy7fw87wfij42vyiapcgfilr0f-python3-3.11.14.drv",
+      "description": "High-level dynamically-typed programming language",
+      "install_id": "python311",
+      "license": "Python-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=2fad6eac6077f03fe109c4d4eb171cf96791faa4",
+      "name": "python3-3.11.14",
+      "pname": "python311",
+      "rev": "2fad6eac6077f03fe109c4d4eb171cf96791faa4",
+      "rev_count": 903292,
+      "rev_date": "2025-11-27T11:14:36Z",
+      "scrape_date": "2025-11-29T03:32:38.634390Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "python3-3.11.14",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/i4bd9nz257aph5lpjr19ggcaqc62qjn0-python3-3.11.14"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 10
+    },
+    {
+      "attr_path": "python311",
+      "broken": false,
+      "derivation": "/nix/store/8pk1p29q6n6q58bxqp5cf71q0pa0c7i7-python3-3.11.14.drv",
+      "description": "High-level dynamically-typed programming language",
+      "install_id": "python311",
+      "license": "Python-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=2fad6eac6077f03fe109c4d4eb171cf96791faa4",
+      "name": "python3-3.11.14",
+      "pname": "python311",
+      "rev": "2fad6eac6077f03fe109c4d4eb171cf96791faa4",
+      "rev_count": 903292,
+      "rev_date": "2025-11-27T11:14:36Z",
+      "scrape_date": "2025-11-29T03:49:04.931603Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "python3-3.11.14",
+      "outputs_to_install": [
+        "out",
+        "out"
+      ],
+      "outputs": {
+        "debug": "/nix/store/2lj58b7mhib83mb0cx8flyahbs9pnd9z-python3-3.11.14-debug",
+        "out": "/nix/store/00x3abm7y8j13i6n4sahvbar99irkc7d-python3-3.11.14"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 10
+    },
+    {
       "attr_path": "python313",
       "broken": false,
       "derivation": "/nix/store/6njqakbkci2h765gyj0q9rcmkfy38hya-python3-3.13.9.drv",
@@ -3564,242 +3932,6 @@
       "system": "x86_64-linux",
       "group": "toplevel",
       "priority": 5
-    },
-    {
-      "attr_path": "uv",
-      "broken": false,
-      "derivation": "/nix/store/gdwhs1agkjqcwvf2lp1819r37223myb7-uv-0.8.23.drv",
-      "description": "Extremely fast Python package installer and resolver, written in Rust",
-      "install_id": "uv",
-      "license": "[ Apache-2.0, MIT ]",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
-      "name": "uv-0.8.23",
-      "pname": "uv",
-      "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
-      "rev_count": 888552,
-      "rev_date": "2025-11-02T19:18:41Z",
-      "scrape_date": "2025-11-04T00:37:39.426966Z",
-      "stabilities": [
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "0.8.23",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/3q234qjj0cvdb8yjaiq64gk2q7r1nwcx-uv-0.8.23"
-      },
-      "system": "aarch64-darwin",
-      "group": "uv",
-      "priority": 5
-    },
-    {
-      "attr_path": "uv",
-      "broken": false,
-      "derivation": "/nix/store/n2z9jrgjrzc7qwmkbz8gas7s64c2gnwh-uv-0.8.23.drv",
-      "description": "Extremely fast Python package installer and resolver, written in Rust",
-      "install_id": "uv",
-      "license": "[ Apache-2.0, MIT ]",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
-      "name": "uv-0.8.23",
-      "pname": "uv",
-      "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
-      "rev_count": 888552,
-      "rev_date": "2025-11-02T19:18:41Z",
-      "scrape_date": "2025-11-05T16:32:06.863960Z",
-      "stabilities": [
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "0.8.23",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/ymbshk79amchwmhvnh8xh5f1608a3p80-uv-0.8.23"
-      },
-      "system": "aarch64-linux",
-      "group": "uv",
-      "priority": 5
-    },
-    {
-      "attr_path": "uv",
-      "broken": false,
-      "derivation": "/nix/store/sgkrry1qcip83fwplpa1v7i7alv809in-uv-0.8.23.drv",
-      "description": "Extremely fast Python package installer and resolver, written in Rust",
-      "install_id": "uv",
-      "license": "[ Apache-2.0, MIT ]",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
-      "name": "uv-0.8.23",
-      "pname": "uv",
-      "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
-      "rev_count": 888552,
-      "rev_date": "2025-11-02T19:18:41Z",
-      "scrape_date": "2025-11-05T16:57:12.042584Z",
-      "stabilities": [
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "0.8.23",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/lnl1zz7f97pqj6bqzqpglf0lhgcy5pk0-uv-0.8.23"
-      },
-      "system": "x86_64-darwin",
-      "group": "uv",
-      "priority": 5
-    },
-    {
-      "attr_path": "uv",
-      "broken": false,
-      "derivation": "/nix/store/d4xl0ip2nr9diprwv6grvkwdh14ai4xd-uv-0.8.23.drv",
-      "description": "Extremely fast Python package installer and resolver, written in Rust",
-      "install_id": "uv",
-      "license": "[ Apache-2.0, MIT ]",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
-      "name": "uv-0.8.23",
-      "pname": "uv",
-      "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
-      "rev_count": 888552,
-      "rev_date": "2025-11-02T19:18:41Z",
-      "scrape_date": "2025-11-05T17:24:14.572070Z",
-      "stabilities": [
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "0.8.23",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/n6chrdybb91npp8gvf8mjk55smx4sn8s-uv-0.8.23"
-      },
-      "system": "x86_64-linux",
-      "group": "uv",
-      "priority": 5
-    },
-    {
-      "attr_path": "vault",
-      "broken": false,
-      "derivation": "/nix/store/8mbfkrl37cs9pxfbnpx5zkhczwzv566w-vault-1.12.3.drv",
-      "description": "A tool for managing secrets",
-      "install_id": "vault",
-      "license": "MPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=7f5639fa3b68054ca0b062866dc62b22c3f11505",
-      "name": "vault-1.12.3",
-      "pname": "vault",
-      "rev": "7f5639fa3b68054ca0b062866dc62b22c3f11505",
-      "rev_count": 458394,
-      "rev_date": "2023-02-26T10:26:41Z",
-      "scrape_date": "2024-08-16T01:52:50Z",
-      "stabilities": [
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.12.3",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/cf4a9gcp0a1gnwlidkmnrd59lw6wlvd1-vault-1.12.3"
-      },
-      "system": "aarch64-darwin",
-      "group": "vault",
-      "priority": 5
-    },
-    {
-      "attr_path": "vault",
-      "broken": false,
-      "derivation": "/nix/store/ik6vvb9d9zl14q2wldpmxa0cc1dizs63-vault-1.12.3.drv",
-      "description": "A tool for managing secrets",
-      "install_id": "vault",
-      "license": "MPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=7f5639fa3b68054ca0b062866dc62b22c3f11505",
-      "name": "vault-1.12.3",
-      "pname": "vault",
-      "rev": "7f5639fa3b68054ca0b062866dc62b22c3f11505",
-      "rev_count": 458394,
-      "rev_date": "2023-02-26T10:26:41Z",
-      "scrape_date": "2024-08-16T01:52:50Z",
-      "stabilities": [
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.12.3",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/pq2p3fcsrcqa8lrx9fn5ni2ygx9z3whp-vault-1.12.3"
-      },
-      "system": "aarch64-linux",
-      "group": "vault",
-      "priority": 5
-    },
-    {
-      "attr_path": "vault",
-      "broken": false,
-      "derivation": "/nix/store/79xwrs3j0q6nj5727lzkj55nha8l5541-vault-1.12.3.drv",
-      "description": "A tool for managing secrets",
-      "install_id": "vault",
-      "license": "MPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=7f5639fa3b68054ca0b062866dc62b22c3f11505",
-      "name": "vault-1.12.3",
-      "pname": "vault",
-      "rev": "7f5639fa3b68054ca0b062866dc62b22c3f11505",
-      "rev_count": 458394,
-      "rev_date": "2023-02-26T10:26:41Z",
-      "scrape_date": "2024-08-16T01:52:50Z",
-      "stabilities": [
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.12.3",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/p5miz6cf2g3hzm30m44m4a53nssaqhm7-vault-1.12.3"
-      },
-      "system": "x86_64-darwin",
-      "group": "vault",
-      "priority": 5
-    },
-    {
-      "attr_path": "vault",
-      "broken": false,
-      "derivation": "/nix/store/bmrlxkfqaqs5mddxsfcxdhhiz6pdgcic-vault-1.12.3.drv",
-      "description": "A tool for managing secrets",
-      "install_id": "vault",
-      "license": "MPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=7f5639fa3b68054ca0b062866dc62b22c3f11505",
-      "name": "vault-1.12.3",
-      "pname": "vault",
-      "rev": "7f5639fa3b68054ca0b062866dc62b22c3f11505",
-      "rev_count": 458394,
-      "rev_date": "2023-02-26T10:26:41Z",
-      "scrape_date": "2024-08-16T01:52:50Z",
-      "stabilities": [
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.12.3",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/qmqras6gis3zdfi0hv3lmfbkaaz44d8l-vault-1.12.3"
-      },
-      "system": "x86_64-linux",
-      "group": "vault",
-      "priority": 5
     }
   ],
   "compose": {
@@ -3815,12 +3947,20 @@
           "pkg-path": "electron",
           "pkg-group": "electron-group",
           "version": "~33.0"
+        },
+        "python311": {
+          "pkg-path": "python311",
+          "priority": 10
         }
       },
       "vars": {
-        "FLOX_ENVIRONMENT": "1"
+        "ELECTRON_OVERRIDE_DIST_PATH": "/nix/store/29ac4qwh9nri55cla2fhgbjqvhpamgzk-electron-33.0.2/Applications",
+        "FLOX_ENVIRONMENT": "1",
+        "VERCEL": "1"
       },
-      "hook": {},
+      "hook": {
+        "on-activate": "  # Setup electron for Flox-provided Electron binary\n  if [ -d \"$FLOX_ENV_PROJECT/node_modules/electron\" ]; then\n    # Create path.txt\n    echo -n \"Electron.app/Contents/MacOS/Electron\" > \"$FLOX_ENV_PROJECT/node_modules/electron/path.txt\"\n    # Create symlink to Electron.app (if not exists)\n    if [ ! -e \"$FLOX_ENV_PROJECT/node_modules/electron/dist\" ]; then\n      ln -s /nix/store/29ac4qwh9nri55cla2fhgbjqvhpamgzk-electron-33.0.2/Applications \"$FLOX_ENV_PROJECT/node_modules/electron/dist\"\n    fi\n  fi\n"
+      },
       "profile": {
         "common": "  # Skip electron binary download from npm (prevents duplication)\n  export ELECTRON_SKIP_BINARY_DOWNLOAD=1\n\n  # Helpful activation message\n  echo \"✓ 1Code development environment activated\"\n  echo \"  Bun: $(bun --version)\"\n  echo \"  Electron: $(electron --version)\"\n  echo \"  TypeScript LSP: $(which typescript-language-server) (via devyard)\"\n"
       },
@@ -3847,7 +3987,7 @@
             "claude-code": {
               "pkg-path": "claude-code",
               "pkg-group": "claude-code",
-              "version": "2.1.9"
+              "version": "2.1.5"
             },
             "devspace": {
               "pkg-path": "devspace",

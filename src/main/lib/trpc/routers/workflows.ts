@@ -6,6 +6,7 @@ import * as os from "os"
 import matter from "gray-matter"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { eq } from "drizzle-orm"
+import { getWorkflowConfigDir } from "./devyard-scan-helper"
 
 // ============ TYPES ============
 
@@ -124,16 +125,11 @@ const BUILTIN_TOOLS = [
 
 /**
  * Get the Claude config directory, preferring customConfigDir from settings
+ * When Devyard mode is active, automatically uses devyard/claude/plugin/ directory
  */
 async function getClaudeConfigDir(): Promise<string> {
-  const db = getDatabase()
-  const settings = db
-    .select()
-    .from(claudeCodeSettings)
-    .where(eq(claudeCodeSettings.id, "default"))
-    .get()
-
-  return settings?.customConfigDir || path.join(os.homedir(), ".claude")
+  const { baseDir } = getWorkflowConfigDir()
+  return baseDir
 }
 
 /**
@@ -244,10 +240,15 @@ async function scanAgentsDir(baseDir: string): Promise<AgentMetadata[]> {
     }
 
     const filePath = path.join(agentsDir, entry.name)
-    const content = await fs.readFile(filePath, "utf-8")
-    const parsed = parseAgentMd(content, entry.name)
-    parsed.sourcePath = filePath
-    agents.push(parsed)
+    try {
+      const content = await fs.readFile(filePath, "utf-8")
+      const parsed = parseAgentMd(content, entry.name)
+      parsed.sourcePath = filePath
+      agents.push(parsed)
+    } catch (err) {
+      console.error(`[workflows] Failed to parse agent ${entry.name}:`, err instanceof Error ? err.message : err)
+      // Skip this agent and continue with others
+    }
   }
 
   return agents
@@ -279,10 +280,15 @@ async function scanCommandsDir(baseDir: string): Promise<CommandMetadata[]> {
     }
 
     const filePath = path.join(commandsDir, entry.name)
-    const content = await fs.readFile(filePath, "utf-8")
-    const parsed = parseCommandMd(content, entry.name)
-    parsed.sourcePath = filePath
-    commands.push(parsed)
+    try {
+      const content = await fs.readFile(filePath, "utf-8")
+      const parsed = parseCommandMd(content, entry.name)
+      parsed.sourcePath = filePath
+      commands.push(parsed)
+    } catch (err) {
+      console.error(`[workflows] Failed to parse command ${entry.name}:`, err instanceof Error ? err.message : err)
+      // Skip this command and continue with others
+    }
   }
 
   return commands

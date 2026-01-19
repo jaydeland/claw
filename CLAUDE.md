@@ -75,6 +75,47 @@ bun run dev
 
 **Without Flox:** The app will try to use system-installed bun/electron, which may have version mismatches. Always activate Flox before development.
 
+## Devyard Integration
+
+The app automatically detects and integrates with Vidyard's Devyard development environment when available. This provides AWS and Kubernetes configuration for Claude agents and terminals.
+
+**Authentication Method:**
+- Available as "Devyard" option in the authentication selector (onboarding and settings)
+- Shows automatically when `$VIDYARD_PATH` environment variable is set
+- Disabled if Devyard is not detected
+
+**Detection:**
+- Checks for `$VIDYARD_PATH/devyard` directory
+- If found, automatically loads AWS/Kubernetes configuration
+
+**Loaded Environment Variables:**
+- `KUBECONFIG` - Points to `.kube.config` in devyard
+- `AWS_PROFILE_OPERATIONS` - Operations account profile (SSO-Operations-075505783641)
+- `AWS_PROFILE_STAGING` - Staging account profile (SSO-Staging-075505783641)
+- `AWS_REGION` - Default region (us-east-1)
+- `AWS_STAGING_CLUSTER` - EKS staging cluster ARN
+- `AWS_SHARED_CREDENTIALS_FILE` - Points to `.aws-creds` in devyard
+- `AWS_CONFIG_FILE` - Points to `.aws-profile` in devyard
+- `CLAUDE_CONFIG_DIR` - Points to `claude/` in devyard (for skills, agents, commands)
+- `CLAUDE_PLUGIN_DIR` - Points to `claude/plugin/` in devyard
+
+**Claude Configuration:**
+When Devyard auth mode is selected, Claude automatically uses `$VIDYARD_PATH/devyard/claude` as its configuration directory. This allows:
+- Shared access to Claude skills across the team
+- Shared Claude agents and commands
+- Shared MCP plugins in `claude/plugin/`
+- Consistent Claude configuration across all developers
+
+**Where It's Used:**
+- Claude SDK environments (`buildClaudeEnv` in `src/main/lib/claude/env.ts`)
+- Terminal environments (`buildTerminalEnv` in `src/main/lib/terminal/env.ts`)
+- Claude config directory (`getClaudeCodeSettings` in `src/main/lib/trpc/routers/claude.ts`)
+- Available to all Claude agents when "Devyard" auth mode is selected
+
+**Configuration Module:** `src/main/lib/devyard-config.ts`
+
+The configuration is detected once at first use and cached for the app lifetime. Missing configuration files will generate warnings but won't prevent the app from running.
+
 ## Architecture
 
 ```
@@ -89,7 +130,10 @@ src/
 │       │   ├── index.ts     # DB init, auto-migrate on startup
 │       │   ├── schema/      # Drizzle table definitions
 │       │   └── utils.ts     # ID generation
-│       └── trpc/routers/    # tRPC routers (projects, chats, claude)
+│       ├── trpc/routers/    # tRPC routers (projects, chats, claude)
+│       ├── devyard-config.ts # Devyard environment detection
+│       ├── claude/env.ts    # Claude SDK environment (includes Devyard)
+│       └── terminal/env.ts  # Terminal environment (includes Devyard)
 │
 ├── preload/                 # IPC bridge (context isolation)
 │   └── index.ts             # Exposes desktopApi + tRPC bridge

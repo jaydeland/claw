@@ -29,7 +29,7 @@ interface FileAgent {
   tools?: string[]
   disallowedTools?: string[]
   model?: "sonnet" | "opus" | "haiku" | "inherit"
-  source: "user" | "project"
+  source: "user" | "project" | "devyard"
   path: string
 }
 
@@ -43,6 +43,7 @@ export function AgentsCustomAgentsTab() {
 
   const userAgents = agents.filter((a) => a.source === "user")
   const projectAgents = agents.filter((a) => a.source === "project")
+  const devyardAgents = agents.filter((a) => a.source === "devyard")
 
   const handleExpandAgent = (agentName: string) => {
     setExpandedAgentName(expandedAgentName === agentName ? null : agentName)
@@ -101,6 +102,33 @@ export function AgentsCustomAgentsTab() {
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
                     {userAgents.map((agent) => (
+                      <AgentRow
+                        key={agent.name}
+                        agent={agent}
+                        isExpanded={expandedAgentName === agent.name}
+                        onToggle={() => handleExpandAgent(agent.name)}
+                        onOpenInFinder={() => handleOpenInFinder(agent.path)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Devyard Agents */}
+            {devyardAgents.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="text-xs text-muted-foreground">
+                    devyard/claude/plugin/agents/
+                  </div>
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                    Devyard
+                  </span>
+                </div>
+                <div className="bg-background rounded-lg border border-border overflow-hidden">
+                  <div className="divide-y divide-border">
+                    {devyardAgents.map((agent) => (
                       <AgentRow
                         key={agent.name}
                         agent={agent}

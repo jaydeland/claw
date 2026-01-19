@@ -41,7 +41,7 @@ export function AnthropicOnboardingPage() {
   )
 
   // Auth mode state
-  const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey">("oauth")
+  const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey" | "devyard">("oauth")
   const [apiKey, setApiKey] = useState("")
   const [bedrockRegion, setBedrockRegion] = useState("us-east-1")
   const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("")
@@ -51,6 +51,9 @@ export function AnthropicOnboardingPage() {
   const submitCodeMutation = trpc.claudeCode.submitCode.useMutation()
   const openOAuthUrlMutation = trpc.claudeCode.openOAuthUrl.useMutation()
   const updateSettingsMutation = trpc.claudeSettings.updateSettings.useMutation()
+
+  // Query Devyard availability
+  const { data: devyardStatus } = trpc.claudeSettings.checkDevyard.useQuery()
 
   // Poll for OAuth URL
   const pollStatusQuery = trpc.claudeCode.pollStatus.useQuery(
@@ -280,11 +283,10 @@ export function AnthropicOnboardingPage() {
           {/* Auth Mode Selector */}
           {flowState.step === "idle" && (
             <div className="space-y-4">
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant={authMode === "oauth" ? "default" : "outline"}
                   onClick={() => setAuthMode("oauth")}
-                  className="flex-1"
                   size="sm"
                 >
                   OAuth
@@ -292,7 +294,6 @@ export function AnthropicOnboardingPage() {
                 <Button
                   variant={authMode === "apiKey" ? "default" : "outline"}
                   onClick={() => setAuthMode("apiKey")}
-                  className="flex-1"
                   size="sm"
                 >
                   API Key
@@ -300,10 +301,16 @@ export function AnthropicOnboardingPage() {
                 <Button
                   variant={authMode === "aws" ? "default" : "outline"}
                   onClick={() => setAuthMode("aws")}
-                  className="flex-1"
                   size="sm"
                 >
                   AWS Bedrock
+                </Button>
+                <Button
+                  variant={authMode === "devyard" ? "default" : "outline"}
+                  onClick={() => setAuthMode("devyard")}
+                  size="sm"
+                >
+                  Devyard
                 </Button>
               </div>
 
@@ -400,6 +407,56 @@ export function AnthropicOnboardingPage() {
                   <Button
                     onClick={handleSaveBedrock}
                     disabled={isSubmitting}
+                    className="w-full"
+                  >
+                    {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Save & Continue"}
+                  </Button>
+                </div>
+              )}
+
+              {/* Devyard Mode */}
+              {authMode === "devyard" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Use Devyard environment AWS credentials and Kubernetes configuration
+                    </p>
+                    <div className="p-3 bg-muted rounded-lg space-y-1 text-xs font-mono">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">VIDYARD_PATH:</span>
+                        <span className="truncate ml-2">{devyardStatus?.path || "Not set"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Status:</span>
+                        <span>{devyardStatus?.available ? "✓ Available" : "✗ Not available"}</span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t border-border/50">
+                        <span className="text-muted-foreground">Config:</span>
+                        <span className="truncate ml-2">{devyardStatus?.claudeConfigDir || "~/devyard/claude"}</span>
+                      </div>
+                    </div>
+                    {!devyardStatus?.available && (
+                      <p className="text-xs text-destructive">
+                        Devyard not detected. Set VIDYARD_PATH environment variable.
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      setFlowState({ step: "submitting" })
+                      try {
+                        await updateSettingsMutation.mutateAsync({
+                          authMode: "devyard",
+                        })
+                        setAnthropicOnboardingCompleted(true)
+                      } catch (err) {
+                        setFlowState({
+                          step: "error",
+                          message: err instanceof Error ? err.message : "Failed to save Devyard settings",
+                        })
+                      }
+                    }}
+                    disabled={isSubmitting || !devyardStatus?.available}
                     className="w-full"
                   >
                     {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Save & Continue"}
