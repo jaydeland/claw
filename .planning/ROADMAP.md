@@ -10,23 +10,22 @@ None
 
 ## Phases
 
-- [ ] **Phase 1: Discovery Layer** — SDK/file parsing to find agents, commands, skills
+- [x] **Phase 1: Discovery Layer** — SDK/file parsing to find agents, commands, skills
 - [ ] **Phase 2: Tree Visualization** — Sidebar entries + nested dependency tree UI
 - [ ] **Phase 3: Content Preview** — Full source code/file content on node click
 
 ## Phase Details
 
-### Phase 1: Discovery Layer
+### Phase 1: Discovery Layer ✅
 **Goal**: Establish data pipeline for discovering and parsing Claude Code agents, commands, and their dependencies
 **Depends on**: Nothing (first phase)
 **Research**: Likely (Claude Code SDK API for dependency discovery is unknown; may need file parsing fallback)
 **Research topics**: @anthropic-ai/claude-agent-sdk 0.2.5 capabilities for dependency graph extraction, Claude config directory structure, YAML frontmatter parsing for skills/commands
-**Plans**: TBD
+**Plans**: 2 (consolidated from 3 items during planning for quick depth)
 
 Plans:
-- [ ] 01-01: Claude config directory integration
-- [ ] 01-02: Agent and command discovery
-- [ ] 01-03: Dependency extraction (skills → tools → MCP → calls)
+- [x] 01-01: Claude config directory integration + Agent and command discovery
+- [x] 01-02: Dependency extraction (skills → tools → MCP → calls)
 
 ### Phase 2: Tree Visualization
 **Goal**: Build sidebar UI with Agents/Commands entries and nested tree view of dependencies
@@ -54,6 +53,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Discovery Layer | 0/3 | Not started | - |
+| 1. Discovery Layer | 2/2 | Complete | 2025-01-18 |
 | 2. Tree Visualization | 0/3 | Not started | - |
 | 3. Content Preview | 0/3 | Not started | - |
