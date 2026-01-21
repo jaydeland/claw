@@ -517,11 +517,29 @@ export const claudeRouter = router({
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
             // cross-chat contamination when multiple chats use the same project folder
             const { customBinaryPath, customEnvVars, customConfigDir, authMode, apiKey, bedrockRegion, anthropicBaseUrl } = getClaudeCodeSettings()
-            const claudeConfigDir = customConfigDir || path.join(
-              app.getPath("userData"),
-              "claude-sessions",
-              input.subChatId
-            )
+
+            // Determine Claude config directory based on auth mode
+            let claudeConfigDir: string
+            if (customConfigDir) {
+              // User-specified custom directory takes precedence
+              claudeConfigDir = customConfigDir
+            } else if (authMode === "devyard") {
+              // Devyard mode: use $VIDYARD_PATH/devyard/claude/
+              const devyardConfig = getDevyardConfig()
+              claudeConfigDir = devyardConfig.claudeConfigDir || path.join(
+                app.getPath("userData"),
+                "claude-sessions",
+                input.subChatId
+              )
+              console.log(`[claude] Devyard mode: using CLAUDE_CONFIG_DIR=${claudeConfigDir}`)
+            } else {
+              // Default: isolated per-subchat directory
+              claudeConfigDir = path.join(
+                app.getPath("userData"),
+                "claude-sessions",
+                input.subChatId
+              )
+            }
 
             // Ensure config dir exists
             await fs.mkdir(claudeConfigDir, { recursive: true })
@@ -575,7 +593,7 @@ export const claudeRouter = router({
                 console.log(`[claude] Could not symlink mcp.json (may not exist): ${symlinkErr}`)
               }
             } else if (authMode === "devyard") {
-              console.log(`[claude] Devyard mode active - using plugin directory directly (no symlinks needed)`)
+              console.log(`[claude] Devyard mode active - using ${claudeConfigDir} directly (no symlinks needed)`)
             }
 
             // Build final env - use appropriate auth method based on mode
