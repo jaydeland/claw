@@ -40,6 +40,30 @@ body:has([data-agents-page]) [data-sonner-toast] {
   --selection-bg: var(--selection, var(--primary));
 }
 
+/* ========================================
+   2. SHIKI SYNTAX HIGHLIGHTING
+   ======================================== */
+
+/* Shiki container for syntax-highlighted code */
+.shiki-container {
+  /* Shiki already includes background and padding in its output */
+  font-size: 0.75rem; /* 12px - match code blocks */
+  line-height: 1.5;
+}
+
+.shiki-container pre {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: transparent !important; /* Shiki sets its own bg */
+}
+
+.shiki-container code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: inherit;
+  line-height: inherit;
+}
+
 /* Dark theme */
 .dark [data-agents-page] {
   /* Override muted to be brighter for better code block visibility */

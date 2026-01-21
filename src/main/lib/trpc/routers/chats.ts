@@ -120,6 +120,7 @@ export const chatsRouter = router({
         baseBranch: z.string().optional(), // Branch to base the worktree off
         useWorktree: z.boolean().default(true), // If false, work directly in project dir
         mode: z.enum(["plan", "agent"]).default("agent"),
+        model: z.enum(["opus", "sonnet", "haiku"]).optional(), // Claude model selection
       }),
     )
     .mutation(async ({ input }) => {
@@ -170,6 +171,7 @@ export const chatsRouter = router({
         .values({
           chatId: chat.id,
           mode: input.mode,
+          model: input.model || null, // Store selected model
           messages: initialMessages,
         })
         .returning()

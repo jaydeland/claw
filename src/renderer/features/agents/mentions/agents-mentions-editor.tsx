@@ -61,9 +61,6 @@ type TriggerPayload = {
   rect: DOMRect
 }
 
-// Export SlashTriggerPayload for slash commands
-export type SlashTriggerPayload = TriggerPayload
-
 export type AgentsMentionsEditorHandle = {
   focus: () => void
   blur: () => void
@@ -71,7 +68,6 @@ export type AgentsMentionsEditorHandle = {
   getValue: () => string
   setValue: (value: string) => void
   clear: () => void
-  clearSlashCommand: () => void // Clear slash command text after selection
 }
 
 type AgentsMentionsEditorProps = {
@@ -79,8 +75,6 @@ type AgentsMentionsEditorProps = {
   initialValue?: string // optional initial content
   onTrigger: (payload: TriggerPayload) => void
   onCloseTrigger: () => void
-  onSlashTrigger?: (payload: TriggerPayload) => void // Slash command trigger
-  onCloseSlashTrigger?: () => void // Close slash command dropdown
   onContentChange?: (hasContent: boolean) => void // lightweight callback for send button state
   placeholder?: string
   className?: string
@@ -364,6 +358,22 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
           atIndex = serialized.length + localAtIdx
           atPosition = { node, offset: localAtIdx }
         }
+
+        // Track / positions for slash commands (same logic as @)
+        for (let i = 0; i < text.length; i++) {
+          if (text[i] === "/") {
+            const globalSlashIdx = serialized.length + i
+            // / is valid only at start of text OR after newline
+            const charBefore =
+              globalSlashIdx === 0
+                ? null
+                : (serialized + text.slice(0, i)).charAt(globalSlashIdx - 1)
+            if (charBefore === null || charBefore === "\n") {
+              slashIndex = globalSlashIdx
+              slashPosition = { node, offset: i }
+            }
+          }
+        }
       }
 
       serialized += text
@@ -467,8 +477,6 @@ export const AgentsMentionsEditor = memo(
         initialValue,
         onTrigger,
         onCloseTrigger,
-        onSlashTrigger,
-        onCloseSlashTrigger,
         onContentChange,
         placeholder,
         className,
@@ -484,9 +492,6 @@ export const AgentsMentionsEditor = memo(
       const editorRef = useRef<HTMLDivElement>(null)
       const triggerActive = useRef(false)
       const triggerStartIndex = useRef<number | null>(null)
-      // Slash command trigger state
-      const slashTriggerActive = useRef(false)
-      const slashTriggerStartIndex = useRef<number | null>(null)
       // Track if editor has content for placeholder (updated via DOM, no React state)
       const [hasContent, setHasContent] = useState(false)
 
@@ -592,11 +597,6 @@ export const AgentsMentionsEditor = memo(
                 triggerStartIndex.current = null
                 onCloseTrigger()
               }
-              if (slashTriggerActive.current) {
-                slashTriggerActive.current = false
-                slashTriggerStartIndex.current = null
-                onCloseSlashTrigger?.()
-              }
               return
             }
 
@@ -611,34 +611,20 @@ export const AgentsMentionsEditor = memo(
                 triggerStartIndex.current = null
                 onCloseTrigger()
               }
-              if (slashTriggerActive.current) {
-                slashTriggerActive.current = false
-                slashTriggerStartIndex.current = null
-                onCloseSlashTrigger?.()
-              }
               return
             }
 
-            // Single tree walk for @ and / trigger detection
+            // Tree walk for @ trigger detection
             const {
               textBeforeCursor,
               atPosition,
               atIndex,
-              slashPosition,
-              slashIndex,
             } = walkTreeOnce(editorRef.current, range)
 
-            // Handle @ trigger (takes priority over /)
+            // Handle @ trigger
             if (atIndex !== -1 && atPosition) {
               triggerActive.current = true
               triggerStartIndex.current = atIndex
-
-              // Close slash trigger if active
-              if (slashTriggerActive.current) {
-                slashTriggerActive.current = false
-                slashTriggerStartIndex.current = null
-                onCloseSlashTrigger?.()
-              }
 
               const afterAt = textBeforeCursor.slice(atIndex + 1)
 
@@ -660,32 +646,8 @@ export const AgentsMentionsEditor = memo(
               onCloseTrigger()
             }
 
-            // Handle / trigger (only if @ trigger is not active)
-            if (slashIndex !== -1 && slashPosition && onSlashTrigger) {
-              slashTriggerActive.current = true
-              slashTriggerStartIndex.current = slashIndex
-
-              const afterSlash = textBeforeCursor.slice(slashIndex + 1)
-
-              // Get position for dropdown
-              if (slashPosition.node.nodeType === Node.TEXT_NODE) {
-                const tempRange = document.createRange()
-                tempRange.setStart(slashPosition.node, slashPosition.offset)
-                tempRange.setEnd(slashPosition.node, slashPosition.offset + 1)
-                const rect = tempRange.getBoundingClientRect()
-                onSlashTrigger({ searchText: afterSlash, rect })
-                return
-              }
-            }
-
-            // Close / trigger if no / found
-            if (slashTriggerActive.current) {
-              slashTriggerActive.current = false
-              slashTriggerStartIndex.current = null
-              onCloseSlashTrigger?.()
-            }
           }, 16), // ~1 frame delay for debounce
-        [onTrigger, onCloseTrigger, onSlashTrigger, onCloseSlashTrigger],
+        [onTrigger, onCloseTrigger],
       )
 
       // Cleanup debounce on unmount
@@ -695,7 +657,7 @@ export const AgentsMentionsEditor = memo(
         }
       }, [debouncedTriggerDetection])
 
-      // Handle input - UNCONTROLLED: no onChange, just @ and / trigger detection
+      // Handle input - UNCONTROLLED: no onChange, just @ trigger detection
       const handleInput = useCallback(() => {
         if (!editorRef.current) return
 
@@ -714,7 +676,7 @@ export const AgentsMentionsEditor = memo(
       const handleKeyDown = useCallback(
         (e: React.KeyboardEvent) => {
           if (e.key === "Enter" && !e.shiftKey) {
-            if (triggerActive.current || slashTriggerActive.current) {
+            if (triggerActive.current) {
               // Let dropdown handle Enter
               return
             }
@@ -730,14 +692,6 @@ export const AgentsMentionsEditor = memo(
               onCloseTrigger()
               return
             }
-            // Close command dropdown
-            if (slashTriggerActive.current) {
-              e.preventDefault()
-              slashTriggerActive.current = false
-              slashTriggerStartIndex.current = null
-              onCloseSlashTrigger?.()
-              return
-            }
             // If no dropdown is open, blur the editor (but don't prevent default
             // to allow other handlers like multi-select clear to run)
             editorRef.current?.blur()
@@ -747,7 +701,7 @@ export const AgentsMentionsEditor = memo(
             onShiftTab?.()
           }
         },
-        [onSubmit, onCloseTrigger, onCloseSlashTrigger, onShiftTab],
+        [onSubmit, onCloseTrigger, onShiftTab],
       )
 
       // Expose methods via ref (UNCONTROLLED pattern)
@@ -797,98 +751,6 @@ export const AgentsMentionsEditor = memo(
             onContentChange?.(false)
             triggerActive.current = false
             triggerStartIndex.current = null
-            slashTriggerActive.current = false
-            slashTriggerStartIndex.current = null
-          },
-
-          // Clear slash command text after selection (removes /command from input)
-          clearSlashCommand: () => {
-            if (!editorRef.current || slashTriggerStartIndex.current === null)
-              return
-
-            const sel = window.getSelection()
-            if (!sel || sel.rangeCount === 0) {
-              // Fallback: clear entire editor if we can't find the range
-              editorRef.current.innerHTML = ""
-              setHasContent(false)
-              onContentChange?.(false)
-              slashTriggerActive.current = false
-              slashTriggerStartIndex.current = null
-              onCloseSlashTrigger?.()
-              return
-            }
-
-            const range = sel.getRangeAt(0)
-            const node = range.startContainer
-
-            if (node.nodeType === Node.TEXT_NODE) {
-              const text = node.textContent || ""
-              // Find local position of / within this text node
-              let localSlashPosition: number | null = null
-              let serializedCharCount = 0
-
-              const walker = document.createTreeWalker(
-                editorRef.current,
-                NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-              )
-              let walkNode: Node | null = walker.nextNode()
-
-              while (walkNode) {
-                if (walkNode === node) {
-                  localSlashPosition =
-                    slashTriggerStartIndex.current! - serializedCharCount
-                  break
-                }
-
-                if (walkNode.nodeType === Node.TEXT_NODE) {
-                  serializedCharCount += (walkNode.textContent || "").length
-                } else if (walkNode.nodeType === Node.ELEMENT_NODE) {
-                  const el = walkNode as HTMLElement
-                  if (el.hasAttribute("data-mention-id")) {
-                    const id = el.getAttribute("data-mention-id") || ""
-                    serializedCharCount += `@[${id}]`.length
-                    const next: Node | null = el.nextSibling
-                    if (next) {
-                      walker.currentNode = next
-                      walkNode = next
-                      continue
-                    }
-                  }
-                }
-                walkNode = walker.nextNode()
-              }
-
-              // Only proceed if we found the slash position
-              if (localSlashPosition === null || localSlashPosition < 0) {
-                // Node not found in tree walk - just close the trigger without modifying text
-                slashTriggerActive.current = false
-                slashTriggerStartIndex.current = null
-                onCloseSlashTrigger?.()
-                return
-              }
-
-              // Remove from / to cursor
-              const beforeSlash = text.slice(0, localSlashPosition)
-              const afterCursor = text.slice(range.startOffset)
-              node.textContent = beforeSlash + afterCursor
-
-              // Move cursor to where / was
-              const newRange = document.createRange()
-              newRange.setStart(node, localSlashPosition)
-              newRange.collapse(true)
-              sel.removeAllRanges()
-              sel.addRange(newRange)
-
-              // Update hasContent
-              const newContent = editorRef.current.textContent
-              setHasContent(!!newContent)
-              onContentChange?.(!!newContent)
-            }
-
-            // Close trigger
-            slashTriggerActive.current = false
-            slashTriggerStartIndex.current = null
-            onCloseSlashTrigger?.()
           },
 
           insertMention: (option: FileMentionOption) => {
@@ -971,7 +833,7 @@ export const AgentsMentionsEditor = memo(
             onCloseTrigger()
           },
         }),
-        [onCloseTrigger, onCloseSlashTrigger, resolveMention, onContentChange],
+        [onCloseTrigger, resolveMention, onContentChange],
       )
 
       return (

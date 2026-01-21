@@ -4,6 +4,8 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator"
 import { app } from "electron"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
+import { homedir } from "os"
+import { eq } from "drizzle-orm"
 import * as schema from "./schema"
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
@@ -38,6 +40,50 @@ function getMigrationsPath(): string {
 }
 
 /**
+ * Ensure default "Home" workspace exists
+ * Creates a non-git workspace pointing to the user's home directory
+ */
+function ensureDefaultHomeWorkspace(database: ReturnType<typeof drizzle<typeof schema>>) {
+  try {
+    const homeDir = homedir()
+
+    // Check if a project already exists for the home directory
+    const existing = database
+      .select()
+      .from(schema.projects)
+      .where(eq(schema.projects.path, homeDir))
+      .get()
+
+    if (existing) {
+      console.log("[DB] Home workspace already exists")
+      return existing
+    }
+
+    // Create the default Home workspace
+    const homeWorkspace = database
+      .insert(schema.projects)
+      .values({
+        name: "Home",
+        path: homeDir,
+        // All git fields are null for non-git workspace
+        gitRemoteUrl: null,
+        gitProvider: null,
+        gitOwner: null,
+        gitRepo: null,
+      })
+      .returning()
+      .get()
+
+    console.log(`[DB] Created default Home workspace at: ${homeDir}`)
+    return homeWorkspace
+  } catch (error) {
+    console.error("[DB] Failed to create default Home workspace:", error)
+    // Don't throw - this is not critical for app startup
+    return null
+  }
+}
+
+/**
  * Initialize the database with Drizzle ORM
  */
 export function initDatabase() {
@@ -67,6 +113,9 @@ export function initDatabase() {
     console.error("[DB] Migration error:", error)
     throw error
   }
+
+  // Ensure default Home workspace exists
+  ensureDefaultHomeWorkspace(db)
 
   return db
 }

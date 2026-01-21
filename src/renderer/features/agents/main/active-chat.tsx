@@ -98,12 +98,9 @@ import {
   setLoading,
   subChatFilesAtom,
 } from "../atoms"
-import {
-  AgentsSlashCommand,
-  COMMAND_PROMPTS,
-  type SlashCommandOption,
-} from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
+import { CommandsDropdown } from "../components/commands-dropdown"
+import { AgentsDropdown } from "../components/agents-dropdown"
 import { PreviewSetupHoverCard } from "../components/preview-setup-hover-card"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
@@ -978,11 +975,6 @@ function ChatViewInner({
   const [showingSkillsList, setShowingSkillsList] = useState(false)
   const [showingAgentsList, setShowingAgentsList] = useState(false)
 
-  // Slash command dropdown state
-  const [showSlashDropdown, setShowSlashDropdown] = useState(false)
-  const [slashSearchText, setSlashSearchText] = useState("")
-  const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 })
-
   // Shift+Tab handler for mode switching (now handled inside input component)
 
   // Keyboard shortcut: Cmd+/ to open model selector (Claude submenu)
@@ -1795,71 +1787,26 @@ function ChatViewInner({
     setShowingAgentsList(false)
   }, [])
 
-  // Slash command handlers
-  const handleSlashTrigger = useCallback(
-    ({ searchText, rect }: { searchText: string; rect: DOMRect }) => {
-      setSlashSearchText(searchText)
-      setSlashPosition({ top: rect.top, left: rect.left })
-      setShowSlashDropdown(true)
-    },
-    [],
-  )
-
-  const handleCloseSlashTrigger = useCallback(() => {
-    setShowSlashDropdown(false)
+  // Handle command selection from Commands dropdown
+  const handleCommandSelect = useCallback((command: string) => {
+    const currentValue = editorRef.current?.getValue() || ""
+    const newValue = currentValue.trim()
+      ? `${command} ${currentValue}`
+      : command
+    editorRef.current?.setValue(newValue)
+    editorRef.current?.focus()
   }, [])
 
-  const handleSlashSelect = useCallback(
-    (command: SlashCommandOption) => {
-      // Clear the slash command text from editor
-      editorRef.current?.clearSlashCommand()
-      setShowSlashDropdown(false)
-
-      // Handle builtin commands
-      if (command.category === "builtin") {
-        switch (command.name) {
-          case "clear":
-            // Create a new sub-chat (fresh conversation)
-            if (onCreateNewSubChat) {
-              onCreateNewSubChat()
-            }
-            break
-          case "plan":
-            if (!isPlanMode) {
-              setIsPlanMode(true)
-            }
-            break
-          case "agent":
-            if (isPlanMode) {
-              setIsPlanMode(false)
-            }
-            break
-          // Prompt-based commands - auto-send to agent
-          case "review":
-          case "pr-comments":
-          case "release-notes":
-          case "security-review": {
-            const prompt =
-              COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
-            if (prompt) {
-              editorRef.current?.setValue(prompt)
-              // Auto-send the prompt to agent
-              setTimeout(() => handleSend(), 0)
-            }
-            break
-          }
-        }
-        return
-      }
-
-      // Handle repository commands - auto-send to agent
-      if (command.prompt) {
-        editorRef.current?.setValue(command.prompt)
-        setTimeout(() => handleSend(), 0)
-      }
-    },
-    [isPlanMode, setIsPlanMode, handleSend, onCreateNewSubChat],
-  )
+  // Handle agent selection from Agents dropdown
+  const handleAgentSelect = useCallback((agentId: string) => {
+    const command = `/${agentId} `
+    const currentValue = editorRef.current?.getValue() || ""
+    const newValue = currentValue.trim()
+      ? `${command}${currentValue}`
+      : command
+    editorRef.current?.setValue(newValue)
+    editorRef.current?.focus()
+  }, [])
 
   // Paste handler for images and plain text
   // Uses async text insertion to prevent UI freeze with large text
@@ -2773,12 +2720,10 @@ function ChatViewInner({
                       setShowingSkillsList(false)
                       setShowingAgentsList(false)
                     }}
-                    onSlashTrigger={handleSlashTrigger}
-                    onCloseSlashTrigger={handleCloseSlashTrigger}
                     onContentChange={setHasContent}
                     onSubmit={handleSend}
                     onShiftTab={() => setIsPlanMode((prev) => !prev)}
-                    placeholder="Plan, @ for context, / for commands"
+                    placeholder="Plan or Accept, @ for context"
                     className={cn(
                       "bg-transparent max-h-[200px] overflow-y-auto p-1",
                       isMobile && "min-h-[56px]",
@@ -2812,7 +2757,7 @@ function ChatViewInner({
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5" />
                           )}
-                          <span>{isPlanMode ? "Plan" : "Agent"}</span>
+                          <span>{isPlanMode ? "Plan" : "Accept"}</span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
@@ -2871,7 +2816,7 @@ function ChatViewInner({
                         >
                           <div className="flex items-center gap-2">
                             <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                            <span>Agent</span>
+                            <span>Accept</span>
                           </div>
                           {!isPlanMode && (
                             <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
@@ -3002,6 +2947,18 @@ function ChatViewInner({
                         })}
                       </DropdownMenuContent>
                     </DropdownMenu>
+
+                    {/* Commands Dropdown */}
+                    <CommandsDropdown
+                      onCommandSelect={handleCommandSelect}
+                      disabled={isStreaming}
+                    />
+
+                    {/* Agents Dropdown */}
+                    <AgentsDropdown
+                      onAgentSelect={handleAgentSelect}
+                      disabled={isStreaming}
+                    />
                   </div>
 
                   <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
@@ -3111,18 +3068,6 @@ function ChatViewInner({
           showingFilesList={showingFilesList}
           showingSkillsList={showingSkillsList}
           showingAgentsList={showingAgentsList}
-        />
-
-        {/* Slash command dropdown */}
-        <AgentsSlashCommand
-          isOpen={showSlashDropdown}
-          onClose={handleCloseSlashTrigger}
-          onSelect={handleSlashSelect}
-          searchText={slashSearchText}
-          position={slashPosition}
-          teamId={teamId}
-          repository={repository}
-          isPlanMode={isPlanMode}
         />
       </div>
     </>

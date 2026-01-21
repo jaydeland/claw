@@ -4,7 +4,7 @@ import { useAtomValue } from "jotai"
 import { selectedWorkflowNodeAtom, workflowViewModeAtom } from "../atoms"
 import { WorkflowDetailHeader } from "./workflow-detail-header"
 import { WorkflowMarkdownView } from "./workflow-markdown-view"
-import { WorkflowFlowchartView } from "./workflow-flowchart-view"
+import { WorkflowReactFlowView } from "./workflow-reactflow-view"
 
 /**
  * Detail panel for viewing workflow file content
@@ -33,7 +33,7 @@ export function WorkflowDetail() {
       {viewMode === "markdown" ? (
         <WorkflowMarkdownView />
       ) : (
-        <WorkflowFlowchartView />
+        <WorkflowReactFlowView />
       )}
     </div>
   )

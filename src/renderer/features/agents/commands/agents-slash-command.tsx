@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "../../../lib/utils"
-import { api } from "../../../lib/mock-api"
+import { trpc } from "../../../lib/trpc"
 import {
   useCallback,
   useEffect,
@@ -88,25 +88,35 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     return () => clearTimeout(timer)
   }, [searchText])
 
-  // Fetch repository commands
-  const { data: repoCommands = [], isLoading } =
-    api.github.getSlashCommands.useQuery(
-      {
-        teamId: teamId!,
-        repository: repository!,
-      },
-      {
-        enabled: isOpen && !!teamId && !!repository,
-        staleTime: 30_000, // Cache for 30 seconds
-        refetchOnWindowFocus: false,
-      },
-    )
+  // Fetch repository commands from workflows router (always fetch, not just when open)
+  const { data: workflowCommands = [], isLoading } =
+    trpc.workflows.listCommands.useQuery(undefined, {
+      staleTime: 30_000, // Cache for 30 seconds
+      refetchOnWindowFocus: false,
+    })
+
+  // Debug logging
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[SlashCommand] Dropdown opened, commands:', workflowCommands?.length ?? 0, 'loading:', isLoading)
+    }
+  }, [isOpen, workflowCommands, isLoading])
+
+  // Transform workflow commands to slash command format
+  const repoCommands: SlashCommandOption[] = workflowCommands.map((cmd) => ({
+    id: cmd.id,
+    name: cmd.name,
+    description: cmd.description,
+    command: `/${cmd.name}`,
+    category: "repository" as const,
+    path: cmd.sourcePath,
+  }))
 
   // State for loading command content
   const [isLoadingContent, setIsLoadingContent] = useState(false)
 
   // tRPC utils for fetching command content
-  const utils = api.useUtils()
+  const utils = trpc.useUtils()
 
   // Handle command selection - fetch content for repository commands
   const handleSelect = useCallback(
@@ -118,12 +128,10 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       }
 
       // For repository commands, fetch the prompt content first
-      if (option.path && teamId) {
+      if (option.path) {
         setIsLoadingContent(true)
         try {
-          const result = await utils.github.getSlashCommandContent.fetch({
-            teamId,
-            repository: option.repository || repository!,
+          const result = await utils.workflows.getCommandContent.fetch({
             path: option.path,
           })
 
@@ -144,7 +152,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         onSelect(option)
       }
     },
-    [onSelect, onClose, teamId, repository, utils],
+    [onSelect, onClose, utils],
   )
 
   // Combine builtin and repository commands, filtered by search
@@ -302,7 +310,22 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
+  // Debug: log render state
+  useEffect(() => {
+    console.log('[SlashCommand] Render state:', {
+      isOpen,
+      optionsCount: options.length,
+      position,
+      searchText: debouncedSearchText
+    })
+  }, [isOpen, options.length, position, debouncedSearchText])
+
+  if (!isOpen) {
+    console.log('[SlashCommand] Not rendering - isOpen is false')
+    return null
+  }
+
+  console.log('[SlashCommand] Rendering dropdown with', options.length, 'options')
 
   // Calculate dropdown dimensions (matching file mention style)
   const dropdownWidth = 320
@@ -353,8 +376,9 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   }
 
   // Compute actual maxHeight based on available space on the chosen side
+  // Ensure minimum height of 100px so dropdown is always visible, even when loading
   const computedMaxHeight = Math.max(
-    80,
+    100, // Minimum 100px to show loading state or empty state
     Math.min(
       requestedHeight,
       placeAbove ? availableAbove - gap : availableBelow - gap,

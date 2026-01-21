@@ -44,6 +44,8 @@ import {
 } from "../atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
+import { CommandsDropdown } from "../components/commands-dropdown"
+import { AgentsDropdown } from "../components/agents-dropdown"
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
@@ -53,11 +55,6 @@ const agentsSettingsDialogActiveTabAtom = atom<string | null>(null)
 // Desktop uses real tRPC
 import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
-import {
-  AgentsSlashCommand,
-  COMMAND_PROMPTS,
-  type SlashCommandOption,
-} from "../commands"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
@@ -225,11 +222,6 @@ export function NewChatForm({
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionSearchText, setMentionSearchText] = useState("")
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 })
-
-  // Slash command dropdown state
-  const [showSlashDropdown, setShowSlashDropdown] = useState(false)
-  const [slashSearchText, setSlashSearchText] = useState("")
-  const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 })
 
   // Mode tooltip state (floating tooltip like canvas)
   const [modeTooltip, setModeTooltip] = useState<{
@@ -653,6 +645,7 @@ export function NewChatForm({
         workMode === "worktree" ? selectedBranch || undefined : undefined,
       useWorktree: workMode === "worktree",
       mode: isPlanMode ? "plan" : "agent",
+      model: selectedModel?.id as "opus" | "sonnet" | "haiku" | undefined, // Pass selected model to backend
     })
     // Editor and images are cleared in onSuccess callback
   }, [
@@ -663,7 +656,29 @@ export function NewChatForm({
     workMode,
     images,
     isPlanMode,
+    selectedModel,
   ])
+
+  // Handle command selection from Commands dropdown
+  const handleCommandSelect = useCallback((command: string) => {
+    const currentValue = editorRef.current?.getValue() || ""
+    const newValue = currentValue.trim()
+      ? `${command} ${currentValue}`
+      : command
+    editorRef.current?.setValue(newValue)
+    editorRef.current?.focus()
+  }, [])
+
+  // Handle agent selection from Agents dropdown
+  const handleAgentSelect = useCallback((agentId: string) => {
+    const command = `/${agentId} `
+    const currentValue = editorRef.current?.getValue() || ""
+    const newValue = currentValue.trim()
+      ? `${command}${currentValue}`
+      : command
+    editorRef.current?.setValue(newValue)
+    editorRef.current?.focus()
+  }, [])
 
   const handleMentionSelect = useCallback((mention: FileMentionOption) => {
     editorRef.current?.insertMention(mention)
@@ -737,69 +752,6 @@ export function NewChatForm({
   const handleCloseTrigger = useCallback(() => {
     setShowMentionDropdown(false)
   }, [])
-
-  // Slash command handlers
-  const handleSlashTrigger = useCallback(
-    ({ searchText, rect }: { searchText: string; rect: DOMRect }) => {
-      setSlashSearchText(searchText)
-      setSlashPosition({ top: rect.top, left: rect.left })
-      setShowSlashDropdown(true)
-    },
-    [],
-  )
-
-  const handleCloseSlashTrigger = useCallback(() => {
-    setShowSlashDropdown(false)
-  }, [])
-
-  const handleSlashSelect = useCallback(
-    (command: SlashCommandOption) => {
-      // Clear the slash command text from editor
-      editorRef.current?.clearSlashCommand()
-      setShowSlashDropdown(false)
-
-      // Handle builtin commands
-      if (command.category === "builtin") {
-        switch (command.name) {
-          case "clear":
-            editorRef.current?.clear()
-            break
-          case "plan":
-            if (!isPlanMode) {
-              setIsPlanMode(true)
-            }
-            break
-          case "agent":
-            if (isPlanMode) {
-              setIsPlanMode(false)
-            }
-            break
-          // Prompt-based commands - auto-send to agent
-          case "review":
-          case "pr-comments":
-          case "release-notes":
-          case "security-review": {
-            const prompt =
-              COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
-            if (prompt) {
-              editorRef.current?.setValue(prompt)
-              // Auto-send the prompt to agent
-              setTimeout(() => handleSend(), 0)
-            }
-            break
-          }
-        }
-        return
-      }
-
-      // Handle repository commands - auto-send to agent
-      if (command.prompt) {
-        editorRef.current?.setValue(command.prompt)
-        setTimeout(() => handleSend(), 0)
-      }
-    },
-    [isPlanMode, setIsPlanMode, handleSend],
-  )
 
   // Paste handler for images and plain text
   // Uses async text insertion to prevent UI freeze with large text
@@ -959,12 +911,10 @@ export function NewChatForm({
                       ref={editorRef}
                       onTrigger={handleMentionTrigger}
                       onCloseTrigger={handleCloseTrigger}
-                      onSlashTrigger={handleSlashTrigger}
-                      onCloseSlashTrigger={handleCloseSlashTrigger}
                       onContentChange={handleContentChange}
                       onSubmit={handleSend}
                       onShiftTab={() => setIsPlanMode((prev) => !prev)}
-                      placeholder="Plan, @ for context, / for commands"
+                      placeholder="Plan or Accept, @ for context"
                       className={cn(
                         "bg-transparent max-h-[200px] overflow-y-auto p-1",
                         isMobileFullscreen ? "min-h-[56px]" : "min-h-[44px]",
@@ -998,7 +948,7 @@ export function NewChatForm({
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5" />
                           )}
-                          <span>{isPlanMode ? "Plan" : "Agent"}</span>
+                          <span>{isPlanMode ? "Plan" : "Accept"}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -1057,7 +1007,7 @@ export function NewChatForm({
                           >
                             <div className="flex items-center gap-2">
                               <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Agent</span>
+                              <span>Accept</span>
                             </div>
                             {!isPlanMode && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
@@ -1188,6 +1138,18 @@ export function NewChatForm({
                           })}
                         </DropdownMenuContent>
                       </DropdownMenu>
+
+                      {/* Commands Dropdown */}
+                      <CommandsDropdown
+                        onCommandSelect={handleCommandSelect}
+                        disabled={createChatMutation.isPending}
+                      />
+
+                      {/* Agents Dropdown */}
+                      <AgentsDropdown
+                        onAgentSelect={handleAgentSelect}
+                        disabled={createChatMutation.isPending}
+                      />
                     </div>
 
                     <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
@@ -1402,19 +1364,6 @@ export function NewChatForm({
                   searchText={mentionSearchText}
                   position={mentionPosition}
                   projectPath={validatedProject?.path}
-                />
-
-                {/* Slash command dropdown */}
-                <AgentsSlashCommand
-                  isOpen={showSlashDropdown}
-                  onClose={handleCloseSlashTrigger}
-                  onSelect={handleSlashSelect}
-                  searchText={slashSearchText}
-                  position={slashPosition}
-                  teamId={selectedTeamId || undefined}
-                  repository={resolvedRepo?.full_name}
-                  isPlanMode={isPlanMode}
-                  disabledCommands={["clear"]}
                 />
               </div>
             </div>

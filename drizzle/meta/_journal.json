@@ -64,6 +64,20 @@
       "when": 1768686511944,
       "tag": "0008_elite_thor_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1769011377535,
+      "tag": "0009_chilly_daredevil",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1769013697511,
+      "tag": "0010_misty_marrow",
+      "breakpoints": true
     }
   ]
 }

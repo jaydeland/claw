@@ -199,7 +199,7 @@ export function WorkflowTree() {
     setWorkflowsPreviewOpen(true)
   }
 
-  const handleSelectCommand = (command: CommandMetadata) => {
+  const handleSelectCommand = (command: any) => {
     setSelectedNode({
       type: "command",
       id: command.id,
@@ -211,7 +211,7 @@ export function WorkflowTree() {
     setWorkflowsPreviewOpen(true)
   }
 
-  const handleSelectSkill = (skill: SkillMetadata) => {
+  const handleSelectSkill = (skill: any) => {
     setSelectedNode({
       type: "skill",
       id: skill.id,
@@ -281,19 +281,58 @@ export function WorkflowTree() {
                   level={1}
                   onClick={() => handleSelectAgent(agent)}
                 >
-                  {/* Tools Category */}
-                  <DependencyCategory
-                    title="Tools"
-                    items={deps.tools}
-                    nodeKey={`${agentNodeKey}:tools`}
-                    isExpanded={isNodeExpanded(`${agentNodeKey}:tools`)}
-                    onToggle={handleToggle}
-                    level={2}
-                    icon={<Cpu className="h-3 w-3.5 text-muted-foreground" />}
-                    itemType="tool"
-                    onSelectNode={setSelectedNode}
-                    selectedNode={null} // Tools don't have source paths yet
-                  />
+                  {/* Built-in Tools Category */}
+                  {(deps.builtinTools && deps.builtinTools.length > 0) && (
+                    <DependencyCategory
+                      title="Built-in Tools"
+                      items={deps.builtinTools}
+                      nodeKey={`${agentNodeKey}:builtinTools`}
+                      isExpanded={isNodeExpanded(`${agentNodeKey}:builtinTools`)}
+                      onToggle={handleToggle}
+                      level={2}
+                      icon={<Cpu className="h-3 w-3.5 text-blue-500" />}
+                      itemType="tool"
+                      onSelectNode={setSelectedNode}
+                      selectedNode={null}
+                    />
+                  )}
+
+                  {/* MCP Tools Category - Flat list with server labels */}
+                  {(deps.mcpTools && deps.mcpTools.length > 0) && (
+                    <TreeNode
+                      nodeKey={`${agentNodeKey}:mcpTools`}
+                      isExpanded={isNodeExpanded(`${agentNodeKey}:mcpTools`)}
+                      onToggle={handleToggle}
+                      label="MCP Tools"
+                      level={2}
+                      icon={<Network className="h-3 w-3.5 text-pink-500" />}
+                    >
+                      {/* Flat list of MCP tools with server name shown */}
+                      {deps.mcpTools.map(({ tool, server }) => (
+                        <div
+                          key={tool}
+                          className="group py-1 pr-2 cursor-pointer transition-colors rounded-sm text-sm hover:bg-muted/50"
+                          style={{ paddingLeft: `${8 + 3 * 16}px` }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedNode({
+                              type: "tool",
+                              id: tool,
+                              name: tool,
+                              sourcePath: "",
+                            })
+                          }}
+                        >
+                          <span className="font-mono text-muted-foreground group-hover:text-foreground">
+                            {tool.split("__").pop()}
+                          </span>
+                          <span className="ml-2 text-xs text-muted-foreground/60">
+                            ({server})
+                          </span>
+                        </div>
+                      ))}
+                    </TreeNode>
+                  )}
 
                   {/* Skills Category */}
                   <DependencyCategory

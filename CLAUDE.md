@@ -24,6 +24,43 @@ bun run db:generate      # Generate migrations from schema
 bun run db:push          # Push schema directly (dev only)
 ```
 
+## Remote Debugging
+
+The app enables remote debugging on port **9223** in development mode for MCP server access.
+
+**Test debugger endpoint:**
+```bash
+curl http://localhost:9223/json
+```
+
+**Configure electron-mcp-server:**
+
+Add to your MCP config file:
+- **Devyard mode:** `$VIDYARD_PATH/devyard/claude/mcp.json`
+- **Standard mode:** `~/.claude/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "electron": {
+      "command": "npx",
+      "args": ["-y", "electron-mcp-server"],
+      "env": {
+        "SCREENSHOT_ENCRYPTION_KEY": "your-32-byte-hex-key",
+        "SECURITY_LEVEL": "balanced"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+**Generate encryption key:** `openssl rand -hex 32`
+**Note:** Server auto-scans ports 9222-9225. The encryption key is only needed in the MCP server config, not in the app code.
+
+**Architecture:** Vite Dev (5174) → Electron Main → Remote Debug (9223) → MCP Server
+
 ## Development Environment
 
 This project uses **Flox** for reproducible development environments. The 1code environment inherits from the devyard environment (TypeScript tooling, Node.js, Python, etc.) and adds app-specific dependencies (bun, electron).

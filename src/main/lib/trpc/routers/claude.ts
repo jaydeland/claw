@@ -163,12 +163,13 @@ function getClaudeCodeSettings(): {
     let configDir = settings.customConfigDir
     const authMode = (settings.authMode || "oauth") as "oauth" | "aws" | "apiKey" | "devyard"
 
-    // If Devyard mode is active, use Devyard's Claude config directory
+    // If Devyard mode is active, use Devyard's Claude plugin directory
+    // This is where agents/commands/skills are stored in Devyard
     if (authMode === "devyard" && !configDir) {
       const devyardConfig = getDevyardConfig()
-      if (devyardConfig.enabled && devyardConfig.claudeConfigDir) {
-        configDir = devyardConfig.claudeConfigDir
-        console.log(`[claude] Using Devyard Claude config: ${configDir}`)
+      if (devyardConfig.enabled && devyardConfig.claudePluginDir) {
+        configDir = devyardConfig.claudePluginDir
+        console.log(`[claude] Using Devyard Claude plugin dir: ${configDir}`)
       }
     }
 
@@ -347,6 +348,7 @@ export const claudeRouter = router({
               .get()
             const existingMessages = JSON.parse(existing?.messages || "[]")
             const existingSessionId = existing?.sessionId || null
+            const existingModel = existing?.model || null // Get model from sub_chat
 
             // Check if last message is already this user message (avoid duplicate)
             const lastMsg = existingMessages[existingMessages.length - 1]
@@ -498,9 +500,10 @@ export const claudeRouter = router({
             // Ensure config dir exists
             await fs.mkdir(claudeConfigDir, { recursive: true })
 
-            // If using isolated dir (not custom), symlink skills/agents from ~/.claude/
+            // If using isolated dir (not custom or devyard), symlink skills/agents from ~/.claude/
             // This is needed because SDK looks for skills at $CLAUDE_CONFIG_DIR/skills/
-            if (!customConfigDir) {
+            // Skip symlinking for Devyard mode since it uses the plugin directory directly
+            if (!customConfigDir && authMode !== "devyard") {
               const homeClaudeDir = path.join(os.homedir(), ".claude")
               const skillsSource = path.join(homeClaudeDir, "skills")
               const skillsTarget = path.join(claudeConfigDir, "skills")
@@ -530,6 +533,8 @@ export const claudeRouter = router({
               } catch (symlinkErr) {
                 // Ignore symlink errors
               }
+            } else if (authMode === "devyard") {
+              console.log(`[claude] Devyard mode active - using plugin directory directly (no symlinks needed)`)
             }
 
             // Build final env - use appropriate auth method based on mode
@@ -689,7 +694,12 @@ export const claudeRouter = router({
                   resume: resumeSessionId,
                   continue: true,
                 }),
-                ...(input.model && { model: input.model }),
+                // Use input.model if provided, otherwise use model from sub_chat in DB
+                // Only include if model is a truthy value (not null/undefined)
+                ...((() => {
+                  const modelToUse = input.model || existingModel
+                  return modelToUse ? { model: modelToUse } : {}
+                })()),
                 // fallbackModel: "claude-opus-4-5-20251101",
                 ...(input.maxThinkingTokens && {
                   maxThinkingTokens: input.maxThinkingTokens,
@@ -702,10 +712,7 @@ export const claudeRouter = router({
             try {
               stream = claudeQuery(queryOptions)
             } catch (queryError) {
-              console.error(
-                "[CLAUDE] ✗ Failed to create SDK query:",
-                queryError,
-              )
+              console.error("[CLAUDE] ✗ Failed to create SDK query:", queryError)
               emitError(queryError, "Failed to start Claude query")
               console.log(`[SD] M:END sub=${subId} reason=query_error n=${chunkCount}`)
               safeEmit({ type: "finish" } as UIMessageChunk)
@@ -890,7 +897,18 @@ export const claudeRouter = router({
               let errorContext = "Claude streaming error"
               let errorCategory = "UNKNOWN"
 
-              if (err.message?.includes("exited with code")) {
+              // Check for "session not found" error in stderr
+              if (stderrOutput.includes("No conversation found with session ID")) {
+                errorContext = "Session expired - starting fresh conversation"
+                errorCategory = "SESSION_NOT_FOUND"
+                console.log(`[claude] Clearing stale sessionId due to session not found error`)
+
+                // Clear stale sessionId from database so next message starts fresh
+                db.update(subChats)
+                  .set({ sessionId: null })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+              } else if (err.message?.includes("exited with code")) {
                 errorContext = "Claude Code process crashed"
                 errorCategory = "PROCESS_CRASH"
               } else if (err.message?.includes("ENOENT")) {
@@ -948,11 +966,16 @@ export const claudeRouter = router({
 
               // Send error with stderr output to frontend (only if not aborted by user)
               if (!abortController.signal.aborted) {
+                // Special handling for session not found - give user helpful message
+                const errorText = errorCategory === "SESSION_NOT_FOUND"
+                  ? `${errorContext}. Please send your message again.`
+                  : stderrOutput
+                    ? `${errorContext}: ${err.message}\n\nProcess output:\n${stderrOutput}`
+                    : `${errorContext}: ${err.message}`
+
                 safeEmit({
                   type: "error",
-                  errorText: stderrOutput
-                    ? `${errorContext}: ${err.message}\n\nProcess output:\n${stderrOutput}`
-                    : `${errorContext}: ${err.message}`,
+                  errorText,
                   debugInfo: {
                     context: errorContext,
                     category: errorCategory,

@@ -28,6 +28,12 @@ if (IS_DEV) {
   console.log("[Dev] Using separate userData path:", devUserData)
 }
 
+// Enable remote debugging for MCP server access (dev mode only)
+if (IS_DEV) {
+  app.commandLine.appendSwitch("remote-debugging-port", "9223")
+  console.log("[Dev] Remote debugging enabled on port 9223")
+}
+
 // Initialize Sentry before app is ready (production only)
 if (app.isPackaged && !IS_DEV) {
   const sentryDsn = import.meta.env.MAIN_VITE_SENTRY_DSN
