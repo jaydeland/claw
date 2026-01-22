@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState, useCallback, useRef, useEffect } from "react"
+import React, { useMemo, useState, useCallback, useRef, useEffect, memo } from "react"
 import { createPortal } from "react-dom"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { motion, AnimatePresence } from "motion/react"
@@ -11,9 +11,12 @@ import {
   loadingSubChatsAtom,
   agentsSubChatUnseenChangesAtom,
   selectedAgentChatIdAtom,
+  previousAgentChatIdAtom,
   subChatFilesAtom,
   justCreatedIdsAtom,
   pendingUserQuestionsAtom,
+  undoStackAtom,
+  type UndoItem,
 } from "../agents/atoms"
 import {
   selectedTeamIdAtom,
@@ -26,16 +29,18 @@ import {
   isDesktopAtom,
   isFullscreenAtom,
 } from "../../lib/atoms"
-import { useArchiveChat } from "./hooks/use-archive-chat"
+import { trpc } from "../../lib/trpc"
 import {
   useAgentSubChatStore,
   type SubChatMeta,
 } from "../agents/stores/sub-chat-store"
+import { useShallow } from "zustand/react/shallow"
 import {
   PlusIcon,
   ArchiveIcon,
   IconDoubleChevronLeft,
   IconSpinner,
+  LoadingDot,
   PlanIcon,
   AgentIcon,
   IconOpenSidebar,
@@ -82,6 +87,96 @@ import { useSubChatDraftsCache, getSubChatDraftKey } from "../agents/lib/drafts"
 import { Checkbox } from "../../components/ui/checkbox"
 import { TypewriterText } from "../../components/ui/typewriter-text"
 
+// Isolated Search History Popover for sidebar - prevents parent re-renders when popover opens/closes
+interface SidebarSearchHistoryPopoverProps {
+  sortedSubChats: SubChatMeta[]
+  loadingSubChats: Map<string, string>
+  subChatUnseenChanges: Set<string>
+  pendingQuestionsMap: Map<string, { subChatId: string }>
+  allSubChatsLength: number
+  onSelect: (subChat: SubChatMeta) => void
+}
+
+const SidebarSearchHistoryPopover = memo(function SidebarSearchHistoryPopover({
+  sortedSubChats,
+  loadingSubChats,
+  subChatUnseenChanges,
+  pendingQuestionsMap,
+  allSubChatsLength,
+  onSelect,
+}: SidebarSearchHistoryPopoverProps) {
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+
+  const renderItem = useCallback((subChat: SubChatMeta) => {
+    const timeAgo = formatTimeAgo(subChat.updated_at || subChat.created_at)
+    const isLoading = loadingSubChats.has(subChat.id)
+    const hasUnseen = subChatUnseenChanges.has(subChat.id)
+    const mode = subChat.mode || "agent"
+    const hasPendingQuestion = pendingQuestionsMap.has(subChat.id)
+
+    return (
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center relative">
+          {hasPendingQuestion ? (
+            <QuestionIcon className="w-4 h-4 text-blue-500" />
+          ) : isLoading ? (
+            <IconSpinner className="w-4 h-4 text-muted-foreground" />
+          ) : mode === "plan" ? (
+            <PlanIcon className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <AgentIcon className="w-4 h-4 text-muted-foreground" />
+          )}
+          {hasUnseen && !isLoading && !hasPendingQuestion && (
+            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-popover flex items-center justify-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#307BD0]" />
+            </div>
+          )}
+        </div>
+        <span className="text-sm truncate flex-1">
+          {subChat.name || "New Chat"}
+        </span>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {timeAgo}
+        </span>
+      </div>
+    )
+  }, [loadingSubChats, subChatUnseenChanges, pendingQuestionsMap])
+
+  return (
+    <SearchCombobox
+      isOpen={isHistoryOpen}
+      onOpenChange={setIsHistoryOpen}
+      items={sortedSubChats}
+      onSelect={onSelect}
+      placeholder="Search chats..."
+      emptyMessage="No results"
+      getItemValue={(subChat) => `${subChat.name || "New Chat"} ${subChat.id}`}
+      renderItem={renderItem}
+      side="bottom"
+      align="end"
+      sideOffset={4}
+      collisionPadding={16}
+      trigger={
+        <Tooltip delayDuration={500}>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
+                disabled={allSubChatsLength === 0}
+              >
+                <ClockIcon className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Chat history</TooltipContent>
+        </Tooltip>
+      }
+    />
+  )
+})
+
 interface AgentsSubChatsSidebarProps {
   onClose?: () => void
   isMobile?: boolean
@@ -99,32 +194,73 @@ export function AgentsSubChatsSidebar({
   isLoading = false,
   agentName,
 }: AgentsSubChatsSidebarProps) {
-  const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
-  const openSubChatIds = useAgentSubChatStore((state) => state.openSubChatIds)
-  const pinnedSubChatIds = useAgentSubChatStore(
-    (state) => state.pinnedSubChatIds,
-  )
-  const allSubChats = useAgentSubChatStore((state) => state.allSubChats)
-  const parentChatId = useAgentSubChatStore((state) => state.chatId)
-  const togglePinSubChat = useAgentSubChatStore(
-    (state) => state.togglePinSubChat,
+  // Use shallow comparison to prevent re-renders when arrays have same content
+  const { activeSubChatId, openSubChatIds, pinnedSubChatIds, allSubChats, parentChatId, togglePinSubChat } = useAgentSubChatStore(
+    useShallow((state) => ({
+      activeSubChatId: state.activeSubChatId,
+      openSubChatIds: state.openSubChatIds,
+      pinnedSubChatIds: state.pinnedSubChatIds,
+      allSubChats: state.allSubChats,
+      parentChatId: state.chatId,
+      togglePinSubChat: state.togglePinSubChat,
+    }))
   )
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const subChatFiles = useAtomValue(subChatFilesAtom)
   const selectedTeamId = useAtomValue(selectedTeamIdAtom)
-  const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+  const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
+  const previousChatId = useAtomValue(previousAgentChatIdAtom)
+
+  // Fetch agent chats for navigation after archive
+  const { data: agentChats } = api.agents.getAgentChats.useQuery(
+    { teamId: selectedTeamId! },
+    { enabled: !!selectedTeamId },
+  )
+
+  const utils = trpc.useUtils()
 
   // Archive parent chat mutation
-  const archiveChatMutation = useArchiveChat({
-    teamId: selectedTeamId,
-    selectedChatId,
+  const archiveChatMutation = trpc.chats.archive.useMutation({
+    onSuccess: (_, variables) => {
+      utils.chats.list.invalidate()
+      utils.chats.listArchived.invalidate()
+
+      // Navigate to previous chat or new workspace
+      if (selectedChatId === variables.id) {
+        const isPreviousAvailable = previousChatId &&
+          agentChats?.some((c) => c.id === previousChatId)
+
+        if (isPreviousAvailable) {
+          setSelectedChatId(previousChatId)
+        } else {
+          setSelectedChatId(null)
+        }
+      }
+    },
   })
   const subChatUnseenChanges = useAtomValue(agentsSubChatUnseenChangesAtom)
   const setSubChatUnseenChanges = useSetAtom(agentsSubChatUnseenChangesAtom)
   const [justCreatedIds, setJustCreatedIds] = useAtom(justCreatedIdsAtom)
-  const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
+  const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
+
+  // Pending plan approvals from DB - only for open sub-chats
+  const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
+    { openSubChatIds },
+    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: (prev) => prev }
+  )
+  const pendingPlanApprovals = useMemo(() => {
+    const set = new Set<string>()
+    if (pendingPlanApprovalsData) {
+      for (const { subChatId } of pendingPlanApprovalsData) {
+        set.add(subChatId)
+      }
+    }
+    return set
+  }, [pendingPlanApprovalsData])
+
+  // Unified undo stack for Cmd+Z support
+  const setUndoStack = useSetAtom(undoStackAtom)
   const [searchQuery, setSearchQuery] = useState("")
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [focusedChatIndex, setFocusedChatIndex] = useState<number>(-1)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -135,22 +271,17 @@ export function AgentsSubChatsSidebar({
   const [renameLoading, setRenameLoading] = useState(false)
   const [showTopGradient, setShowTopGradient] = useState(false)
   const [showBottomGradient, setShowBottomGradient] = useState(false)
-  const [hoveredChatIndex, setHoveredChatIndex] = useState<number>(-1)
+  // Using ref instead of state to avoid re-renders on hover
+  const hoveredChatIndexRef = useRef<number>(-1)
   const [archiveAgentDialogOpen, setArchiveAgentDialogOpen] = useState(false)
   const [subChatToArchive, setSubChatToArchive] = useState<SubChatMeta | null>(
     null,
   )
 
-  // SubChat name tooltip state (for truncated names)
-  const [subChatTooltip, setSubChatTooltip] = useState<{
-    visible: boolean
-    position: { top: number; left: number }
-    name: string
-  } | null>(null)
+  // SubChat name tooltip - using refs instead of state to avoid re-renders on hover
   const subChatNameRefs = useRef<Map<string, HTMLSpanElement>>(new Map())
-  const subChatTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  )
+  const subChatTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
 
   // Multi-select state
   const [selectedSubChatIds, setSelectedSubChatIds] = useAtom(
@@ -329,20 +460,37 @@ export function AgentsSubChatsSidebar({
       }
       // Archive = remove from open tabs (but keep in allSubChats for history)
       useAgentSubChatStore.getState().removeFromOpenSubChats(subChatId)
+
+      // Add to unified undo stack for Cmd+Z
+      if (parentChatId) {
+        const timeoutId = setTimeout(() => {
+          setUndoStack((prev) => prev.filter(
+            (item) => !(item.type === "subchat" && item.subChatId === subChatId)
+          ))
+        }, 10000)
+
+        setUndoStack((prev) => [...prev, {
+          type: "subchat",
+          subChatId,
+          chatId: parentChatId,
+          timeoutId,
+        }])
+      }
     },
-    [openSubChats.length, allSubChats],
+    [openSubChats.length, allSubChats, parentChatId, setUndoStack],
   )
 
   const handleConfirmArchiveAgent = useCallback(() => {
     if (parentChatId) {
       // Archive the parent agent chat
-      archiveChatMutation.mutate({ chatId: parentChatId })
+      archiveChatMutation.mutate({ id: parentChatId })
     }
     setArchiveAgentDialogOpen(false)
     setSubChatToArchive(null)
   }, [parentChatId, archiveChatMutation])
 
   // Handle sub-chat card hover for truncated name tooltip (1s delay)
+  // Uses direct DOM manipulation instead of state to avoid re-renders
   const handleSubChatMouseEnter = useCallback(
     (subChatId: string, name: string, cardElement: HTMLElement) => {
       // Clear any existing timer
@@ -357,17 +505,16 @@ export function AgentsSubChatsSidebar({
       const isTruncated = nameEl.scrollWidth > nameEl.clientWidth
       if (!isTruncated) return
 
-      // Show tooltip after 1 second delay
+      // Show tooltip after 1 second delay via DOM manipulation (no state update)
       subChatTooltipTimerRef.current = setTimeout(() => {
+        const tooltip = tooltipRef.current
+        if (!tooltip) return
+
         const rect = cardElement.getBoundingClientRect()
-        setSubChatTooltip({
-          visible: true,
-          position: {
-            top: rect.top + rect.height / 2,
-            left: rect.right + 8,
-          },
-          name,
-        })
+        tooltip.style.display = "block"
+        tooltip.style.top = `${rect.top + rect.height / 2}px`
+        tooltip.style.left = `${rect.right + 8}px`
+        tooltip.textContent = name
       }, 1000)
     },
     [],
@@ -379,7 +526,11 @@ export function AgentsSubChatsSidebar({
       clearTimeout(subChatTooltipTimerRef.current)
       subChatTooltipTimerRef.current = null
     }
-    setSubChatTooltip(null)
+    // Hide tooltip via DOM - no state update, no re-render
+    const tooltip = tooltipRef.current
+    if (tooltip) {
+      tooltip.style.display = "none"
+    }
   }, [])
 
   const handleArchiveAllBelow = useCallback(
@@ -394,8 +545,21 @@ export function AgentsSubChatsSidebar({
         .map((c) => c.id)
 
       idsToClose.forEach((id) => state.removeFromOpenSubChats(id))
+
+      // Add each to unified undo stack for Cmd+Z
+      if (parentChatId) {
+        const newItems: UndoItem[] = idsToClose.map((id) => {
+          const timeoutId = setTimeout(() => {
+            setUndoStack((prev) => prev.filter(
+              (item) => !(item.type === "subchat" && item.subChatId === id)
+            ))
+          }, 10000)
+          return { type: "subchat" as const, subChatId: id, chatId: parentChatId, timeoutId }
+        })
+        setUndoStack((prev) => [...prev, ...newItems])
+      }
     },
-    [filteredSubChats],
+    [filteredSubChats, parentChatId, setUndoStack],
   )
 
   const onCloseOtherChats = useCallback((subChatId: string) => {
@@ -403,7 +567,20 @@ export function AgentsSubChatsSidebar({
     const idsToClose = state.openSubChatIds.filter((id) => id !== subChatId)
     idsToClose.forEach((id) => state.removeFromOpenSubChats(id))
     state.setActiveSubChat(subChatId)
-  }, [])
+
+    // Add each to unified undo stack for Cmd+Z
+    if (parentChatId) {
+      const newItems: UndoItem[] = idsToClose.map((id) => {
+        const timeoutId = setTimeout(() => {
+          setUndoStack((prev) => prev.filter(
+            (item) => !(item.type === "subchat" && item.subChatId === id)
+          ))
+        }, 10000)
+        return { type: "subchat" as const, subChatId: id, chatId: parentChatId, timeoutId }
+      })
+      setUndoStack((prev) => [...prev, ...newItems])
+    }
+  }, [parentChatId, setUndoStack])
 
   const renameMutation = api.agents.renameSubChat.useMutation({
     // Note: store is updated optimistically in handleRenameSave, no need for onSuccess
@@ -604,9 +781,22 @@ export function AgentsSubChatsSidebar({
         const state = useAgentSubChatStore.getState()
         idsToArchive.forEach((id) => state.removeFromOpenSubChats(id))
         clearSubChatSelection()
+
+        // Add each to unified undo stack for Cmd+Z
+        if (parentChatId) {
+          const newItems: UndoItem[] = idsToArchive.map((id) => {
+            const timeoutId = setTimeout(() => {
+              setUndoStack((prev) => prev.filter(
+                (item) => !(item.type === "subchat" && item.subChatId === id)
+              ))
+            }, 10000)
+            return { type: "subchat" as const, subChatId: id, chatId: parentChatId, timeoutId }
+          })
+          setUndoStack((prev) => [...prev, ...newItems])
+        }
       }
     }
-  }, [selectedSubChatIds, openSubChatIds, allSubChats, clearSubChatSelection])
+  }, [selectedSubChatIds, openSubChatIds, allSubChats, clearSubChatSelection, parentChatId, setUndoStack])
 
   // Handle checkbox click
   const handleCheckboxClick = (e: React.MouseEvent, subChatId: string) => {
@@ -682,10 +872,10 @@ export function AgentsSubChatsSidebar({
     () => {
       if (!filteredSubChats || filteredSubChats.length === 0) return
 
-      // Prefer hovered, then focused
+      // Prefer hovered (via ref), then focused
       const targetIndex =
-        hoveredChatIndex >= 0
-          ? hoveredChatIndex
+        hoveredChatIndexRef.current >= 0
+          ? hoveredChatIndexRef.current
           : focusedChatIndex >= 0
             ? focusedChatIndex
             : -1
@@ -697,7 +887,6 @@ export function AgentsSubChatsSidebar({
     },
     [
       filteredSubChats,
-      hoveredChatIndex,
       focusedChatIndex,
       toggleSubChatSelection,
     ],
@@ -754,74 +943,13 @@ export function AgentsSubChatsSidebar({
   // History and Close buttons - reusable element
   const headerButtons = onClose && (
     <div className="flex items-center gap-1">
-      <SearchCombobox
-        isOpen={isHistoryOpen}
-        onOpenChange={setIsHistoryOpen}
-        items={sortedSubChats}
+      <SidebarSearchHistoryPopover
+        sortedSubChats={sortedSubChats}
+        loadingSubChats={loadingSubChats}
+        subChatUnseenChanges={subChatUnseenChanges}
+        pendingQuestionsMap={pendingQuestionsMap}
+        allSubChatsLength={allSubChats.length}
         onSelect={handleSelectFromHistory}
-        placeholder="Search chats..."
-        emptyMessage="No results"
-        getItemValue={(subChat) =>
-          `${subChat.name || "New Chat"} ${subChat.id}`
-        }
-        renderItem={(subChat) => {
-          const timeAgo = formatTimeAgo(
-            subChat.updated_at || subChat.created_at,
-          )
-          const isLoading = loadingSubChats.has(subChat.id)
-          const hasUnseen = subChatUnseenChanges.has(subChat.id)
-          const mode = subChat.mode || "agent"
-          const hasPendingQuestion = pendingQuestions?.subChatId === subChat.id
-
-          return (
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* Icon with badge - question icon has priority */}
-              <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center relative">
-                {hasPendingQuestion ? (
-                  <QuestionIcon className="w-4 h-4 text-blue-500" />
-                ) : isLoading ? (
-                  <IconSpinner className="w-4 h-4 text-muted-foreground" />
-                ) : mode === "plan" ? (
-                  <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                ) : (
-                  <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                )}
-                {hasUnseen && !isLoading && !hasPendingQuestion && (
-                  <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-popover flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#307BD0]" />
-                  </div>
-                )}
-              </div>
-              <span className="text-sm truncate flex-1">
-                {subChat.name || "New Chat"}
-              </span>
-              <span className="text-sm text-muted-foreground whitespace-nowrap">
-                {timeAgo}
-              </span>
-            </div>
-          )
-        }}
-        side="bottom"
-        align="end"
-        sideOffset={4}
-        collisionPadding={16}
-        trigger={
-          <Tooltip delayDuration={500}>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
-                  disabled={allSubChats.length === 0}
-                >
-                  <ClockIcon className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Chat history</TooltipContent>
-          </Tooltip>
-        }
       />
       <Tooltip delayDuration={500}>
         <TooltipTrigger asChild>
@@ -846,6 +974,17 @@ export function AgentsSubChatsSidebar({
       className="flex flex-col h-full bg-background border-r overflow-hidden relative"
       style={{ borderRightWidth: "0.5px" }}
     >
+      {/* Draggable area for window movement - background layer (hidden in fullscreen) */}
+      {isDesktop && !isFullscreen && (
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            // @ts-expect-error - WebKit-specific property
+            WebkitAppRegion: "drag",
+          }}
+        />
+      )}
+
       {/* Spacer for macOS traffic lights - only when agents sidebar is open */}
       {isSidebarOpen && (
         <TrafficLightSpacer isDesktop={isDesktop} isFullscreen={isFullscreen} />
@@ -865,27 +1004,13 @@ export function AgentsSubChatsSidebar({
       )}
 
       {/* Header */}
-      <div className="p-2 pb-3 flex-shrink-0">
+      <div className="p-2 pb-3 flex-shrink-0 relative z-10">
         <div className="space-y-2">
           {/* Top row - different layout based on agents sidebar state */}
           {isSidebarOpen ? (
-            <div
-              className="h-6"
-              style={{
-                // @ts-expect-error - WebKit-specific property for Electron window dragging
-                WebkitAppRegion:
-                  isDesktop && !isFullscreen ? "drag" : undefined,
-              }}
-            />
+            <div className="h-6" />
           ) : (
-            <div
-              className="flex items-center justify-between gap-1 mb-1"
-              style={{
-                // @ts-expect-error - WebKit-specific property for Electron window dragging
-                WebkitAppRegion:
-                  isDesktop && !isFullscreen ? "drag" : undefined,
-              }}
-            >
+            <div className="flex items-center justify-between gap-1 mb-1">
               {onBackToChats && (
                 <Tooltip delayDuration={500}>
                   <TooltipTrigger asChild>
@@ -919,7 +1044,13 @@ export function AgentsSubChatsSidebar({
             </div>
           )}
           {/* Search Input */}
-          <div className="relative">
+          <div
+            className="relative"
+            style={{
+              // @ts-expect-error - WebKit-specific property
+              WebkitAppRegion: "no-drag",
+            }}
+          >
             <Input
               ref={searchInputRef}
               placeholder="Search chats..."
@@ -968,31 +1099,44 @@ export function AgentsSubChatsSidebar({
             />
           </div>
           {/* New Chat Button */}
-          <Tooltip delayDuration={500}>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={handleCreateNew}
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 w-full hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground rounded-lg"
-              >
-                <span className="text-sm font-medium">New Chat</span>
-              </Button>
-            </TooltipTrigger>
+          <div
+            style={{
+              // @ts-expect-error - WebKit-specific property
+              WebkitAppRegion: "no-drag",
+            }}
+          >
+            <Tooltip delayDuration={500}>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleCreateNew}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 w-full hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground rounded-lg"
+                >
+                  <span className="text-sm font-medium">New Chat</span>
+                </Button>
+              </TooltipTrigger>
             <TooltipContent side="right">
               Create a new chat
               <Kbd>{getShortcutKey("newTab")}</Kbd>
             </TooltipContent>
           </Tooltip>
+          </div>
         </div>
       </div>
 
       {/* Scrollable Sub-Chats List */}
-      <div className="flex-1 min-h-0 relative">
+      <div
+        className="flex-1 min-h-0 relative z-10"
+        style={{
+          // @ts-expect-error - WebKit-specific property
+          WebkitAppRegion: "no-drag",
+        }}
+      >
         {/* Loading state - centered spinner */}
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <IconSpinner className="w-5 h-5 text-muted-foreground" />
+            <IconSpinner className="w-4 h-4 text-muted-foreground" />
           </div>
         ) : (
           <>
@@ -1051,7 +1195,8 @@ export function AgentsSubChatsSidebar({
                           const mode = subChat.mode || "agent"
                           const isChecked = selectedSubChatIds.has(subChat.id)
                           const draftText = getDraftText(subChat.id)
-                          const hasPendingQuestion = pendingQuestions?.subChatId === subChat.id
+                          const hasPendingQuestion = pendingQuestionsMap.has(subChat.id)
+                          const hasPendingPlan = pendingPlanApprovals.has(subChat.id)
                           const fileChanges = subChatFiles.get(subChat.id) || []
                           const stats =
                             fileChanges.length > 0
@@ -1089,7 +1234,7 @@ export function AgentsSubChatsSidebar({
                                     }
                                   }}
                                   onMouseEnter={(e) => {
-                                    setHoveredChatIndex(globalIndex)
+                                    hoveredChatIndexRef.current = globalIndex
                                     handleSubChatMouseEnter(
                                       subChat.id,
                                       subChat.name || "New Chat",
@@ -1097,11 +1242,11 @@ export function AgentsSubChatsSidebar({
                                     )
                                   }}
                                   onMouseLeave={() => {
-                                    setHoveredChatIndex(-1)
+                                    hoveredChatIndexRef.current = -1
                                     handleSubChatMouseLeave()
                                   }}
                                   className={cn(
-                                    "w-full text-left py-1.5 transition-colors duration-150 cursor-pointer group relative",
+                                    "w-full text-left py-1.5 transition-colors duration-75 cursor-pointer group relative",
                                     "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                                     isMultiSelectMode ? "px-3" : "pl-2 pr-2",
                                     isMultiSelectMode ? "" : "rounded-md",
@@ -1153,7 +1298,7 @@ export function AgentsSubChatsSidebar({
                                         )}
                                       </div>
                                       {/* Badge in bottom-right corner - hidden in multi-select mode and when pending question */}
-                                      {(isSubChatLoading || hasUnseen) &&
+                                      {(isSubChatLoading || hasUnseen || hasPendingPlan) &&
                                         !isMultiSelectMode && !hasPendingQuestion && (
                                           <div
                                             className={cn(
@@ -1163,10 +1308,13 @@ export function AgentsSubChatsSidebar({
                                                 : "bg-[#F4F4F4] group-hover:bg-[#E8E8E8] dark:bg-[#101010] dark:group-hover:bg-[#1B1B1B]",
                                             )}
                                           >
+                                            {/* Priority: loader > amber dot (pending plan) > blue dot (unseen) */}
                                             {isSubChatLoading ? (
-                                              <IconSpinner className="w-2.5 h-2.5 text-muted-foreground" />
+                                              <LoadingDot isLoading={true} className="w-2.5 h-2.5 text-muted-foreground" />
+                                            ) : hasPendingPlan ? (
+                                              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                             ) : (
-                                              <div className="w-2 h-2 rounded-full bg-[#307BD0]" />
+                                              <LoadingDot isLoading={false} className="w-2.5 h-2.5 text-muted-foreground" />
                                             )}
                                           </div>
                                         )}
@@ -1207,39 +1355,35 @@ export function AgentsSubChatsSidebar({
                                       </div>
                                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 min-w-0">
                                         {draftText ? (
-                                          <span className="truncate">
+                                          <span className="truncate flex-1 min-w-0">
                                             <span className="text-blue-500">Draft:</span>{" "}
                                             {draftText}
                                           </span>
                                         ) : (
-                                          <span className="flex-shrink-0">
-                                            {timeAgo}
+                                          <span className="truncate flex-1 min-w-0">
+                                            {stats ? (
+                                              <>
+                                                {stats.fileCount}{" "}
+                                                {stats.fileCount === 1
+                                                  ? "file"
+                                                  : "files"}
+                                              </>
+                                            ) : null}
                                           </span>
                                         )}
-                                        {!draftText && stats && (
-                                          <>
-                                            <span className="text-muted-foreground/40">
-                                              ·
-                                            </span>
-                                            <span>
-                                              {stats.fileCount}{" "}
-                                              {stats.fileCount === 1
-                                                ? "file"
-                                                : "files"}
-                                            </span>
-                                            {(stats.additions > 0 ||
-                                              stats.deletions > 0) && (
-                                              <>
-                                                <span className="text-green-600 dark:text-green-400">
-                                                  +{stats.additions}
-                                                </span>
-                                                <span className="text-red-600 dark:text-red-400">
-                                                  -{stats.deletions}
-                                                </span>
-                                              </>
-                                            )}
-                                          </>
-                                        )}
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                          {!draftText && stats && (stats.additions > 0 || stats.deletions > 0) && (
+                                            <>
+                                              <span className="text-green-600 dark:text-green-400">
+                                                +{stats.additions}
+                                              </span>
+                                              <span className="text-red-600 dark:text-red-400">
+                                                -{stats.deletions}
+                                              </span>
+                                            </>
+                                          )}
+                                          <span>{timeAgo}</span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -1324,7 +1468,8 @@ export function AgentsSubChatsSidebar({
                           const mode = subChat.mode || "agent"
                           const isChecked = selectedSubChatIds.has(subChat.id)
                           const draftText = getDraftText(subChat.id)
-                          const hasPendingQuestion = pendingQuestions?.subChatId === subChat.id
+                          const hasPendingQuestion = pendingQuestionsMap.has(subChat.id)
+                          const hasPendingPlan = pendingPlanApprovals.has(subChat.id)
                           const fileChanges = subChatFiles.get(subChat.id) || []
                           const stats =
                             fileChanges.length > 0
@@ -1362,7 +1507,7 @@ export function AgentsSubChatsSidebar({
                                     }
                                   }}
                                   onMouseEnter={(e) => {
-                                    setHoveredChatIndex(globalIndex)
+                                    hoveredChatIndexRef.current = globalIndex
                                     handleSubChatMouseEnter(
                                       subChat.id,
                                       subChat.name || "New Chat",
@@ -1370,11 +1515,11 @@ export function AgentsSubChatsSidebar({
                                     )
                                   }}
                                   onMouseLeave={() => {
-                                    setHoveredChatIndex(-1)
+                                    hoveredChatIndexRef.current = -1
                                     handleSubChatMouseLeave()
                                   }}
                                   className={cn(
-                                    "w-full text-left py-1.5 transition-colors duration-150 cursor-pointer group relative",
+                                    "w-full text-left py-1.5 transition-colors duration-75 cursor-pointer group relative",
                                     "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                                     isMultiSelectMode ? "px-3" : "pl-2 pr-2",
                                     isMultiSelectMode ? "" : "rounded-md",
@@ -1426,7 +1571,7 @@ export function AgentsSubChatsSidebar({
                                         )}
                                       </div>
                                       {/* Badge - hidden in multi-select mode and when pending question */}
-                                      {(isSubChatLoading || hasUnseen) &&
+                                      {(isSubChatLoading || hasUnseen || hasPendingPlan) &&
                                         !isMultiSelectMode && !hasPendingQuestion && (
                                           <div
                                             className={cn(
@@ -1436,10 +1581,13 @@ export function AgentsSubChatsSidebar({
                                                 : "bg-[#F4F4F4] group-hover:bg-[#E8E8E8] dark:bg-[#101010] dark:group-hover:bg-[#1B1B1B]",
                                             )}
                                           >
+                                            {/* Priority: loader > amber dot (pending plan) > blue dot (unseen) */}
                                             {isSubChatLoading ? (
-                                              <IconSpinner className="w-2.5 h-2.5 text-muted-foreground" />
+                                              <LoadingDot isLoading={true} className="w-2.5 h-2.5 text-muted-foreground" />
+                                            ) : hasPendingPlan ? (
+                                              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                             ) : (
-                                              <div className="w-2 h-2 rounded-full bg-[#307BD0]" />
+                                              <LoadingDot isLoading={false} className="w-2.5 h-2.5 text-muted-foreground" />
                                             )}
                                           </div>
                                         )}
@@ -1480,39 +1628,35 @@ export function AgentsSubChatsSidebar({
                                       </div>
                                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 min-w-0">
                                         {draftText ? (
-                                          <span className="truncate">
+                                          <span className="truncate flex-1 min-w-0">
                                             <span className="text-blue-500">Draft:</span>{" "}
                                             {draftText}
                                           </span>
                                         ) : (
-                                          <span className="flex-shrink-0">
-                                            {timeAgo}
+                                          <span className="truncate flex-1 min-w-0">
+                                            {stats ? (
+                                              <>
+                                                {stats.fileCount}{" "}
+                                                {stats.fileCount === 1
+                                                  ? "file"
+                                                  : "files"}
+                                              </>
+                                            ) : null}
                                           </span>
                                         )}
-                                        {!draftText && stats && (
-                                          <>
-                                            <span className="text-muted-foreground/40">
-                                              ·
-                                            </span>
-                                            <span>
-                                              {stats.fileCount}{" "}
-                                              {stats.fileCount === 1
-                                                ? "file"
-                                                : "files"}
-                                            </span>
-                                            {(stats.additions > 0 ||
-                                              stats.deletions > 0) && (
-                                              <>
-                                                <span className="text-green-600 dark:text-green-400">
-                                                  +{stats.additions}
-                                                </span>
-                                                <span className="text-red-600 dark:text-red-400">
-                                                  -{stats.deletions}
-                                                </span>
-                                              </>
-                                            )}
-                                          </>
-                                        )}
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                          {!draftText && stats && (stats.additions > 0 || stats.deletions > 0) && (
+                                            <>
+                                              <span className="text-green-600 dark:text-green-400">
+                                                +{stats.additions}
+                                              </span>
+                                              <span className="text-red-600 dark:text-red-400">
+                                                -{stats.deletions}
+                                              </span>
+                                            </>
+                                          )}
+                                          <span>{timeAgo}</span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -1588,7 +1732,11 @@ export function AgentsSubChatsSidebar({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0 }}
-            className="flex-shrink-0 p-2 bg-background space-y-2"
+            className="flex-shrink-0 p-2 bg-background space-y-2 relative z-10"
+            style={{
+              // @ts-expect-error - WebKit-specific property
+              WebkitAppRegion: "no-drag",
+            }}
           >
             <div className="flex items-center justify-between px-1">
               <span className="text-xs text-muted-foreground">
@@ -1662,22 +1810,17 @@ export function AgentsSubChatsSidebar({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* SubChat name tooltip portal */}
-      {subChatTooltip?.visible &&
-        typeof document !== "undefined" &&
+      {/* SubChat name tooltip portal - always rendered, visibility controlled via ref */}
+      {typeof document !== "undefined" &&
         createPortal(
           <div
-            className="fixed z-[100000] max-w-xs px-2 py-1 text-xs bg-popover border border-border rounded-md shadow-lg dark pointer-events-none"
+            ref={tooltipRef}
+            className="fixed z-[100000] max-w-xs px-2 py-1 text-xs bg-popover border border-border rounded-md shadow-lg pointer-events-none text-foreground/90 whitespace-nowrap"
             style={{
-              top: subChatTooltip.position.top,
-              left: subChatTooltip.position.left,
+              display: "none",
               transform: "translateY(-50%)",
             }}
-          >
-            <div className="text-foreground/90 whitespace-nowrap">
-              {subChatTooltip.name}
-            </div>
-          </div>,
+          />,
           document.body,
         )}
     </div>

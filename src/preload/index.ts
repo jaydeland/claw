@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
   platform: process.platform,
   arch: process.arch,
   getVersion: () => ipcRenderer.invoke("app:version"),
+  isPackaged: () => ipcRenderer.invoke("app:isPackaged"),
 
   // Auto-update methods
   checkForUpdates: () => ipcRenderer.invoke("update:check"),
@@ -75,6 +76,11 @@ contextBridge.exposeInMainWorld("desktopApi", {
   setTrafficLightVisibility: (visible: boolean) =>
     ipcRenderer.invoke("window:set-traffic-light-visibility", visible),
 
+  // Windows-specific: Frame preference (native vs frameless)
+  setWindowFramePreference: (useNativeFrame: boolean) =>
+    ipcRenderer.invoke("window:set-frame-preference", useNativeFrame),
+  getWindowFrameState: () => ipcRenderer.invoke("window:get-frame-state"),
+
   // Window events
   onFullscreenChange: (callback: (isFullscreen: boolean) => void) => {
     const handler = (_event: unknown, isFullscreen: boolean) => callback(isFullscreen)
@@ -101,6 +107,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // Native features
   setBadge: (count: number | null) => ipcRenderer.invoke("app:set-badge", count),
+  setBadgeIcon: (imageData: string | null) => ipcRenderer.invoke("app:set-badge-icon", imageData),
   showNotification: (options: { title: string; body: string }) =>
     ipcRenderer.invoke("app:show-notification", options),
   openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
@@ -118,6 +125,24 @@ contextBridge.exposeInMainWorld("desktopApi", {
     ipcRenderer.on("shortcut:new-agent", handler)
     return () => ipcRenderer.removeListener("shortcut:new-agent", handler)
   },
+
+  // File change events (from Claude Write/Edit tools)
+  onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => {
+    const handler = (_event: unknown, data: { filePath: string; type: string; subChatId: string }) => callback(data)
+    ipcRenderer.on("file-changed", handler)
+    return () => ipcRenderer.removeListener("file-changed", handler)
+  },
+
+  // Git status change events (from file watcher)
+  onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => {
+    const handler = (_event: unknown, data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => callback(data)
+    ipcRenderer.on("git:status-changed", handler)
+    return () => ipcRenderer.removeListener("git:status-changed", handler)
+  },
+
+  // Subscribe to git watcher for a worktree (from renderer)
+  subscribeToGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
+  unsubscribeFromGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
 })
 
 // Type definitions
@@ -137,6 +162,7 @@ export interface DesktopApi {
   platform: NodeJS.Platform
   arch: string
   getVersion: () => Promise<string>
+  isPackaged: () => Promise<boolean>
   // Auto-update
   checkForUpdates: () => Promise<UpdateInfo | null>
   downloadUpdate: () => Promise<boolean>
@@ -156,6 +182,9 @@ export interface DesktopApi {
   windowToggleFullscreen: () => Promise<void>
   windowIsFullscreen: () => Promise<boolean>
   setTrafficLightVisibility: (visible: boolean) => Promise<void>
+  // Windows-specific frame preference
+  setWindowFramePreference: (useNativeFrame: boolean) => Promise<boolean>
+  getWindowFrameState: () => Promise<boolean>
   onFullscreenChange: (callback: (isFullscreen: boolean) => void) => () => void
   onFocusChange: (callback: (isFocused: boolean) => void) => () => void
   zoomIn: () => Promise<void>
@@ -165,6 +194,7 @@ export interface DesktopApi {
   toggleDevTools: () => Promise<void>
   setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
   setBadge: (count: number | null) => Promise<void>
+  setBadgeIcon: (imageData: string | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
   openExternal: (url: string) => Promise<void>
   getApiBaseUrl: () => Promise<string>
@@ -172,6 +202,12 @@ export interface DesktopApi {
   clipboardRead: () => Promise<string>
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
+  // File changes
+  onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => () => void
+  // Git status changes (from file watcher)
+  onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => () => void
+  subscribeToGitWatcher: (worktreePath: string) => Promise<void>
+  unsubscribeFromGitWatcher: (worktreePath: string) => Promise<void>
 }
 
 declare global {

@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cn } from "../../lib/utils"
-import { CmdIcon, OptionIcon, ShiftIcon } from "./icons"
+import { CmdIcon, EnterIcon, OptionIcon, ShiftIcon } from "./icons"
 
 export interface KbdProps extends React.HTMLAttributes<HTMLElement> {}
 
@@ -16,10 +16,11 @@ function renderShortcut(children: React.ReactNode): React.ReactNode {
     "⌥": <OptionIcon key="opt" className="h-3 w-3" />,
     "⇧": <ShiftIcon key="shift" className="h-3 w-3" />,
     "⌃": <span key="ctrl">⌃</span>, // Control stays as unicode (no icon)
+    "↵": <EnterIcon key="enter" className="h-3 w-3" />,
   }
 
   // Split by symbols and replace with icons
-  const regex = /([⌘⌥⇧⌃])/g
+  const regex = /([⌘⌥⇧⌃↵])/g
   const tokens = children.split(regex)
 
   tokens.forEach((token, index) => {

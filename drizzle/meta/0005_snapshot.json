@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "975b8b43-5ae2-4832-8f23-af5c5b1ceca3",
+  "id": "a5b2c3d4-e5f6-7890-abcd-ef1234567890",
   "prevId": "1c211023-1270-4cdd-934d-4396e72557e9",
   "tables": {
     "chats": {
@@ -133,46 +133,6 @@
         "user_id": {
           "name": "user_id",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "claude_code_settings": {
-      "name": "claude_code_settings",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'default'"
-        },
-        "custom_binary_path": {
-          "name": "custom_binary_path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "custom_env_vars": {
-          "name": "custom_env_vars",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{}'"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -318,6 +278,30 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'[]'"
+        },
+        "additions": {
+          "name": "additions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "deletions": {
+          "name": "deletions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "file_count": {
+          "name": "file_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",

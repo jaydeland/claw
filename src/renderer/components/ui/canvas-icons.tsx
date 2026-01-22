@@ -1238,8 +1238,9 @@ export function IconChevronUp(props: IconProps) {
   )
 }
 
-export function IconSpinner(props: IconProps & { color?: string }) {
-  const { className, style, color, ...rest } = props
+export function IconSpinner(props: IconProps & { color?: string; size?: "default" | "nano" }) {
+  const { className, style, color, size = "default", ...rest } = props
+  const strokeWidth = size === "nano" ? 4 : 3
   return (
     <>
       <style>{`
@@ -1255,76 +1256,27 @@ export function IconSpinner(props: IconProps & { color?: string }) {
         fill="none"
         className={className}
         style={{
-          animation: "spin 0.6s linear infinite",
-          transformOrigin: "center",
-          color: color || "currentColor",
+          animation: "spin 1s linear infinite",
           ...style,
         }}
         {...rest}
       >
-        {/* Top - brightest */}
-        <path
-          d="M12 3V6"
-          stroke="currentColor"
-          strokeOpacity="1"
-          strokeWidth="2"
+        <circle
+          cx="12"
+          cy="12"
+          r="10"
+          stroke={color || "currentColor"}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
+          fill="none"
+          opacity={0.2}
         />
-        {/* Top-left */}
         <path
-          d="M5.63634 5.63604L7.75766 7.75736"
-          stroke="currentColor"
-          strokeOpacity="0.875"
-          strokeWidth="2"
+          d="M12 2C6.48 2 2 6.48 2 12"
+          stroke={color || "currentColor"}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
-        />
-        {/* Left */}
-        <path
-          d="M3 12H6"
-          stroke="currentColor"
-          strokeOpacity="0.75"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        {/* Bottom-left */}
-        <path
-          d="M5.63634 18.364L7.75766 16.2426"
-          stroke="currentColor"
-          strokeOpacity="0.625"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        {/* Bottom */}
-        <path
-          d="M12 18V21"
-          stroke="currentColor"
-          strokeOpacity="0.5"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        {/* Bottom-right */}
-        <path
-          d="M16.2429 16.2426L18.3643 18.364"
-          stroke="currentColor"
-          strokeOpacity="0.375"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        {/* Right */}
-        <path
-          d="M18 12H21"
-          stroke="currentColor"
-          strokeOpacity="0.25"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        {/* Top-right - dimmest */}
-        <path
-          d="M16.2429 7.75736L18.3643 5.63604"
-          stroke="currentColor"
-          strokeOpacity="0.125"
-          strokeWidth="2"
-          strokeLinecap="round"
+          fill="none"
         />
       </svg>
     </>

@@ -1,15 +1,17 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
 import { useSetAtom } from "jotai"
+import { ChevronLeft } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 
-import { Input } from "../../components/ui/input"
-import { Button } from "../../components/ui/button"
-import { Label } from "../../components/ui/label"
 import { ClaudeCodeIcon, IconSpinner } from "../../components/ui/icons"
+import { Input } from "../../components/ui/input"
 import { Logo } from "../../components/ui/logo"
+import {
+  anthropicOnboardingCompletedAtom,
+  billingMethodAtom,
+} from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
-import { anthropicOnboardingCompletedAtom } from "../../lib/atoms"
 
 type AuthFlowState =
   | { step: "idle" }
@@ -33,27 +35,39 @@ type AuthFlowState =
 export function AnthropicOnboardingPage() {
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
   const [authCode, setAuthCode] = useState("")
+  const [userClickedConnect, setUserClickedConnect] = useState(false)
   const [urlOpened, setUrlOpened] = useState(false)
   const [savedOauthUrl, setSavedOauthUrl] = useState<string | null>(null)
+  const [ignoredExistingToken, setIgnoredExistingToken] = useState(false)
+  const [isUsingExistingToken, setIsUsingExistingToken] = useState(false)
+  const [existingTokenError, setExistingTokenError] = useState<string | null>(null)
   const urlOpenedRef = useRef(false)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
+  const setBillingMethod = useSetAtom(billingMethodAtom)
 
-  // Auth mode state
-  const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey" | "devyard">("oauth")
-  const [apiKey, setApiKey] = useState("")
-  const [bedrockRegion, setBedrockRegion] = useState("us-east-1")
-  const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("")
+  const handleBack = () => {
+    setBillingMethod(null)
+  }
+
+  const formatTokenPreview = (token: string) => {
+    const trimmed = token.trim()
+    if (trimmed.length <= 16) return trimmed
+    return `${trimmed.slice(0, 19)}...${trimmed.slice(-6)}`
+  }
 
   // tRPC mutations
   const startAuthMutation = trpc.claudeCode.startAuth.useMutation()
   const submitCodeMutation = trpc.claudeCode.submitCode.useMutation()
   const openOAuthUrlMutation = trpc.claudeCode.openOAuthUrl.useMutation()
-  const updateSettingsMutation = trpc.claudeSettings.updateSettings.useMutation()
-
-  // Query Devyard availability
-  const { data: devyardStatus } = trpc.claudeSettings.checkDevyard.useQuery()
+  const importSystemTokenMutation = trpc.claudeCode.importSystemToken.useMutation()
+  const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
+  const existingToken = existingTokenQuery.data?.token ?? null
+  const hasExistingToken = !!existingToken
+  const checkedExistingToken = existingTokenQuery.isFetched
+  const shouldOfferExistingToken =
+    checkedExistingToken && hasExistingToken && !ignoredExistingToken
 
   // Poll for OAuth URL
   const pollStatusQuery = trpc.claudeCode.pollStatus.useQuery(
@@ -67,15 +81,30 @@ export function AnthropicOnboardingPage() {
     }
   )
 
-  // Reset to idle when switching away from oauth mode
+  // Auto-start auth on mount
   useEffect(() => {
-    if (authMode !== "oauth" && (flowState.step === "starting" || flowState.step === "waiting_url" || flowState.step === "has_url")) {
-      setFlowState({ step: "idle" })
-      setAuthCode("")
-      setUrlOpened(false)
-      urlOpenedRef.current = false
+    if (!checkedExistingToken || shouldOfferExistingToken) return
+
+    if (flowState.step === "idle") {
+      setFlowState({ step: "starting" })
+      startAuthMutation.mutate(undefined, {
+        onSuccess: (result) => {
+          setFlowState({
+            step: "waiting_url",
+            sandboxId: result.sandboxId,
+            sandboxUrl: result.sandboxUrl,
+            sessionId: result.sessionId,
+          })
+        },
+        onError: (err) => {
+          setFlowState({
+            step: "error",
+            message: err.message || "Failed to start authentication",
+          })
+        },
+      })
     }
-  }, [flowState.step, authMode])
+  }, [flowState.step, startAuthMutation, checkedExistingToken, shouldOfferExistingToken])
 
   // Update flow state when we get the OAuth URL
   useEffect(() => {
@@ -99,15 +128,19 @@ export function AnthropicOnboardingPage() {
     }
   }, [pollStatusQuery.data, flowState])
 
-  // Open URL in browser when OAuth URL is received
+  // Open URL in browser when ready (after user clicked Connect)
   useEffect(() => {
-    if (flowState.step === "has_url" && !urlOpenedRef.current) {
+    if (
+      flowState.step === "has_url" &&
+      userClickedConnect &&
+      !urlOpenedRef.current
+    ) {
       urlOpenedRef.current = true
       setUrlOpened(true)
       // Use Electron's shell.openExternal via tRPC
       openOAuthUrlMutation.mutate(flowState.oauthUrl)
     }
-  }, [flowState, openOAuthUrlMutation])
+  }, [flowState, userClickedConnect, openOAuthUrlMutation])
 
   // Check if the code looks like a valid Claude auth code (format: XXX#YYY)
   const isValidCodeFormat = (code: string) => {
@@ -116,25 +149,9 @@ export function AnthropicOnboardingPage() {
   }
 
   const handleConnectClick = async () => {
-    if (flowState.step === "idle" && authMode === "oauth") {
-      // Start OAuth flow when user clicks Connect from idle state
-      setFlowState({ step: "starting" })
-      try {
-        const result = await startAuthMutation.mutateAsync()
-        setFlowState({
-          step: "waiting_url",
-          sandboxId: result.sandboxId,
-          sandboxUrl: result.sandboxUrl,
-          sessionId: result.sessionId,
-        })
-      } catch (err) {
-        setFlowState({
-          step: "error",
-          message:
-            err instanceof Error ? err.message : "Failed to start authentication",
-        })
-      }
-    } else if (flowState.step === "has_url") {
+    setUserClickedConnect(true)
+
+    if (flowState.step === "has_url") {
       // URL is ready, open it immediately
       urlOpenedRef.current = true
       setUrlOpened(true)
@@ -160,6 +177,31 @@ export function AnthropicOnboardingPage() {
         })
       }
     }
+    // For idle, starting, waiting_url states - the useEffect will handle opening the URL
+    // when it becomes ready (userClickedConnect is now true)
+  }
+
+  const handleUseExistingToken = async () => {
+    if (!hasExistingToken || isUsingExistingToken) return
+
+    setIsUsingExistingToken(true)
+    setExistingTokenError(null)
+
+    try {
+      await importSystemTokenMutation.mutateAsync()
+      setAnthropicOnboardingCompleted(true)
+    } catch (err) {
+      setExistingTokenError(
+        err instanceof Error ? err.message : "Failed to use existing token"
+      )
+      setIsUsingExistingToken(false)
+    }
+  }
+
+  const handleRejectExistingToken = () => {
+    setIgnoredExistingToken(true)
+    setExistingTokenError(null)
+    handleConnectClick()
   }
 
   // Submit code - reusable for both auto-submit and manual Enter
@@ -208,43 +250,6 @@ export function AnthropicOnboardingPage() {
     }
   }
 
-  // Save API key and complete onboarding
-  const handleSaveApiKey = async () => {
-    if (!apiKey.trim()) return
-
-    setFlowState({ step: "submitting" })
-    try {
-      await updateSettingsMutation.mutateAsync({
-        authMode: "apiKey",
-        apiKey: apiKey.trim(),
-        anthropicBaseUrl: anthropicBaseUrl.trim() || null,
-      })
-      setAnthropicOnboardingCompleted(true)
-    } catch (err) {
-      setFlowState({
-        step: "error",
-        message: err instanceof Error ? err.message : "Failed to save API key",
-      })
-    }
-  }
-
-  // Save Bedrock settings and complete onboarding
-  const handleSaveBedrock = async () => {
-    setFlowState({ step: "submitting" })
-    try {
-      await updateSettingsMutation.mutateAsync({
-        authMode: "aws",
-        bedrockRegion: bedrockRegion.trim() || "us-east-1",
-      })
-      setAnthropicOnboardingCompleted(true)
-    } catch (err) {
-      setFlowState({
-        step: "error",
-        message: err instanceof Error ? err.message : "Failed to save Bedrock settings",
-      })
-    }
-  }
-
   const isLoadingAuth =
     flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
@@ -256,6 +261,14 @@ export function AnthropicOnboardingPage() {
         className="fixed top-0 left-0 right-0 h-10"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
+
+      {/* Back button - fixed in top left corner below traffic lights */}
+      <button
+        onClick={handleBack}
+        className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
 
       <div className="w-full max-w-[440px] space-y-8 px-4">
         {/* Header with dual icons */}
@@ -279,213 +292,74 @@ export function AnthropicOnboardingPage() {
         </div>
 
         {/* Content */}
-        <div className="space-y-6">
-          {/* Auth Mode Selector */}
-          {flowState.step === "idle" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant={authMode === "oauth" ? "default" : "outline"}
-                  onClick={() => setAuthMode("oauth")}
-                  size="sm"
-                >
-                  OAuth
-                </Button>
-                <Button
-                  variant={authMode === "apiKey" ? "default" : "outline"}
-                  onClick={() => setAuthMode("apiKey")}
-                  size="sm"
-                >
-                  API Key
-                </Button>
-                <Button
-                  variant={authMode === "aws" ? "default" : "outline"}
-                  onClick={() => setAuthMode("aws")}
-                  size="sm"
-                >
-                  AWS Bedrock
-                </Button>
-                <Button
-                  variant={authMode === "devyard" ? "default" : "outline"}
-                  onClick={() => setAuthMode("devyard")}
-                  size="sm"
-                >
-                  Devyard
-                </Button>
+        <div className="space-y-6 flex flex-col items-center">
+          {/* Existing token prompt */}
+          {shouldOfferExistingToken && flowState.step === "idle" && (
+            <div className="space-y-4 w-full">
+              <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                <p className="text-sm font-medium">
+                  Existing Claude Code credentials found
+                </p>
+                {existingToken && (
+                  <pre className="mt-2 px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap break-words font-mono bg-background/60 rounded border border-border/60">
+                    {formatTokenPreview(existingToken)}
+                  </pre>
+                )}
               </div>
-
-              {/* OAuth Mode */}
-              {authMode === "oauth" && (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Connect your Claude Code subscription to get started
+              {existingTokenError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <p className="text-sm text-destructive">
+                    {existingTokenError}
                   </p>
-                  {!urlOpened && (
-                    <button
-                      onClick={handleConnectClick}
-                      disabled={isLoadingAuth}
-                      className="w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                    >
-                      {isLoadingAuth ? <IconSpinner className="h-4 w-4" /> : "Connect"}
-                    </button>
+                </div>
+              )}
+              <div className="flex w-full gap-2">
+                <button
+                  onClick={handleRejectExistingToken}
+                  disabled={isUsingExistingToken}
+                  className="h-8 px-3 flex-1 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  Auth with Anthropic
+                </button>
+                <button
+                  onClick={handleUseExistingToken}
+                  disabled={isUsingExistingToken}
+                  className="h-8 px-3 flex-1 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {isUsingExistingToken ? (
+                    <IconSpinner className="h-4 w-4" />
+                  ) : (
+                    "Use existing token"
                   )}
-                </div>
-              )}
-
-              {/* API Key Mode */}
-              {authMode === "apiKey" && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm">Anthropic API Key</Label>
-                    <Input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="sk-ant-api03-..."
-                      className="font-mono text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && apiKey.trim()) {
-                          handleSaveApiKey()
-                        }
-                      }}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Base URL (optional)</Label>
-                    <Input
-                      type="text"
-                      value={anthropicBaseUrl}
-                      onChange={(e) => setAnthropicBaseUrl(e.target.value)}
-                      placeholder="https://api.anthropic.com"
-                      className="font-mono text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && apiKey.trim()) {
-                          handleSaveApiKey()
-                        }
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Custom API base URL. Leave empty to use the default.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleSaveApiKey}
-                    disabled={!apiKey.trim() || isSubmitting}
-                    className="w-full"
-                  >
-                    {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Save & Continue"}
-                  </Button>
-                </div>
-              )}
-
-              {/* AWS Bedrock Mode */}
-              {authMode === "aws" && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm">Bedrock Region</Label>
-                    <Input
-                      type="text"
-                      value={bedrockRegion}
-                      onChange={(e) => setBedrockRegion(e.target.value)}
-                      placeholder="us-east-1"
-                      className="font-mono text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleSaveBedrock()
-                        }
-                      }}
-                      autoFocus
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      AWS region for Bedrock (e.g., us-east-1, eu-central-1)
-                    </p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Ensure you have AWS credentials configured (env vars or ~/.aws/credentials file)
-                  </p>
-                  <Button
-                    onClick={handleSaveBedrock}
-                    disabled={isSubmitting}
-                    className="w-full"
-                  >
-                    {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Save & Continue"}
-                  </Button>
-                </div>
-              )}
-
-              {/* Devyard Mode */}
-              {authMode === "devyard" && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      Use Devyard environment AWS credentials and Kubernetes configuration
-                    </p>
-                    <div className="p-3 bg-muted rounded-lg space-y-1 text-xs font-mono">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">VIDYARD_PATH:</span>
-                        <span className="truncate ml-2">{devyardStatus?.path || "Not set"}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Status:</span>
-                        <span>{devyardStatus?.available ? "✓ Available" : "✗ Not available"}</span>
-                      </div>
-                      <div className="flex justify-between pt-1 border-t border-border/50">
-                        <span className="text-muted-foreground">Config:</span>
-                        <span className="truncate ml-2">{devyardStatus?.claudeConfigDir || "~/devyard/claude"}</span>
-                      </div>
-                    </div>
-                    {!devyardStatus?.available && (
-                      <p className="text-xs text-destructive">
-                        Devyard not detected. Set VIDYARD_PATH environment variable.
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    onClick={async () => {
-                      setFlowState({ step: "submitting" })
-                      try {
-                        await updateSettingsMutation.mutateAsync({
-                          authMode: "devyard",
-                        })
-                        setAnthropicOnboardingCompleted(true)
-                      } catch (err) {
-                        setFlowState({
-                          step: "error",
-                          message: err instanceof Error ? err.message : "Failed to save Devyard settings",
-                        })
-                      }
-                    }}
-                    disabled={isSubmitting || !devyardStatus?.available}
-                    className="w-full"
-                  >
-                    {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Save & Continue"}
-                  </Button>
-                </div>
-              )}
+                </button>
+              </div>
             </div>
           )}
 
-          {/* OAuth Flow States */}
+          {/* Connect Button - shows loader only if user clicked AND loading */}
+          {checkedExistingToken &&
+            !shouldOfferExistingToken &&
+            !urlOpened &&
+            flowState.step !== "has_url" &&
+            flowState.step !== "error" && (
+              <button
+                onClick={handleConnectClick}
+                disabled={userClickedConnect && isLoadingAuth}
+                className="h-8 px-4 min-w-[85px] bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {userClickedConnect && isLoadingAuth ? (
+                  <IconSpinner className="h-4 w-4" />
+                ) : (
+                  "Connect"
+                )}
+              </button>
+            )}
 
-          {/* Starting State */}
-          {flowState.step === "starting" && (
-            <div className="flex items-center justify-center gap-3">
-              <IconSpinner className="h-5 w-5" />
-              <p className="text-sm text-muted-foreground">Setting up authentication...</p>
-            </div>
-          )}
-
-          {/* Waiting for URL State */}
-          {flowState.step === "waiting_url" && (
-            <div className="flex items-center justify-center gap-3">
-              <IconSpinner className="h-5 w-5" />
-              <p className="text-sm text-muted-foreground">Preparing authentication URL...</p>
-            </div>
-          )}
-
-          {/* Has URL State - show code input */}
-          {flowState.step === "has_url" && (
+          {/* Code Input - Show after URL is opened, if has_url (after redirect), or if submitting */}
+          {/* No Continue button - auto-submit on valid code paste */}
+          {(urlOpened ||
+            flowState.step === "has_url" ||
+            flowState.step === "submitting") && (
             <div className="space-y-4">
               <div className="relative">
                 <Input
@@ -520,34 +394,21 @@ export function AnthropicOnboardingPage() {
             </div>
           )}
 
-          {/* Submitting State */}
-          {flowState.step === "submitting" && authMode === "oauth" && (
-            <div className="flex items-center justify-center gap-3">
-              <IconSpinner className="h-5 w-5" />
-              <p className="text-sm text-muted-foreground">Verifying authentication...</p>
-            </div>
-          )}
-
           {/* Error State */}
           {flowState.step === "error" && (
             <div className="space-y-4">
               <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                 <p className="text-sm text-destructive">{flowState.message}</p>
               </div>
-              {authMode === "oauth" ? (
-                <button
-                  onClick={handleConnectClick}
-                  className="w-full h-8 px-3 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] flex items-center justify-center"
-                >
-                  Try Again
-                </button>
-              ) : (
-                <Button onClick={() => setFlowState({ step: "idle" })} variant="outline">
-                  Back
-                </Button>
-              )}
+              <button
+                onClick={handleConnectClick}
+                className="w-full h-8 px-3 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] flex items-center justify-center"
+              >
+                Try Again
+              </button>
             </div>
           )}
+
         </div>
       </div>
     </div>

@@ -21,6 +21,7 @@ interface AgentChatCardProps {
   isSelected: boolean
   isLoading: boolean
   onClick?: () => void
+  onMouseEnter?: () => void
   variant?: "sidebar" | "quick-switch"
   // Git info from project (passed from parent)
   gitOwner?: string | null
@@ -105,6 +106,7 @@ export function AgentChatCard({
   isSelected,
   isLoading,
   onClick,
+  onMouseEnter,
   variant = "sidebar",
   gitOwner,
   gitProvider,
@@ -130,6 +132,7 @@ export function AgentChatCard({
     return (
       <div
         onClick={onClick}
+        onMouseEnter={onMouseEnter}
         className={cn(
           "relative rounded-2xl overflow-hidden min-w-[160px] max-w-[180px] p-2 cursor-pointer",
           isSelected ? "bg-primary shadow-lg" : "bg-transparent",

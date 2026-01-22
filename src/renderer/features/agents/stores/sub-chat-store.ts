@@ -1,4 +1,7 @@
 import { create } from "zustand"
+import { useMessageQueueStore } from "./message-queue-store"
+import { useStreamingStatusStore } from "./streaming-status-store"
+import { agentChatStore } from "./agent-chat-store"
 
 export interface SubChatMeta {
   id: string
@@ -37,9 +40,23 @@ interface AgentSubChatStore {
 const getStorageKey = (chatId: string, type: "open" | "active" | "pinned") =>
   `agent-${type}-sub-chats-${chatId}`
 
+// Custom event for notifying other components when open sub-chats change
+export const OPEN_SUB_CHATS_CHANGE_EVENT = "open-sub-chats-change"
+
+// Debounce timer to avoid rapid-fire events
+let openSubChatsChangeTimer: ReturnType<typeof setTimeout> | null = null
+
 const saveToLS = (chatId: string, type: "open" | "active" | "pinned", value: unknown) => {
   if (typeof window === "undefined") return
   localStorage.setItem(getStorageKey(chatId, type), JSON.stringify(value))
+  // Dispatch debounced event when open sub-chats change so sidebar can update
+  if (type === "open") {
+    if (openSubChatsChangeTimer) clearTimeout(openSubChatsChangeTimer)
+    openSubChatsChangeTimer = setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(OPEN_SUB_CHATS_CHANGE_EVENT))
+      openSubChatsChangeTimer = null
+    }, 50)
+  }
 }
 
 const loadFromLS = <T>(chatId: string, type: "open" | "active" | "pinned", fallback: T): T => {
@@ -115,6 +132,12 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
       saveToLS(chatId, "open", newIds)
       saveToLS(chatId, "active", newActive)
     }
+
+    // Cleanup queue, streaming status, and Chat instance to prevent memory leaks
+    // and race conditions (QueueProcessor sending to closed subChat)
+    useMessageQueueStore.getState().clearQueue(subChatId)
+    useStreamingStatusStore.getState().clearStatus(subChatId)
+    agentChatStore.delete(subChatId)
   },
 
   togglePinSubChat: (subChatId) => {

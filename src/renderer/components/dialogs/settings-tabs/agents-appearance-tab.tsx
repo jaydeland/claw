@@ -1,5 +1,6 @@
 import { useTheme } from "next-themes"
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { IconSpinner } from "../../../icons"
 import { useAtom, useSetAtom } from "jotai"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "../../../lib/utils"
@@ -8,6 +9,7 @@ import {
   fullThemeDataAtom,
   systemLightThemeIdAtom,
   systemDarkThemeIdAtom,
+  showWorkspaceIconAtom,
   type VSCodeFullTheme,
 } from "../../../lib/atoms"
 import {
@@ -27,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select"
+import { Switch } from "../../../components/ui/switch"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -133,6 +136,9 @@ export function AgentsAppearanceTab() {
     systemDarkThemeIdAtom,
   )
   const setFullThemeData = useSetAtom(fullThemeDataAtom)
+
+  // Sidebar settings
+  const [showWorkspaceIcon, setShowWorkspaceIcon] = useAtom(showWorkspaceIconAtom)
 
   useEffect(() => {
     setMounted(true)
@@ -291,7 +297,7 @@ export function AgentsAppearanceTab() {
     return (
       <div className="p-6 space-y-6">
         <div className="h-48 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground" />
+          <IconSpinner className="h-8 w-8 text-foreground" />
         </div>
       </div>
     )
@@ -475,6 +481,24 @@ export function AgentsAppearanceTab() {
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      {/* Sidebar Section */}
+      <div className="bg-background rounded-lg border border-border overflow-hidden">
+        <div className="flex items-center justify-between p-4">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              Workspace icon
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Show project icon in the sidebar workspace list
+            </span>
+          </div>
+          <Switch
+            checked={showWorkspaceIcon}
+            onCheckedChange={setShowWorkspaceIcon}
+          />
+        </div>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useState, useMemo, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { isDesktopApp } from "../../lib/utils/platform"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
@@ -8,29 +8,26 @@ import {
   agentsSidebarWidthAtom,
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
-  agentsShortcutsDialogOpenAtom,
   isDesktopAtom,
   isFullscreenAtom,
   anthropicOnboardingCompletedAtom,
+  customHotkeysAtom,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom } from "../agents/atoms"
-import {
-  workflowsPreviewOpenAtom,
-  workflowsPreviewWidthAtom,
-  selectedWorkflowCategoryAtom,
-} from "../workflows/atoms"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
+import { toggleSearchAtom } from "../agents/search"
 import { AgentsSettingsDialog } from "../../components/dialogs/agents-settings-dialog"
-import { AgentsShortcutsDialog } from "../../components/dialogs/agents-shortcuts-dialog"
+import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { AgentsSidebar } from "../sidebar/agents-sidebar"
 import { AgentsContent } from "../agents/ui/agents-content"
-import { WorkflowPreview } from "../workflows/ui/workflow-preview"
 import { UpdateBanner } from "../../components/update-banner"
+import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
+import { QueueProcessor } from "../agents/components/queue-processor"
 
 // ============================================================================
 // Constants
@@ -40,11 +37,6 @@ const SIDEBAR_MIN_WIDTH = 160
 const SIDEBAR_MAX_WIDTH = 300
 const SIDEBAR_ANIMATION_DURATION = 0
 const SIDEBAR_CLOSE_HOTKEY = "⌘\\"
-
-const PREVIEW_MIN_WIDTH = 300
-const PREVIEW_MAX_WIDTH = 800
-const PREVIEW_ANIMATION_DURATION = 0
-const PREVIEW_CLOSE_HOTKEY = "⌘⇧\\"
 
 // ============================================================================
 // Component
@@ -94,37 +86,13 @@ export function AgentsLayout() {
 
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [sidebarWidth, setSidebarWidth] = useAtom(agentsSidebarWidthAtom)
-  const [previewOpen, setPreviewOpen] = useAtom(workflowsPreviewOpenAtom)
-  const [previewWidth, setPreviewWidth] = useAtom(workflowsPreviewWidthAtom)
-  const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const [settingsOpen, setSettingsOpen] = useAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
-  const [shortcutsOpen, setShortcutsOpen] = useAtom(
-    agentsShortcutsDialogOpenAtom,
-  )
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
-  const [selectedCategory, setSelectedCategory] = useAtom(selectedWorkflowCategoryAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
-
-  // Close old workflow preview panel when using new workflow UI
-  // Also close it on initial mount to prevent it from showing up
-  useEffect(() => {
-    if (selectedCategory || previewOpen) {
-      setPreviewOpen(false)
-    }
-  }, [selectedCategory, previewOpen, setPreviewOpen])
-
-  // Force close preview panel on mount
-  useEffect(() => {
-    setPreviewOpen(false)
-  }, [])
-
-  // Note: We DON'T clear workflow category when chat is selected anymore
-  // The workflow view takes priority when category is selected
-  // User can return to chat by clicking category button again (toggle off)
 
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
@@ -177,17 +145,58 @@ export function AgentsLayout() {
   }, [sidebarOpen, isDesktop])
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
 
+  // Desktop user state
+  const [desktopUser, setDesktopUser] = useState<{
+    id: string
+    email: string
+    name: string | null
+    imageUrl: string | null
+    username: string | null
+  } | null>(null)
+
+  // Fetch desktop user on mount
+  useEffect(() => {
+    async function fetchUser() {
+      if (window.desktopApi?.getUser) {
+        const user = await window.desktopApi.getUser()
+        setDesktopUser(user)
+      }
+    }
+    fetchUser()
+  }, [])
+
+  // Track if this is the initial load - skip auto-open on first load to respect saved state
+  const isInitialLoadRef = useRef(true)
+
   // Auto-open sidebar when project is selected, close when no project
-  // Only act after projects have loaded to avoid closing sidebar during initial load
+  // Skip on initial load to preserve user's saved sidebar preference
   useEffect(() => {
     if (!projects) return // Don't change sidebar state while loading
 
+    // On initial load, just mark as loaded and don't change sidebar state
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false
+      return
+    }
+
+    // After initial load, react to project changes
     if (validatedProject) {
       setSidebarOpen(true)
     } else {
       setSidebarOpen(false)
     }
   }, [validatedProject, projects, setSidebarOpen])
+
+  // Handle sign out
+  const handleSignOut = useCallback(async () => {
+    // Clear selected project and anthropic onboarding on logout
+    setSelectedProject(null)
+    setSelectedChatId(null)
+    setAnthropicOnboardingCompleted(false)
+    if (window.desktopApi?.logout) {
+      await window.desktopApi.logout()
+    }
+  }, [setSelectedProject, setSelectedChatId, setAnthropicOnboardingCompleted])
 
   // Initialize sub-chats when chat is selected
   useEffect(() => {
@@ -198,37 +207,42 @@ export function AgentsLayout() {
     }
   }, [selectedChatId, setChatId])
 
+  // Chat search toggle
+  const toggleChatSearch = useSetAtom(toggleSearchAtom)
+
+  // Custom hotkeys config
+  const customHotkeysConfig = useAtomValue(customHotkeysAtom)
+
   // Initialize hotkeys manager
   useAgentsHotkeys({
     setSelectedChatId,
     setSidebarOpen,
     setSettingsDialogOpen: setSettingsOpen,
     setSettingsActiveTab,
-    setShortcutsDialogOpen: setShortcutsOpen,
+    toggleChatSearch,
     selectedChatId,
+    customHotkeysConfig,
   })
 
   const handleCloseSidebar = useCallback(() => {
     setSidebarOpen(false)
   }, [setSidebarOpen])
 
-  const handleClosePreview = useCallback(() => {
-    setPreviewOpen(false)
-  }, [setPreviewOpen])
-
   return (
     <TooltipProvider delayDuration={300}>
+      {/* Global queue processor - handles message queues for all sub-chats */}
+      <QueueProcessor />
       <AgentsSettingsDialog
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
-      <AgentsShortcutsDialog
-        isOpen={shortcutsOpen}
-        onClose={() => setShortcutsOpen(false)}
-      />
-      <div className="flex w-full h-full relative overflow-hidden bg-background select-none">
-        {/* Left Sidebar (Agents) */}
-        <ResizableSidebar
+      <ClaudeLoginModal />
+      <div className="flex flex-col w-full h-full relative overflow-hidden bg-background select-none">
+        {/* Windows Title Bar (only shown on Windows with frameless window) */}
+        <WindowsTitleBar />
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left Sidebar (Agents) */}
+          <ResizableSidebar
           isOpen={!isMobile && sidebarOpen}
           onClose={handleCloseSidebar}
           widthAtom={agentsSidebarWidthAtom}
@@ -243,32 +257,18 @@ export function AgentsLayout() {
           className="overflow-hidden bg-background border-r"
           style={{ borderRightWidth: "0.5px" }}
         >
-          <AgentsSidebar onToggleSidebar={handleCloseSidebar} />
+          <AgentsSidebar
+            desktopUser={desktopUser}
+            onSignOut={handleSignOut}
+            onToggleSidebar={handleCloseSidebar}
+          />
         </ResizableSidebar>
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-          <AgentsContent />
+          {/* Main Content */}
+          <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+            <AgentsContent />
+          </div>
         </div>
-
-        {/* Right Preview Sidebar (Workflow Inspector) */}
-        <ResizableSidebar
-          isOpen={!isMobile && previewOpen}
-          onClose={handleClosePreview}
-          widthAtom={workflowsPreviewWidthAtom}
-          minWidth={PREVIEW_MIN_WIDTH}
-          maxWidth={PREVIEW_MAX_WIDTH}
-          side="right"
-          closeHotkey={PREVIEW_CLOSE_HOTKEY}
-          animationDuration={PREVIEW_ANIMATION_DURATION}
-          initialWidth={0}
-          exitWidth={0}
-          showResizeTooltip={true}
-          className="overflow-hidden bg-background border-l"
-          style={{ borderLeftWidth: "0.5px" }}
-        >
-          <WorkflowPreview />
-        </ResizableSidebar>
 
         {/* Update Banner */}
         <UpdateBanner />

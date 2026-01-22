@@ -4,7 +4,13 @@ import { memo } from "react"
 import { useAtomValue } from "jotai"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { QuestionIcon } from "../../../components/ui/icons"
-import { QUESTIONS_SKIPPED_MESSAGE, QUESTIONS_TIMED_OUT_MESSAGE, askUserQuestionResultsAtom, pendingUserQuestionsAtom } from "../atoms"
+import {
+  QUESTIONS_SKIPPED_MESSAGE,
+  QUESTIONS_TIMED_OUT_MESSAGE,
+  askUserQuestionResultsAtom,
+  pendingUserQuestionsAtom,
+} from "../atoms"
+import { areAskUserQuestionPropsEqual } from "./agent-tool-utils"
 
 interface AgentAskUserQuestionToolProps {
   input: {
@@ -45,8 +51,10 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
   const realtimeResult = toolCallId ? resultsMap.get(toolCallId) : undefined
 
   // Check if the question dialog is currently shown for this tool
-  const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
-  const isDialogShown = pendingQuestions?.toolUseId === toolCallId
+  const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
+  const isDialogShown = toolCallId
+    ? Array.from(pendingQuestionsMap.values()).some(q => q.toolUseId === toolCallId)
+    : false
 
   // Use realtime result if available, otherwise fall back to prop
   const effectiveResult = realtimeResult ?? result
@@ -119,7 +127,9 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
         {/* Header */}
         <div className="flex items-center gap-1.5 pl-2.5 pr-2 h-7 border-b border-border">
           <QuestionIcon className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Answers</span>
+          <span className="text-xs text-muted-foreground">
+            {entries.length === 1 ? "Answer" : "Answers"}
+          </span>
         </div>
         {/* Content */}
         <div className="flex flex-col gap-2 p-2.5 text-xs">
@@ -171,4 +181,4 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
       <span>Interrupted</span>
     </div>
   )
-})
+}, areAskUserQuestionPropsEqual)

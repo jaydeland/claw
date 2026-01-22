@@ -4,6 +4,7 @@ import { chatsRouter } from "./chats"
 import { claudeRouter } from "./claude"
 import { claudeCodeRouter } from "./claude-code"
 import { claudeSettingsRouter } from "./claude-settings"
+import { ollamaRouter } from "./ollama"
 import { terminalRouter } from "./terminal"
 import { externalRouter } from "./external"
 import { filesRouter } from "./files"
@@ -12,6 +13,8 @@ import { skillsRouter } from "./skills"
 import { agentsRouter } from "./agents"
 import { workflowsRouter } from "./workflows"
 import { mcpRouter } from "./mcp"
+import { worktreeConfigRouter } from "./worktree-config"
+import { commandsRouter } from "./commands"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -26,6 +29,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     claude: claudeRouter,
     claudeCode: claudeCodeRouter,
     claudeSettings: claudeSettingsRouter,
+    ollama: ollamaRouter,
     terminal: terminalRouter,
     external: externalRouter,
     files: filesRouter,
@@ -34,6 +38,8 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     agents: agentsRouter,
     workflows: workflowsRouter,
     mcp: mcpRouter,
+    worktreeConfig: worktreeConfigRouter,
+    commands: commandsRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

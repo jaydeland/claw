@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect } from "react"
+import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useAtom } from "jotai"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import {
@@ -13,12 +13,13 @@ import {
   IconArrowRight,
 } from "../../../components/ui/icons"
 import { getToolStatus } from "./agent-tool-registry"
+import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 import { Circle } from "lucide-react"
 import { AgentToolCall } from "./agent-tool-call"
 import { currentTodosAtomFamily } from "../atoms"
 
-interface TodoItem {
+export interface TodoItem {
   content: string
   status: "pending" | "in_progress" | "completed"
   activeForm?: string
@@ -122,6 +123,77 @@ function getStatusIconComponent(status: TodoItem["status"]) {
   }
 }
 
+// Pie-style progress circle - fills sectors like pizza slices
+const ProgressCircle = ({
+  completed,
+  total,
+  size = 16,
+  className,
+}: {
+  completed: number
+  total: number
+  size?: number
+  className?: string
+}) => {
+  const cx = size / 2
+  const cy = size / 2
+  const outerRadius = (size - 1) / 2
+  const innerRadius = outerRadius - 1.5 // Leave space for outer border
+
+  // Create pie segments (no borders on segments, just fill)
+  const segments = []
+  for (let i = 0; i < total; i++) {
+    const startAngle = (i / total) * 360 - 90 // Start from top
+    const endAngle = ((i + 1) / total) * 360 - 90
+    const gap = total > 1 ? 4 : 0 // Gap between segments
+    const adjustedStartAngle = startAngle + gap / 2
+    const adjustedEndAngle = endAngle - gap / 2
+
+    // Convert to radians
+    const startRad = (adjustedStartAngle * Math.PI) / 180
+    const endRad = (adjustedEndAngle * Math.PI) / 180
+
+    // Calculate arc points
+    const x1 = cx + innerRadius * Math.cos(startRad)
+    const y1 = cy + innerRadius * Math.sin(startRad)
+    const x2 = cx + innerRadius * Math.cos(endRad)
+    const y2 = cy + innerRadius * Math.sin(endRad)
+
+    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0
+    const pathData = `M ${cx} ${cy} L ${x1} ${y1} A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`
+
+    segments.push(
+      <path
+        key={i}
+        d={pathData}
+        fill={i < completed ? "currentColor" : "transparent"}
+        opacity={i < completed ? 0.7 : 0.15}
+      />,
+    )
+  }
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className={cn("text-muted-foreground", className)}
+    >
+      {/* Outer border circle */}
+      <circle
+        cx={cx}
+        cy={cy}
+        r={outerRadius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={0.5}
+        opacity={0.3}
+      />
+      {segments}
+    </svg>
+  )
+}
+
 const TodoStatusIcon = ({
   status,
   isPending,
@@ -164,6 +236,75 @@ const TodoStatusIcon = ({
   }
 }
 
+// Memoized status icon map to avoid recreating on each render
+// For compact change items (multiple updates view)
+const STATUS_ICONS = {
+  completed: CheckIcon,
+  in_progress: IconDoubleChevronRight,
+  pending: Circle,
+} as const
+
+// For AgentToolCall icon (single update view) - use IconSpinner for in_progress
+const TOOL_CALL_ICONS = {
+  completed: CheckIcon,
+  in_progress: IconSpinner,
+  pending: Circle,
+} as const
+
+// Memoized component for rendering individual todo change items
+const TodoChangeItem = memo(function TodoChangeItem({
+  change,
+  showSeparator,
+}: {
+  change: TodoChange
+  showSeparator: boolean
+}) {
+  const StatusIcon = STATUS_ICONS[change.newStatus] || STATUS_ICONS.pending
+  return (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      <StatusIcon className="w-3 h-3" />
+      <span className="truncate">{change.todo.content}</span>
+      {showSeparator && <span className="mx-0.5">,</span>}
+    </div>
+  )
+})
+
+// Memoized component for rendering individual todo list items in expanded view
+const TodoListItem = memo(function TodoListItem({
+  todo,
+  isPending,
+  isLast,
+}: {
+  todo: TodoItem
+  isPending: boolean
+  isLast: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 px-2.5 py-1.5",
+        !isLast && "border-b border-border/30",
+      )}
+    >
+      <TodoStatusIcon status={todo.status} isPending={isPending} />
+      <span
+        className={cn(
+          "text-xs truncate",
+          isPending
+            ? "text-muted-foreground"
+            : todo.status === "completed"
+              ? "line-through text-muted-foreground"
+              : todo.status === "pending"
+                ? "text-muted-foreground"
+                : "text-foreground",
+        )}
+      >
+        {todo.content}
+      </span>
+    </div>
+  )
+})
+
 export const AgentTodoTool = memo(function AgentTodoTool({
   part,
   chatStatus,
@@ -178,6 +319,11 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   const [todoState, setTodoState] = useAtom(todosAtom)
   const syncedTodos = todoState.todos
   const creationToolCallId = todoState.creationToolCallId
+
+  // Use ref to track syncedTodos without triggering effect re-runs
+  // This prevents infinite loops when the effect updates the atom
+  const syncedTodosRef = useRef(syncedTodos)
+  syncedTodosRef.current = syncedTodos
 
   // Get todos from input or output.newTodos
   const rawOldTodos = part.output?.oldTodos || []
@@ -218,29 +364,53 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   const [isExpanded, setIsExpanded] = useState(false)
   const { isPending } = getToolStatus(part, chatStatus)
 
+  // Memoized click handlers to prevent inline function re-creation
+  const handleToggleExpand = useCallback(() => {
+    setIsExpanded(prev => !prev)
+  }, [])
+
+  const handleExpand = useCallback(() => {
+    setIsExpanded(true)
+  }, [])
+
+  const handleCollapse = useCallback(() => {
+    setIsExpanded(false)
+  }, [])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      setIsExpanded(prev => !prev)
+    }
+  }, [])
+
   // Update synced todos whenever newTodos change
   // This keeps the creation tool in sync with all updates
   useEffect(() => {
     if (newTodos.length > 0) {
+      // Use ref to get current syncedTodos without adding it to dependencies
+      // This prevents infinite loops: effect updates atom -> syncedTodos changes -> effect runs again
+      const currentSyncedTodos = syncedTodosRef.current
+
       // Only update if:
       // 1. This is the creation tool call (always update), OR
       // 2. newTodos has at least as many items as syncedTodos (prevents partial streaming overwrites)
       // During streaming, JSON parsing may return partial arrays, causing temporary drops in length
-      const shouldUpdate = isCreationToolCall || newTodos.length >= syncedTodos.length
+      const shouldUpdate = isCreationToolCall || newTodos.length >= currentSyncedTodos.length
 
       if (shouldUpdate) {
-        const newCreationId = creationToolCallId === null ? part.toolCallId : creationToolCallId
-        setTodoState({ todos: newTodos, creationToolCallId: newCreationId })
+        // Prevent infinite loop: check if todos actually changed before updating
+        // Compare by serializing to JSON - if content is the same, skip update
+        const newTodosJson = JSON.stringify(newTodos)
+        const syncedTodosJson = JSON.stringify(currentSyncedTodos)
+
+        if (newTodosJson !== syncedTodosJson) {
+          const newCreationId = creationToolCallId === null ? part.toolCallId : creationToolCallId
+          setTodoState({ todos: newTodos, creationToolCallId: newCreationId })
+        }
       }
     }
-  }, [newTodos, setTodoState, creationToolCallId, part.toolCallId, isCreationToolCall, syncedTodos.length])
-
-  // Auto-expand on creation
-  useEffect(() => {
-    if (changes.type === "creation") {
-      setIsExpanded(true)
-    }
-  }, [changes.type])
+  }, [newTodos, setTodoState, creationToolCallId, part.toolCallId, isCreationToolCall])
 
   // Check if we're still streaming input (data not yet complete)
   const isStreaming = part.state === "input-streaming"
@@ -255,12 +425,16 @@ export const AgentTodoTool = memo(function AgentTodoTool({
       return null
     }
 
-    // For creation tool calls, show the placeholder
+    // For creation tool calls, show the placeholder - also sticky with top offset
     return (
-      <div className="flex items-start gap-1.5 py-0.5 rounded-md px-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5">
-          <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
-            <span className="font-medium whitespace-nowrap flex-shrink-0">
+      <div
+        className="mx-2 sticky bg-background"
+        style={{ top: 'calc(var(--user-message-height, 28px) - 29px)' }}
+      >
+        <div className="rounded-lg border border-border bg-muted/30 px-2.5 py-1.5">
+          <div className="flex items-center gap-1.5">
+            <PlanIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <span className="text-xs font-medium whitespace-nowrap flex-shrink-0">
               {isPending ? (
                 <TextShimmer
                   as="span"
@@ -304,7 +478,8 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   // COMPACT MODE: Single update - render as simple tool call
   if (changes.type === "single") {
     const change = changes.items[0]
-    const IconComponent = getStatusIconComponent(change.newStatus)
+    // Use stable icon reference from TOOL_CALL_ICONS map
+    const IconComponent = TOOL_CALL_ICONS[change.newStatus] || TOOL_CALL_ICONS.pending
 
     // For in_progress status with activeForm, use activeForm as the title text
     // to avoid duplication (content + activeForm both shown)
@@ -365,28 +540,13 @@ export const AgentTodoTool = memo(function AgentTodoTool({
               )}
             </span>
             <div className="flex items-center gap-1 text-muted-foreground/60 font-normal truncate min-w-0">
-              {visibleItems.map((c, idx) => {
-                // Choose icon based on status
-                const StatusIcon =
-                  c.newStatus === "completed"
-                    ? CheckIcon
-                    : c.newStatus === "in_progress"
-                      ? IconDoubleChevronRight
-                      : Circle
-
-                return (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-1 flex-shrink-0"
-                  >
-                    <StatusIcon className="w-3 h-3" />
-                    <span className="truncate">{c.todo.content}</span>
-                    {idx < visibleItems.length - 1 && (
-                      <span className="mx-0.5">,</span>
-                    )}
-                  </div>
-                )
-              })}
+              {visibleItems.map((c, idx) => (
+                <TodoChangeItem
+                  key={idx}
+                  change={c}
+                  showSeparator={idx < visibleItems.length - 1}
+                />
+              ))}
               {remainingCount > 0 && (
                 <span className="text-muted-foreground/60 whitespace-nowrap flex-shrink-0">
                   +{remainingCount} more
@@ -407,63 +567,48 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   ).length
   const totalTodos = displayTodos.length
 
-  // Header title
-  const getHeaderTitle = () => {
-    if (isPending) {
-      return <span>Updating todos...</span>
-    }
-    return (
-      <span>
-        To-dos{" "}
-        <span className="text-muted-foreground/60">
-          {completedCount}/{totalTodos}
-        </span>
-      </span>
-    )
-  }
+  // Find current task (first in_progress, or first pending if none in progress)
+  const currentTask = displayTodos.find((t) => t.status === "in_progress")
+    || displayTodos.find((t) => t.status === "pending")
+
+  // Find current task index for progress display
+  const currentTaskIndex = currentTask
+    ? displayTodos.findIndex((t) => t === currentTask) + 1
+    : completedCount
 
   return (
-    <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
-      {/* Header - click anywhere to expand/collapse */}
+    <div
+      className={cn(
+        "mx-2",
+        // Make entire creation todo sticky
+        isCreationToolCall && "sticky bg-background"
+      )}
+      style={isCreationToolCall ? {
+        // Offset so TOP BLOCK (title) goes fully under user message
+        // TOP BLOCK height: py-1.5 (12px) + text-xs (~16px) + border (1px) = ~29px
+        top: 'calc(var(--user-message-height, 28px) - 29px)'
+      } : undefined}
+    >
+      {/* TOP BLOCK - Plan title with expand/collapse button */}
       <div
-        className="flex items-center justify-between px-2.5 py-2 cursor-pointer hover:bg-muted/50 transition-colors duration-150"
-        onClick={() => setIsExpanded(!isExpanded)}
+        className="rounded-t-lg border border-b-0 border-border bg-muted/30 px-2.5 py-1.5 cursor-pointer hover:bg-muted/40 transition-colors duration-150"
+        onClick={handleToggleExpand}
         role="button"
         aria-expanded={isExpanded}
         aria-label={`Todo list with ${totalTodos} items. Click to ${isExpanded ? "collapse" : "expand"}`}
         tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault()
-            setIsExpanded(!isExpanded)
-          }
-        }}
+        onKeyDown={handleKeyDown}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <PlanIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            {isPending ? (
-              <TextShimmer
-                as="span"
-                duration={1.2}
-                className="text-xs font-medium"
-              >
-                {getHeaderTitle()}
-              </TextShimmer>
-            ) : (
-              <span className="text-xs font-medium text-foreground">
-                {getHeaderTitle()}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Right side */}
-        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-          {isPending && <IconSpinner className="w-3 h-3" />}
-
+        <div className="flex items-center gap-1.5">
+          <PlanIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          <span className="text-xs font-medium text-foreground">
+            To-dos
+          </span>
+          <span className="text-xs text-muted-foreground truncate flex-1">
+            {displayTodos[0]?.content || "Todo List"}
+          </span>
           {/* Expand/Collapse icon */}
-          <div className="relative w-4 h-4">
+          <div className="relative w-4 h-4 flex-shrink-0">
             <ExpandIcon
               className={cn(
                 "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
@@ -480,38 +625,68 @@ export const AgentTodoTool = memo(function AgentTodoTool({
         </div>
       </div>
 
-      {/* Expanded content - todo list */}
-      {isExpanded && (
-        <div className="border-t border-border max-h-[300px] overflow-y-auto">
-          {displayTodos.map((todo, idx) => (
-            <div
-              key={idx}
-              className={cn(
-                "flex items-center gap-2 px-2.5 py-1.5",
-                idx !== displayTodos.length - 1 && "border-b border-border/30",
+      {/* BOTTOM BLOCK - Current task + progress (expandable) */}
+      <div className="rounded-b-lg border border-border bg-muted/20 shadow-xl shadow-background">
+        {/* Collapsed view - progress circle + current task + count */}
+        {!isExpanded && (
+          <div
+            className="flex items-center gap-2.5 px-2.5 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors duration-150"
+            onClick={handleExpand}
+          >
+            {/* Progress circle or checkmark when all completed */}
+            {completedCount === totalTodos && totalTodos > 0 ? (
+              <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center flex-shrink-0" style={{ border: "0.5px solid hsl(var(--border))" }}>
+                <CheckIcon className="w-2.5 h-2.5 text-muted-foreground" />
+              </div>
+            ) : (
+              <ProgressCircle
+                completed={completedCount}
+                total={totalTodos}
+                size={16}
+                className="flex-shrink-0"
+              />
+            )}
+
+            {/* Current task name */}
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              {currentTask && (
+                <span className="text-xs text-muted-foreground truncate">
+                  {currentTask.status === "in_progress"
+                    ? currentTask.activeForm || currentTask.content
+                    : currentTask.content}
+                </span>
               )}
-            >
-              <TodoStatusIcon status={todo.status} isPending={isPending} />
-              <span
-                className={cn(
-                  "text-xs truncate",
-                  // During streaming (isPending), use consistent muted color for all items
-                  // to avoid jarring color changes as items stream in
-                  isPending
-                    ? "text-muted-foreground"
-                    : todo.status === "completed"
-                      ? "line-through text-muted-foreground"
-                      : todo.status === "pending"
-                        ? "text-muted-foreground"
-                        : "text-foreground",
-                )}
-              >
-                {todo.content}
-              </span>
+              {!currentTask && completedCount === totalTodos && totalTodos > 0 && (
+                <span className="text-xs text-muted-foreground truncate">
+                  {displayTodos[totalTodos - 1]?.content}
+                </span>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+
+            {/* Right side - task count */}
+            <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
+              {currentTaskIndex}/{totalTodos}
+            </span>
+          </div>
+        )}
+
+        {/* Expanded content - full todo list */}
+        {isExpanded && (
+          <div
+            className="max-h-[300px] overflow-y-auto cursor-pointer"
+            onClick={handleCollapse}
+          >
+            {displayTodos.map((todo, idx) => (
+              <TodoListItem
+                key={idx}
+                todo={todo}
+                isPending={isPending}
+                isLast={idx === displayTodos.length - 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
-})
+}, areToolPropsEqual)

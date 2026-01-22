@@ -2,7 +2,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { AlignJustify, Plus } from "lucide-react"
+import { AlignJustify, Plus, Zap } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Button } from "../../../components/ui/button"
@@ -44,17 +44,26 @@ import {
 } from "../atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
-import { CommandsDropdown } from "../components/commands-dropdown"
-import { AgentsDropdown } from "../components/agents-dropdown"
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
-// import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "@/lib/atoms/agents-settings-dialog"
-const agentsSettingsDialogOpenAtom = atom(false)
-const agentsSettingsDialogActiveTabAtom = atom<string | null>(null)
+import {
+  agentsSettingsDialogOpenAtom,
+  agentsSettingsDialogActiveTabAtom,
+  customClaudeConfigAtom,
+  normalizeCustomClaudeConfig,
+  showOfflineModeFeaturesAtom,
+  selectedOllamaModelAtom,
+} from "../../../lib/atoms"
 // Desktop uses real tRPC
 import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
+import {
+  AgentsSlashCommand,
+  COMMAND_PROMPTS,
+  BUILTIN_SLASH_COMMANDS,
+  type SlashCommandOption,
+} from "../commands"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
@@ -85,6 +94,7 @@ import {
   markDraftVisible,
   type DraftProject,
 } from "../lib/drafts"
+import { CLAUDE_MODELS } from "../lib/models"
 // import type { PlanType } from "@/lib/config/subscription-plans"
 type PlanType = string
 
@@ -95,12 +105,42 @@ const CodexIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 )
 
-// Model options for Claude Code
-const claudeModels = [
-  { id: "opus", name: "Opus" },
-  { id: "sonnet", name: "Sonnet" },
-  { id: "haiku", name: "Haiku" },
-]
+// Hook to get available models (including offline models if Ollama is available and debug enabled)
+function useAvailableModels() {
+  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
+    refetchInterval: 30000,
+  })
+  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
+
+  const baseModels = CLAUDE_MODELS
+
+  const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
+  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
+  const ollamaModels = ollamaStatus?.ollama.models || []
+  const recommendedModel = ollamaStatus?.ollama.recommendedModel
+
+  // Only show offline models if:
+  // 1. Debug flag is enabled (showOfflineFeatures)
+  // 2. Ollama is available with models
+  // 3. User is actually offline
+  if (showOfflineFeatures && hasOllama && isOffline) {
+    return {
+      models: baseModels,
+      ollamaModels,
+      recommendedModel,
+      isOffline,
+      hasOllama: true,
+    }
+  }
+
+  return {
+    models: baseModels,
+    ollamaModels: [] as string[],
+    recommendedModel: undefined as string | undefined,
+    isOffline,
+    hasOllama: false,
+  }
+}
 
 // Agent providers
 const agents = [
@@ -165,11 +205,52 @@ export function NewChatForm({
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const debugMode = useAtomValue(agentsDebugModeAtom)
+  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
+  const normalizedCustomClaudeConfig =
+    normalizeCustomClaudeConfig(customClaudeConfig)
+  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
   const [repoSearchQuery, setRepoSearchQuery] = useState("")
   const [createBranchDialogOpen, setCreateBranchDialogOpen] = useState(false)
+
+  // Worktree config banner state
+  const [worktreeBannerDismissed, setWorktreeBannerDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("worktree-banner-dismissed") === "true"
+    } catch {
+      return false
+    }
+  })
+
+  // Check if project has worktree config
+  const { data: worktreeConfigData } = trpc.worktreeConfig.get.useQuery(
+    { projectId: validatedProject?.id ?? "" },
+    { enabled: !!validatedProject?.id && workMode === "worktree" && !worktreeBannerDismissed },
+  )
+
+  const showWorktreeBanner =
+    workMode === "worktree" &&
+    validatedProject &&
+    !worktreeBannerDismissed &&
+    worktreeConfigData &&
+    !worktreeConfigData.config
+
+  const handleDismissWorktreeBanner = () => {
+    setWorktreeBannerDismissed(true)
+    try {
+      localStorage.setItem("worktree-banner-dismissed", "true")
+    } catch {}
+  }
+
+  const handleConfigureWorktree = () => {
+    // Open the project-specific worktree settings tab
+    if (validatedProject?.id) {
+      setSettingsActiveTab(`project-${validatedProject.id}` as any)
+      setSettingsDialogOpen(true)
+    }
+  }
   // Parse owner/repo from GitHub URL
   const parseGitHubUrl = (url: string) => {
     const match = url.match(/(?:github\.com\/)?([^\/]+)\/([^\/\s#?]+)/)
@@ -179,10 +260,18 @@ export function NewChatForm({
   const [selectedAgent, setSelectedAgent] = useState(
     () => agents.find((a) => a.id === lastSelectedAgentId) || agents[0],
   )
+
+  // Get available models (with offline support)
+  const availableModels = useAvailableModels()
+  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
+
   const [selectedModel, setSelectedModel] = useState(
     () =>
-      claudeModels.find((m) => m.id === lastSelectedModelId) || claudeModels[1],
+      availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[1],
   )
+
+  // Determine current Ollama model (selected or recommended)
+  const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
   const [lastSelectedBranches, setLastSelectedBranches] = useAtom(
@@ -223,6 +312,17 @@ export function NewChatForm({
   const [mentionSearchText, setMentionSearchText] = useState("")
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 })
 
+  // Mention subpage navigation state
+  const [showingFilesList, setShowingFilesList] = useState(false)
+  const [showingSkillsList, setShowingSkillsList] = useState(false)
+  const [showingAgentsList, setShowingAgentsList] = useState(false)
+  const [showingToolsList, setShowingToolsList] = useState(false)
+
+  // Slash command dropdown state
+  const [showSlashDropdown, setShowSlashDropdown] = useState(false)
+  const [slashSearchText, setSlashSearchText] = useState("")
+  const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 })
+
   // Mode tooltip state (floating tooltip like canvas)
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
@@ -232,6 +332,7 @@ export function NewChatForm({
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
   const [modeDropdownOpen, setModeDropdownOpen] = useState(false)
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
 
   // Shift+Tab handler for mode switching (now handled inside input component via onShiftTab prop)
 
@@ -599,12 +700,45 @@ export function NewChatForm({
     }
   }
 
-  const handleSend = useCallback(() => {
+  const trpcUtils = trpc.useUtils()
+
+  const handleSend = useCallback(async () => {
     // Get value from uncontrolled editor
-    const message = editorRef.current?.getValue() || ""
+    let message = editorRef.current?.getValue() || ""
 
     if (!message.trim() || !selectedProject) {
       return
+    }
+
+    // Check if message is a slash command with arguments (e.g. "/hello world")
+    const slashMatch = message.match(/^\/(\S+)\s*(.*)$/)
+    if (slashMatch) {
+      const [, commandName, args] = slashMatch
+
+      // Check if it's a builtin command - if so, don't process as custom command
+      const builtinNames = new Set(
+        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
+      )
+      if (!builtinNames.has(commandName)) {
+        // This is a custom command - load content and replace $ARGUMENTS
+        try {
+          const commands = await trpcUtils.commands.list.fetch({
+            projectPath: validatedProject?.path,
+          })
+          const cmd = commands.find((c) => c.name === commandName)
+
+          if (cmd) {
+            const { content } = await trpcUtils.commands.getContent.fetch({
+              path: cmd.path,
+            })
+            // Replace $ARGUMENTS with the provided args
+            message = content.replace(/\$ARGUMENTS/g, args.trim())
+          }
+        } catch (error) {
+          console.error("Failed to process custom command:", error)
+          // Fall through with original message
+        }
+      }
     }
 
     // Build message parts array (images first, then text)
@@ -645,55 +779,49 @@ export function NewChatForm({
         workMode === "worktree" ? selectedBranch || undefined : undefined,
       useWorktree: workMode === "worktree",
       mode: isPlanMode ? "plan" : "agent",
-      model: selectedModel?.id as "opus" | "sonnet" | "haiku" | undefined, // Pass selected model to backend
     })
     // Editor and images are cleared in onSuccess callback
   }, [
     selectedProject,
+    validatedProject?.path,
     createChatMutation,
     hasContent,
     selectedBranch,
     workMode,
     images,
     isPlanMode,
-    selectedModel,
+    trpcUtils,
   ])
 
-  // Handle command selection from Commands dropdown
-  const handleCommandSelect = useCallback((command: string) => {
-    const currentValue = editorRef.current?.getValue() || ""
-    const commandWithSpace = `${command} `
-    const newValue = currentValue.trim()
-      ? `${commandWithSpace}${currentValue}`
-      : commandWithSpace
-    editorRef.current?.setValue(newValue)
-    editorRef.current?.focus()
-
-    // Position cursor right after the command and space
-    setTimeout(() => {
-      editorRef.current?.setCursorPosition(commandWithSpace.length)
-    }, 0)
-  }, [])
-
-  // Handle agent selection from Agents dropdown
-  const handleAgentSelect = useCallback((agentId: string) => {
-    const command = `/${agentId} `
-    const currentValue = editorRef.current?.getValue() || ""
-    const newValue = currentValue.trim()
-      ? `${command}${currentValue}`
-      : command
-    editorRef.current?.setValue(newValue)
-    editorRef.current?.focus()
-
-    // Position cursor right after the agent command and space
-    setTimeout(() => {
-      editorRef.current?.setCursorPosition(command.length)
-    }, 0)
-  }, [])
-
   const handleMentionSelect = useCallback((mention: FileMentionOption) => {
+    // Category navigation - enter subpage instead of inserting mention
+    if (mention.type === "category") {
+      if (mention.id === "files") {
+        setShowingFilesList(true)
+        return
+      }
+      if (mention.id === "skills") {
+        setShowingSkillsList(true)
+        return
+      }
+      if (mention.id === "agents") {
+        setShowingAgentsList(true)
+        return
+      }
+      if (mention.id === "tools") {
+        setShowingToolsList(true)
+        return
+      }
+    }
+
+    // Otherwise: insert mention as normal
     editorRef.current?.insertMention(mention)
     setShowMentionDropdown(false)
+    // Reset subpage state
+    setShowingFilesList(false)
+    setShowingSkillsList(false)
+    setShowingAgentsList(false)
+    setShowingToolsList(false)
   }, [])
 
   // Save draft to localStorage when content changes
@@ -754,6 +882,11 @@ export function NewChatForm({
       if (validatedProject) {
         setMentionSearchText(searchText)
         setMentionPosition({ top: rect.top, left: rect.left })
+        // Reset subpage state when opening dropdown
+        setShowingFilesList(false)
+        setShowingSkillsList(false)
+        setShowingAgentsList(false)
+        setShowingToolsList(false)
         setShowMentionDropdown(true)
       }
     },
@@ -762,7 +895,79 @@ export function NewChatForm({
 
   const handleCloseTrigger = useCallback(() => {
     setShowMentionDropdown(false)
+    // Reset subpage state when closing
+    setShowingFilesList(false)
+    setShowingSkillsList(false)
+    setShowingAgentsList(false)
+    setShowingToolsList(false)
   }, [])
+
+  // Slash command handlers
+  const handleSlashTrigger = useCallback(
+    ({ searchText, rect }: { searchText: string; rect: DOMRect }) => {
+      setSlashSearchText(searchText)
+      setSlashPosition({ top: rect.top, left: rect.left })
+      setShowSlashDropdown(true)
+    },
+    [],
+  )
+
+  const handleCloseSlashTrigger = useCallback(() => {
+    setShowSlashDropdown(false)
+  }, [])
+
+  const handleSlashSelect = useCallback(
+    (command: SlashCommandOption) => {
+      // Clear the slash command text from editor
+      editorRef.current?.clearSlashCommand()
+      setShowSlashDropdown(false)
+
+      // Handle builtin commands
+      if (command.category === "builtin") {
+        switch (command.name) {
+          case "clear":
+            editorRef.current?.clear()
+            break
+          case "plan":
+            if (!isPlanMode) {
+              setIsPlanMode(true)
+            }
+            break
+          case "agent":
+            if (isPlanMode) {
+              setIsPlanMode(false)
+            }
+            break
+          // Prompt-based commands - auto-send to agent
+          case "review":
+          case "pr-comments":
+          case "release-notes":
+          case "security-review": {
+            const prompt =
+              COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
+            if (prompt) {
+              editorRef.current?.setValue(prompt)
+              // Auto-send the prompt to agent
+              setTimeout(() => handleSend(), 0)
+            }
+            break
+          }
+        }
+        return
+      }
+
+      // Handle custom commands
+      if (command.argumentHint) {
+        // Command expects arguments - insert command and let user add args
+        editorRef.current?.setValue(`/${command.name} `)
+      } else if (command.prompt) {
+        // Command without arguments - send immediately
+        editorRef.current?.setValue(command.prompt)
+        setTimeout(() => handleSend(), 0)
+      }
+    },
+    [isPlanMode, setIsPlanMode, handleSend],
+  )
 
   // Paste handler for images and plain text
   // Uses async text insertion to prevent UI freeze with large text
@@ -912,7 +1117,7 @@ export function NewChatForm({
                     isDragOver && "ring-2 ring-primary/50 border-primary/50",
                     isFocused && !isDragOver && "ring-2 ring-primary/50",
                   )}
-                  maxHeight={200}
+                  maxHeight={240}
                   onSubmit={handleSend}
                   contextItems={contextItems}
                 >
@@ -922,12 +1127,14 @@ export function NewChatForm({
                       ref={editorRef}
                       onTrigger={handleMentionTrigger}
                       onCloseTrigger={handleCloseTrigger}
+                      onSlashTrigger={handleSlashTrigger}
+                      onCloseSlashTrigger={handleCloseSlashTrigger}
                       onContentChange={handleContentChange}
                       onSubmit={handleSend}
                       onShiftTab={() => setIsPlanMode((prev) => !prev)}
-                      placeholder="Plan or Accept, @ for context"
+                      placeholder="Plan, @ for context, / for commands"
                       className={cn(
-                        "bg-transparent max-h-[200px] overflow-y-auto p-1",
+                        "bg-transparent max-h-[240px] overflow-y-auto p-1",
                         isMobileFullscreen ? "min-h-[56px]" : "min-h-[44px]",
                       )}
                       onPaste={handlePaste}
@@ -959,7 +1166,7 @@ export function NewChatForm({
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5" />
                           )}
-                          <span>{isPlanMode ? "Plan" : "Accept"}</span>
+                          <span>{isPlanMode ? "Plan" : "Agent"}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -1018,7 +1225,7 @@ export function NewChatForm({
                           >
                             <div className="flex items-center gap-2">
                               <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Accept</span>
+                              <span>Agent</span>
                             </div>
                             {!isPlanMode && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
@@ -1105,62 +1312,111 @@ export function NewChatForm({
                           )}
                       </DropdownMenu>
 
-                      {/* Model selector */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                            <ClaudeCodeIcon className="h-3.5 w-3.5" />
-                            <span>
-                              {selectedModel?.name}{" "}
-                              <span className="text-muted-foreground">4.5</span>
-                            </span>
-                            <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="w-[150px]"
+                      {/* Model selector - shows Ollama models when offline, Claude models when online */}
+                      {availableModels.isOffline && availableModels.hasOllama ? (
+                        // Offline mode: show Ollama model selector
+                        <DropdownMenu
+                          open={isModelDropdownOpen}
+                          onOpenChange={setIsModelDropdownOpen}
                         >
-                          {claudeModels.map((model) => {
-                            const isSelected = selectedModel?.id === model.id
-                            return (
-                              <DropdownMenuItem
-                                key={model.id}
-                                onClick={() => {
-                                  setSelectedModel(model)
-                                  setLastSelectedModelId(model.id)
-                                }}
-                                className="gap-2 justify-between"
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  <span>
-                                    {model.name}{" "}
-                                    <span className="text-muted-foreground">
-                                      4.5
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 border border-border"
+                            >
+                              <Zap className="h-4 w-4" />
+                              <span>{currentOllamaModel || "Select model"}</span>
+                              <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-[240px]">
+                            {availableModels.ollamaModels.map((model) => {
+                              const isSelected = model === currentOllamaModel
+                              const isRecommended = model === availableModels.recommendedModel
+                              return (
+                                <DropdownMenuItem
+                                  key={model}
+                                  onClick={() => setSelectedOllamaModel(model)}
+                                  className="gap-2 justify-between"
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span>
+                                      {model}
+                                      {isRecommended && (
+                                        <span className="text-muted-foreground ml-1">(recommended)</span>
+                                      )}
                                     </span>
-                                  </span>
-                                </div>
-                                {isSelected && (
-                                  <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                                  </div>
+                                  {isSelected && (
+                                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        // Online mode: show Claude model selector
+                        <DropdownMenu
+                          open={hasCustomClaudeConfig ? false : isModelDropdownOpen}
+                          onOpenChange={(open) => {
+                            if (!hasCustomClaudeConfig) {
+                              setIsModelDropdownOpen(open)
+                            }
+                          }}
+                        >
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              disabled={hasCustomClaudeConfig}
+                              className={cn(
+                                "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-[background-color,color] duration-150 ease-out rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                                hasCustomClaudeConfig
+                                  ? "opacity-70 cursor-not-allowed"
+                                  : "hover:text-foreground hover:bg-muted/50",
+                              )}
+                            >
+                              <ClaudeCodeIcon className="h-3.5 w-3.5" />
+                              <span>
+                                {hasCustomClaudeConfig ? (
+                                  "Custom Model"
+                                ) : (
+                                  <>
+                                    {selectedModel?.name}{" "}
+                                    <span className="text-muted-foreground">4.5</span>
+                                  </>
                                 )}
-                              </DropdownMenuItem>
-                            )
-                          })}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-
-                      {/* Commands Dropdown */}
-                      <CommandsDropdown
-                        onCommandSelect={handleCommandSelect}
-                        disabled={createChatMutation.isPending}
-                      />
-
-                      {/* Agents Dropdown */}
-                      <AgentsDropdown
-                        onAgentSelect={handleAgentSelect}
-                        disabled={createChatMutation.isPending}
-                      />
+                              </span>
+                              <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-[200px]">
+                            {availableModels.models.map((model) => {
+                              const isSelected = selectedModel?.id === model.id
+                              return (
+                                <DropdownMenuItem
+                                  key={model.id}
+                                  onClick={() => {
+                                    setSelectedModel(model)
+                                    setLastSelectedModelId(model.id)
+                                  }}
+                                  className="gap-2 justify-between"
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <span>
+                                      {model.name}{" "}
+                                      <span className="text-muted-foreground">4.5</span>
+                                    </span>
+                                  </div>
+                                  {isSelected && (
+                                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
@@ -1366,15 +1622,73 @@ export function NewChatForm({
                   )}
                 </div>
 
+                {/* Worktree config banner - absolute positioned to avoid layout shift */}
+                {showWorktreeBanner && (
+                  <div className="absolute left-0 right-0 top-full mt-2 ml-[5px] mr-[5px] p-3 pb-4 bg-muted/50 rounded-lg border border-border space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Configure a worktree setup script to install dependencies or copy environment variables.
+                    </p>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleConfigureWorktree}
+                      >
+                        Settings
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const prompt = COMMAND_PROMPTS["worktree-setup"]
+                          if (prompt && validatedProject) {
+                            createChatMutation.mutate({
+                              projectId: validatedProject.id,
+                              name: "Worktree Setup",
+                              initialMessageParts: [{ type: "text", text: prompt }],
+                              useWorktree: false,
+                              mode: "agent",
+                            })
+                          }
+                        }}
+                      >
+                        Fill with AI
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {/* File mention dropdown */}
                 {/* Desktop: use projectPath for local file search */}
                 <AgentsFileMention
                   isOpen={showMentionDropdown && !!validatedProject}
-                  onClose={() => setShowMentionDropdown(false)}
+                  onClose={() => {
+                    setShowMentionDropdown(false)
+                    // Reset subpage state when dropdown closes
+                    setShowingFilesList(false)
+                    setShowingSkillsList(false)
+                    setShowingAgentsList(false)
+                    setShowingToolsList(false)
+                  }}
                   onSelect={handleMentionSelect}
                   searchText={mentionSearchText}
                   position={mentionPosition}
                   projectPath={validatedProject?.path}
+                  showingFilesList={showingFilesList}
+                  showingSkillsList={showingSkillsList}
+                  showingAgentsList={showingAgentsList}
+                  showingToolsList={showingToolsList}
+                />
+
+                {/* Slash command dropdown */}
+                <AgentsSlashCommand
+                  isOpen={showSlashDropdown}
+                  onClose={handleCloseSlashTrigger}
+                  onSelect={handleSlashSelect}
+                  searchText={slashSearchText}
+                  position={slashPosition}
+                  projectPath={validatedProject?.path}
+                  isPlanMode={isPlanMode}
+                  disabledCommands={["clear"]}
                 />
               </div>
             </div>

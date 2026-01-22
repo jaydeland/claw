@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react"
-import { useAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { FolderOpen } from "lucide-react"
+import { showOfflineModeFeaturesAtom } from "../../../lib/atoms"
 import {
   Popover,
   PopoverContent,
@@ -14,7 +15,15 @@ import {
   CommandItem,
   CommandList,
 } from "../../../components/ui/command"
-import { IconChevronDown, CheckIcon, FolderPlusIcon } from "../../../components/ui/icons"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../../components/ui/dialog"
+import { Input } from "../../../components/ui/input"
+import { Button } from "../../../components/ui/button"
+import { IconChevronDown, CheckIcon, FolderPlusIcon, GitHubIcon } from "../../../components/ui/icons"
 import { trpc } from "../../../lib/trpc"
 import { selectedProjectAtom } from "../atoms"
 
@@ -23,12 +32,15 @@ function ProjectIcon({
   gitOwner,
   gitProvider,
   className = "h-4 w-4",
+  isOffline = false,
 }: {
   gitOwner?: string | null
   gitProvider?: string | null
   className?: string
+  isOffline?: boolean
 }) {
-  if (gitOwner && gitProvider === "github") {
+  // In offline mode, don't try to load remote images
+  if (!isOffline && gitOwner && gitProvider === "github") {
     return (
       <img
         src={`https://github.com/${gitOwner}.png?size=64`}
@@ -48,6 +60,15 @@ export function ProjectSelector() {
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [githubDialogOpen, setGithubDialogOpen] = useState(false)
+  const [githubUrl, setGithubUrl] = useState("")
+
+  // Check if offline mode is enabled and if we're actually offline
+  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
+  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
+    enabled: showOfflineFeatures,
+  })
+  const isOffline = showOfflineFeatures && ollamaStatus ? !ollamaStatus.internet.online : false
 
   // Fetch projects from DB
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
@@ -100,9 +121,48 @@ export function ProjectSelector() {
     },
   })
 
+  // Clone from GitHub mutation
+  const cloneFromGitHub = trpc.projects.cloneFromGitHub.useMutation({
+    onSuccess: (project) => {
+      if (project) {
+        utils.projects.list.setData(undefined, (oldData) => {
+          if (!oldData) return [project]
+          const exists = oldData.some((p) => p.id === project.id)
+          if (exists) {
+            return oldData.map((p) =>
+              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
+            )
+          }
+          return [project, ...oldData]
+        })
+
+        setSelectedProject({
+          id: project.id,
+          name: project.name,
+          path: project.path,
+          gitRemoteUrl: project.gitRemoteUrl,
+          gitProvider: project.gitProvider as
+            | "github"
+            | "gitlab"
+            | "bitbucket"
+            | null,
+          gitOwner: project.gitOwner,
+          gitRepo: project.gitRepo,
+        })
+        setGithubDialogOpen(false)
+        setGithubUrl("")
+      }
+    },
+  })
+
   const handleOpenFolder = async () => {
     setOpen(false)
     await openFolder.mutateAsync()
+  }
+
+  const handleCloneFromGitHub = async () => {
+    if (!githubUrl.trim()) return
+    await cloneFromGitHub.mutateAsync({ repoUrl: githubUrl.trim() })
   }
 
   const handleSelectProject = (projectId: string) => {
@@ -152,6 +212,7 @@ export function ProjectSelector() {
   }
 
   return (
+    <>
     <Popover
       open={open}
       onOpenChange={(isOpen) => {
@@ -167,6 +228,7 @@ export function ProjectSelector() {
           <ProjectIcon
             gitOwner={validSelection?.gitOwner}
             gitProvider={validSelection?.gitProvider}
+            isOffline={isOffline}
           />
           <span className="truncate max-w-[120px]">
             {validSelection?.name || "Select repo"}
@@ -200,6 +262,7 @@ export function ProjectSelector() {
                       <ProjectIcon
                         gitOwner={project.gitOwner}
                         gitProvider={project.gitProvider}
+                        isOffline={isOffline}
                       />
                       <span className="truncate flex-1">{project.name}</span>
                       {isSelected && (
@@ -222,9 +285,62 @@ export function ProjectSelector() {
               <FolderPlusIcon className="h-4 w-4 text-muted-foreground" />
               <span>{openFolder.isPending ? "Adding..." : "Add repository"}</span>
             </button>
+            <button
+              onClick={() => {
+                setOpen(false)
+                setGithubDialogOpen(true)
+              }}
+              className="flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
+            >
+              <GitHubIcon className="h-4 w-4 text-muted-foreground" />
+              <span>Add from GitHub</span>
+            </button>
           </div>
         </Command>
       </PopoverContent>
     </Popover>
+
+    <Dialog open={githubDialogOpen} onOpenChange={setGithubDialogOpen}>
+      <DialogContent className="w-[400px] p-0 gap-0 overflow-hidden">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleCloneFromGitHub()
+          }}
+        >
+          <div className="p-6">
+            <h2 className="text-xl font-semibold mb-4">
+              Clone from GitHub
+            </h2>
+            <Input
+              placeholder="owner/repo or https://github.com/..."
+              value={githubUrl}
+              onChange={(e) => setGithubUrl(e.target.value)}
+              className="w-full h-11 text-sm"
+              autoFocus
+            />
+          </div>
+          <div className="bg-muted p-4 flex justify-between border-t border-border">
+            <Button
+              type="button"
+              onClick={() => setGithubDialogOpen(false)}
+              variant="ghost"
+              className="rounded-md"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={!githubUrl.trim() || cloneFromGitHub.isPending}
+              variant="default"
+              className="rounded-md"
+            >
+              {cloneFromGitHub.isPending ? "Cloning..." : "Clone"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

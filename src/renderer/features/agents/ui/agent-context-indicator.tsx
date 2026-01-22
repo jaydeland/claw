@@ -1,13 +1,12 @@
 "use client"
 
-import { memo, useMemo } from "react"
+import { memo } from "react"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
-import type { AgentMessageMetadata } from "./agent-message-usage"
 
 // Claude model context windows
 const CONTEXT_WINDOWS = {
@@ -18,10 +17,21 @@ const CONTEXT_WINDOWS = {
 
 type ModelId = keyof typeof CONTEXT_WINDOWS
 
+// Pre-computed token data to avoid re-computing on every render
+export interface MessageTokenData {
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCostUsd: number
+  messageCount: number
+}
+
 interface AgentContextIndicatorProps {
-  messages: Array<{ metadata?: AgentMessageMetadata }>
+  tokenData: MessageTokenData
   modelId?: ModelId
   className?: string
+  onCompact?: () => void
+  isCompacting?: boolean
+  disabled?: boolean
 }
 
 function formatTokens(tokens: number): string {
@@ -84,52 +94,40 @@ function CircularProgress({
 }
 
 export const AgentContextIndicator = memo(function AgentContextIndicator({
-  messages,
+  tokenData,
   modelId = "sonnet",
   className,
+  onCompact,
+  isCompacting,
+  disabled,
 }: AgentContextIndicatorProps) {
-  // Calculate session totals from all message metadata
-  const sessionTotals = useMemo(() => {
-    let totalInputTokens = 0
-    let totalOutputTokens = 0
-    let totalCostUsd = 0
-
-    for (const msg of messages) {
-      if (msg.metadata) {
-        totalInputTokens += msg.metadata.inputTokens || 0
-        totalOutputTokens += msg.metadata.outputTokens || 0
-        totalCostUsd += msg.metadata.totalCostUsd || 0
-      }
-    }
-
-    const totalTokens = totalInputTokens + totalOutputTokens
-
-    return {
-      inputTokens: totalInputTokens,
-      outputTokens: totalOutputTokens,
-      totalTokens,
-      totalCostUsd,
-    }
-  }, [messages])
-
+  const totalTokens = tokenData.totalInputTokens + tokenData.totalOutputTokens
   const contextWindow = CONTEXT_WINDOWS[modelId]
-  const percentUsed = Math.min(
-    100,
-    (sessionTotals.totalTokens / contextWindow) * 100,
-  )
+  const percentUsed = Math.min(100, (totalTokens / contextWindow) * 100)
+  const isEmpty = totalTokens === 0
 
-  const isEmpty = sessionTotals.totalTokens === 0
+  const isClickable = onCompact && !disabled && !isCompacting
 
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
         <div
+          onClick={isClickable ? onCompact : undefined}
           className={cn(
-            "h-4 w-4 flex items-center justify-center cursor-default",
+            "h-4 w-4 flex items-center justify-center",
+            isClickable
+              ? "cursor-pointer hover:opacity-70 transition-opacity"
+              : "cursor-default",
+            disabled && "opacity-50",
             className,
           )}
         >
-          <CircularProgress percent={percentUsed} size={14} strokeWidth={2.5} />
+          <CircularProgress
+            percent={percentUsed}
+            size={14}
+            strokeWidth={2.5}
+            className={isCompacting ? "animate-pulse" : undefined}
+          />
         </div>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={8}>
@@ -145,7 +143,7 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
               </span>
               <span className="text-muted-foreground mx-1">·</span>
               <span className="text-muted-foreground">
-                {formatTokens(sessionTotals.totalTokens)} /{" "}
+                {formatTokens(totalTokens)} /{" "}
                 {formatTokens(contextWindow)} context
               </span>
             </>

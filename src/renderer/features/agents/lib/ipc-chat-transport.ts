@@ -3,12 +3,19 @@ import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
   agentsLoginModalOpenAtom,
+  customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
+  historyEnabledAtom,
+  sessionInfoAtom,
+  selectedOllamaModelAtom,
+  type CustomClaudeConfig,
+  normalizeCustomClaudeConfig,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
 import {
   askUserQuestionResultsAtom,
+  compactingSubChatsAtom,
   lastSelectedModelIdAtom,
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
@@ -44,12 +51,26 @@ const ERROR_TOAST_CONFIG: Record<
       "Your Claude API key is invalid. Check your CLI configuration.",
   },
   RATE_LIMIT_SDK: {
-    title: "Rate limited",
-    description: "Too many requests. Please wait a moment and try again.",
+    title: "Session limit reached",
+    description: "You've hit the Claude Code usage limit.",
+    action: {
+      label: "View usage",
+      onClick: () =>
+        trpcClient.external.openExternal.mutate(
+          "https://claude.ai/settings/usage",
+        ),
+    },
   },
   RATE_LIMIT: {
-    title: "Rate limited",
-    description: "Too many requests. Please wait a moment and try again.",
+    title: "Session limit reached",
+    description: "You've hit the Claude Code usage limit.",
+    action: {
+      label: "View usage",
+      onClick: () =>
+        trpcClient.external.openExternal.mutate(
+          "https://claude.ai/settings/usage",
+        ),
+    },
   },
   OVERLOADED_SDK: {
     title: "Claude is busy",
@@ -59,7 +80,7 @@ const ERROR_TOAST_CONFIG: Record<
   PROCESS_CRASH: {
     title: "Claude crashed",
     description:
-      "The Claude process exited unexpectedly. Try sending your message again.",
+      "The Claude process exited unexpectedly. Try sending your message again or rollback.",
   },
   EXECUTABLE_NOT_FOUND: {
     title: "Claude CLI not found",
@@ -89,6 +110,7 @@ type IPCChatTransportConfig = {
   chatId: string
   subChatId: string
   cwd: string
+  projectPath?: string // Original project path for MCP config lookup (when using worktrees)
   mode: "plan" | "agent"
   model?: string
 }
@@ -123,10 +145,20 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     // Read extended thinking setting dynamically (so toggle applies to existing chats)
     const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
     const maxThinkingTokens = thinkingEnabled ? 128_000 : undefined
+    const historyEnabled = appStore.get(historyEnabledAtom)
 
     // Read model selection dynamically (so model changes apply to existing chats)
     const selectedModelId = appStore.get(lastSelectedModelIdAtom)
     const modelString = MODEL_ID_MAP[selectedModelId]
+
+    const storedCustomConfig = appStore.get(
+      customClaudeConfigAtom,
+    ) as CustomClaudeConfig
+    const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
+
+    // Get selected Ollama model for offline mode
+    const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
+    console.log(`[SD] selectedOllamaModel from atom: ${selectedOllamaModel || "(null)"}`)
 
     const currentMode =
       useAgentSubChatStore
@@ -138,7 +170,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
-    console.log(`[SD] R:START sub=${subId}`)
+    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"}`)
 
     return new ReadableStream({
       start: (controller) => {
@@ -148,10 +180,14 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             chatId: this.config.chatId,
             prompt,
             cwd: this.config.cwd,
+            projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
             sessionId,
             ...(maxThinkingTokens && { maxThinkingTokens }),
             ...(modelString && { model: modelString }),
+            ...(customConfig && { customConfig }),
+            ...(selectedOllamaModel && { selectedOllamaModel }),
+            historyEnabled,
             ...(images.length > 0 && { images }),
           },
           {
@@ -161,18 +197,25 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle AskUserQuestion - show question UI
               if (chunk.type === "ask-user-question") {
-                appStore.set(pendingUserQuestionsAtom, {
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                const newMap = new Map(currentMap)
+                newMap.set(this.config.subChatId, {
                   subChatId: this.config.subChatId,
+                  parentChatId: this.config.chatId,
                   toolUseId: chunk.toolUseId,
                   questions: chunk.questions,
                 })
+                appStore.set(pendingUserQuestionsAtom, newMap)
               }
 
               // Handle AskUserQuestion timeout - clear pending question immediately
               if (chunk.type === "ask-user-question-timeout") {
-                const pending = appStore.get(pendingUserQuestionsAtom)
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                const pending = currentMap.get(this.config.subChatId)
                 if (pending && pending.toolUseId === chunk.toolUseId) {
-                  appStore.set(pendingUserQuestionsAtom, null)
+                  const newMap = new Map(currentMap)
+                  newMap.delete(this.config.subChatId)
+                  appStore.set(pendingUserQuestionsAtom, newMap)
                 }
               }
 
@@ -182,6 +225,38 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 const newResults = new Map(currentResults)
                 newResults.set(chunk.toolUseId, chunk.result)
                 appStore.set(askUserQuestionResultsAtom, newResults)
+              }
+
+              // Handle compacting status - track in atom for UI display
+              if (chunk.type === "system-Compact") {
+                const compacting = appStore.get(compactingSubChatsAtom)
+                const newCompacting = new Set(compacting)
+                if (chunk.state === "input-streaming") {
+                  // Compacting started
+                  newCompacting.add(this.config.subChatId)
+                } else {
+                  // Compacting finished (output-available)
+                  newCompacting.delete(this.config.subChatId)
+                }
+                appStore.set(compactingSubChatsAtom, newCompacting)
+              }
+
+              // Handle session init - store MCP servers, plugins, tools info
+              if (chunk.type === "session-init") {
+                console.log("[MCP] Received session-init:", {
+                  tools: chunk.tools?.length,
+                  mcpServers: chunk.mcpServers,
+                  plugins: chunk.plugins,
+                  skills: chunk.skills?.length,
+                  // Debug: show all tools to check for MCP tools (format: mcp__servername__toolname)
+                  allTools: chunk.tools,
+                })
+                appStore.set(sessionInfoAtom, {
+                  tools: chunk.tools,
+                  mcpServers: chunk.mcpServers,
+                  plugins: chunk.plugins,
+                  skills: chunk.skills,
+                })
               }
 
               // Clear pending questions ONLY when agent has moved on
@@ -196,9 +271,11 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 chunk.type !== "start-step"
 
               if (shouldClearOnChunk) {
-                const pending = appStore.get(pendingUserQuestionsAtom)
-                if (pending && pending.subChatId === this.config.subChatId) {
-                  appStore.set(pendingUserQuestionsAtom, null)
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                if (currentMap.has(this.config.subChatId)) {
+                  const newMap = new Map(currentMap)
+                  newMap.delete(this.config.subChatId)
+                  appStore.set(pendingUserQuestionsAtom, newMap)
                 }
               }
 
@@ -217,6 +294,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 // Use controller.error() instead of controller.close() so that
                 // the SDK Chat properly resets status from "streaming" to "ready"
                 // This allows user to retry sending messages after failed auth
+                console.log(`[SD] R:AUTH_ERR sub=${subId}`)
                 controller.error(new Error("Authentication required"))
                 return
               }

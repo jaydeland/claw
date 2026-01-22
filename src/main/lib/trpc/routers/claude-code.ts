@@ -1,9 +1,19 @@
-import { z } from "zod"
-import { shell, safeStorage } from "electron"
-import { router, publicProcedure } from "../index"
-import { getApiUrl } from "../../config"
-import { getDatabase, claudeCodeCredentials, claudeCodeSettings } from "../../db"
 import { eq } from "drizzle-orm"
+import { safeStorage, shell } from "electron"
+import { z } from "zod"
+import { getAuthManager } from "../../../index"
+import { getExistingClaudeToken } from "../../claude-token"
+import { getApiUrl } from "../../config"
+import { claudeCodeCredentials, getDatabase } from "../../db"
+import { publicProcedure, router } from "../index"
+
+/**
+ * Get desktop auth token for server API calls
+ */
+async function getDesktopToken(): Promise<string | null> {
+  const authManager = getAuthManager()
+  return authManager.getValidToken()
+}
 
 /**
  * Encrypt token using Electron's safeStorage
@@ -27,6 +37,27 @@ function decryptToken(encrypted: string): string {
   return safeStorage.decryptString(buffer)
 }
 
+function storeOAuthToken(oauthToken: string) {
+  const authManager = getAuthManager()
+  const user = authManager.getUser()
+
+  const encryptedToken = encryptToken(oauthToken)
+  const db = getDatabase()
+
+  db.delete(claudeCodeCredentials)
+    .where(eq(claudeCodeCredentials.id, "default"))
+    .run()
+
+  db.insert(claudeCodeCredentials)
+    .values({
+      id: "default",
+      oauthToken: encryptedToken,
+      connectedAt: new Date(),
+      userId: user?.id ?? null,
+    })
+    .run()
+}
+
 /**
  * Claude Code OAuth router for desktop
  * Uses server only for sandbox creation, stores token locally
@@ -34,7 +65,6 @@ function decryptToken(encrypted: string): string {
 export const claudeCodeRouter = router({
   /**
    * Check if user has Claude Code connected (local check)
-   * Checks for OAuth token, API key, or AWS Bedrock mode
    */
   getIntegration: publicProcedure.query(() => {
     const db = getDatabase()
@@ -44,29 +74,9 @@ export const claudeCodeRouter = router({
       .where(eq(claudeCodeCredentials.id, "default"))
       .get()
 
-    const settings = db
-      .select()
-      .from(claudeCodeSettings)
-      .where(eq(claudeCodeSettings.id, "default"))
-      .get()
-
-    const authMode = settings?.authMode || "oauth"
-    let isConnected = !!cred?.oauthToken
-
-    // For API Key mode, check if API key is set
-    if (authMode === "apiKey" && settings?.apiKey) {
-      isConnected = true
-    }
-
-    // For AWS Bedrock mode, consider connected if mode is set
-    if (authMode === "aws") {
-      isConnected = true
-    }
-
     return {
-      isConnected,
+      isConnected: !!cred?.oauthToken,
       connectedAt: cred?.connectedAt?.toISOString() ?? null,
-      authMode: authMode as "oauth" | "aws" | "apiKey",
     }
   }),
 
@@ -74,9 +84,15 @@ export const claudeCodeRouter = router({
    * Start OAuth flow - calls server to create sandbox
    */
   startAuth: publicProcedure.mutation(async () => {
+    const token = await getDesktopToken()
+    if (!token) {
+      throw new Error("Not authenticated with 21st.dev")
+    }
+
     // Server creates sandbox (has CodeSandbox SDK)
     const response = await fetch(`${getApiUrl()}/api/auth/claude-code/start`, {
       method: "POST",
+      headers: { "x-desktop-token": token },
     })
 
     if (!response.ok) {
@@ -177,32 +193,51 @@ export const claudeCodeRouter = router({
         throw new Error("Timeout waiting for OAuth token")
       }
 
-      // Validate token format
-      if (!oauthToken.startsWith("sk-ant-oat01-")) {
-        throw new Error("Invalid OAuth token format")
-      }
-
-      // Encrypt and store locally
-      const encryptedToken = encryptToken(oauthToken)
-      const db = getDatabase()
-
-      // Upsert - delete existing and insert new
-      db.delete(claudeCodeCredentials)
-        .where(eq(claudeCodeCredentials.id, "default"))
-        .run()
-
-      db.insert(claudeCodeCredentials)
-        .values({
-          id: "default",
-          oauthToken: encryptedToken,
-          connectedAt: new Date(),
-          userId: null,
-        })
-        .run()
+      storeOAuthToken(oauthToken)
 
       console.log("[ClaudeCode] Token stored locally")
       return { success: true }
     }),
+
+  /**
+   * Import an existing OAuth token from the local machine
+   */
+  importToken: publicProcedure
+    .input(
+      z.object({
+        token: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const oauthToken = input.token.trim()
+
+      storeOAuthToken(oauthToken)
+
+      console.log("[ClaudeCode] Token imported locally")
+      return { success: true }
+    }),
+
+  /**
+   * Check for existing Claude token in system credentials
+   */
+  getSystemToken: publicProcedure.query(() => {
+    const token = getExistingClaudeToken()?.trim() ?? null
+    return { token }
+  }),
+
+  /**
+   * Import Claude token from system credentials
+   */
+  importSystemToken: publicProcedure.mutation(() => {
+    const token = getExistingClaudeToken()?.trim()
+    if (!token) {
+      throw new Error("No existing Claude token found")
+    }
+
+    storeOAuthToken(token)
+    console.log("[ClaudeCode] Token imported from system")
+    return { success: true }
+  }),
 
   /**
    * Get decrypted OAuth token (local)

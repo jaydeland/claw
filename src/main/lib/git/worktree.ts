@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import simpleGit from "simple-git";
@@ -10,6 +11,7 @@ import {
 	uniqueNamesGenerator,
 } from "unique-names-generator";
 import { checkGitLfsAvailable, getShellEnvironment } from "./shell-env";
+import { executeWorktreeSetup } from "./worktree-config";
 
 const execFileAsync = promisify(execFile);
 
@@ -915,13 +917,27 @@ export async function createWorktreeForChat(
 			worktreesDir = expandEnvVars(customWorktreeLocation);
 			console.log(`[worktree] Using custom location: ${customWorktreeLocation} → ${worktreesDir}`);
 		} else {
-			// Default: ~/.claw/worktrees
-			worktreesDir = join(process.env.HOME || "", ".claw", "worktrees");
+			// Default: ~/.21st/worktrees
+			worktreesDir = join(homedir(), ".21st", "worktrees");
 		}
 
 		const worktreePath = join(worktreesDir, projectId, chatId);
 
 		await createWorktree(projectPath, branch, worktreePath, `origin/${baseBranch}`);
+
+		// Run worktree setup commands in BACKGROUND (don't block chat creation)
+		// This allows the user to start chatting immediately while deps install
+		executeWorktreeSetup(worktreePath, projectPath)
+			.then((setupResult) => {
+				if (!setupResult.success) {
+					console.warn(`[worktree] Setup completed with errors: ${setupResult.errors.join(", ")}`);
+				} else {
+					console.log(`[worktree] Setup completed successfully for ${chatId}`);
+				}
+			})
+			.catch((setupError) => {
+				console.warn(`[worktree] Setup failed: ${setupError}`);
+			});
 
 		return { success: true, worktreePath, branch, baseBranch };
 	} catch (error) {
@@ -940,6 +956,7 @@ export async function createWorktreeForChat(
 export async function getWorktreeDiff(
 	worktreePath: string,
 	baseBranch?: string,
+	options?: { onlyUncommitted?: boolean },
 ): Promise<{ success: boolean; diff?: string; error?: string }> {
 	try {
 		const git = simpleGit(worktreePath);
@@ -948,24 +965,71 @@ export async function getWorktreeDiff(
 
 		// Has uncommitted changes - diff against HEAD
 		if (!status.isClean()) {
-			await git.add("-A");
-
-			const diff = await git.diff([
-				"--cached",
-				"HEAD",
-				"--no-color",
-				"--relative",
-				"--",
+			const exclusionArgs = [
 				":!*.lock",
 				":!*-lock.*",
 				":!package-lock.json",
 				":!pnpm-lock.yaml",
 				":!yarn.lock",
+			];
+
+			const workingDiff = await git.diff([
+				"HEAD",
+				"--no-color",
+				"--",
+				...exclusionArgs,
 			]);
 
-			await git.reset(["HEAD"]).catch(() => {});
+			const untrackedFiles = status.not_added.filter((file) => {
+				if (file.endsWith(".lock")) return false;
+				if (file.includes("-lock.")) return false;
+				if (file.endsWith("package-lock.json")) return false;
+				if (file.endsWith("pnpm-lock.yaml")) return false;
+				if (file.endsWith("yarn.lock")) return false;
+				return true;
+			});
 
-			return { success: true, diff: diff || "" };
+			// git diff --no-index only accepts 2 paths, so we need to diff each file separately
+			// Also, git diff --no-index returns exit code 1 when files differ, which simple-git treats as error
+			// So we use raw() to get the output regardless of exit code
+			const untrackedDiffs: string[] = [];
+			for (const file of untrackedFiles) {
+				try {
+					const fileDiff = await git.raw([
+						"diff",
+						"--no-color",
+						"--no-index",
+						"/dev/null",
+						file,
+					]);
+					if (fileDiff) {
+						untrackedDiffs.push(fileDiff);
+					}
+				} catch (error: unknown) {
+					// git diff --no-index returns exit code 1 when files differ
+					// simple-git throws but includes the diff output in the error
+					const gitError = error as { message?: string };
+					if (gitError.message && gitError.message.includes("diff --git")) {
+						// Extract the diff from the error message
+						const diffStart = gitError.message.indexOf("diff --git");
+						if (diffStart !== -1) {
+							untrackedDiffs.push(gitError.message.substring(diffStart));
+						}
+					}
+				}
+			}
+			const untrackedDiff = untrackedDiffs.join("\n");
+
+			const combinedDiff = [workingDiff, untrackedDiff]
+				.filter(Boolean)
+				.join("\n");
+
+			return { success: true, diff: combinedDiff };
+		}
+
+		// All committed - if onlyUncommitted mode, return empty diff
+		if (options?.onlyUncommitted) {
+			return { success: true, diff: "" };
 		}
 
 		// All committed - diff against base branch

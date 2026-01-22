@@ -4,8 +4,10 @@ import * as React from "react"
 type IconProps = React.SVGProps<SVGSVGElement> & { className?: string }
 
 // Spinner icon with animation
-export function IconSpinner(props: IconProps & { color?: string }) {
-  const { className, style, color, ...rest } = props
+// size: "default" (strokeWidth 3) or "nano" (strokeWidth 4, for small displays)
+export function IconSpinner(props: IconProps & { color?: string; size?: "default" | "nano" }) {
+  const { className, style, color, size = "default", ...rest } = props
+  const strokeWidth = size === "nano" ? 4 : 3
   return (
     <>
       <style>{`
@@ -31,7 +33,7 @@ export function IconSpinner(props: IconProps & { color?: string }) {
           cy="12"
           r="10"
           stroke={color || "currentColor"}
-          strokeWidth="3"
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
           fill="none"
           opacity={0.2}
@@ -39,12 +41,70 @@ export function IconSpinner(props: IconProps & { color?: string }) {
         <path
           d="M12 2C6.48 2 2 6.48 2 12"
           stroke={color || "currentColor"}
-          strokeWidth="3"
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
           fill="none"
         />
       </svg>
     </>
+  )
+}
+
+// Loading indicator that transitions from spinner to dot
+// Shows spinner when loading, animates to blue dot when done
+export function LoadingDot({
+  isLoading,
+  className,
+  dotClassName = "bg-[#307BD0]"
+}: {
+  isLoading: boolean
+  className?: string
+  dotClassName?: string
+}) {
+  return (
+    <div className={`relative ${className || ""}`}>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+      {/* Spinner - visible when loading */}
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        className={`absolute inset-0 w-full h-full transition-[opacity,transform] duration-200 ease-out ${
+          isLoading ? "opacity-100 scale-100" : "opacity-0 scale-50"
+        }`}
+        style={{
+          animation: isLoading ? 'spin 1s linear infinite' : undefined,
+        }}
+      >
+        <circle
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth={4}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.2}
+        />
+        <path
+          d="M12 2C6.48 2 2 6.48 2 12"
+          stroke="currentColor"
+          strokeWidth={4}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+      {/* Dot - appears when not loading */}
+      <div
+        className={`absolute inset-0 m-auto w-[80%] h-[80%] rounded-full transition-[opacity,transform] duration-200 ease-out ${dotClassName} ${
+          isLoading ? "opacity-0 scale-50" : "opacity-100 scale-100"
+        }`}
+      />
+    </div>
   )
 }
 
