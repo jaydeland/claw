@@ -257,12 +257,14 @@ export const splitUnifiedDiffByFile = (diffText: string): ParsedDiffFile[] => {
 
       if (line.startsWith("--- ")) {
         const raw = line.slice(4).trim()
-        oldPath = raw.startsWith("a/") ? raw.slice(2) : raw
+        const extracted = raw.startsWith("a/") ? raw.slice(2) : raw
+        oldPath = stripWorktreePrefix(extracted)
       }
 
       if (line.startsWith("+++ ")) {
         const raw = line.slice(4).trim()
-        newPath = raw.startsWith("b/") ? raw.slice(2) : raw
+        const extracted = raw.startsWith("b/") ? raw.slice(2) : raw
+        newPath = stripWorktreePrefix(extracted)
       }
 
       if (line.startsWith("+") && !line.startsWith("+++ ")) {
@@ -287,6 +289,32 @@ export const splitUnifiedDiffByFile = (diffText: string): ParsedDiffFile[] => {
       isValid,
     }
   })
+}
+
+/**
+ * Strip worktree path prefix from file paths to show only repo-relative paths
+ * Removes prefixes like: $VIDYARD_PATH/worktrees/proj/chat/ or /abs/path/.claw/worktrees/proj/chat/
+ */
+function stripWorktreePrefix(path: string): string {
+  if (!path || path === "/dev/null") return path
+
+  // Strip common worktree path patterns
+  const prefixPatterns = [
+    /^\$[A-Z_]+\/.*?\/worktrees\/[^/]+\/[^/]+\//,  // $VAR/path/worktrees/proj/chat/
+    /^\/.*?\/\.claw\/worktrees\/[^/]+\/[^/]+\//,   // /path/.claw/worktrees/proj/chat/
+    /^\/.*?\/\.21st\/worktrees\/[^/]+\/[^/]+\//,   // /path/.21st/worktrees/proj/chat/
+    /^\/.*?\/worktrees\/[^/]+\/[^/]+\//,           // /abs/path/worktrees/proj/chat/
+    /^~\/.*?\/worktrees\/[^/]+\/[^/]+\//,          // ~/path/worktrees/proj/chat/
+  ]
+
+  for (const pattern of prefixPatterns) {
+    const match = path.match(pattern)
+    if (match) {
+      return path.slice(match[0].length)
+    }
+  }
+
+  return path
 }
 
 interface FileDiffCardProps {
