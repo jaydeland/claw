@@ -4,7 +4,7 @@ import { z } from "zod"
 import { getAuthManager } from "../../../index"
 import { getExistingClaudeToken } from "../../claude-token"
 import { getApiUrl } from "../../config"
-import { claudeCodeCredentials, getDatabase } from "../../db"
+import { claudeCodeCredentials, claudeCodeSettings, getDatabase } from "../../db"
 import { publicProcedure, router } from "../index"
 
 /**
