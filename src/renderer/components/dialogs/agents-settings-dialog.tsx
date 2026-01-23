@@ -25,6 +25,7 @@ import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
 import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
+import { AgentsClaudeCodeTab } from "../../../features/agents/components/settings-tabs/agents-claude-code-tab"
 import { trpc } from "../../lib/trpc"
 
 // Hook to detect narrow screen
@@ -61,6 +62,12 @@ const MAIN_TABS = [
     description: "Manage your account settings",
   },
   {
+    id: "claude-code" as SettingsTab,
+    label: "Authentication",
+    icon: SettingsIcon,
+    description: "Claude Code and AWS Bedrock authentication",
+  },
+  {
     id: "appearance" as SettingsTab,
     label: "Appearance",
     icon: EyeOpenFilledIcon,
@@ -82,7 +89,7 @@ const MAIN_TABS = [
     id: "models" as SettingsTab,
     label: "Models",
     icon: BrainFilledIcon,
-    description: "Model overrides and Claude Code auth",
+    description: "Model overrides",
   },
 ]
 
@@ -301,6 +308,8 @@ export function AgentsSettingsDialog({
     switch (activeTab) {
       case "profile":
         return <AgentsProfileTab />
+      case "claude-code":
+        return <AgentsClaudeCodeTab />
       case "appearance":
         return <AgentsAppearanceTab />
       case "keyboard":
