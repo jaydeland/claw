@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback, ChangeEvent } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { IconSpinner } from "../../../components/ui/icons"
-import { Check, ExternalLink, LogOut, RefreshCw } from "lucide-react"
+import { Check, ExternalLink, LogOut, RefreshCw, Copy, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   Select,
@@ -14,6 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../../../components/ui/dialog"
 import { trpc } from "../../../lib/trpc"
 
 interface AwsSsoSectionProps {
@@ -34,6 +41,15 @@ interface SsoAccount {
 interface SsoRole {
   roleName: string
   accountId: string
+}
+
+interface DeviceAuthState {
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  verificationUriComplete: string
+  expiresIn: number
+  interval: number
 }
 
 // AWS Regions with Bedrock availability
@@ -79,6 +95,11 @@ export function AwsSsoSection({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
+  // Device auth state
+  const [deviceAuth, setDeviceAuth] = useState<DeviceAuthState | null>(null)
+  const [codeCopied, setCodeCopied] = useState(false)
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+
   // Account/role selection
   const [selectedAccountId, setSelectedAccountId] = useState("")
   const [selectedRoleName, setSelectedRoleName] = useState("")
@@ -87,7 +108,8 @@ export function AwsSsoSection({
 
   // tRPC queries and mutations
   const { data: ssoStatus, refetch: refetchStatus } = trpc.awsSso.getStatus.useQuery()
-  const startBrowserAuthMutation = trpc.awsSso.startBrowserAuth.useMutation()
+  const startDeviceAuthMutation = trpc.awsSso.startDeviceAuth.useMutation()
+  const pollDeviceAuthMutation = trpc.awsSso.pollDeviceAuth.useMutation()
   const selectProfileMutation = trpc.awsSso.selectProfile.useMutation()
   const refreshCredentialsMutation = trpc.awsSso.refreshCredentials.useMutation()
   const logoutMutation = trpc.awsSso.logout.useMutation()
@@ -126,6 +148,49 @@ export function AwsSsoSection({
     }
   }, [ssoStatus])
 
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+      }
+    }
+  }, [])
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+    setDeviceAuth(null)
+    setIsAuthenticating(false)
+    setCodeCopied(false)
+  }, [])
+
+  const handleCopyCode = async () => {
+    if (deviceAuth?.userCode) {
+      try {
+        await navigator.clipboard.writeText(deviceAuth.userCode)
+        setCodeCopied(true)
+        toast.success("Code copied to clipboard")
+        setTimeout(() => setCodeCopied(false), 2000)
+      } catch (err) {
+        toast.error("Failed to copy code")
+      }
+    }
+  }
+
+  const handleOpenBrowser = () => {
+    if (deviceAuth?.verificationUriComplete) {
+      window.open(deviceAuth.verificationUriComplete, "_blank")
+    }
+  }
+
+  const handleCancelAuth = () => {
+    stopPolling()
+    toast.info("Authentication cancelled")
+  }
+
   const handleStartSsoLogin = async () => {
     if (!ssoStartUrl || !ssoRegion) {
       toast.error("Please enter SSO Start URL and Region")
@@ -141,19 +206,54 @@ export function AwsSsoSection({
     setIsAuthenticating(true)
 
     try {
-      // Start browser-based OAuth flow
-      await startBrowserAuthMutation.mutateAsync({
+      // Start device authorization flow
+      const result = await startDeviceAuthMutation.mutateAsync({
         ssoStartUrl,
         ssoRegion,
       })
 
-      toast.success("Successfully connected to AWS!")
-      await refetchStatus()
-      await refetchAccounts()
+      setDeviceAuth(result)
+      setCodeCopied(true) // Code was auto-copied
+      toast.success("Code copied to clipboard! Complete sign-in in browser.")
+
+      // Start polling for completion
+      const pollInterval = Math.max(result.interval, 5) * 1000 // At least 5 seconds
+      const expiresAt = Date.now() + result.expiresIn * 1000
+
+      pollingRef.current = setInterval(async () => {
+        // Check if expired
+        if (Date.now() > expiresAt) {
+          stopPolling()
+          toast.error("Device authorization expired. Please try again.")
+          return
+        }
+
+        try {
+          const pollResult = await pollDeviceAuthMutation.mutateAsync({
+            deviceCode: result.deviceCode,
+          })
+
+          if (pollResult.status === "success") {
+            stopPolling()
+            toast.success("Successfully connected to AWS!")
+            await refetchStatus()
+            await refetchAccounts()
+          } else if (pollResult.status === "expired") {
+            stopPolling()
+            toast.error("Authorization expired. Please try again.")
+          } else if (pollResult.status === "denied") {
+            stopPolling()
+            toast.error("Authorization denied. Please try again.")
+          }
+          // "pending" status - keep polling
+        } catch (error) {
+          console.error("[aws-sso] Poll error:", error)
+          // Don't stop on network errors, keep trying
+        }
+      }, pollInterval)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to authenticate"
       toast.error(message)
-    } finally {
       setIsAuthenticating(false)
     }
   }
@@ -314,8 +414,8 @@ export function AwsSsoSection({
               >
                 {isAuthenticating ? (
                   <>
-                    <IconSpinner className="h-4 w-4 mr-2" />
-                    Waiting for browser...
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Waiting for browser sign-in...
                   </>
                 ) : (
                   <>
@@ -327,7 +427,7 @@ export function AwsSsoSection({
 
               {isAuthenticating && (
                 <p className="text-xs text-muted-foreground">
-                  Complete the sign-in in your browser. This will update automatically.
+                  A browser window has opened. Complete the sign-in there.
                 </p>
               )}
             </>
@@ -506,6 +606,84 @@ export function AwsSsoSection({
           Save Settings
         </Button>
       </div>
+
+      {/* Device Code Modal */}
+      <Dialog open={!!deviceAuth} onOpenChange={(open) => !open && handleCancelAuth()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enter code in browser</DialogTitle>
+            <DialogDescription>
+              A browser window has opened. Enter the code below or paste from clipboard.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* User Code Display */}
+            <div className="flex items-center justify-center gap-3">
+              <div className="font-mono text-3xl font-bold tracking-widest bg-muted px-6 py-4 rounded-lg">
+                {deviceAuth?.userCode}
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCopyCode}
+                className="h-12 w-12"
+              >
+                {codeCopied ? (
+                  <Check className="h-5 w-5 text-green-500" />
+                ) : (
+                  <Copy className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
+
+            {/* Auto-copied indicator */}
+            <p className="text-xs text-center text-muted-foreground">
+              Code has been automatically copied to your clipboard
+            </p>
+
+            {/* Verification URL */}
+            <div className="text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                If the browser didn't open, go to:
+              </p>
+              <a
+                href={deviceAuth?.verificationUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-primary hover:underline font-mono"
+              >
+                {deviceAuth?.verificationUri}
+              </a>
+            </div>
+
+            {/* Status indicator */}
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Waiting for you to complete sign-in...</span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={handleOpenBrowser}
+                className="flex-1"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open Browser
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleCancelAuth}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

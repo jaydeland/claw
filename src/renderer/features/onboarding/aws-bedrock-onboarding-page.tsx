@@ -1,8 +1,8 @@
 "use client"
 
 import { useSetAtom } from "jotai"
-import { ChevronLeft } from "lucide-react"
-import { useState, useEffect } from "react"
+import { ChevronLeft, Copy, ExternalLink, Check, Loader2 } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
 
 import { Logo } from "../../components/ui/logo"
 import { Button } from "../../components/ui/button"
@@ -11,8 +11,22 @@ import { Label } from "../../components/ui/label"
 import { billingMethodAtom, awsBedrockOnboardingCompletedAtom } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
 import { toast } from "sonner"
-import { IconSpinner } from "../../components/ui/icons"
-import { ExternalLink, Check } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog"
+
+interface DeviceAuthState {
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  verificationUriComplete: string
+  expiresIn: number
+  interval: number
+}
 
 export function AwsBedrockOnboardingPage() {
   const setBillingMethod = useSetAtom(billingMethodAtom)
@@ -20,14 +34,18 @@ export function AwsBedrockOnboardingPage() {
 
   const [ssoStartUrl, setSsoStartUrl] = useState("https://d-9067694978.awsapps.com/start")
   const [isAuthenticating, setIsAuthenticating] = useState(false)
+  const [deviceAuth, setDeviceAuth] = useState<DeviceAuthState | null>(null)
+  const [codeCopied, setCodeCopied] = useState(false)
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
   // Check AWS connection status
   const { data: awsStatus, refetch: refetchStatus } = trpc.awsSso.getStatus.useQuery(undefined, {
     refetchInterval: false,
   })
 
-  // Browser auth mutation - the new seamless flow
-  const startBrowserAuthMutation = trpc.awsSso.startBrowserAuth.useMutation()
+  // Device auth mutations
+  const startDeviceAuthMutation = trpc.awsSso.startDeviceAuth.useMutation()
+  const pollDeviceAuthMutation = trpc.awsSso.pollDeviceAuth.useMutation()
   const updateSettingsMutation = trpc.claudeSettings.updateSettings.useMutation()
 
   // Auto-complete onboarding when AWS is connected and has credentials
@@ -37,8 +55,47 @@ export function AwsBedrockOnboardingPage() {
     }
   }, [awsStatus, setAwsBedrockOnboardingCompleted])
 
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+      }
+    }
+  }, [])
+
   const handleBack = () => {
     setBillingMethod(null)
+    stopPolling()
+  }
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+    setDeviceAuth(null)
+    setIsAuthenticating(false)
+    setCodeCopied(false)
+  }, [])
+
+  const handleCopyCode = async () => {
+    if (deviceAuth?.userCode) {
+      try {
+        await navigator.clipboard.writeText(deviceAuth.userCode)
+        setCodeCopied(true)
+        toast.success("Code copied to clipboard")
+        setTimeout(() => setCodeCopied(false), 2000)
+      } catch (err) {
+        toast.error("Failed to copy code")
+      }
+    }
+  }
+
+  const handleOpenBrowser = () => {
+    if (deviceAuth?.verificationUriComplete) {
+      window.open(deviceAuth.verificationUriComplete, "_blank")
+    }
   }
 
   const handleConnect = async () => {
@@ -55,29 +112,65 @@ export function AwsBedrockOnboardingPage() {
         authMode: "aws",
       })
 
-      // Start browser-based OAuth flow
-      // This opens the browser, user logs in, and it automatically completes!
-      await startBrowserAuthMutation.mutateAsync({
+      // Start device authorization flow
+      const result = await startDeviceAuthMutation.mutateAsync({
         ssoStartUrl: ssoStartUrl.trim(),
         ssoRegion: "us-east-1",
       })
 
-      // Success - browser auth completed automatically
-      toast.success("Successfully connected to AWS!")
+      setDeviceAuth(result)
+      setCodeCopied(true) // Code was auto-copied
+      toast.success("Code copied to clipboard! Complete sign-in in browser.")
 
-      // Refetch status to update UI
-      await refetchStatus()
+      // Start polling for completion
+      const pollInterval = Math.max(result.interval, 5) * 1000 // At least 5 seconds
+      const expiresAt = Date.now() + result.expiresIn * 1000
 
-      // Complete onboarding - user can configure account/role in Settings
-      setTimeout(() => {
-        setAwsBedrockOnboardingCompleted(true)
-      }, 1000)
+      pollingRef.current = setInterval(async () => {
+        // Check if expired
+        if (Date.now() > expiresAt) {
+          stopPolling()
+          toast.error("Device authorization expired. Please try again.")
+          return
+        }
+
+        try {
+          const pollResult = await pollDeviceAuthMutation.mutateAsync({
+            deviceCode: result.deviceCode,
+          })
+
+          if (pollResult.status === "success") {
+            stopPolling()
+            toast.success("Successfully connected to AWS!")
+            await refetchStatus()
+
+            // Complete onboarding
+            setTimeout(() => {
+              setAwsBedrockOnboardingCompleted(true)
+            }, 1000)
+          } else if (pollResult.status === "expired") {
+            stopPolling()
+            toast.error("Authorization expired. Please try again.")
+          } else if (pollResult.status === "denied") {
+            stopPolling()
+            toast.error("Authorization denied. Please try again.")
+          }
+          // "pending" status - keep polling
+        } catch (error) {
+          console.error("[aws-sso] Poll error:", error)
+          // Don't stop on network errors, keep trying
+        }
+      }, pollInterval)
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to authenticate"
+      const message = error instanceof Error ? error.message : "Failed to start authentication"
       toast.error(message)
-    } finally {
       setIsAuthenticating(false)
     }
+  }
+
+  const handleCancelAuth = () => {
+    stopPolling()
+    toast.info("Authentication cancelled")
   }
 
   return (
@@ -142,8 +235,8 @@ export function AwsBedrockOnboardingPage() {
             >
               {isAuthenticating ? (
                 <>
-                  <IconSpinner className="mr-2 h-4 w-4" />
-                  Waiting for browser...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Waiting for browser sign-in...
                 </>
               ) : (
                 <>
@@ -155,13 +248,13 @@ export function AwsBedrockOnboardingPage() {
 
             {isAuthenticating && (
               <p className="text-xs text-center text-muted-foreground">
-                Complete the sign-in in your browser. This window will update automatically.
+                A browser window has opened. Complete the sign-in there.
               </p>
             )}
           </div>
 
           {/* Connection Status */}
-          {awsStatus?.configured && (
+          {awsStatus?.configured && awsStatus?.authenticated && (
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
                 <Check className="w-4 h-4" />
@@ -183,6 +276,84 @@ export function AwsBedrockOnboardingPage() {
           </div>
         </div>
       </div>
+
+      {/* Device Code Modal */}
+      <Dialog open={!!deviceAuth} onOpenChange={(open) => !open && handleCancelAuth()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enter code in browser</DialogTitle>
+            <DialogDescription>
+              A browser window has opened. Enter the code below or paste from clipboard.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* User Code Display */}
+            <div className="flex items-center justify-center gap-3">
+              <div className="font-mono text-3xl font-bold tracking-widest bg-muted px-6 py-4 rounded-lg">
+                {deviceAuth?.userCode}
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCopyCode}
+                className="h-12 w-12"
+              >
+                {codeCopied ? (
+                  <Check className="h-5 w-5 text-green-500" />
+                ) : (
+                  <Copy className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
+
+            {/* Auto-copied indicator */}
+            <p className="text-xs text-center text-muted-foreground">
+              Code has been automatically copied to your clipboard
+            </p>
+
+            {/* Verification URL */}
+            <div className="text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                If the browser didn't open, go to:
+              </p>
+              <a
+                href={deviceAuth?.verificationUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-primary hover:underline font-mono"
+              >
+                {deviceAuth?.verificationUri}
+              </a>
+            </div>
+
+            {/* Status indicator */}
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Waiting for you to complete sign-in...</span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={handleOpenBrowser}
+                className="flex-1"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open Browser
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleCancelAuth}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
