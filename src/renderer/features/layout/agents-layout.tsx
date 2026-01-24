@@ -13,7 +13,7 @@ import {
   anthropicOnboardingCompletedAtom,
   customHotkeysAtom,
 } from "../../lib/atoms"
-import { selectedAgentChatIdAtom, selectedProjectAtom, selectedSidebarTabAtom } from "../agents/atoms"
+import { selectedAgentChatIdAtom, selectedProjectAtom, selectedSidebarTabAtom, sidebarContentCollapsedAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
@@ -26,13 +26,14 @@ import { ChatTabBar } from "../agents/ui/chat-tab-bar"
 import { UpdateBanner } from "../../components/update-banner"
 import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { AwsStatusBar } from "../../components/aws-status-bar"
-import { GitStatusBar } from "../../components/git-status-bar"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
 import { TrafficLights } from "../agents/components/traffic-light-spacer"
 import {
   SidebarTabBar,
+  HistoryTabContent,
+  WorkspacesTabContent,
   CommandsTabContent,
   AgentsTabContent,
   SkillsTabContent,
@@ -100,6 +101,7 @@ export function AgentsLayout() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
+  const isContentCollapsed = useAtomValue(sidebarContentCollapsedAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
@@ -306,10 +308,14 @@ export function AgentsLayout() {
             </div>
           )}
 
-          {/* Sidebar Content Panel - shows content for selected tab (except "chats") */}
-          {!isMobile && selectedSidebarTab !== "chats" && (
+          {/* Sidebar Content Panel - shows content for selected tab */}
+          {!isMobile && !isContentCollapsed && (
             <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background overflow-hidden">
-              {selectedSidebarTab === "commands" ? (
+              {selectedSidebarTab === "history" ? (
+                <HistoryTabContent className="h-full" />
+              ) : selectedSidebarTab === "chats" ? (
+                <WorkspacesTabContent className="h-full" />
+              ) : selectedSidebarTab === "commands" ? (
                 <CommandsTabContent className="h-full" />
               ) : selectedSidebarTab === "agents" ? (
                 <AgentsTabContent className="h-full" />
@@ -331,9 +337,6 @@ export function AgentsLayout() {
 
         {/* Update Banner */}
         <UpdateBanner />
-
-        {/* Git Status Bar (shows repository and branch info) */}
-        <GitStatusBar />
 
         {/* AWS Status Bar (shows when authenticated with AWS) */}
         <AwsStatusBar />
