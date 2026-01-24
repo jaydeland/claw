@@ -32,6 +32,8 @@ import { cn } from "../../../lib/utils"
 import { isPlanModeAtom, lastSelectedModelIdAtom } from "../atoms"
 import { AgentsSlashCommand, COMMAND_PROMPTS, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
+import { CommandsDropdown } from "../components/commands-dropdown"
+import { AgentsDropdown } from "../components/agents-dropdown"
 import {
   AgentsMentionsEditor,
   type AgentsMentionsEditorHandle,
@@ -579,6 +581,38 @@ export const ChatInputArea = memo(function ChatInputArea({
     [isPlanMode, setIsPlanMode, onSend, onCreateNewSubChat, onCompact, editorRef],
   )
 
+  // Handle command selection from Commands dropdown
+  const handleCommandSelect = useCallback((command: string) => {
+    const currentValue = editorRef.current?.getValue() || ""
+    const commandWithSpace = `${command} `
+    const newValue = currentValue.trim()
+      ? `${commandWithSpace}${currentValue}`
+      : commandWithSpace
+    editorRef.current?.setValue(newValue)
+    editorRef.current?.focus()
+
+    // Position cursor right after the command and space
+    setTimeout(() => {
+      editorRef.current?.setCursorPosition(commandWithSpace.length)
+    }, 0)
+  }, [editorRef])
+
+  // Handle agent selection from Agents dropdown
+  const handleAgentSelect = useCallback((agentId: string) => {
+    const command = `/${agentId} `
+    const currentValue = editorRef.current?.getValue() || ""
+    const newValue = currentValue.trim()
+      ? `${command}${currentValue}`
+      : command
+    editorRef.current?.setValue(newValue)
+    editorRef.current?.focus()
+
+    // Position cursor right after the agent command and space
+    setTimeout(() => {
+      editorRef.current?.setCursorPosition(command.length)
+    }, 0)
+  }, [editorRef])
+
   // Paste handler for images and plain text
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => handlePasteEvent(e, onAddAttachments),
@@ -1022,6 +1056,18 @@ export const ChatInputArea = memo(function ChatInputArea({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
+
+                  {/* Commands Dropdown */}
+                  <CommandsDropdown
+                    onCommandSelect={handleCommandSelect}
+                    disabled={isStreaming}
+                  />
+
+                  {/* Agents Dropdown */}
+                  <AgentsDropdown
+                    onAgentSelect={handleAgentSelect}
+                    disabled={isStreaming}
+                  />
                 </div>
 
                 <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">

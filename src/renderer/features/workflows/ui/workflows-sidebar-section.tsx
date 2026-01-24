@@ -2,9 +2,10 @@
 
 import React from "react"
 import { Network, Workflow, Cpu } from "lucide-react"
-import { useAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import { cn } from "../../../lib/utils"
 import { selectedWorkflowCategoryAtom } from "../atoms"
+import { selectedAgentChatIdAtom } from "../../agents/atoms"
 
 interface WorkflowsSidebarSectionProps {
   className?: string
@@ -16,6 +17,7 @@ export function WorkflowsSidebarSection({
   const [selectedCategory, setSelectedCategory] = useAtom(
     selectedWorkflowCategoryAtom
   )
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
 
   const handleCategoryClick = (
     category: "agents" | "commands" | "skills"
@@ -30,6 +32,8 @@ export function WorkflowsSidebarSection({
     } else {
       console.log("[workflow-category] Setting category to:", category)
       setSelectedCategory(category)
+      // Clear chat selection to switch to workflow view
+      setSelectedChatId(null)
     }
   }
 

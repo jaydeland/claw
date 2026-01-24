@@ -2,10 +2,11 @@
 
 import React from "react"
 import { Server } from "lucide-react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { cn } from "../../../lib/utils"
 import { selectedClustersCategoryAtom } from "../atoms"
 import { clustersFeatureEnabledAtom } from "../../../lib/atoms"
+import { selectedAgentChatIdAtom } from "../../agents/atoms"
 import { trpc } from "../../../lib/trpc"
 
 interface ClustersSidebarSectionProps {
@@ -15,6 +16,7 @@ interface ClustersSidebarSectionProps {
 export function ClustersSidebarSection({ className }: ClustersSidebarSectionProps) {
   const [selectedCategory, setSelectedCategory] = useAtom(selectedClustersCategoryAtom)
   const clustersEnabled = useAtomValue(clustersFeatureEnabledAtom)
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
 
   // Check if AWS credentials are available
   const { data: availability } = trpc.clusters.isAvailable.useQuery(undefined, {
@@ -32,6 +34,8 @@ export function ClustersSidebarSection({ className }: ClustersSidebarSectionProp
       setSelectedCategory(null)
     } else {
       setSelectedCategory("clusters")
+      // Clear chat selection to switch to clusters view
+      setSelectedChatId(null)
     }
   }
 

@@ -2,9 +2,10 @@
 
 import React from "react"
 import { Plug } from "lucide-react"
-import { useAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import { cn } from "../../../lib/utils"
 import { selectedMcpCategoryAtom } from "../atoms"
+import { selectedAgentChatIdAtom } from "../../agents/atoms"
 
 interface McpSidebarSectionProps {
   className?: string
@@ -12,6 +13,7 @@ interface McpSidebarSectionProps {
 
 export function McpSidebarSection({ className }: McpSidebarSectionProps) {
   const [selectedCategory, setSelectedCategory] = useAtom(selectedMcpCategoryAtom)
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
 
   const handleClick = () => {
     // Toggle: if clicking the active category, deselect it
@@ -19,6 +21,8 @@ export function McpSidebarSection({ className }: McpSidebarSectionProps) {
       setSelectedCategory(null)
     } else {
       setSelectedCategory("mcp")
+      // Clear chat selection to switch to MCP view
+      setSelectedChatId(null)
     }
   }
 
