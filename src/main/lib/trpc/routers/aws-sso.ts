@@ -4,10 +4,10 @@ import { eq } from "drizzle-orm"
 import { router, publicProcedure } from "../index"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { AwsSsoService, decrypt } from "../../aws/sso-service"
-import { lookupService } from "dns"
+import { lookup } from "dns"
 import { promisify } from "util"
 
-const dnsLookup = promisify(lookupService)
+const dnsLookup = promisify(lookup)
 
 // Cached service instance
 let ssoService: AwsSsoService | null = null
@@ -452,8 +452,42 @@ export const awsSsoRouter = router({
       }
     }
 
-    // Use AWS SSO endpoint for VPN check
-    // If user has SSO configured, use their region; otherwise use us-east-1
+    // Determine what to check
+    const checkUrl = settings.vpnCheckUrl?.trim()
+
+    // If user provided a custom URL, check that
+    if (checkUrl) {
+      try {
+        // Try HTTP HEAD request with timeout
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 3000)
+
+        const response = await fetch(checkUrl, {
+          method: "HEAD",
+          signal: controller.signal,
+        })
+
+        clearTimeout(timeoutId)
+
+        // If we get any response (even 4xx/5xx), it means we reached the server
+        console.log("[vpn-check] Custom URL check succeeded:", checkUrl, response.status)
+        return {
+          enabled: true,
+          connected: true,
+          lastChecked: new Date().toISOString(),
+        }
+      } catch (error: any) {
+        // Connection failed - VPN likely disconnected
+        console.log("[vpn-check] Custom URL check failed:", checkUrl, error.message)
+        return {
+          enabled: true,
+          connected: false,
+          lastChecked: new Date().toISOString(),
+        }
+      }
+    }
+
+    // Fallback: Use AWS SSO endpoint for VPN check (if no custom URL)
     const ssoRegion = settings.ssoRegion || "us-east-1"
     const hostname = `oidc.${ssoRegion}.amazonaws.com`
 
@@ -466,14 +500,14 @@ export const awsSsoRouter = router({
 
       await Promise.race([lookupPromise, timeoutPromise])
 
-      // DNS resolved successfully, VPN/network is connected
+      // DNS resolved successfully
       return {
         enabled: true,
         connected: true,
         lastChecked: new Date().toISOString(),
       }
     } catch (error: any) {
-      // DNS lookup failed or timeout - VPN/network likely disconnected
+      // DNS lookup failed or timeout
       console.log("[vpn-check] DNS lookup failed:", error.message)
       return {
         enabled: true,

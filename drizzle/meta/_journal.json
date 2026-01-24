@@ -127,6 +127,13 @@
       "when": 1737762000000,
       "tag": "0017_vpn_check_toggle",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1769273625903,
+      "tag": "0018_lazy_quasar",
+      "breakpoints": true
     }
   ]
 }

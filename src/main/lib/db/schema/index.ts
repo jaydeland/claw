@@ -147,6 +147,7 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
 
   // VPN connectivity check
   vpnCheckEnabled: integer("vpn_check_enabled", { mode: "boolean" }).notNull().default(false), // Enable/disable VPN status monitoring
+  vpnCheckUrl: text("vpn_check_url"), // Internal URL to check for VPN connectivity (e.g., https://internal.company.com)
 })
 
 // ============ MCP SERVER CREDENTIALS ============

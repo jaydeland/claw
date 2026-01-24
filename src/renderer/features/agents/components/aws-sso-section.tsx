@@ -31,6 +31,8 @@ interface AwsSsoSectionProps {
   isSaving: boolean
   vpnCheckEnabled?: boolean
   onVpnCheckEnabledChange: (enabled: boolean) => void
+  vpnCheckUrl?: string | null
+  onVpnCheckUrlChange: (url: string) => void
 }
 
 type ConnectionMethod = "sso" | "profile"
@@ -88,6 +90,8 @@ export function AwsSsoSection({
   isSaving,
   vpnCheckEnabled,
   onVpnCheckEnabledChange,
+  vpnCheckUrl,
+  onVpnCheckUrlChange,
 }: AwsSsoSectionProps) {
   const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>("sso")
   const [ssoStartUrl, setSsoStartUrl] = useState("")
@@ -622,6 +626,26 @@ export function AwsSsoSection({
           onCheckedChange={onVpnCheckEnabledChange}
         />
       </div>
+
+      {/* VPN Check URL - shown only when VPN check is enabled */}
+      {vpnCheckEnabled && (
+        <div className="space-y-2">
+          <Label htmlFor="vpn-check-url" className="text-sm">
+            Internal URL to Check
+          </Label>
+          <Input
+            id="vpn-check-url"
+            type="url"
+            placeholder="https://internal.company.com"
+            value={vpnCheckUrl || ""}
+            onChange={(e) => onVpnCheckUrlChange(e.target.value)}
+            className="font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            Enter an internal URL that's only accessible via VPN (e.g., internal load balancer, private DNS name)
+          </p>
+        </div>
+      )}
 
       {/* Save Button */}
       <div className="flex justify-end pt-2">

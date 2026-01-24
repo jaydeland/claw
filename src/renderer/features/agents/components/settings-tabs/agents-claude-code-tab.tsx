@@ -41,6 +41,7 @@ export function AgentsClaudeCodeTab() {
   const [bedrockRegion, setBedrockRegion] = useState("us-east-1")
   const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("")
   const [vpnCheckEnabled, setVpnCheckEnabled] = useState(false)
+  const [vpnCheckUrl, setVpnCheckUrl] = useState("")
   const { trigger: triggerHaptic } = useHaptic()
 
   const utils = trpc.useUtils()
@@ -153,6 +154,7 @@ export function AgentsClaudeCodeTab() {
       setBedrockRegion(claudeSettings.bedrockRegion || "us-east-1")
       setAnthropicBaseUrl(claudeSettings.anthropicBaseUrl || "")
       setVpnCheckEnabled(claudeSettings.vpnCheckEnabled || false)
+      setVpnCheckUrl(claudeSettings.vpnCheckUrl || "")
       // Don't set API key from masked value - user needs to enter it
     }
   }, [claudeSettings])
@@ -348,11 +350,14 @@ export function AgentsClaudeCodeTab() {
                 onBedrockRegionChange={setBedrockRegion}
                 vpnCheckEnabled={vpnCheckEnabled}
                 onVpnCheckEnabledChange={setVpnCheckEnabled}
+                vpnCheckUrl={vpnCheckUrl}
+                onVpnCheckUrlChange={setVpnCheckUrl}
                 onSave={() => {
                   updateSettings.mutate({
                     authMode,
                     bedrockRegion,
                     vpnCheckEnabled,
+                    vpnCheckUrl,
                   })
                 }}
                 isSaving={updateSettings.isPending}
