@@ -1,6 +1,4 @@
-# 1Code
-
-[1Code.dev](https://1code.dev)
+# Claw
 
 Best UI for Claude Code with local and remote agent execution.
 
@@ -60,15 +58,15 @@ Claude asks clarifying questions, builds structured plans, and shows clean markd
 ### Prerequisites
 
 - **Flox** - For reproducible development environment ([install instructions](https://flox.dev/docs))
-- **Devyard environment** - 1code inherits TypeScript tooling from the devyard Flox environment (must be accessible via symlink at `./devyard`)
+- **Devyard environment** - Claw inherits TypeScript tooling from the devyard Flox environment (must be accessible via symlink at `./devyard`)
 - **Python 3** - For native module compilation (inherited from devyard)
 - **Xcode Command Line Tools** (macOS) - Run `xcode-select --install`
 
-### Option 1: Build from source (free)
+### Build from source
 
 ```bash
 # 1. Activate Flox environment (manages bun, electron, inherits from devyard)
-cd /path/to/1code
+cd /path/to/claw
 flox activate
 
 # 2. Install JavaScript dependencies
@@ -83,12 +81,6 @@ bun run package:mac  # or package:win, package:linux
 ```
 
 > **Important:** The Flox environment provides bun, electron, and inherits TypeScript LSP from devyard. The `claude:download` step downloads the Claude CLI binary which is required for agent chat functionality.
-
-### Option 2: Subscribe to 1code.dev (recommended)
-
-Get pre-built releases + background agents support by subscribing at [1code.dev](https://1code.dev).
-
-Your subscription helps us maintain and improve 1Code.
 
 ## Development
 
