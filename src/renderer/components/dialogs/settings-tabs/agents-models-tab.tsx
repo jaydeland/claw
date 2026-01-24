@@ -50,6 +50,9 @@ export function AgentsModelsTab() {
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
 
+  // Get SDK version info
+  const { data: versionInfo } = trpc.claude.getVersionInfo.useQuery()
+
   useEffect(() => {
     setModel(storedConfig.model)
     setBaseUrl(storedConfig.baseUrl)
@@ -97,6 +100,9 @@ export function AgentsModelsTab() {
     }
   }
 
+  // Determine current model being used
+  const currentModel = storedConfig.model || "claude-sonnet-4-5-20250929"
+
   return (
     <div className="p-6 space-y-6">
       {/* Header - hidden on narrow screens since it's in the navigation bar */}
@@ -108,6 +114,66 @@ export function AgentsModelsTab() {
           </p>
         </div>
       )}
+
+      {/* SDK Version and Models */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">Version Information</h4>
+        </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-4">
+            {/* SDK Version */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Claude Agent SDK</span>
+              <span className="text-sm font-mono text-foreground">
+                {versionInfo?.sdkVersion || "Loading..."}
+              </span>
+            </div>
+
+            {/* Binary Version */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Claude Binary</span>
+              <span className="text-sm font-mono text-foreground">
+                {versionInfo?.binaryVersion || "Loading..."}
+              </span>
+            </div>
+
+            {/* Current Model */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Current Model</span>
+              <span className="text-sm font-mono text-foreground">
+                {currentModel}
+              </span>
+            </div>
+
+            {/* Available Models */}
+            <div className="pt-2 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-3">Available Models</p>
+              <div className="space-y-3">
+                {versionInfo?.availableModels.map((model) => (
+                  <div key={model.id} className="flex flex-col space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">
+                        {model.name}
+                      </span>
+                      {model.contextWindow && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                          {model.contextWindow} context
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{model.description}</p>
+                    <p className="text-xs font-mono text-muted-foreground">
+                      {model.modelId}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="space-y-2">
         <div className="pb-2">

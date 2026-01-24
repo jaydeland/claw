@@ -20,23 +20,21 @@ import { toggleSearchAtom } from "../agents/search"
 import { AgentsSettingsDialog } from "../../components/dialogs/agents-settings-dialog"
 import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
 import { TooltipProvider } from "../../components/ui/tooltip"
-import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
-import { AgentsSidebar } from "../sidebar/agents-sidebar"
 import { AgentsContent } from "../agents/ui/agents-content"
+import { ChatTabBar } from "../agents/ui/chat-tab-bar"
 import { UpdateBanner } from "../../components/update-banner"
 import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { AwsStatusBar } from "../../components/aws-status-bar"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
+import { TrafficLights } from "../agents/components/traffic-light-spacer"
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const SIDEBAR_MIN_WIDTH = 160
-const SIDEBAR_MAX_WIDTH = 300
-const SIDEBAR_ANIMATION_DURATION = 0
+// Sidebar constants kept for potential future use
 const SIDEBAR_CLOSE_HOTKEY = "⌘\\"
 
 // ============================================================================
@@ -49,7 +47,7 @@ export function AgentsLayout() {
 
   // Global desktop/fullscreen state - initialized here at root level
   const [isDesktop, setIsDesktop] = useAtom(isDesktopAtom)
-  const [, setIsFullscreen] = useAtom(isFullscreenAtom)
+  const [isFullscreen, setIsFullscreen] = useAtom(isFullscreenAtom)
 
   // Initialize isDesktop on mount
   useEffect(() => {
@@ -129,7 +127,7 @@ export function AgentsLayout() {
     setSelectedProject,
   ])
 
-  // Hide native traffic lights when sidebar is closed (no traffic lights needed when sidebar is closed)
+  // Hide native traffic lights - we use custom traffic lights in the tab bar area
   useEffect(() => {
     if (!isDesktop) return
     if (
@@ -138,12 +136,9 @@ export function AgentsLayout() {
     )
       return
 
-    // When sidebar is closed, hide native traffic lights
-    // When sidebar is open, TrafficLights component handles visibility
-    if (!sidebarOpen) {
-      window.desktopApi.setTrafficLightVisibility(false)
-    }
-  }, [sidebarOpen, isDesktop])
+    // Always hide native traffic lights - we use custom ones in the tab bar
+    window.desktopApi.setTrafficLightVisibility(false)
+  }, [isDesktop])
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
 
   // Desktop user state
@@ -229,6 +224,20 @@ export function AgentsLayout() {
     setSidebarOpen(false)
   }, [setSidebarOpen])
 
+  // Handle new chat from tab bar
+  const handleNewChat = useCallback(() => {
+    setSelectedChatId(null)
+  }, [setSelectedChatId])
+
+  // Handle open settings from tab bar
+  const handleOpenSettings = useCallback(() => {
+    setSettingsActiveTab("profile")
+    setSettingsOpen(true)
+  }, [setSettingsActiveTab, setSettingsOpen])
+
+  // Track hover state for traffic lights
+  const [isTabBarHovered, setIsTabBarHovered] = useState(false)
+
   return (
     <TooltipProvider delayDuration={300}>
       {/* Global queue processor - handles message queues for all sub-chats */}
@@ -241,34 +250,44 @@ export function AgentsLayout() {
       <div className="flex flex-col w-full h-full relative overflow-hidden bg-background select-none">
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar (Agents) */}
-          <ResizableSidebar
-          isOpen={!isMobile && sidebarOpen}
-          onClose={handleCloseSidebar}
-          widthAtom={agentsSidebarWidthAtom}
-          minWidth={SIDEBAR_MIN_WIDTH}
-          maxWidth={SIDEBAR_MAX_WIDTH}
-          side="left"
-          closeHotkey={SIDEBAR_CLOSE_HOTKEY}
-          animationDuration={SIDEBAR_ANIMATION_DURATION}
-          initialWidth={0}
-          exitWidth={0}
-          showResizeTooltip={true}
-          className="overflow-hidden bg-background border-r"
-          style={{ borderRightWidth: "0.5px" }}
-        >
-          <AgentsSidebar
-            desktopUser={desktopUser}
-            onSignOut={handleSignOut}
-            onToggleSidebar={handleCloseSidebar}
-          />
-        </ResizableSidebar>
 
-          {/* Main Content */}
-          <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-            <AgentsContent />
+        {/* Tab Bar Header with Traffic Lights */}
+        {!isMobile && (
+          <div
+            className="flex items-center border-b border-border/50 bg-background flex-shrink-0"
+            onMouseEnter={() => setIsTabBarHovered(true)}
+            onMouseLeave={() => setIsTabBarHovered(false)}
+          >
+            {/* Traffic lights area - draggable for window movement */}
+            {isDesktop && (
+              <div
+                className="flex items-center h-10 pl-2 pr-1 flex-shrink-0"
+                style={{
+                  // @ts-expect-error - WebKit-specific property
+                  WebkitAppRegion: "drag",
+                }}
+              >
+                <TrafficLights
+                  isHovered={isTabBarHovered}
+                  isFullscreen={isFullscreen}
+                  isDesktop={isDesktop}
+                  className="flex-shrink-0"
+                />
+              </div>
+            )}
+            {/* Tab bar takes remaining space */}
+            <div className="flex-1 min-w-0">
+              <ChatTabBar
+                onNewChat={handleNewChat}
+                onOpenSettings={handleOpenSettings}
+              />
+            </div>
           </div>
+        )}
+
+        {/* Main Content */}
+        <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+          <AgentsContent />
         </div>
 
         {/* Update Banner */}

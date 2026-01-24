@@ -435,6 +435,65 @@ export async function warmupMcpCache(): Promise<void> {
 
 export const claudeRouter = router({
   /**
+   * Get Claude SDK version and available models
+   */
+  getVersionInfo: publicProcedure.query(async () => {
+    // Get SDK version from package.json
+    const packageJsonPath = path.join(app.getAppPath(), 'package.json')
+    let sdkVersion = 'unknown'
+
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+      sdkVersion = packageJson.dependencies?.['@anthropic-ai/claude-agent-sdk']?.replace(/^\^/, '') || 'unknown'
+    } catch (error) {
+      console.error('[claude] Failed to read SDK version:', error)
+    }
+
+    // Get Claude binary version
+    let binaryVersion = 'unknown'
+    try {
+      const { execSync } = await import('child_process')
+      const output = execSync('claude --version', { encoding: 'utf-8', timeout: 5000 })
+      // Parse output like "claude 2.1.5"
+      const match = output.trim().match(/claude\s+(\S+)/)
+      binaryVersion = match ? match[1] : output.trim()
+    } catch (error: any) {
+      console.error('[claude] Failed to get binary version:', error.message)
+      binaryVersion = 'Not installed or not in PATH'
+    }
+
+    // Available models (from env.ts defaults)
+    const availableModels = [
+      {
+        id: 'opus-4-5',
+        name: 'Claude Opus 4.5',
+        description: 'Most capable model for complex tasks',
+        modelId: 'claude-opus-4-5-20251101',
+      },
+      {
+        id: 'sonnet-4-5',
+        name: 'Claude Sonnet 4.5',
+        description: 'Balanced performance and speed with 1M context',
+        modelId: 'claude-sonnet-4-5-20250929',
+        contextWindow: '1M',
+      },
+      {
+        id: 'haiku-4-5',
+        name: 'Claude Haiku 4.5',
+        description: 'Fastest model for quick tasks with 1M context',
+        modelId: 'claude-haiku-4-5-20251001',
+        contextWindow: '1M',
+      },
+    ]
+
+    return {
+      sdkVersion,
+      binaryVersion,
+      availableModels,
+    }
+  }),
+
+  /**
    * Stream chat with Claude - single subscription handles everything
    */
   chat: publicProcedure
