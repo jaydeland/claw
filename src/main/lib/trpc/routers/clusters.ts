@@ -19,6 +19,8 @@ import {
   type K8sNode,
   type K8sNamespace,
   type K8sPod,
+  type K8sDeployment,
+  type K8sService,
 } from "../../kubernetes/kubernetes-service"
 import { decrypt, type AwsCredentials } from "../../aws/sso-service"
 
@@ -294,6 +296,60 @@ export const clustersRouter = router({
       const k8sClient = createK8sClient(cluster, token)
 
       return await listPods(k8sClient, input.namespace)
+    }),
+
+  /**
+   * List deployments in a namespace
+   */
+  getDeployments: publicProcedure
+    .input(z.object({ clusterName: z.string(), namespace: z.string() }))
+    .query(async ({ input }): Promise<K8sDeployment[]> => {
+      const db = getDatabase()
+      const settings = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      const region = settings?.bedrockRegion || "us-east-1"
+      const eksService = getEksService(region)
+
+      if (!eksService) {
+        throw new Error("No AWS credentials available")
+      }
+
+      const cluster = await eksService.describeCluster(input.clusterName)
+      const token = await eksService.generateToken(input.clusterName)
+      const k8sClient = createK8sClient(cluster, token)
+
+      return await listDeployments(k8sClient, input.namespace)
+    }),
+
+  /**
+   * List services in a namespace
+   */
+  getServices: publicProcedure
+    .input(z.object({ clusterName: z.string(), namespace: z.string() }))
+    .query(async ({ input }): Promise<K8sService[]> => {
+      const db = getDatabase()
+      const settings = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      const region = settings?.bedrockRegion || "us-east-1"
+      const eksService = getEksService(region)
+
+      if (!eksService) {
+        throw new Error("No AWS credentials available")
+      }
+
+      const cluster = await eksService.describeCluster(input.clusterName)
+      const token = await eksService.generateToken(input.clusterName)
+      const k8sClient = createK8sClient(cluster, token)
+
+      return await listServices(k8sClient, input.namespace)
     }),
 
   /**

@@ -11,6 +11,11 @@ import {
   Box,
   Layers,
   RefreshCw,
+  Rocket,
+  Network,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
@@ -118,6 +123,40 @@ export function ClusterDetail() {
     { clusterName: selectedClusterId!, namespace: currentNamespace },
     { enabled: !!selectedClusterId && status?.connected && !!currentNamespace }
   )
+
+  // Get deployments in selected namespace
+  const {
+    data: deployments,
+    isLoading: deploymentsLoading,
+    refetch: refetchDeployments,
+    isRefetching: deploymentsRefetching,
+  } = trpc.clusters.getDeployments.useQuery(
+    { clusterName: selectedClusterId!, namespace: currentNamespace },
+    { enabled: !!selectedClusterId && status?.connected && !!currentNamespace }
+  )
+
+  // Get services in selected namespace
+  const {
+    data: services,
+    isLoading: servicesLoading,
+    refetch: refetchServices,
+    isRefetching: servicesRefetching,
+  } = trpc.clusters.getServices.useQuery(
+    { clusterName: selectedClusterId!, namespace: currentNamespace },
+    { enabled: !!selectedClusterId && status?.connected && !!currentNamespace }
+  )
+
+  // Calculate pod summary counts
+  const podSummary = pods
+    ? {
+        running: pods.filter((p) => p.status === "Running").length,
+        pending: pods.filter((p) => p.status === "Pending").length,
+        failed: pods.filter(
+          (p) => p.status !== "Running" && p.status !== "Pending"
+        ).length,
+        total: pods.length,
+      }
+    : null
 
   const handleCopy = async (value: string, field: string) => {
     await navigator.clipboard.writeText(value)
@@ -274,12 +313,12 @@ export function ClusterDetail() {
               )}
             </div>
 
-            {/* Namespaces & Pods */}
+            {/* Deployments */}
             <div className="space-y-4 pt-4 border-t border-border">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium flex items-center gap-2">
-                  <Box className="h-4 w-4" />
-                  Pods
+                  <Rocket className="h-4 w-4" />
+                  Deployments ({deployments?.length || 0})
                 </h3>
                 <div className="flex items-center gap-2">
                   <Select
@@ -306,15 +345,160 @@ export function ClusterDetail() {
                   </Select>
                   <button
                     type="button"
-                    onClick={() => refetchPods()}
-                    disabled={podsRefetching}
+                    onClick={() => refetchDeployments()}
+                    disabled={deploymentsRefetching}
                     className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     <RefreshCw
-                      className={cn("h-3 w-3", podsRefetching && "animate-spin")}
+                      className={cn("h-3 w-3", deploymentsRefetching && "animate-spin")}
                     />
                   </button>
                 </div>
+              </div>
+
+              {deploymentsLoading || namespacesLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : deployments && deployments.length > 0 ? (
+                <div className="space-y-2">
+                  {deployments.map((deploy) => {
+                    const [ready, total] = deploy.ready.split("/").map(Number)
+                    const isHealthy = ready === total && total > 0
+                    const isPartial = ready > 0 && ready < total
+                    const isFailed = ready === 0 && total > 0
+
+                    return (
+                      <div
+                        key={deploy.name}
+                        className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
+                      >
+                        <div className="flex items-center gap-2 truncate flex-1 mr-2">
+                          {isHealthy && (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                          )}
+                          {isPartial && (
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                          )}
+                          {isFailed && (
+                            <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                          )}
+                          <span className="font-medium truncate">{deploy.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <span
+                            className={cn(
+                              "text-xs font-mono",
+                              isHealthy && "text-emerald-500",
+                              isPartial && "text-amber-500",
+                              isFailed && "text-red-500"
+                            )}
+                          >
+                            {deploy.ready} ready
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No deployments found in {currentNamespace}
+                </p>
+              )}
+            </div>
+
+            {/* Services */}
+            <div className="space-y-4 pt-4 border-t border-border">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  <Network className="h-4 w-4" />
+                  Services ({services?.length || 0})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => refetchServices()}
+                  disabled={servicesRefetching}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw
+                    className={cn("h-3 w-3", servicesRefetching && "animate-spin")}
+                  />
+                </button>
+              </div>
+
+              {servicesLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : services && services.length > 0 ? (
+                <div className="space-y-2">
+                  {services.map((svc) => (
+                    <div
+                      key={svc.name}
+                      className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
+                    >
+                      <div className="truncate flex-1 mr-2">
+                        <span className="font-medium">{svc.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-xs px-1.5 py-0.5 bg-muted rounded">
+                          {svc.type}
+                        </span>
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {svc.clusterIp}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {svc.ports}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No services found in {currentNamespace}
+                </p>
+              )}
+            </div>
+
+            {/* Pods */}
+            <div className="space-y-4 pt-4 border-t border-border">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  <Box className="h-4 w-4" />
+                  Pods
+                  {podSummary && (
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      <span className="text-emerald-500">{podSummary.running}</span>
+                      {" running"}
+                      {podSummary.pending > 0 && (
+                        <>
+                          {" · "}
+                          <span className="text-amber-500">{podSummary.pending}</span>
+                          {" pending"}
+                        </>
+                      )}
+                      {podSummary.failed > 0 && (
+                        <>
+                          {" · "}
+                          <span className="text-red-500">{podSummary.failed}</span>
+                          {" failed"}
+                        </>
+                      )}
+                    </span>
+                  )}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => refetchPods()}
+                  disabled={podsRefetching}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw
+                    className={cn("h-3 w-3", podsRefetching && "animate-spin")}
+                  />
+                </button>
               </div>
 
               {podsLoading || namespacesLoading ? (

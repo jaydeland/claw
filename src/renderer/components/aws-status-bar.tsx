@@ -1,10 +1,17 @@
 "use client"
 
 import { useEffect, useCallback } from "react"
-import { Cloud, RefreshCw, Clock, AlertTriangle } from "lucide-react"
+import { useAtom, useAtomValue } from "jotai"
+import { Cloud, RefreshCw, Clock, AlertTriangle, Server } from "lucide-react"
 import { trpc } from "../lib/trpc"
 import { cn } from "../lib/utils"
 import { toast } from "sonner"
+import { clustersFeatureEnabledAtom, clustersDefaultNamespaceAtom } from "../lib/atoms"
+import {
+  selectedClusterIdAtom,
+  selectedClustersCategoryAtom,
+  selectedNamespaceAtom,
+} from "../features/clusters/atoms"
 
 /**
  * Format time remaining until expiration
@@ -57,10 +64,35 @@ function formatTimeRemaining(expiresAt: string): {
  * Automatically refreshes credentials before expiration.
  */
 export function AwsStatusBar() {
+  // Clusters state
+  const clustersEnabled = useAtomValue(clustersFeatureEnabledAtom)
+  const selectedClusterId = useAtomValue(selectedClusterIdAtom)
+  const selectedNamespace = useAtomValue(selectedNamespaceAtom)
+  const defaultNamespaceOverride = useAtomValue(clustersDefaultNamespaceAtom)
+  const [, setSelectedClustersCategory] = useAtom(selectedClustersCategoryAtom)
+
   // Query AWS status
   const { data: awsStatus, refetch: refetchStatus } = trpc.awsSso.getStatus.useQuery(undefined, {
     refetchInterval: 60000, // Update every minute
   })
+
+  // Query derived namespace from email
+  const { data: derivedNamespace } = trpc.clusters.getDefaultNamespace.useQuery(undefined, {
+    enabled: clustersEnabled,
+  })
+
+  // Query cluster connection status
+  const { data: clusterStatus } = trpc.clusters.getStatus.useQuery(
+    { clusterName: selectedClusterId! },
+    {
+      enabled: clustersEnabled && !!selectedClusterId,
+      refetchInterval: 60000, // Check connection every minute
+    }
+  )
+
+  // Effective namespace
+  const effectiveNamespace =
+    selectedNamespace || defaultNamespaceOverride || derivedNamespace || "default"
 
   // Refresh credentials mutation
   const refreshMutation = trpc.awsSso.refreshCredentials.useMutation({
@@ -166,6 +198,31 @@ export function AwsStatusBar() {
           </div>
         )}
       </div>
+
+      {/* K8s Cluster Indicator (right side) */}
+      {clustersEnabled && selectedClusterId && (
+        <button
+          onClick={() => setSelectedClustersCategory("clusters")}
+          className="flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-muted transition-colors mr-2"
+          title={`Cluster: ${selectedClusterId}\nNamespace: ${effectiveNamespace}\nClick to open clusters panel`}
+        >
+          {/* Connection status dot */}
+          <span
+            className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              clusterStatus?.connected ? "bg-emerald-500" : "bg-red-500"
+            )}
+          />
+          <Server className="h-3 w-3" />
+          <span className="font-mono text-xs">
+            {selectedClusterId.length > 20
+              ? `${selectedClusterId.slice(0, 20)}...`
+              : selectedClusterId}
+          </span>
+          <span className="text-muted-foreground/70">/</span>
+          <span className="font-mono text-xs">{effectiveNamespace}</span>
+        </button>
+      )}
 
       {/* Refresh Button */}
       <button
