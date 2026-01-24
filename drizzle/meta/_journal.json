@@ -99,6 +99,13 @@
       "when": 1737590400000,
       "tag": "0013_add_aws_sso_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1769200207431,
+      "tag": "0014_modern_sunspot",
+      "breakpoints": true
     }
   ]
 }

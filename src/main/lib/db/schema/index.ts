@@ -156,6 +156,21 @@ export const mcpCredentials = sqliteTable("mcp_credentials", {
   ),
 })
 
+// ============ CONFIG SOURCES ============
+// Stores custom configuration file paths (mcp.json files and plugin directories)
+export const configSources = sqliteTable("config_sources", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  type: text("type", { enum: ["mcp", "plugin"] }).notNull(), // Type of configuration source
+  path: text("path").notNull(), // Absolute path to the config file or directory
+  priority: integer("priority").notNull().default(50), // Lower = higher priority (project=10, devyard=20, user=100)
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true), // Whether this source is active
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -169,3 +184,5 @@ export type ClaudeCodeSettings = typeof claudeCodeSettings.$inferSelect
 export type NewClaudeCodeSettings = typeof claudeCodeSettings.$inferInsert
 export type McpCredential = typeof mcpCredentials.$inferSelect
 export type NewMcpCredential = typeof mcpCredentials.$inferInsert
+export type ConfigSource = typeof configSources.$inferSelect
+export type NewConfigSource = typeof configSources.$inferInsert

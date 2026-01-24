@@ -7,9 +7,11 @@ import {
   clipboard,
   session,
   nativeImage,
+  dialog,
 } from "electron"
 import { join } from "path"
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
+import { promises as fsPromises } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
@@ -208,6 +210,23 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
   )
   ipcMain.handle("clipboard:read", () => clipboard.readText())
 
+  // Dialog
+  ipcMain.handle("dialog:showOpenDialog", async (_event, options) => {
+    const win = getWindow()
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, options)
+    return result.canceled ? null : result.filePaths
+  })
+
+  // File System
+  ipcMain.handle("fs:readTextFile", async (_event, filePath: string) => {
+    try {
+      return await fsPromises.readFile(filePath, "utf-8")
+    } catch (error) {
+      throw new Error(`Failed to read file: ${(error as Error).message}`)
+    }
+  })
+
   // Auth IPC handlers
   const validateSender = (event: Electron.IpcMainInvokeEvent): boolean => {
     const senderUrl = event.sender.getURL()
@@ -243,7 +262,7 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
     } catch (err) {
       console.error("[Auth] Failed to clear cookie:", err)
     }
-    showLoginPage()
+    // Renderer will handle navigation after logout
   })
 
   ipcMain.handle("auth:start-flow", (event) => {

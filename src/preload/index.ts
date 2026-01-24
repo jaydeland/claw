@@ -119,6 +119,13 @@ contextBridge.exposeInMainWorld("desktopApi", {
   clipboardWrite: (text: string) => ipcRenderer.invoke("clipboard:write", text),
   clipboardRead: () => ipcRenderer.invoke("clipboard:read"),
 
+  // Dialog
+  showOpenDialog: (options: { title?: string; properties?: Array<"openFile" | "openDirectory" | "multiSelections">; filters?: Array<{ name: string; extensions: string[] }> }) =>
+    ipcRenderer.invoke("dialog:showOpenDialog", options),
+
+  // File System
+  readTextFile: (filePath: string) => ipcRenderer.invoke("fs:readTextFile", filePath),
+
   // Shortcut events (from main process menu accelerators)
   onShortcutNewAgent: (callback: () => void) => {
     const handler = () => callback()
@@ -200,6 +207,14 @@ export interface DesktopApi {
   getApiBaseUrl: () => Promise<string>
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
+  // Dialog
+  showOpenDialog: (options: {
+    title?: string
+    properties?: Array<"openFile" | "openDirectory" | "multiSelections">
+    filters?: Array<{ name: string; extensions: string[] }>
+  }) => Promise<string[] | null>
+  // File System
+  readTextFile: (filePath: string) => Promise<string>
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
   // File changes
