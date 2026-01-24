@@ -13,7 +13,7 @@ import {
   anthropicOnboardingCompletedAtom,
   customHotkeysAtom,
 } from "../../lib/atoms"
-import { selectedAgentChatIdAtom, selectedProjectAtom } from "../agents/atoms"
+import { selectedAgentChatIdAtom, selectedProjectAtom, selectedSidebarTabAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
@@ -31,6 +31,14 @@ import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
 import { TrafficLights } from "../agents/components/traffic-light-spacer"
+import {
+  SidebarTabBar,
+  CommandsTabContent,
+  AgentsTabContent,
+  SkillsTabContent,
+  McpsTabContent,
+  ClustersTabContent,
+} from "../sidebar/components"
 
 // ============================================================================
 // Constants
@@ -91,6 +99,7 @@ export function AgentsLayout() {
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
+  const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
   )
@@ -288,9 +297,36 @@ export function AgentsLayout() {
           </div>
         )}
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-          <AgentsContent />
+        {/* Main Content with Sidebar */}
+        <div className="flex-1 overflow-hidden flex min-w-0">
+          {/* Sidebar Tab Bar (vertical icons) */}
+          {!isMobile && (
+            <div className="flex-shrink-0 border-r border-border/50 bg-background">
+              <SidebarTabBar isCollapsed={true} />
+            </div>
+          )}
+
+          {/* Sidebar Content Panel - shows content for selected tab (except "chats") */}
+          {!isMobile && selectedSidebarTab !== "chats" && (
+            <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background overflow-hidden">
+              {selectedSidebarTab === "commands" ? (
+                <CommandsTabContent className="h-full" />
+              ) : selectedSidebarTab === "agents" ? (
+                <AgentsTabContent className="h-full" />
+              ) : selectedSidebarTab === "skills" ? (
+                <SkillsTabContent className="h-full" />
+              ) : selectedSidebarTab === "mcps" ? (
+                <McpsTabContent className="h-full" />
+              ) : selectedSidebarTab === "clusters" ? (
+                <ClustersTabContent className="h-full" />
+              ) : null}
+            </div>
+          )}
+
+          {/* Main content area */}
+          <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+            <AgentsContent />
+          </div>
         </div>
 
         {/* Update Banner */}
