@@ -66,9 +66,9 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
     } else if (process.platform === "win32" && win) {
       // Windows: Update title with count as fallback
       if (count !== null && count > 0) {
-        win.setTitle(`1Code (${count})`)
+        win.setTitle(`Claw (${count})`)
       } else {
-        win.setTitle("1Code")
+        win.setTitle("Claw")
         win.setOverlayIcon(null, "")
       }
     }
@@ -342,7 +342,7 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 500, // Allow narrow mobile-like mode
     minHeight: 600,
     show: false,
-    title: "1Code",
+    title: "Claw",
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#09090b" : "#ffffff",
     // hiddenInset shows native traffic lights inset in the window
     // Start with traffic lights off-screen (custom ones shown in normal mode)

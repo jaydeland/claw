@@ -96,7 +96,7 @@ export class AwsSsoService {
    */
   async registerClient(): Promise<ClientRegistration> {
     const command = new RegisterClientCommand({
-      clientName: "1Code Desktop",
+      clientName: "Claw Desktop",
       clientType: "public",
       scopes: ["sso:account:access"],
     })

@@ -256,7 +256,7 @@ if (process.env.ELECTRON_RENDERER_URL) {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - Authentication</title>
+  <title>Claw - Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -421,10 +421,10 @@ if (gotTheLock) {
 
     // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
     if (process.platform === "win32") {
-      app.setAppUserModelId(IS_DEV ? "dev.21st.1code.dev" : "dev.21st.1code")
+      app.setAppUserModelId(IS_DEV ? "dev.21st.claw.dev" : "dev.21st.claw")
     }
 
-    console.log(`[App] Starting 1Code${IS_DEV ? " (DEV)" : ""}...`)
+    console.log(`[App] Starting Claw${IS_DEV ? " (DEV)" : ""}...`)
 
     // Verify protocol registration after app is ready
     // This helps diagnose first-install issues where the protocol isn't recognized yet
@@ -448,7 +448,7 @@ if (gotTheLock) {
 
     // Set About panel options with Claude Code version
     app.setAboutPanelOptions({
-      applicationName: "1Code",
+      applicationName: "Claw",
       applicationVersion: app.getVersion(),
       version: `Claude Code ${claudeCodeVersion}`,
       copyright: "Copyright © 2026 21st.dev",
@@ -464,7 +464,7 @@ if (gotTheLock) {
         {
           label: app.name,
           submenu: [
-            { role: "about", label: "About 1Code" },
+            { role: "about", label: "About Claw" },
             {
               label: updateAvailable
                 ? `Update to v${availableVersion}...`

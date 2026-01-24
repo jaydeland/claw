@@ -59,7 +59,7 @@ function getBuiltInMcpPaths(projectPath?: string): McpConfigFileWithMetadata[] {
     paths.push({
       id: "project",
       type: "project",
-      path: path.join(projectPath, ".1code", "mcp.json"),
+      path: path.join(projectPath, ".claw", "mcp.json"),
       priority: 10,
       enabled: true,
       serverCount: 0,
