@@ -16,6 +16,7 @@ import {
   agentsPreviewSidebarOpenAtom,
   agentsSidebarOpenAtom,
   selectedSidebarTabAtom,
+  selectedCommandAtom,
 } from "../atoms"
 import {
   selectedTeamIdAtom,
@@ -48,6 +49,7 @@ import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { McpContent } from "../../mcp/ui/mcp-content"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { ClustersContent } from "../../clusters/ui/clusters-content"
+import { CommandDetail } from "../../commands/ui/command-detail"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 // Desktop mock
@@ -60,6 +62,7 @@ export function AgentsContent() {
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
+  const selectedCommand = useAtomValue(selectedCommandAtom)
 
   // Debug logging
   useEffect(() => {
@@ -870,6 +873,9 @@ export function AgentsContent() {
                 <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
               </div>
             )
+          ) : selectedSidebarTab === "commands" ? (
+            // Commands tab - show command detail or placeholder
+            <CommandDetail />
           ) : (
             // For other tabs, show a placeholder detail view
             <div className="h-full flex items-center justify-center">

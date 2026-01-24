@@ -5,8 +5,8 @@ import { Terminal, ChevronRight } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
-import { selectedProjectAtom } from "../../agents/atoms"
-import { useAtomValue } from "jotai"
+import { selectedProjectAtom, selectedCommandAtom } from "../../agents/atoms"
+import { useAtom, useAtomValue } from "jotai"
 
 interface CommandsTabContentProps {
   className?: string
@@ -38,6 +38,7 @@ function SourceBadge({ source }: { source: "user" | "project" | "custom" }) {
 export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
+  const [selectedCommand, setSelectedCommand] = useAtom(selectedCommandAtom)
 
   // Fetch commands using tRPC
   const { data: commands, isLoading } = trpc.commands.list.useQuery({
@@ -111,28 +112,51 @@ export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTa
                 </h3>
               </div>
               <div className="space-y-0.5">
-                {cmds.map((cmd) => (
-                  <div
-                    key={cmd.path}
-                    className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-default"
-                  >
-                    <Terminal className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-foreground truncate">
-                          /{cmd.name}
-                        </span>
-                        <SourceBadge source={cmd.source} />
-                      </div>
-                      {cmd.description && (
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {cmd.description}
-                        </p>
+                {cmds.map((cmd) => {
+                  const isSelected = selectedCommand === cmd.path
+                  return (
+                    <div
+                      key={cmd.path}
+                      onClick={() => setSelectedCommand(cmd.path)}
+                      className={cn(
+                        "group flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+                        isSelected
+                          ? "bg-accent text-accent-foreground"
+                          : "hover:bg-foreground/5"
                       )}
+                    >
+                      <Terminal className={cn(
+                        "h-4 w-4 flex-shrink-0 mt-0.5",
+                        isSelected ? "text-accent-foreground" : "text-muted-foreground"
+                      )} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-sm font-medium truncate",
+                            isSelected ? "text-accent-foreground" : "text-foreground"
+                          )}>
+                            /{cmd.name}
+                          </span>
+                          <SourceBadge source={cmd.source} />
+                        </div>
+                        {cmd.description && (
+                          <p className={cn(
+                            "text-xs truncate mt-0.5",
+                            isSelected ? "text-accent-foreground/70" : "text-muted-foreground"
+                          )}>
+                            {cmd.description}
+                          </p>
+                        )}
+                      </div>
+                      <ChevronRight className={cn(
+                        "h-3.5 w-3.5 flex-shrink-0 mt-1 transition-opacity",
+                        isSelected
+                          ? "opacity-100 text-accent-foreground/50"
+                          : "opacity-0 group-hover:opacity-100 text-muted-foreground/50"
+                      )} />
                     </div>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))

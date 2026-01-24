@@ -613,6 +613,16 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
 )
 
 // ============================================
+// COMMAND SELECTION
+// ============================================
+
+/**
+ * Currently selected command path for detail view
+ * null = no command selected
+ */
+export const selectedCommandAtom = atom<string | null>(null)
+
+// ============================================
 // SIDEBAR TAB NAVIGATION
 // ============================================
 
