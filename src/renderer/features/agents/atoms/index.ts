@@ -609,3 +609,28 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
     },
   ),
 )
+
+// ============================================
+// SIDEBAR TAB NAVIGATION
+// ============================================
+
+/**
+ * Sidebar tab types:
+ * - "chats": Default chat list view
+ * - "commands": List of available commands
+ * - "agents": List of available agents
+ * - "skills": List of available skills
+ * - "mcps": List of MCP servers
+ */
+export type SidebarTab = "chats" | "commands" | "agents" | "skills" | "mcps"
+
+/**
+ * Currently selected sidebar tab (persisted)
+ * Defaults to "chats" which shows the workspace list
+ */
+export const selectedSidebarTabAtom = atomWithStorage<SidebarTab>(
+  "agents:selectedSidebarTab",
+  "chats",
+  undefined,
+  { getOnInit: true },
+)

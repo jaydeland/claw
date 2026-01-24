@@ -85,9 +85,7 @@ function TypeBadge({ type }: { type: string }) {
 }
 
 export function AgentsAdvancedSettingsTab() {
-  // Advanced settings state
-  const [customBinaryPath, setCustomBinaryPath] = useState("")
-  const [envVarsText, setEnvVarsText] = useState("")
+  // Path settings state
   const [customConfigDir, setCustomConfigDir] = useState("")
   const [customWorktreeLocation, setCustomWorktreeLocation] = useState("")
   const [worktreeLocationError, setWorktreeLocationError] = useState<string | null>(null)
@@ -190,32 +188,10 @@ export function AgentsAdvancedSettingsTab() {
   // Sync form with settings
   useEffect(() => {
     if (claudeSettings) {
-      setCustomBinaryPath(claudeSettings.customBinaryPath || "")
       setCustomConfigDir(claudeSettings.customConfigDir || "")
       setCustomWorktreeLocation(claudeSettings.customWorktreeLocation || "")
-      setEnvVarsText(
-        Object.entries(claudeSettings.customEnvVars)
-          .map(([k, v]) => `${k}=${v}`)
-          .join("\n") || ""
-      )
     }
   }, [claudeSettings])
-
-  // Parse env vars from text format (KEY=VALUE, one per line)
-  const parseEnvVars = (text: string): Record<string, string> => {
-    const result: Record<string, string> = {}
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith("#")) continue
-      const eqIndex = trimmed.indexOf("=")
-      if (eqIndex > 0) {
-        const key = trimmed.slice(0, eqIndex).trim()
-        const value = trimmed.slice(eqIndex + 1).trim()
-        if (key) result[key] = value
-      }
-    }
-    return result
-  }
 
   // Handle adding MCP config
   const handleAddMcpConfig = async () => {
@@ -557,40 +533,12 @@ export function AgentsAdvancedSettingsTab() {
         >
           <div className="flex items-center gap-2">
             {sectionsCollapsed.advanced ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            <h3 className="text-sm font-semibold text-foreground">Advanced Options</h3>
+            <h3 className="text-sm font-semibold text-foreground">Path Settings</h3>
           </div>
         </button>
 
         {!sectionsCollapsed.advanced && (
           <div className="pl-6 space-y-4">
-            {/* Custom Binary Path */}
-            <div className="space-y-2">
-              <Label className="text-sm">Custom Claude Binary Path</Label>
-              <Input
-                value={customBinaryPath}
-                onChange={(e) => setCustomBinaryPath(e.target.value)}
-                placeholder="/usr/local/bin/claude or leave empty for bundled"
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave empty to use the bundled Claude binary. Specify an absolute path to use your own build.
-              </p>
-            </div>
-
-            {/* Custom Environment Variables */}
-            <div className="space-y-2">
-              <Label className="text-sm">Custom Environment Variables</Label>
-              <textarea
-                value={envVarsText}
-                onChange={(e) => setEnvVarsText(e.target.value)}
-                placeholder="ANTHROPIC_MODEL=claude-sonnet-4-5-20250514&#10;CLAUDE_DEFAULT_MODEL=claude-sonnet-4-5-20250514"
-                className="w-full min-h-[100px] p-2 text-sm font-mono bg-muted rounded-md border border-border resize-y focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <p className="text-xs text-muted-foreground">
-                One variable per line in KEY=VALUE format. These affect Claude's settings.json behavior.
-              </p>
-            </div>
-
             {/* Custom Config Directory */}
             <div className="space-y-2">
               <Label className="text-sm">Claude Config Directory</Label>
@@ -648,8 +596,6 @@ export function AgentsAdvancedSettingsTab() {
             }
 
             updateSettings.mutate({
-              customBinaryPath: customBinaryPath || null,
-              customEnvVars: parseEnvVars(envVarsText),
               customConfigDir: customConfigDir || null,
               customWorktreeLocation: customWorktreeLocation || null,
             })

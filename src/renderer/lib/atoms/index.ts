@@ -26,6 +26,8 @@ export {
   agentsSidebarWidthAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatsSidebarWidthAtom,
+  selectedSidebarTabAtom,
+  type SidebarTab,
 
   // Preview atoms
   previewPathAtomFamily,
