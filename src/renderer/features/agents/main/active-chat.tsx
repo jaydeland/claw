@@ -80,6 +80,8 @@ import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
+import { sessionFlowSidebarOpenAtom } from "../../session-flow/atoms"
+import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -1967,6 +1969,39 @@ const ChatViewInner = memo(function ChatViewInner({
 
     requestAnimationFrame(animateScroll)
   }, [])
+
+  // Scroll to a specific message (used by session flow panel)
+  const handleScrollToMessage = useCallback(
+    (messageId: string, _partIndex?: number) => {
+      const container = chatContainerRef.current
+      if (!container) return
+
+      // Find the message element
+      const selector = `[data-message-id="${messageId}"]`
+      const targetElement = container.querySelector(selector)
+
+      if (targetElement) {
+        // Check if this is inside a sticky user message container
+        const stickyParent = targetElement.closest("[data-user-message-id]")
+        if (stickyParent) {
+          const messageGroupWrapper = stickyParent.parentElement
+          if (messageGroupWrapper) {
+            messageGroupWrapper.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            })
+            return
+          }
+        }
+
+        targetElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        })
+      }
+    },
+    [],
+  )
 
   // tRPC utils for cache invalidation
   const utils = api.useUtils()
@@ -3960,6 +3995,9 @@ export function ChatView({
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(
     terminalSidebarOpenAtom,
   )
+  const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
+    sessionFlowSidebarOpenAtom,
+  )
   const [diffStats, setDiffStatsRaw] = useState({
     fileCount: 0,
     additions: 0,
@@ -5620,6 +5658,25 @@ Make sure to preserve all functionality from both branches when resolving confli
                       </TooltipContent>
                     </Tooltip>
                   )}
+                {/* Session Flow Button - shows when sidebar is closed (desktop only) */}
+                {!isMobileFullscreen && !isSessionFlowSidebarOpen && (
+                  <Tooltip delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsSessionFlowSidebarOpen(true)}
+                        className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
+                        aria-label="Open session flow"
+                      >
+                        <ListTree className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Session flow
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {/* Restore Button - shows when viewing archived workspace (desktop only) */}
                 {!isMobileFullscreen && isArchived && (
                   <Tooltip delayDuration={500}>
@@ -5916,6 +5973,9 @@ Make sure to preserve all functionality from both branches when resolving confli
             workspaceId={chatId}
           />
         )}
+
+        {/* Session Flow Sidebar - shows session execution flow */}
+        <SessionFlowSidebar onScrollToMessage={handleScrollToMessage} />
       </div>
     </div>
   )
