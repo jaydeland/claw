@@ -44,3 +44,14 @@ export const clusterSearchAtom = atom<string>("")
  * null = use default namespace from settings
  */
 export const selectedNamespaceAtom = atom<string | null>(null)
+
+// ============================================
+// TAB SELECTION
+// ============================================
+
+export type ClusterTab = "dashboard" | "nodes" | "logs"
+
+/**
+ * Currently selected tab in cluster detail view
+ */
+export const selectedClusterTabAtom = atom<ClusterTab>("dashboard")

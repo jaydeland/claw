@@ -252,3 +252,183 @@ export async function testConnection(client: KubernetesClient): Promise<boolean>
     return false
   }
 }
+
+// ============================================================================
+// Metrics Server Integration
+// ============================================================================
+
+export interface NodeMetric {
+  name: string
+  cpuMillicores: number
+  memoryMi: number
+  timestamp: Date
+}
+
+export interface PodMetric {
+  name: string
+  namespace: string
+  cpuMillicores: number
+  memoryMi: number
+  containers: Array<{
+    name: string
+    cpuMillicores: number
+    memoryMi: number
+  }>
+  timestamp: Date
+}
+
+/**
+ * Parse CPU from Kubernetes format (e.g., "150m" -> 150, "0.15" -> 150)
+ */
+function parseCpuMillicores(cpuStr: string | undefined): number {
+  if (!cpuStr) return 0
+  cpuStr = cpuStr.trim()
+
+  if (cpuStr.endsWith("m")) {
+    return parseInt(cpuStr.slice(0, -1), 10) || 0
+  } else if (cpuStr.endsWith("n")) {
+    // Nanocores: 1000000000n = 1000m
+    return Math.round(parseInt(cpuStr.slice(0, -1), 10) / 1000000)
+  } else {
+    // Assumed to be in cores (e.g., "0.15")
+    return Math.round(parseFloat(cpuStr) * 1000)
+  }
+}
+
+/**
+ * Parse memory from Kubernetes format (e.g., "512Mi" -> 512)
+ */
+function parseMemoryMi(memStr: string | undefined): number {
+  if (!memStr) return 0
+  memStr = memStr.trim()
+
+  const units: { [key: string]: number } = {
+    Ki: 1 / 1024,
+    Mi: 1,
+    Gi: 1024,
+    Ti: 1024 * 1024,
+    K: 1 / 1000 / 1.024,
+    M: 1 / 1.048576,
+    G: 1000 / 1.048576,
+  }
+
+  for (const [unit, multiplier] of Object.entries(units)) {
+    if (memStr.endsWith(unit)) {
+      const value = parseInt(memStr.slice(0, -unit.length), 10)
+      return Math.round(value * multiplier)
+    }
+  }
+
+  // Plain bytes
+  return Math.round(parseInt(memStr, 10) / (1024 * 1024))
+}
+
+/**
+ * Check if metrics-server is available in the cluster
+ */
+export async function checkMetricsAvailable(
+  client: KubernetesClient
+): Promise<boolean> {
+  try {
+    const opts = getAuthOpts(client)
+    await (client as any).get(
+      "/apis/metrics.k8s.io/v1beta1/nodes",
+      {},
+      undefined,
+      { ...opts, timeout: 5000 }
+    )
+    return true
+  } catch (error) {
+    console.warn(
+      "[kubernetes-service] Metrics-server not available:",
+      error instanceof Error ? error.message : "Unknown error"
+    )
+    return false
+  }
+}
+
+/**
+ * List metrics for all nodes
+ */
+export async function listNodeMetrics(
+  client: KubernetesClient
+): Promise<NodeMetric[]> {
+  const opts = getAuthOpts(client)
+
+  try {
+    const response = await (client as any).get(
+      "/apis/metrics.k8s.io/v1beta1/nodes",
+      {},
+      undefined,
+      opts
+    )
+
+    return ((response as any).items || [])
+      .map((metric: any) => ({
+        name: metric.metadata?.name || "",
+        cpuMillicores: parseCpuMillicores(metric.usage?.cpu),
+        memoryMi: parseMemoryMi(metric.usage?.memory),
+        timestamp: new Date(metric.timestamp || new Date()),
+      }))
+      .sort(
+        (a: NodeMetric, b: NodeMetric) =>
+          b.cpuMillicores + b.memoryMi - (a.cpuMillicores + a.memoryMi)
+      )
+  } catch (error) {
+    console.error("[kubernetes-service] Failed to fetch node metrics:", error)
+    return []
+  }
+}
+
+/**
+ * List metrics for pods in a namespace
+ */
+export async function listPodMetrics(
+  client: KubernetesClient,
+  namespace: string
+): Promise<PodMetric[]> {
+  const opts = getAuthOpts(client)
+
+  try {
+    const response = await (client as any).get(
+      `/apis/metrics.k8s.io/v1beta1/namespaces/${namespace}/pods`,
+      {},
+      undefined,
+      opts
+    )
+
+    return ((response as any).items || [])
+      .map((metric: any) => {
+        const containers = (metric.containers || []).map((c: any) => ({
+          name: c.name,
+          cpuMillicores: parseCpuMillicores(c.usage?.cpu),
+          memoryMi: parseMemoryMi(c.usage?.memory),
+        }))
+
+        const totalCpu = containers.reduce(
+          (sum: number, c: any) => sum + c.cpuMillicores,
+          0
+        )
+        const totalMemory = containers.reduce(
+          (sum: number, c: any) => sum + c.memoryMi,
+          0
+        )
+
+        return {
+          name: metric.metadata?.name || "",
+          namespace: metric.metadata?.namespace || namespace,
+          cpuMillicores: totalCpu,
+          memoryMi: totalMemory,
+          containers,
+          timestamp: new Date(metric.timestamp || new Date()),
+        }
+      })
+      .sort(
+        (a: PodMetric, b: PodMetric) =>
+          b.cpuMillicores + b.memoryMi - (a.cpuMillicores + a.memoryMi)
+      )
+  } catch (error) {
+    console.error("[kubernetes-service] Failed to fetch pod metrics:", error)
+    return []
+  }
+}

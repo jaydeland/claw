@@ -16,11 +16,16 @@ import {
   listDeployments,
   listServices,
   testConnection,
+  checkMetricsAvailable,
+  listNodeMetrics,
+  listPodMetrics,
   type K8sNode,
   type K8sNamespace,
   type K8sPod,
   type K8sDeployment,
   type K8sService,
+  type NodeMetric,
+  type PodMetric,
 } from "../../kubernetes/kubernetes-service"
 import { decrypt, type AwsCredentials } from "../../aws/sso-service"
 
@@ -372,4 +377,97 @@ export const clustersRouter = router({
     const namespace = email.split("@")[0].replace(/\./g, "")
     return namespace
   }),
+
+  // ============================================================================
+  // Metrics Server Procedures
+  // ============================================================================
+
+  /**
+   * Check if metrics-server is available in the cluster
+   */
+  checkMetricsAvailable: publicProcedure
+    .input(z.object({ clusterName: z.string() }))
+    .query(async ({ input }): Promise<{ available: boolean; error?: string }> => {
+      const db = getDatabase()
+      const settings = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      const region = settings?.bedrockRegion || "us-east-1"
+      const eksService = getEksService(region)
+
+      if (!eksService) {
+        return { available: false, error: "No AWS credentials available" }
+      }
+
+      try {
+        const cluster = await eksService.describeCluster(input.clusterName)
+        const token = await eksService.generateToken(input.clusterName)
+        const k8sClient = createK8sClient(cluster, token)
+
+        const available = await checkMetricsAvailable(k8sClient)
+        return { available }
+      } catch (error) {
+        return {
+          available: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        }
+      }
+    }),
+
+  /**
+   * Get node metrics (CPU/Memory usage)
+   */
+  getNodeMetrics: publicProcedure
+    .input(z.object({ clusterName: z.string() }))
+    .query(async ({ input }): Promise<NodeMetric[]> => {
+      const db = getDatabase()
+      const settings = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      const region = settings?.bedrockRegion || "us-east-1"
+      const eksService = getEksService(region)
+
+      if (!eksService) {
+        throw new Error("No AWS credentials available")
+      }
+
+      const cluster = await eksService.describeCluster(input.clusterName)
+      const token = await eksService.generateToken(input.clusterName)
+      const k8sClient = createK8sClient(cluster, token)
+
+      return await listNodeMetrics(k8sClient)
+    }),
+
+  /**
+   * Get pod metrics in a namespace (CPU/Memory usage)
+   */
+  getPodMetrics: publicProcedure
+    .input(z.object({ clusterName: z.string(), namespace: z.string() }))
+    .query(async ({ input }): Promise<PodMetric[]> => {
+      const db = getDatabase()
+      const settings = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      const region = settings?.bedrockRegion || "us-east-1"
+      const eksService = getEksService(region)
+
+      if (!eksService) {
+        throw new Error("No AWS credentials available")
+      }
+
+      const cluster = await eksService.describeCluster(input.clusterName)
+      const token = await eksService.generateToken(input.clusterName)
+      const k8sClient = createK8sClient(cluster, token)
+
+      return await listPodMetrics(k8sClient, input.namespace)
+    }),
 })
