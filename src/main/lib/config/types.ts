@@ -23,7 +23,7 @@ export interface McpConfigFile {
 /**
  * Source of an MCP config file
  */
-export type ConfigSourceType = "project" | "devyard" | "user" | "custom"
+export type ConfigSourceType = "project" | "user" | "custom"
 
 /**
  * Metadata about an MCP config source

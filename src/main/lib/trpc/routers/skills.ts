@@ -4,12 +4,22 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
-import { getScanLocations } from "./devyard-scan-helper"
+
+/**
+ * Get directories to scan for skills
+ */
+function getScanLocations(type: string, cwd?: string) {
+  const homeDir = os.homedir()
+  const userDir = path.join(homeDir, ".claude", type)
+  const projectDir = cwd ? path.join(cwd, ".claude", type) : null
+
+  return { userDir, projectDir }
+}
 
 interface FileSkill {
   name: string
   description: string
-  source: "user" | "project" | "devyard"
+  source: "user" | "project" | "custom"
   path: string
 }
 
@@ -34,7 +44,7 @@ function parseSkillMd(content: string): { name?: string; description?: string } 
  */
 async function scanSkillsDirectory(
   dir: string,
-  source: "user" | "project" | "devyard",
+  source: "user" | "project" | "custom",
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
 
@@ -93,19 +103,16 @@ const listSkillsProcedure = publicProcedure
   .query(async ({ input }) => {
     const locations = getScanLocations("skills", input?.cwd)
 
-    // Scan all three directories in parallel
-    const [userSkills, projectSkills, devyardSkills] = await Promise.all([
+    // Scan directories in parallel
+    const [userSkills, projectSkills] = await Promise.all([
       scanSkillsDirectory(locations.userDir, "user"),
       locations.projectDir
         ? scanSkillsDirectory(locations.projectDir, "project")
         : Promise.resolve<FileSkill[]>([]),
-      locations.devyardDir
-        ? scanSkillsDirectory(locations.devyardDir, "devyard")
-        : Promise.resolve<FileSkill[]>([]),
     ])
 
-    // Return all skills, priority: project > devyard > user
-    return [...projectSkills, ...devyardSkills, ...userSkills]
+    // Return all skills, priority: project > user
+    return [...projectSkills, ...userSkills]
   })
 
 export const skillsRouter = router({

@@ -33,7 +33,7 @@ import type { ConsolidatedConfig } from "../../../../main/lib/config/types"
 // Types from config-management router
 interface McpConfigFileWithMetadata {
   id: string
-  type: "project" | "devyard" | "user" | "custom"
+  type: "project" | "user" | "custom"
   path: string
   priority: number
   enabled: boolean
@@ -70,7 +70,6 @@ function PriorityBadge({ priority }: { priority: number }) {
 function TypeBadge({ type }: { type: string }) {
   const colors = {
     project: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    devyard: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
     user: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
     custom: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
   }
@@ -280,7 +279,7 @@ export function AgentsAdvancedSettingsTab() {
                   This allows you to add custom MCP configs and plugin directories that persist across sessions.
                 </p>
                 <p className="font-medium text-foreground">
-                  Priority order: Project (10) → Devyard (20) → User (100) → Custom (by priority)
+                  Priority order: Project (10) → User (100) → Custom (by priority)
                 </p>
               </div>
             </div>
@@ -493,14 +492,10 @@ export function AgentsAdvancedSettingsTab() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="text-xs">2</Badge>
-                    <span>Devyard configs (devyard/claude/mcp.json)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">3</Badge>
                     <span>User configs (~/.claude/mcp.json)</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">4</Badge>
+                    <Badge variant="outline" className="text-xs">3</Badge>
                     <span>Custom configs (by priority)</span>
                   </div>
                 </div>

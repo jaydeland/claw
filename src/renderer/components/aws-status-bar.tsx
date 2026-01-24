@@ -166,7 +166,7 @@ export function AwsStatusBar() {
         {/* Account */}
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground/70">Account:</span>
-          <span className="font-mono">
+          <span className="font-mono font-semibold text-cyan-600 dark:text-cyan-400">
             {awsStatus.accountName || awsStatus.accountId || "Unknown"}
           </span>
         </div>
@@ -175,7 +175,7 @@ export function AwsStatusBar() {
         {awsStatus.roleName && (
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground/70">Role:</span>
-            <span className="font-mono">{awsStatus.roleName}</span>
+            <span className="font-mono font-semibold text-purple-600 dark:text-purple-400">{awsStatus.roleName}</span>
           </div>
         )}
 
@@ -184,6 +184,7 @@ export function AwsStatusBar() {
           <div
             className={cn(
               "flex items-center gap-1",
+              !credentialsExpiry.isExpiringSoon && !credentialsExpiry.isExpired && "text-green-600 dark:text-green-400",
               credentialsExpiry.isExpiringSoon && "text-yellow-600 dark:text-yellow-500",
               credentialsExpiry.isExpired && "text-red-600 dark:text-red-500"
             )}
@@ -194,7 +195,7 @@ export function AwsStatusBar() {
               <Clock className="h-3 w-3" />
             )}
             <span className="text-muted-foreground/70">Token:</span>
-            <span>{credentialsExpiry.text}</span>
+            <span className="font-semibold">{credentialsExpiry.text}</span>
           </div>
         )}
       </div>

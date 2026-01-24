@@ -36,7 +36,6 @@ export type UIMessageChunk =
         multiSelect: boolean
       }>
     }
-  | { type: "ask-user-question-timeout"; toolUseId: string }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
   // System tools (rendered like regular tools)
   | {

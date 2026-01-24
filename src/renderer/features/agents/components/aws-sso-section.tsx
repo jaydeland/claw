@@ -495,29 +495,34 @@ export function AwsSsoSection({
               )}
 
               {/* Current Selection Status */}
-              {ssoStatus?.hasCredentials && (
+              {ssoStatus?.authenticated && (ssoStatus?.accountId || ssoStatus?.roleName) && (
                 <div className="p-3 bg-background rounded-lg space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Account:</span>
-                    <span className="font-mono">
-                      {ssoStatus.accountName} ({ssoStatus.accountId})
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Role:</span>
-                    <span className="font-mono">{ssoStatus.roleName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Credentials Expire:</span>
-                    <span className={
-                      ssoStatus.credentialsExpiresAt &&
-                      new Date(ssoStatus.credentialsExpiresAt).getTime() - Date.now() < 3600000
-                        ? "text-yellow-500"
-                        : ""
-                    }>
-                      {formatExpirationTime(ssoStatus.credentialsExpiresAt)}
-                    </span>
-                  </div>
+                  {ssoStatus.accountId && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Account:</span>
+                      <span className="font-mono">
+                        {ssoStatus.accountName} ({ssoStatus.accountId})
+                      </span>
+                    </div>
+                  )}
+                  {ssoStatus.roleName && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Role:</span>
+                      <span className="font-mono">{ssoStatus.roleName}</span>
+                    </div>
+                  )}
+                  {ssoStatus.hasCredentials && ssoStatus.credentialsExpiresAt && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Credentials Expire:</span>
+                      <span className={
+                        new Date(ssoStatus.credentialsExpiresAt).getTime() - Date.now() < 3600000
+                          ? "text-yellow-500"
+                          : ""
+                      }>
+                        {formatExpirationTime(ssoStatus.credentialsExpiresAt)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 

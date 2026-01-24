@@ -208,16 +208,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 appStore.set(pendingUserQuestionsAtom, newMap)
               }
 
-              // Handle AskUserQuestion timeout - clear pending question immediately
-              if (chunk.type === "ask-user-question-timeout") {
-                const currentMap = appStore.get(pendingUserQuestionsAtom)
-                const pending = currentMap.get(this.config.subChatId)
-                if (pending && pending.toolUseId === chunk.toolUseId) {
-                  const newMap = new Map(currentMap)
-                  newMap.delete(this.config.subChatId)
-                  appStore.set(pendingUserQuestionsAtom, newMap)
-                }
-              }
 
               // Handle AskUserQuestion result - store for real-time updates
               if (chunk.type === "ask-user-question-result") {
@@ -264,7 +254,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               // Clear when we get tool-output-* (answer received) or text-delta (agent moved on)
               const shouldClearOnChunk =
                 chunk.type !== "ask-user-question" &&
-                chunk.type !== "ask-user-question-timeout" &&
                 chunk.type !== "ask-user-question-result" &&
                 !chunk.type.startsWith("tool-input") && // Don't clear while input is being built
                 chunk.type !== "start" &&

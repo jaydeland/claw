@@ -761,8 +761,8 @@ export const claudeRouter = router({
                 symlinksCreated.add(cacheKey)
               }
 
-              // Get merged MCP config from all sources (project, devyard, user, custom)
-              // This consolidates configs in priority order: project (10) → devyard (20) → user (100)
+              // Get merged MCP config from all sources (project, custom, user, custom)
+              // This consolidates configs in priority order: project (10) → custom (20) → user (100)
               try {
                 const lookupPath = input.projectPath || input.cwd
                 const mergedConfig = await getMergedMcpConfig(lookupPath)
@@ -1112,27 +1112,15 @@ ${prompt}
                       questions: (toolInput as any).questions,
                     } as UIMessageChunk)
 
-                    // Wait for response (60s timeout)
+                    // Wait for response (no timeout - question remains open until user responds)
                     const response = await new Promise<{
                       approved: boolean
                       message?: string
                       updatedInput?: unknown
                     }>((resolve) => {
-                      const timeoutId = setTimeout(() => {
-                        pendingToolApprovals.delete(toolUseID)
-                        // Emit chunk to notify UI that the question has timed out
-                        // This ensures the pending question dialog is cleared
-                        safeEmit({
-                          type: "ask-user-question-timeout",
-                          toolUseId: toolUseID,
-                        } as UIMessageChunk)
-                        resolve({ approved: false, message: "Timed out" })
-                      }, 60000)
-
                       pendingToolApprovals.set(toolUseID, {
                         subChatId: input.subChatId,
                         resolve: (d) => {
-                          clearTimeout(timeoutId)
                           resolve(d)
                         },
                       })
@@ -1764,7 +1752,7 @@ ${prompt}
   /**
    * Get MCP servers configuration for a project
    * This allows showing MCP servers in UI before starting a chat session
-   * Uses consolidated config from all sources (project, devyard, user, custom)
+   * Uses consolidated config from all sources (project, custom, user, custom)
    */
   getMcpConfig: publicProcedure
     .input(z.object({ projectPath: z.string() }))

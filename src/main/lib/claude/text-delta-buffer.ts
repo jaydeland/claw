@@ -19,7 +19,6 @@ const CRITICAL_CHUNK_TYPES = new Set([
   "auth-error",
   "finish",
   "ask-user-question",
-  "ask-user-question-timeout",
 ])
 
 type BufferedDelta = {

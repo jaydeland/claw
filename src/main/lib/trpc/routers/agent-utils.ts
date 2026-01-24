@@ -19,7 +19,7 @@ export interface ParsedAgent {
 
 // Agent with source/path metadata
 export interface FileAgent extends ParsedAgent {
-  source: "user" | "project" | "devyard"
+  source: "user" | "project" | "custom"
   path: string
 }
 
@@ -114,19 +114,19 @@ export function generateAgentMd(agent: {
 
 /**
  * Load agent definition from filesystem by name
- * Searches in user (~/.claude/agents/), project (.claude/agents/), and devyard directories
+ * Searches in user (~/.claude/agents/) and project (.claude/agents/) directories
  */
 export async function loadAgent(
   name: string,
   cwd?: string
 ): Promise<ParsedAgent | null> {
-  const { getScanLocations } = await import("./devyard-scan-helper")
-  const scanLocs = getScanLocations("agents", cwd)
+  const homeDir = os.homedir()
+  const userDir = path.join(homeDir, ".claude", "agents")
+  const projectDir = cwd ? path.join(cwd, ".claude", "agents") : null
 
   const locations = [
-    scanLocs.userDir,
-    ...(scanLocs.projectDir ? [scanLocs.projectDir] : []),
-    ...(scanLocs.devyardDir ? [scanLocs.devyardDir] : []),
+    userDir,
+    ...(projectDir ? [projectDir] : []),
   ]
 
   for (const dir of locations) {
@@ -159,7 +159,7 @@ export async function loadAgent(
  */
 export async function scanAgentsDirectory(
   dir: string,
-  source: "user" | "project" | "devyard"
+  source: "user" | "project" | "custom"
 ): Promise<FileAgent[]> {
   const agents: FileAgent[] = []
 

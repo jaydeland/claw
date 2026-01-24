@@ -6,7 +6,6 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { eq } from "drizzle-orm"
-import { getDevyardConfig } from "../../devyard-config"
 
 /**
  * Parse JSON safely with fallback
@@ -48,19 +47,6 @@ function decryptApiKey(encrypted: string): string | null {
 }
 
 export const claudeSettingsRouter = router({
-  /**
-   * Check if Devyard is available
-   */
-  checkDevyard: publicProcedure.query(() => {
-    const devyardConfig = getDevyardConfig()
-    return {
-      available: devyardConfig.enabled,
-      path: devyardConfig.devyardPath || null,
-      claudeConfigDir: devyardConfig.claudeConfigDir || null,
-      claudePluginDir: devyardConfig.claudePluginDir || null,
-    }
-  }),
-
   /**
    * Get Claude Code settings (always returns a record, creates default if missing)
    */
@@ -112,7 +98,7 @@ export const claudeSettingsRouter = router({
         settings.mcpServerSettings ?? "{}",
         {}
       ),
-      authMode: (settings.authMode || "oauth") as "oauth" | "aws" | "apiKey" | "devyard",
+      authMode: (settings.authMode || "oauth") as "oauth" | "aws" | "apiKey",
       apiKey: settings.apiKey ? "••••••••" : null, // Masked for UI
       bedrockRegion: settings.bedrockRegion || "us-east-1",
       anthropicBaseUrl: settings.anthropicBaseUrl || null,
@@ -130,7 +116,7 @@ export const claudeSettingsRouter = router({
         customConfigDir: z.string().nullable().optional(),
         customWorktreeLocation: z.string().nullable().optional(),
         mcpServerSettings: z.record(z.string(), z.object({ enabled: z.boolean() })).optional(),
-        authMode: z.enum(["oauth", "aws", "apiKey", "devyard"]).optional(),
+        authMode: z.enum(["oauth", "aws", "apiKey"]).optional(),
         apiKey: z.string().optional(), // API key for apiKey mode
         bedrockRegion: z.string().optional(), // AWS region for Bedrock
         anthropicBaseUrl: z.string().nullable().optional(), // Custom Anthropic API base URL

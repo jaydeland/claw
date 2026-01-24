@@ -6,7 +6,6 @@ import * as os from "os"
 import matter from "gray-matter"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { eq } from "drizzle-orm"
-import { getWorkflowConfigDir } from "./devyard-scan-helper"
 
 // ============ TYPES ============
 
@@ -110,11 +109,17 @@ const BUILTIN_TOOLS = [
 
 /**
  * Get the Claude config directory, preferring customConfigDir from settings
- * When Devyard mode is active, automatically uses devyard/claude/plugin/ directory
  */
 async function getClaudeConfigDir(): Promise<string> {
-  const { baseDir } = getWorkflowConfigDir()
-  return baseDir
+  const db = getDatabase()
+  const settings = db
+    .select()
+    .from(claudeCodeSettings)
+    .where(eq(claudeCodeSettings.id, "default"))
+    .get()
+
+  // Use custom config dir if set, otherwise default to ~/.claude
+  return settings?.customConfigDir || path.join(os.homedir(), ".claude")
 }
 
 /**

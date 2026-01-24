@@ -547,7 +547,6 @@ export const justCreatedIdsAtom = atom<Set<string>>(new Set())
 // Pending user questions from AskUserQuestion tool
 // Set when Claude requests user input, cleared when answered or skipped
 export const QUESTIONS_SKIPPED_MESSAGE = "User skipped questions - proceed with defaults"
-export const QUESTIONS_TIMED_OUT_MESSAGE = "Timed out"
 
 export type PendingUserQuestion = {
   subChatId: string

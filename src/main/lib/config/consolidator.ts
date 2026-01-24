@@ -6,7 +6,6 @@ import * as fs from "fs/promises"
 import { existsSync, statSync } from "fs"
 import path from "path"
 import * as os from "os"
-import { getDevyardConfig } from "../devyard-config"
 import type {
   ConfigSource,
   McpConfigFile,
@@ -18,7 +17,7 @@ import type {
 
 /**
  * Get all MCP config paths in priority order
- * Priority: Project (10) → Devyard (20) → User (100) → Custom configs (by priority field)
+ * Priority: Project (10) → User (100) → Custom configs (by priority field)
  *
  * @param projectPath Optional path to project root (for project-specific mcp.json)
  * @returns Array of ConfigSource objects in priority order
@@ -37,19 +36,7 @@ export function getMcpConfigPaths(projectPath?: string): ConfigSource[] {
     })
   }
 
-  // 2. Devyard config (priority 20)
-  const devyardConfig = getDevyardConfig()
-  if (devyardConfig.enabled && devyardConfig.claudeConfigDir) {
-    const devyardConfigPath = path.join(devyardConfig.claudeConfigDir, "mcp.json")
-    sources.push({
-      type: "devyard",
-      path: devyardConfigPath,
-      priority: 20,
-      exists: existsSync(devyardConfigPath),
-    })
-  }
-
-  // 3. User config (priority 100)
+  // 2. User config (priority 100)
   const userConfigPath = path.join(os.homedir(), ".claude", "mcp.json")
   sources.push({
     type: "user",

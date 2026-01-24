@@ -6,7 +6,6 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, mcpCredentials } from "../../db"
 import { eq } from "drizzle-orm"
-import { getDevyardConfig } from "../../devyard-config"
 import { getConsolidatedConfig } from "../../config/consolidator"
 import type {
   McpServerConfig,
@@ -34,13 +33,9 @@ export interface McpServer {
 
 /**
  * Get the path to mcp.json config file
- * Checks Devyard path first, then falls back to ~/.claude/
+ * Returns ~/.claude/mcp.json
  */
 function getMcpConfigPath(): string {
-  const devyardConfig = getDevyardConfig()
-  if (devyardConfig.enabled && devyardConfig.claudeConfigDir) {
-    return path.join(devyardConfig.claudeConfigDir, "mcp.json")
-  }
   return path.join(os.homedir(), ".claude", "mcp.json")
 }
 
@@ -148,7 +143,7 @@ function getAuthStatus(
 export const mcpRouter = router({
   /**
    * List all MCP servers from consolidated mcp.json configs with auth status
-   * Merges servers from project, devyard, user, and custom config sources
+   * Merges servers from project, user, and custom config sources
    */
   listServers: publicProcedure
     .input(

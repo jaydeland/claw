@@ -5,15 +5,14 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, configSources } from "../../db"
 import { eq, and } from "drizzle-orm"
-import { getDevyardConfig } from "../../devyard-config"
 import type { McpConfigFile } from "../../../lib/config/types"
 import { getConsolidatedConfig as getConsolidatedConfigFromModule } from "../../config/consolidator"
 
 // ============ TYPES ============
 
 export interface McpConfigFileWithMetadata {
-  id: string // ID from database (for custom sources) or source type (project/devyard/user)
-  type: "project" | "devyard" | "user" | "custom"
+  id: string // ID from database (for custom sources) or source type (project/user)
+  type: "project" | "user" | "custom"
   path: string
   priority: number
   enabled: boolean
@@ -48,7 +47,7 @@ export interface ValidationResult {
 // ============ HELPER FUNCTIONS ============
 
 /**
- * Get built-in MCP config paths (project, devyard, user)
+ * Get built-in MCP config paths (project, user)
  * These are always present, even if files don't exist
  */
 function getBuiltInMcpPaths(projectPath?: string): McpConfigFileWithMetadata[] {
@@ -61,20 +60,6 @@ function getBuiltInMcpPaths(projectPath?: string): McpConfigFileWithMetadata[] {
       type: "project",
       path: path.join(projectPath, ".1code", "mcp.json"),
       priority: 10,
-      enabled: true,
-      serverCount: 0,
-      exists: false,
-    })
-  }
-
-  // Devyard path (priority 20)
-  const devyardConfig = getDevyardConfig()
-  if (devyardConfig.enabled && devyardConfig.claudeConfigDir) {
-    paths.push({
-      id: "devyard",
-      type: "devyard",
-      path: path.join(devyardConfig.claudeConfigDir, "mcp.json"),
-      priority: 20,
       enabled: true,
       serverCount: 0,
       exists: false,

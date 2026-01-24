@@ -7,12 +7,10 @@ import {
   ListClustersCommand,
   DescribeClusterCommand,
 } from "@aws-sdk/client-eks"
-import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts"
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { HttpRequest } from "@smithy/protocol-http"
 import { SignatureV4 } from "@smithy/signature-v4"
 import { Sha256 } from "@aws-crypto/sha256-js"
-import { decrypt, type AwsCredentials } from "./sso-service"
+import type { AwsCredentials } from "./sso-service"
 
 export interface EksClusterInfo {
   name: string
@@ -33,19 +31,19 @@ export interface EksClusterSummary {
 }
 
 /**
- * Creates AWS credentials provider from stored credentials
+ * Creates AWS credentials provider from already-decrypted credentials
+ * Note: Credentials are decrypted in clusters.ts before being passed here
  */
 function createCredentialsProvider(credentials: AwsCredentials) {
   return {
-    accessKeyId: decrypt(credentials.accessKeyId),
-    secretAccessKey: decrypt(credentials.secretAccessKey),
-    sessionToken: decrypt(credentials.sessionToken),
+    accessKeyId: credentials.accessKeyId,
+    secretAccessKey: credentials.secretAccessKey,
+    sessionToken: credentials.sessionToken,
   }
 }
 
 export class EksService {
   private eksClient: EKSClient
-  private stsClient: STSClient
   private region: string
   private credentials: ReturnType<typeof createCredentialsProvider>
 
@@ -54,11 +52,6 @@ export class EksService {
     this.credentials = createCredentialsProvider(awsCredentials)
 
     this.eksClient = new EKSClient({
-      region,
-      credentials: this.credentials,
-    })
-
-    this.stsClient = new STSClient({
       region,
       credentials: this.credentials,
     })

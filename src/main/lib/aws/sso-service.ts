@@ -169,7 +169,7 @@ export class AwsSsoService {
       return {
         accessToken: encrypt(response.accessToken),
         refreshToken: response.refreshToken ? encrypt(response.refreshToken) : undefined,
-        expiresAt: new Date(Date.now() + (response.expiresIn || 3600) * 1000),
+        expiresAt: new Date(Date.now() + (response.expiresIn || 43200) * 1000), // Default to 12 hours if AWS doesn't specify
       }
     } catch (error: any) {
       // AuthorizationPendingException means user hasn't completed auth yet
@@ -299,7 +299,7 @@ export class AwsSsoService {
     return {
       accessToken: encrypt(response.accessToken),
       refreshToken: response.refreshToken ? encrypt(response.refreshToken) : refreshToken,
-      expiresAt: new Date(Date.now() + (response.expiresIn || 3600) * 1000),
+      expiresAt: new Date(Date.now() + (response.expiresIn || 43200) * 1000), // Default to 12 hours if AWS doesn't specify
     }
   }
 }

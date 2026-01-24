@@ -10,7 +10,17 @@ import {
   VALID_AGENT_MODELS,
   type FileAgent,
 } from "./agent-utils"
-import { getScanLocations } from "./devyard-scan-helper"
+
+/**
+ * Get directories to scan for agents
+ */
+function getScanLocations(type: string, cwd?: string) {
+  const homeDir = os.homedir()
+  const userDir = path.join(homeDir, ".claude", type)
+  const projectDir = cwd ? path.join(cwd, ".claude", type) : null
+
+  return { userDir, projectDir }
+}
 
 // Shared procedure for listing agents
 const listAgentsProcedure = publicProcedure
@@ -24,19 +34,16 @@ const listAgentsProcedure = publicProcedure
   .query(async ({ input }) => {
     const locations = getScanLocations("agents", input?.cwd)
 
-    // Scan all three directories in parallel
-    const [userAgents, projectAgents, devyardAgents] = await Promise.all([
+    // Scan directories in parallel
+    const [userAgents, projectAgents] = await Promise.all([
       scanAgentsDirectory(locations.userDir, "user"),
       locations.projectDir
         ? scanAgentsDirectory(locations.projectDir, "project")
         : Promise.resolve<FileAgent[]>([]),
-      locations.devyardDir
-        ? scanAgentsDirectory(locations.devyardDir, "devyard")
-        : Promise.resolve<FileAgent[]>([]),
     ])
 
-    // Return all agents, priority: project > devyard > user
-    return [...projectAgents, ...devyardAgents, ...userAgents]
+    // Return all agents, priority: project > user
+    return [...projectAgents, ...userAgents]
   })
 
 export const agentsRouter = router({
@@ -63,7 +70,6 @@ export const agentsRouter = router({
       const locations = [
         { dir: scanLocs.userDir, source: "user" as const },
         ...(scanLocs.projectDir ? [{ dir: scanLocs.projectDir, source: "project" as const }] : []),
-        ...(scanLocs.devyardDir ? [{ dir: scanLocs.devyardDir, source: "devyard" as const }] : []),
       ]
 
       for (const { dir, source } of locations) {

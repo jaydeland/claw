@@ -1,7 +1,6 @@
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import os from "node:os"
-import { getDevyardConfig } from "../devyard-config"
 
 const execFileAsync = promisify(execFile)
 
@@ -291,9 +290,9 @@ const ALLOWED_ENV_VARS = new Set([
   "AWS_REGION",
   "AWS_CONFIG_FILE",
   "AWS_SHARED_CREDENTIALS_FILE",
-  "AWS_PROFILE_OPERATIONS", // Devyard: Operations account profile
-  "AWS_PROFILE_STAGING", // Devyard: Staging account profile
-  "AWS_STAGING_CLUSTER", // Devyard: EKS cluster ARN
+  "AWS_PROFILE_OPERATIONS",
+  "AWS_PROFILE_STAGING",
+  "AWS_STAGING_CLUSTER",
 
   // Docker configuration
   "DOCKER_HOST",
@@ -306,7 +305,7 @@ const ALLOWED_ENV_VARS = new Set([
   "KUBECONFIG",
   "KUBE_CONFIG_PATH",
 
-  // Claude Code configuration (Devyard)
+  // Claude Code configuration
   "CLAUDE_CONFIG_DIR",
   "CLAUDE_PLUGIN_DIR",
 
@@ -412,13 +411,6 @@ export function buildTerminalEnv(params: {
     AGENTS_WORKSPACE_NAME: workspaceName || "",
     AGENTS_WORKSPACE_PATH: workspacePath || "",
     AGENTS_ROOT_PATH: rootPath || "",
-  }
-
-  // Add Devyard configuration (if available)
-  const devyardConfig = getDevyardConfig()
-  if (devyardConfig.enabled && devyardConfig.env) {
-    console.log("[terminal-env] Adding Devyard configuration")
-    Object.assign(env, devyardConfig.env)
   }
 
   return env

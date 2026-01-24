@@ -176,10 +176,6 @@ export function WorkflowTree() {
 
   const { data, isLoading } = trpc.workflows.getWorkflowGraph.useQuery()
   const { data: claudeSettings } = trpc.claudeSettings.getSettings.useQuery()
-  const { data: devyardStatus } = trpc.claudeSettings.checkDevyard.useQuery()
-
-  const isDevyardMode = claudeSettings?.authMode === "devyard"
-  const showDevyardBadge = isDevyardMode && devyardStatus?.available
 
   const isNodeExpanded = (key: string) => expandedNodes.has(key)
 
@@ -241,20 +237,6 @@ export function WorkflowTree() {
 
   return (
     <div className="py-1">
-      {/* Devyard Mode Indicator */}
-      {showDevyardBadge && (
-        <div className="mx-2 mb-3 px-3 py-2 bg-purple-50 dark:bg-purple-900/10 rounded-md border border-purple-200 dark:border-purple-800">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">
-              Devyard
-            </span>
-            <span className="text-muted-foreground">
-              Showing Devyard workflows
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Agents Section */}
       {data.agents.length > 0 && (
         <TreeNode

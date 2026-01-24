@@ -108,7 +108,7 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   customConfigDir: text("custom_config_dir"), // Path to Claude config dir (null = use per-subchat isolated)
   customWorktreeLocation: text("custom_worktree_location"), // Custom base path for worktrees with env var support (null = use ~/.21st/worktrees)
   mcpServerSettings: text("mcp_server_settings").notNull().default("{}"), // JSON object of MCP server overrides
-  authMode: text("auth_mode").notNull().default("oauth"), // "oauth" | "aws" | "apiKey" | "devyard"
+  authMode: text("auth_mode").notNull().default("oauth"), // "oauth" | "aws" | "apiKey"
   apiKey: text("api_key"), // API key for apiKey mode (encrypted)
   bedrockRegion: text("bedrock_region").notNull().default("us-east-1"), // AWS region for Bedrock
   anthropicBaseUrl: text("anthropic_base_url"), // Custom Anthropic API base URL (for API key mode)
@@ -164,7 +164,7 @@ export const configSources = sqliteTable("config_sources", {
     .$defaultFn(() => createId()),
   type: text("type", { enum: ["mcp", "plugin"] }).notNull(), // Type of configuration source
   path: text("path").notNull(), // Absolute path to the config file or directory
-  priority: integer("priority").notNull().default(50), // Lower = higher priority (project=10, devyard=20, user=100)
+  priority: integer("priority").notNull().default(50), // Lower = higher priority (project=10, user=100, custom=50+)
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true), // Whether this source is active
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),

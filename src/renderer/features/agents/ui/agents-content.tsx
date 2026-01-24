@@ -836,7 +836,6 @@ export function AgentsContent() {
           >
             {selectedChatId ? (
               <ChatView
-                key={selectedChatId}
                 chatId={selectedChatId}
                 isSidebarOpen={false}
                 onToggleSidebar={() => {}}
@@ -935,7 +934,6 @@ export function AgentsContent() {
           {selectedChatId ? (
             <div className="h-full flex flex-col relative overflow-hidden">
               <ChatView
-                key={selectedChatId}
                 chatId={selectedChatId}
                 isSidebarOpen={sidebarOpen}
                 onToggleSidebar={() => setSidebarOpen((prev) => !prev)}

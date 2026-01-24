@@ -26,7 +26,7 @@ import {
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
-import { ClustersSidebarSection } from "../clusters"
+import { ClustersSidebarSection, selectedClustersCategoryAtom } from "../clusters"
 import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../mcp/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
@@ -1384,6 +1384,7 @@ export function AgentsSidebar({
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const setSelectedCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
+  const setSelectedClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
@@ -1911,11 +1912,15 @@ export function AgentsSidebar({
       // Navigate to NewChatForm with this draft selected
       setSelectedChatId(null)
       setSelectedDraftId(draftId)
+      // Clear all category selections to show the new chat form
+      setSelectedCategory(null)
+      setSelectedMcpCategory(null)
+      setSelectedClustersCategory(null)
       if (isMobileFullscreen && onChatSelect) {
         onChatSelect()
       }
     },
-    [setSelectedChatId, setSelectedDraftId, isMobileFullscreen, onChatSelect],
+    [setSelectedChatId, setSelectedDraftId, setSelectedCategory, setSelectedMcpCategory, setSelectedClustersCategory, isMobileFullscreen, onChatSelect],
   )
 
   // Reset focused index when search query changes
@@ -1984,6 +1989,10 @@ export function AgentsSidebar({
     triggerHaptic("light")
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
+    // Clear all category selections to show the new chat form
+    setSelectedCategory(null)
+    setSelectedMcpCategory(null)
+    setSelectedClustersCategory(null)
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2055,12 +2064,14 @@ export function AgentsSidebar({
     setSelectedCategory(null)
     // Clear MCP category when chat is selected
     setSelectedMcpCategory(null)
+    // Clear clusters category when chat is selected
+    setSelectedClustersCategory(null)
 
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
     }
-  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedCategory, setSelectedMcpCategory, isMobileFullscreen, onChatSelect])
+  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedCategory, setSelectedMcpCategory, setSelectedClustersCategory, isMobileFullscreen, onChatSelect])
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation()

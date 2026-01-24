@@ -6,7 +6,6 @@ import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { QuestionIcon } from "../../../components/ui/icons"
 import {
   QUESTIONS_SKIPPED_MESSAGE,
-  QUESTIONS_TIMED_OUT_MESSAGE,
   askUserQuestionResultsAtom,
   pendingUserQuestionsAtom,
 } from "../atoms"
@@ -71,9 +70,8 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
 
   // Determine status
   const isSkipped = effectiveErrorText === QUESTIONS_SKIPPED_MESSAGE
-  const isTimedOut = effectiveErrorText === QUESTIONS_TIMED_OUT_MESSAGE
   const isCompleted =
-    state === "result" && answers && !isSkipped && !isTimedOut && !isError
+    state === "result" && answers && !isSkipped && !isError
 
   // Show loading state if:
   // 1. No questions yet (still streaming input)
@@ -88,14 +86,14 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
     )
   }
 
-  // Show skipped/timed out state
-  if (state === "result" && (isSkipped || isTimedOut)) {
+  // Show skipped state
+  if (state === "result" && isSkipped) {
     const firstQuestion = questions[0]?.header || questions[0]?.question
     return (
       <div className="flex items-center gap-2 py-1 px-2 text-xs text-muted-foreground">
         <span>{firstQuestion || "Question"}</span>
         <span className="text-muted-foreground/50">•</span>
-        <span>{isTimedOut ? "Timed out" : "Skipped"}</span>
+        <span>Skipped</span>
       </div>
     )
   }
@@ -163,7 +161,7 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
   // show "Submitting..." (user just answered, waiting for sync)
   // Note: realtimeResult is set immediately when user answers via ask-user-question-result chunk
   // If there's no realtimeResult and no answers, the stream was interrupted without an answer
-  if (state === "result" && realtimeResult && !answers && !isError && !isSkipped && !isTimedOut) {
+  if (state === "result" && realtimeResult && !answers && !isError && !isSkipped) {
     return (
       <div className="flex items-center gap-2 py-1 px-2 text-xs text-muted-foreground">
         <span>{firstQuestion || "Question"}</span>
