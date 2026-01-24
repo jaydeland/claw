@@ -220,6 +220,59 @@ const allProjects = db.select().from(projects).all()
 const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all()
 ```
 
+### Handling Database Schema Changes
+
+When modifying the database schema, follow these steps to ensure migrations work correctly:
+
+1. **Update schema file**: Make changes in `src/main/lib/db/schema/index.ts`
+
+2. **Generate migration**:
+   ```bash
+   bun run db:generate
+   ```
+   This creates a new SQL file in `drizzle/` folder (e.g., `0018_new_feature.sql`)
+
+3. **Review migration**: Check the generated SQL to ensure it's correct
+
+4. **Test in development**:
+   ```bash
+   # Stop the app if running
+   bun run dev
+   # Migrations run automatically on app startup via initDatabase()
+   ```
+
+5. **Manual migration** (if auto-migration fails):
+   ```bash
+   # Stop app first
+   DB_PATH="/Users/jdeland/Library/Application Support/Agents Dev/data/agents.db"
+   sqlite3 "$DB_PATH" < drizzle/0018_new_feature.sql
+   ```
+
+6. **Verify schema**:
+   ```bash
+   sqlite3 "$DB_PATH" ".schema table_name"
+   ```
+
+**Important Notes:**
+- The app auto-migrates on startup, reading from `drizzle/` in dev mode
+- **DO NOT** modify the database directly without creating a migration
+- **ALWAYS** test migrations by restarting the app to ensure they apply correctly
+- If you see "no such column" errors, it means the migration didn't run - manually apply it
+- Migration files must be sequential (0017, 0018, etc.)
+- Packaged apps read migrations from `resources/migrations` (copied during build)
+
+**Troubleshooting:**
+```bash
+# Check if database is locked
+lsof "$DB_PATH"
+
+# View migration journal
+sqlite3 "$DB_PATH" "SELECT * FROM __drizzle_migrations"
+
+# Check current schema
+sqlite3 "$DB_PATH" ".schema"
+```
+
 ## Key Patterns
 
 ### IPC Communication
