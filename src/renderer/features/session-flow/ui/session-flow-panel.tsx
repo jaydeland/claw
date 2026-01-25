@@ -73,13 +73,17 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
   // Handle expansion toggle
   const handleToggleExpansion = useCallback(
     (nodeId: string) => {
+      console.log("[session-flow] Toggling expansion for node:", nodeId)
       setExpandedNodes((prev) => {
         const newSet = new Set(prev)
         if (newSet.has(nodeId)) {
+          console.log("[session-flow] Collapsing node:", nodeId)
           newSet.delete(nodeId)
         } else {
+          console.log("[session-flow] Expanding node:", nodeId)
           newSet.add(nodeId)
         }
+        console.log("[session-flow] New expanded nodes:", Array.from(newSet))
         return newSet
       })
     },

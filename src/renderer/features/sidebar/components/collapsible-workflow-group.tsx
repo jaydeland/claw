@@ -11,11 +11,14 @@ interface CollapsibleWorkflowGroupProps {
   onToggle: () => void
   children: ReactNode
   className?: string
+  /** Whether this is a nested sub-group (adds extra indentation) */
+  nested?: boolean
 }
 
 /**
  * Collapsible group component for workflows (agents, commands, skills)
  * Shows namespace title with item count and chevron indicator
+ * Supports nested sub-groups with proper indentation
  */
 export function CollapsibleWorkflowGroup({
   title,
@@ -24,30 +27,44 @@ export function CollapsibleWorkflowGroup({
   onToggle,
   children,
   className,
+  nested = false,
 }: CollapsibleWorkflowGroupProps) {
   return (
-    <div className={cn("mb-2", className)}>
+    <div className={cn(nested ? "mb-1" : "mb-2", className)}>
       <button
         onClick={onToggle}
-        className="flex items-center justify-between w-full px-1 py-1 hover:bg-muted/50 rounded transition-colors"
+        className={cn(
+          "flex items-center justify-between w-full py-1 hover:bg-muted/50 rounded transition-colors",
+          nested ? "px-0.5" : "px-1"
+        )}
       >
         <div className="flex items-center gap-1.5">
           <ChevronRight
             className={cn(
-              "h-3 w-3 transition-transform text-muted-foreground",
-              expanded && "rotate-90"
+              "transition-transform text-muted-foreground",
+              expanded && "rotate-90",
+              nested ? "h-2.5 w-2.5" : "h-3 w-3"
             )}
           />
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className={cn(
+            "font-medium text-muted-foreground",
+            nested ? "text-[10px]" : "text-xs"
+          )}>
             {title}
           </span>
-          <span className="text-[10px] text-muted-foreground/60">
+          <span className={cn(
+            "text-muted-foreground/60",
+            nested ? "text-[9px]" : "text-[10px]"
+          )}>
             ({count})
           </span>
         </div>
       </button>
       {expanded && (
-        <div className="ml-4 mt-0.5 space-y-0.5">
+        <div className={cn(
+          "mt-0.5 space-y-0.5",
+          nested ? "ml-3" : "ml-4"
+        )}>
           {children}
         </div>
       )}

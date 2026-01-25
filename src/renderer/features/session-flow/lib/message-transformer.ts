@@ -279,6 +279,13 @@ export function transformMessagesToFlow(
         const toolNodeId = `tool-${message.id}-bash`
         const isExpanded = options.expandedNodes?.has(toolNodeId) || false
 
+        console.log("[message-transformer] Creating Bash node:", {
+          toolNodeId,
+          bashCount,
+          isExpanded,
+          hasOnToggleExpansion: !!options.onToggleExpansion,
+        })
+
         nodes.push({
           id: toolNodeId,
           type: "toolCall",
@@ -291,7 +298,10 @@ export function transformMessagesToFlow(
             isExpanded,
             onClick: () => options.onNodeClick(message.id, bashFirstPartIndex),
             onToggleExpansion: bashCount > 1 && options.onToggleExpansion
-              ? () => options.onToggleExpansion(toolNodeId)
+              ? () => {
+                  console.log("[message-transformer] onToggleExpansion called for:", toolNodeId)
+                  options.onToggleExpansion?.(toolNodeId)
+                }
               : undefined,
           } as ToolCallNodeData,
         })
@@ -311,6 +321,12 @@ export function transformMessagesToFlow(
 
         // Create detail nodes if expanded
         if (isExpanded && bashCount > 1) {
+          console.log("[message-transformer] Creating detail nodes for Bash:", {
+            toolNodeId,
+            bashCount,
+            partsLength: parts.length,
+          })
+
           let detailY = branchY
           let detailIndex = 0
 
@@ -371,6 +387,13 @@ export function transformMessagesToFlow(
         const toolNodeId = `tool-${message.id}-thinking`
         const isExpanded = options.expandedNodes?.has(toolNodeId) || false
 
+        console.log("[message-transformer] Creating Thinking node:", {
+          toolNodeId,
+          thinkingCount,
+          isExpanded,
+          hasOnToggleExpansion: !!options.onToggleExpansion,
+        })
+
         nodes.push({
           id: toolNodeId,
           type: "toolCall",
@@ -383,7 +406,10 @@ export function transformMessagesToFlow(
             isExpanded,
             onClick: () => options.onNodeClick(message.id, thinkingFirstPartIndex),
             onToggleExpansion: thinkingCount > 1 && options.onToggleExpansion
-              ? () => options.onToggleExpansion(toolNodeId)
+              ? () => {
+                  console.log("[message-transformer] onToggleExpansion called for:", toolNodeId)
+                  options.onToggleExpansion?.(toolNodeId)
+                }
               : undefined,
           } as ToolCallNodeData,
         })
@@ -403,6 +429,12 @@ export function transformMessagesToFlow(
 
         // Create detail nodes if expanded
         if (isExpanded && thinkingCount > 1) {
+          console.log("[message-transformer] Creating detail nodes for Thinking:", {
+            toolNodeId,
+            thinkingCount,
+            partsLength: parts.length,
+          })
+
           let detailY = branchY
           let detailIndex = 0
 

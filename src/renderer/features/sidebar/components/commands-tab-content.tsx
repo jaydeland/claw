@@ -8,7 +8,7 @@ import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
 import { selectWorkflowItemAtom } from "../../workflows/atoms"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { groupWorkflowsByNamespace } from "../../workflows/lib/parse-workflow-name"
+import { groupWorkflowsHierarchically } from "../../workflows/lib/parse-workflow-name"
 import { CollapsibleWorkflowGroup } from "./collapsible-workflow-group"
 import { commandsExpansionAtom } from "../atoms/workflow-expansion-atoms"
 
@@ -17,6 +17,12 @@ interface CommandsTabContentProps {
   isMobileFullscreen?: boolean
 }
 
+type Command = {
+  name: string
+  path: string
+  source: "user" | "project" | "custom"
+  description?: string
+}
 
 export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -42,23 +48,59 @@ export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTa
     )
   }, [commands, searchQuery])
 
-  // Group commands by namespace
-  const groupedCommands = useMemo(() => {
-    return groupWorkflowsByNamespace(filteredCommands)
+  // Group commands hierarchically with sub-groups
+  const hierarchicalGroups = useMemo(() => {
+    return groupWorkflowsHierarchically(filteredCommands)
   }, [filteredCommands])
 
-  // Toggle group expansion
-  const toggleGroup = (namespace: string) => {
+  // Toggle group expansion (supports both namespaces and sub-groups)
+  const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => {
       const newSet = new Set(prev)
-      if (newSet.has(namespace)) {
-        newSet.delete(namespace)
+      if (newSet.has(key)) {
+        newSet.delete(key)
       } else {
-        newSet.add(namespace)
+        newSet.add(key)
       }
       return newSet
     })
   }
+
+  // Render a single command item
+  const renderCommandItem = (cmd: Command & { displayName: string }) => (
+    <div
+      key={cmd.path}
+      onClick={() => {
+        // Use combined action to set both category and node atomically
+        selectWorkflowItem({
+          node: {
+            id: cmd.name,
+            name: cmd.name,
+            type: "command",
+            sourcePath: cmd.path,
+          },
+          category: "commands",
+        })
+      }}
+      className={cn(
+        "group flex items-start gap-2 px-2 py-1 rounded-md cursor-pointer transition-colors",
+        "hover:bg-foreground/5"
+      )}
+    >
+      <Terminal className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium truncate text-foreground flex-1">
+            {cmd.displayName}
+          </span>
+          {cmd.source === "project" && (
+            <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
+          )}
+        </div>
+      </div>
+      <ChevronRight className="h-3 w-3 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50" />
+    </div>
+  )
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
@@ -90,48 +132,33 @@ export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTa
           </div>
         ) : (
           <div className="space-y-1">
-            {Object.entries(groupedCommands).map(([namespace, cmds]) => (
+            {hierarchicalGroups.map((nsGroup) => (
               <CollapsibleWorkflowGroup
-                key={namespace}
-                title={namespace}
-                count={cmds.length}
-                expanded={expandedGroups.has(namespace)}
-                onToggle={() => toggleGroup(namespace)}
+                key={nsGroup.namespace}
+                title={nsGroup.namespace}
+                count={nsGroup.totalCount}
+                expanded={expandedGroups.has(nsGroup.namespace)}
+                onToggle={() => toggleGroup(nsGroup.namespace)}
               >
-                {cmds.map((cmd) => (
-                  <div
-                    key={cmd.path}
-                    onClick={() => {
-                      // Use combined action to set both category and node atomically
-                      selectWorkflowItem({
-                        node: {
-                          id: cmd.name,
-                          name: cmd.name,
-                          type: "command",
-                          sourcePath: cmd.path,
-                        },
-                        category: "commands",
-                      })
-                    }}
-                    className={cn(
-                      "group flex items-start gap-2 px-2 py-1 rounded-md cursor-pointer transition-colors",
-                      "hover:bg-foreground/5"
-                    )}
-                  >
-                    <Terminal className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium truncate text-foreground flex-1">
-                          /{cmd.name}
-                        </span>
-                        {cmd.source === "project" && (
-                          <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
-                        )}
-                      </div>
-                    </div>
-                    <ChevronRight className="h-3 w-3 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50" />
-                  </div>
-                ))}
+                {/* Sub-groups (if any) */}
+                {nsGroup.subGroups.map((subGroup) => {
+                  const subGroupKey = `${nsGroup.namespace}:${subGroup.name}`
+                  return (
+                    <CollapsibleWorkflowGroup
+                      key={subGroupKey}
+                      title={subGroup.name}
+                      count={subGroup.items.length}
+                      expanded={expandedGroups.has(subGroupKey)}
+                      onToggle={() => toggleGroup(subGroupKey)}
+                      nested
+                    >
+                      {subGroup.items.map(renderCommandItem)}
+                    </CollapsibleWorkflowGroup>
+                  )
+                })}
+
+                {/* Flat items (no sub-group) */}
+                {nsGroup.flatItems.map(renderCommandItem)}
               </CollapsibleWorkflowGroup>
             ))}
           </div>

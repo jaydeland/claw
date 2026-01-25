@@ -8,7 +8,7 @@ import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { selectWorkflowItemAtom } from "../../workflows/atoms"
-import { groupWorkflowsByNamespace } from "../../workflows/lib/parse-workflow-name"
+import { groupWorkflowsHierarchically } from "../../workflows/lib/parse-workflow-name"
 import { CollapsibleWorkflowGroup } from "./collapsible-workflow-group"
 import { agentsExpansionAtom } from "../atoms/workflow-expansion-atoms"
 
@@ -17,6 +17,13 @@ interface AgentsTabContentProps {
   isMobileFullscreen?: boolean
 }
 
+type Agent = {
+  name: string
+  path: string
+  source: "user" | "project" | "custom"
+  description?: string
+  model?: string
+}
 
 export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -30,13 +37,7 @@ export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabCon
   })
 
   // Handle agent click - switches to full-screen workflows view with agent selected
-  const handleAgentClick = (agent: {
-    name: string
-    path: string
-    source: "user" | "project" | "custom"
-    description?: string
-    model?: string
-  }) => {
+  const handleAgentClick = (agent: Agent) => {
     // Use combined action to set both category and node atomically
     selectWorkflowItem({
       node: {
@@ -62,23 +63,50 @@ export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabCon
     )
   }, [agents, searchQuery])
 
-  // Group agents by namespace
-  const groupedAgents = useMemo(() => {
-    return groupWorkflowsByNamespace(filteredAgents)
+  // Group agents hierarchically with sub-groups
+  const hierarchicalGroups = useMemo(() => {
+    return groupWorkflowsHierarchically(filteredAgents)
   }, [filteredAgents])
 
-  // Toggle group expansion
-  const toggleGroup = (namespace: string) => {
+  // Toggle group expansion (supports both namespaces and sub-groups)
+  const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => {
       const newSet = new Set(prev)
-      if (newSet.has(namespace)) {
-        newSet.delete(namespace)
+      if (newSet.has(key)) {
+        newSet.delete(key)
       } else {
-        newSet.add(namespace)
+        newSet.add(key)
       }
       return newSet
     })
   }
+
+  // Render a single agent item
+  const renderAgentItem = (agent: Agent & { displayName: string }) => (
+    <button
+      key={agent.path}
+      onClick={() => handleAgentClick(agent)}
+      className="group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
+    >
+      <Bot className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-foreground truncate flex-1">
+            {agent.displayName}
+          </span>
+          {agent.source === "project" && (
+            <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
+          )}
+        </div>
+        {agent.model && (
+          <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
+            Model: {agent.model}
+          </p>
+        )}
+      </div>
+      <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+    </button>
+  )
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
@@ -110,39 +138,33 @@ export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabCon
           </div>
         ) : (
           <div className="space-y-1">
-            {Object.entries(groupedAgents).map(([namespace, agents]) => (
+            {hierarchicalGroups.map((nsGroup) => (
               <CollapsibleWorkflowGroup
-                key={namespace}
-                title={namespace}
-                count={agents.length}
-                expanded={expandedGroups.has(namespace)}
-                onToggle={() => toggleGroup(namespace)}
+                key={nsGroup.namespace}
+                title={nsGroup.namespace}
+                count={nsGroup.totalCount}
+                expanded={expandedGroups.has(nsGroup.namespace)}
+                onToggle={() => toggleGroup(nsGroup.namespace)}
               >
-                {agents.map((agent) => (
-                  <button
-                    key={agent.path}
-                    onClick={() => handleAgentClick(agent)}
-                    className="group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
-                  >
-                    <Bot className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium text-foreground truncate flex-1">
-                          {agent.name}
-                        </span>
-                        {agent.source === "project" && (
-                          <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
-                        )}
-                      </div>
-                      {agent.model && (
-                        <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
-                          Model: {agent.model}
-                        </p>
-                      )}
-                    </div>
-                    <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                ))}
+                {/* Sub-groups (if any) */}
+                {nsGroup.subGroups.map((subGroup) => {
+                  const subGroupKey = `${nsGroup.namespace}:${subGroup.name}`
+                  return (
+                    <CollapsibleWorkflowGroup
+                      key={subGroupKey}
+                      title={subGroup.name}
+                      count={subGroup.items.length}
+                      expanded={expandedGroups.has(subGroupKey)}
+                      onToggle={() => toggleGroup(subGroupKey)}
+                      nested
+                    >
+                      {subGroup.items.map(renderAgentItem)}
+                    </CollapsibleWorkflowGroup>
+                  )
+                })}
+
+                {/* Flat items (no sub-group) */}
+                {nsGroup.flatItems.map(renderAgentItem)}
               </CollapsibleWorkflowGroup>
             ))}
           </div>

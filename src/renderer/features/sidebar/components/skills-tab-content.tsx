@@ -8,7 +8,7 @@ import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
 import { selectWorkflowItemAtom } from "../../workflows/atoms"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { groupWorkflowsByNamespace } from "../../workflows/lib/parse-workflow-name"
+import { groupWorkflowsHierarchically } from "../../workflows/lib/parse-workflow-name"
 import { CollapsibleWorkflowGroup } from "./collapsible-workflow-group"
 import { skillsExpansionAtom } from "../atoms/workflow-expansion-atoms"
 
@@ -17,6 +17,12 @@ interface SkillsTabContentProps {
   isMobileFullscreen?: boolean
 }
 
+type Skill = {
+  name: string
+  path: string
+  source: "user" | "project" | "custom"
+  description?: string
+}
 
 export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -42,23 +48,56 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
     )
   }, [skills, searchQuery])
 
-  // Group skills by namespace
-  const groupedSkills = useMemo(() => {
-    return groupWorkflowsByNamespace(filteredSkills)
+  // Group skills hierarchically with sub-groups
+  const hierarchicalGroups = useMemo(() => {
+    return groupWorkflowsHierarchically(filteredSkills)
   }, [filteredSkills])
 
-  // Toggle group expansion
-  const toggleGroup = (namespace: string) => {
+  // Toggle group expansion (supports both namespaces and sub-groups)
+  const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => {
       const newSet = new Set(prev)
-      if (newSet.has(namespace)) {
-        newSet.delete(namespace)
+      if (newSet.has(key)) {
+        newSet.delete(key)
       } else {
-        newSet.add(namespace)
+        newSet.add(key)
       }
       return newSet
     })
   }
+
+  // Render a single skill item
+  const renderSkillItem = (skill: Skill & { displayName: string }) => (
+    <button
+      key={skill.path}
+      onClick={() => {
+        // Use combined action to set both category and node atomically
+        selectWorkflowItem({
+          node: {
+            id: skill.name,
+            name: skill.name,
+            type: "skill",
+            sourcePath: skill.path,
+          },
+          category: "skills",
+        })
+      }}
+      className="group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
+    >
+      <Sparkles className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-foreground truncate flex-1">
+            {skill.displayName}
+          </span>
+          {skill.source === "project" && (
+            <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
+          )}
+        </div>
+      </div>
+      <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+    </button>
+  )
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
@@ -90,45 +129,33 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
           </div>
         ) : (
           <div className="space-y-1">
-            {Object.entries(groupedSkills).map(([namespace, skills]) => (
+            {hierarchicalGroups.map((nsGroup) => (
               <CollapsibleWorkflowGroup
-                key={namespace}
-                title={namespace}
-                count={skills.length}
-                expanded={expandedGroups.has(namespace)}
-                onToggle={() => toggleGroup(namespace)}
+                key={nsGroup.namespace}
+                title={nsGroup.namespace}
+                count={nsGroup.totalCount}
+                expanded={expandedGroups.has(nsGroup.namespace)}
+                onToggle={() => toggleGroup(nsGroup.namespace)}
               >
-                {skills.map((skill) => (
-                  <button
-                    key={skill.path}
-                    onClick={() => {
-                      // Use combined action to set both category and node atomically
-                      selectWorkflowItem({
-                        node: {
-                          id: skill.name,
-                          name: skill.name,
-                          type: "skill",
-                          sourcePath: skill.path,
-                        },
-                        category: "skills",
-                      })
-                    }}
-                    className="group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium text-foreground truncate flex-1">
-                          {skill.name}
-                        </span>
-                        {skill.source === "project" && (
-                          <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
-                        )}
-                      </div>
-                    </div>
-                    <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                ))}
+                {/* Sub-groups (if any) */}
+                {nsGroup.subGroups.map((subGroup) => {
+                  const subGroupKey = `${nsGroup.namespace}:${subGroup.name}`
+                  return (
+                    <CollapsibleWorkflowGroup
+                      key={subGroupKey}
+                      title={subGroup.name}
+                      count={subGroup.items.length}
+                      expanded={expandedGroups.has(subGroupKey)}
+                      onToggle={() => toggleGroup(subGroupKey)}
+                      nested
+                    >
+                      {subGroup.items.map(renderSkillItem)}
+                    </CollapsibleWorkflowGroup>
+                  )
+                })}
+
+                {/* Flat items (no sub-group) */}
+                {nsGroup.flatItems.map(renderSkillItem)}
               </CollapsibleWorkflowGroup>
             ))}
           </div>

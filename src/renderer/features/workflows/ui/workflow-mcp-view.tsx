@@ -5,6 +5,115 @@ import { selectedWorkflowNodeAtom } from "../atoms"
 import { trpc } from "../../../lib/trpc"
 import { Loader2, CheckCircle, XCircle, AlertTriangle, Plug } from "lucide-react"
 import { cn } from "../../../lib/utils"
+import type { McpServer } from "../../../../../main/lib/trpc/routers/mcp"
+
+/**
+ * Available Tools Section Component
+ * Queries and displays tools from an MCP server
+ */
+function AvailableToolsSection({ mcpServer }: { mcpServer: McpServer }) {
+  // Fetch tools for this MCP server (only if enabled)
+  const { data: toolsData, isLoading: toolsLoading, error: toolsError } = trpc.mcp.getServerTools.useQuery(
+    { serverId: mcpServer.id },
+    {
+      enabled: mcpServer.enabled,
+      // Don't retry on error (server might be slow or misconfigured)
+      retry: false,
+    }
+  )
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-lg font-semibold">Available Tools</h3>
+
+      {/* Loading State */}
+      {toolsLoading && (
+        <div className="bg-muted/50 rounded-md p-4 flex items-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Connecting to server and querying tools...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {!toolsLoading && toolsError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-md p-4">
+          <div className="flex items-start gap-2">
+            <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-2">
+              <p className="text-sm font-medium">Failed to query tools</p>
+              <p className="text-xs text-muted-foreground">
+                Could not connect to the MCP server. The server may be misconfigured or missing dependencies.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Server Disabled */}
+      {!toolsLoading && !mcpServer.enabled && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Server is disabled</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Enable this server to query its available tools.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tools List */}
+      {!toolsLoading && !toolsError && toolsData && mcpServer.enabled && (
+        <>
+          {toolsData.error ? (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{toolsData.error}</p>
+                </div>
+              </div>
+            </div>
+          ) : toolsData.tools.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Found {toolsData.tools.length} tool{toolsData.tools.length === 1 ? "" : "s"}
+              </p>
+              {toolsData.tools.map((tool) => (
+                <div key={tool.name} className="bg-muted/50 rounded-md p-3 space-y-1">
+                  <div className="font-mono text-sm font-medium">{tool.name}</div>
+                  {tool.description && (
+                    <p className="text-xs text-muted-foreground">{tool.description}</p>
+                  )}
+                  {tool.inputSchema?.properties && Object.keys(tool.inputSchema.properties).length > 0 && (
+                    <div className="text-xs text-muted-foreground mt-2">
+                      <span className="font-medium">Parameters:</span>{" "}
+                      {Object.keys(tool.inputSchema.properties).join(", ")}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-4">
+              <div className="flex items-start gap-2">
+                <Plug className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">No tools available</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This server connected successfully but did not report any tools.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 
 /**
  * MCP server detail view
@@ -197,23 +306,7 @@ export function WorkflowMcpView() {
         )}
 
         {/* Available Tools */}
-        <div className="space-y-3">
-          <h3 className="text-lg font-semibold">Available Tools</h3>
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-4">
-            <div className="flex items-start gap-2">
-              <Plug className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-2">
-                <p className="text-sm font-medium">Tools are available when the server is running</p>
-                <p className="text-xs text-muted-foreground">
-                  MCP servers dynamically expose their tools when connected to Claude. The available tools will vary based on the server implementation and may include file operations, API integrations, data processing, and more.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  To see this server's tools in action, start a chat session and check the Session Flow panel.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AvailableToolsSection mcpServer={mcpServer} />
 
         {/* Server ID */}
         <div className="pt-4 border-t border-border/50">

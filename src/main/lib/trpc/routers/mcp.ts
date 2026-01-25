@@ -14,6 +14,7 @@ import type {
   McpConfigMetadata,
   ConflictInfo,
 } from "../../config/types"
+import { queryMcpServerTools, type McpTool } from "../../mcp/tool-query"
 
 // ============ TYPES ============
 
@@ -456,6 +457,53 @@ export const mcpRouter = router({
       } catch (error) {
         console.error("[mcp] Failed to get consolidated view:", error)
         throw error
+      }
+    }),
+
+  /**
+   * Query tools from an MCP server
+   * Connects to the server and retrieves its available tools
+   */
+  getServerTools: publicProcedure
+    .input(
+      z.object({
+        serverId: z.string(),
+        projectPath: z.string().optional(),
+      })
+    )
+    .query(async ({ input }): Promise<{ tools: McpTool[]; error?: string }> => {
+      try {
+        console.log(`[mcp] Querying tools for server: ${input.serverId}`)
+
+        // Get server configuration
+        const consolidated = await getConsolidatedConfig(input.projectPath)
+        const serverConfig = consolidated.mergedServers[input.serverId]
+
+        if (!serverConfig) {
+          return {
+            tools: [],
+            error: `Server ${input.serverId} not found`,
+          }
+        }
+
+        // Check if server is disabled
+        if (serverConfig.disabled) {
+          return {
+            tools: [],
+            error: "Server is disabled",
+          }
+        }
+
+        // Query tools from the server
+        const tools = await queryMcpServerTools(serverConfig)
+
+        return { tools }
+      } catch (error) {
+        console.error("[mcp] Failed to query server tools:", error)
+        return {
+          tools: [],
+          error: error instanceof Error ? error.message : String(error),
+        }
       }
     }),
 })

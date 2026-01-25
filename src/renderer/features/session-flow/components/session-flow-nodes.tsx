@@ -215,8 +215,17 @@ export const ToolCallNode = memo(function ToolCallNode({
   const handleChevronClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation() // Prevent node click from firing
+      console.log("[ToolCallNode] Chevron clicked:", {
+        toolName: data.toolName,
+        count: data.count,
+        isExpanded: data.isExpanded,
+        hasOnToggleExpansion: !!data.onToggleExpansion,
+      })
       if (data.onToggleExpansion) {
+        console.log("[ToolCallNode] Calling onToggleExpansion")
         data.onToggleExpansion()
+      } else {
+        console.warn("[ToolCallNode] No onToggleExpansion handler!")
       }
     },
     [data]
