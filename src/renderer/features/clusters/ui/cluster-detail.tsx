@@ -68,9 +68,29 @@ export function ClusterDetail() {
     isRefetching,
   } = trpc.clusters.discover.useQuery()
 
-  // Auto-select default cluster (prefer staging-cluster) if none selected
+  // Always prefer staging-cluster if present, otherwise validate current selection
   useEffect(() => {
-    if (clusters && !selectedClusterId) {
+    if (!clusters || clusters.length === 0) return
+
+    // Always prefer staging-cluster if it's in the list (overrides localStorage)
+    const hasStagingCluster = clusters.some((c) => c.name === "staging-cluster")
+    if (hasStagingCluster && selectedClusterId !== "staging-cluster") {
+      setSelectedClusterId("staging-cluster")
+      return
+    }
+
+    // If no cluster selected, use default selection logic
+    if (!selectedClusterId) {
+      const defaultCluster = getDefaultCluster(clusters)
+      if (defaultCluster) {
+        setSelectedClusterId(defaultCluster)
+      }
+      return
+    }
+
+    // Validate that selected cluster still exists in the list
+    const isSelectedValid = clusters.some((c) => c.name === selectedClusterId)
+    if (!isSelectedValid) {
       const defaultCluster = getDefaultCluster(clusters)
       if (defaultCluster) {
         setSelectedClusterId(defaultCluster)
