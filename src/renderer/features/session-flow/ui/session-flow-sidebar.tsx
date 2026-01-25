@@ -13,7 +13,9 @@ import { DialogIcons, DialogIconSizes } from "@/lib/dialog-icons"
 import { SessionFlowPanel } from "./session-flow-panel"
 import { SessionFlowTodos } from "./session-flow-todos"
 import { SessionSubAgentsList } from "./session-sub-agents-list"
+import { SessionBackgroundTasksList } from "./session-background-tasks-list"
 import { SubAgentOutputDialog } from "./sub-agent-output-dialog"
+import { BackgroundTaskOutputDialog } from "./background-task-output-dialog"
 import {
   sessionFlowSidebarOpenAtom,
   sessionFlowSidebarWidthAtom,
@@ -293,14 +295,28 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
               >
                 Sub Agents
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setBottomTab("backgroundTasks")}
+                className={`h-6 px-2 text-xs transition-colors ${
+                  bottomTab === "backgroundTasks"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                Background
+              </Button>
             </div>
 
             {/* Tab content */}
             <div className="flex-1 min-h-0 overflow-hidden">
               {bottomTab === "todos" ? (
                 <SessionFlowTodos onScrollToMessage={onScrollToMessage} />
-              ) : (
+              ) : bottomTab === "subAgents" ? (
                 <SessionSubAgentsList onScrollToMessage={onScrollToMessage} />
+              ) : (
+                <SessionBackgroundTasksList onScrollToMessage={onScrollToMessage} />
               )}
             </div>
           </div>
@@ -308,6 +324,9 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
 
         {/* Sub-agent output dialog */}
         <SubAgentOutputDialog />
+
+        {/* Background task output dialog */}
+        <BackgroundTaskOutputDialog />
       </div>
     </ResizableSidebar>
   )

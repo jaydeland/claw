@@ -12,11 +12,10 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Copy, Download, CheckIcon, AlertCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Copy, Download, CheckIcon, AlertCircle, Terminal } from "lucide-react"
 import {
-  selectedSubAgentAtom,
-  subAgentOutputDialogOpenAtom,
+  selectedBackgroundTaskAtom,
+  backgroundTaskOutputDialogOpenAtom,
 } from "../atoms"
 
 // Format duration in human-readable format
@@ -30,21 +29,21 @@ function formatDuration(ms?: number): string {
   return `${minutes}m ${remainingSeconds}s`
 }
 
-export const SubAgentOutputDialog = memo(function SubAgentOutputDialog() {
-  const [open, setOpen] = useAtom(subAgentOutputDialogOpenAtom)
-  const [selectedAgent, setSelectedAgent] = useAtom(selectedSubAgentAtom)
+export const BackgroundTaskOutputDialog = memo(function BackgroundTaskOutputDialog() {
+  const [open, setOpen] = useAtom(backgroundTaskOutputDialogOpenAtom)
+  const [selectedTask, setSelectedTask] = useAtom(selectedBackgroundTaskAtom)
   const [copied, setCopied] = useState(false)
 
   const handleClose = useCallback(() => {
     setOpen(false)
     // Clear selection after dialog closes
-    setTimeout(() => setSelectedAgent(null), 200)
-  }, [setOpen, setSelectedAgent])
+    setTimeout(() => setSelectedTask(null), 200)
+  }, [setOpen, setSelectedTask])
 
   const handleCopy = useCallback(async () => {
-    if (!selectedAgent) return
+    if (!selectedTask) return
 
-    const content = selectedAgent.error || selectedAgent.output || ""
+    const content = selectedTask.error || selectedTask.output || ""
     try {
       await navigator.clipboard.writeText(content)
       setCopied(true)
@@ -52,69 +51,87 @@ export const SubAgentOutputDialog = memo(function SubAgentOutputDialog() {
     } catch (err) {
       console.error("Failed to copy:", err)
     }
-  }, [selectedAgent])
+  }, [selectedTask])
 
   const handleDownload = useCallback(() => {
-    if (!selectedAgent) return
+    if (!selectedTask) return
 
-    const content = selectedAgent.error || selectedAgent.output || ""
+    const content = selectedTask.error || selectedTask.output || ""
     const blob = new Blob([content], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-    link.download = `sub-agent-${selectedAgent.type}-${timestamp}.txt`
+    link.download = `background-task-${selectedTask.type}-${timestamp}.txt`
     link.href = url
     link.click()
     URL.revokeObjectURL(url)
-  }, [selectedAgent])
+  }, [selectedTask])
 
-  // Compute display values (with fallbacks for when selectedAgent is null)
-  const hasError = !!selectedAgent?.error
-  const content = selectedAgent?.error || selectedAgent?.output || "No output available"
-  const duration = formatDuration(selectedAgent?.duration)
+  // Compute display values (with fallbacks for when selectedTask is null)
+  const hasError = !!selectedTask?.error
+  const content = selectedTask?.error || selectedTask?.output || "No output available"
+  const duration = formatDuration(selectedTask?.duration)
 
   // Always render Dialog to ensure it can open when state changes
   // The Dialog's open prop controls visibility - don't use early return
   return (
-    <Dialog open={open && !!selectedAgent} onOpenChange={(newOpen) => {
+    <Dialog open={open && !!selectedTask} onOpenChange={(newOpen) => {
       setOpen(newOpen)
       if (!newOpen) {
         // Clear selection after dialog closes
-        setTimeout(() => setSelectedAgent(null), 200)
+        setTimeout(() => setSelectedTask(null), 200)
       }
     }}>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-        {selectedAgent && (
+        {selectedTask && (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {hasError && (
+                {hasError ? (
                   <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                ) : (
+                  <Terminal className="w-4 h-4 flex-shrink-0" />
                 )}
-                <span className="truncate">{selectedAgent.description}</span>
+                <span className="truncate">{selectedTask.description}</span>
               </DialogTitle>
               <DialogDescription className="flex items-center gap-2 flex-wrap">
                 <Badge variant="outline" className="text-[10px] font-mono">
-                  {selectedAgent.agentId}
+                  {selectedTask.taskId}
                 </Badge>
                 <Badge
                   variant={
-                    hasError ? "destructive" : selectedAgent.status === "completed" ? "default" : "secondary"
+                    hasError ? "destructive" : selectedTask.status === "completed" ? "default" : "secondary"
                   }
                   className="text-[10px] capitalize"
                 >
-                  {selectedAgent.status}
+                  {selectedTask.status}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  Type: {selectedAgent.type.replace(/-/g, " ")}
+                  Type: {selectedTask.type}
                 </span>
                 {duration && (
                   <span className="text-xs text-muted-foreground tabular-nums">
                     Duration: {duration}
                   </span>
                 )}
+                {selectedTask.exitCode !== undefined && (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    Exit code: {selectedTask.exitCode}
+                  </span>
+                )}
               </DialogDescription>
             </DialogHeader>
+
+            {/* Command (if available) */}
+            {selectedTask.command && (
+              <div className="border rounded-md bg-muted/30 px-3 py-2 flex-shrink-0">
+                <div className="text-[10px] text-muted-foreground mb-1">Command</div>
+                <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                  <span className="text-amber-600 dark:text-amber-400">$ </span>
+                  {selectedTask.command}
+                </pre>
+              </div>
+            )}
 
             {/* Output content */}
             <div className="flex-1 overflow-y-auto border rounded-md bg-muted/30">

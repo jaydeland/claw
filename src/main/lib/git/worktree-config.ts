@@ -9,6 +9,7 @@ export interface WorktreeConfig {
   "setup-worktree-unix"?: string[] | string
   "setup-worktree-windows"?: string[] | string
   "setup-worktree"?: string[] | string
+  "worktree-location"?: string // Custom worktree directory location (overrides global setting)
 }
 
 export type WorktreeConfigSource = "custom" | "cursor" | "1code" | null

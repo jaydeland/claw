@@ -1,11 +1,17 @@
 "use client"
 
 import { memo, useCallback } from "react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { cn } from "@/lib/utils"
 import { CheckIcon, IconSpinner } from "@/components/ui/icons"
-import { X } from "lucide-react"
+import { X, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   Brain,
   FileCode,
@@ -106,42 +112,70 @@ const SubAgentItem = memo(function SubAgentItem({
   agent,
   isLast,
   onClick,
+  onOpenDialog,
 }: {
   agent: SessionSubAgent
   isLast: boolean
   onClick: () => void
+  onOpenDialog: () => void
 }) {
   const hasOutput = !!agent.output || !!agent.error
   const duration = formatDuration(agent.duration)
 
   return (
-    <button
-      onClick={onClick}
-      disabled={!hasOutput && agent.status !== "running"}
+    <div
       className={cn(
-        "w-full flex items-center gap-2 px-2.5 py-1.5 text-left",
+        "w-full flex items-center gap-2 px-2.5 py-1.5",
         "hover:bg-muted/50 transition-colors",
-        hasOutput || agent.status === "running" ? "cursor-pointer" : "cursor-default opacity-60",
         !isLast && "border-b border-border/30"
       )}
     >
-      <div className="flex-shrink-0 text-muted-foreground">
-        {getAgentIcon(agent.type)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-xs font-medium truncate">{agent.description}</div>
-        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-          <span className="capitalize">{agent.type.replace(/-/g, " ")}</span>
-          {duration && (
-            <>
-              <span>•</span>
-              <span className="tabular-nums">{duration}</span>
-            </>
-          )}
+      <button
+        onClick={onClick}
+        disabled={!hasOutput && agent.status !== "running"}
+        className={cn(
+          "flex-1 flex items-center gap-2 min-w-0 text-left",
+          hasOutput || agent.status === "running" ? "cursor-pointer" : "cursor-default opacity-60"
+        )}
+      >
+        <div className="flex-shrink-0 text-muted-foreground">
+          {getAgentIcon(agent.type)}
         </div>
-      </div>
-      <SubAgentStatusIcon status={agent.status} />
-    </button>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium truncate">{agent.description}</div>
+          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <span className="capitalize">{agent.type.replace(/-/g, " ")}</span>
+            {duration && (
+              <>
+                <span>-</span>
+                <span className="tabular-nums">{duration}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <SubAgentStatusIcon status={agent.status} />
+      </button>
+
+      {/* Dialog button */}
+      {hasOutput && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-5 w-5 flex-shrink-0 hover:bg-muted"
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenDialog()
+              }}
+            >
+              <ExternalLink className="h-3 w-3 text-muted-foreground" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">View output</TooltipContent>
+        </Tooltip>
+      )}
+    </div>
   )
 })
 
@@ -164,6 +198,14 @@ export const SessionSubAgentsList = memo(function SessionSubAgentsList({
       }
     },
     [onScrollToMessage, setSelectedAgent, setDialogOpen]
+  )
+
+  const handleOpenDialog = useCallback(
+    (agent: SessionSubAgent) => {
+      setSelectedAgent(agent)
+      setDialogOpen(true)
+    },
+    [setSelectedAgent, setDialogOpen]
   )
 
   const completedCount = subAgents.filter((a) => a.status === "completed").length
@@ -206,6 +248,7 @@ export const SessionSubAgentsList = memo(function SessionSubAgentsList({
             agent={agent}
             isLast={idx === subAgents.length - 1}
             onClick={() => handleAgentClick(agent)}
+            onOpenDialog={() => handleOpenDialog(agent)}
           />
         ))}
       </div>

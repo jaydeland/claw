@@ -340,14 +340,21 @@ export const chatsRouter = router({
           input.baseBranch,
         )
 
-        // Get custom worktree location from settings
+        // Get custom worktree location from per-project config (preferred) or global settings (fallback)
+        const { detectWorktreeConfig } = await import("../../git/worktree-config")
+        const worktreeConfig = await detectWorktreeConfig(project.path)
+        const perProjectLocation = worktreeConfig.config?.["worktree-location"] || null
+
         const { claudeCodeSettings } = await import("../../db")
         const settings = db
           .select()
           .from(claudeCodeSettings)
           .where(eq(claudeCodeSettings.id, "default"))
           .get()
-        const customWorktreeLocation = settings?.customWorktreeLocation || null
+        const globalWorktreeLocation = settings?.customWorktreeLocation || null
+
+        // Prefer per-project config over global setting
+        const customWorktreeLocation = perProjectLocation || globalWorktreeLocation
 
         const result = await createWorktreeForChat(
           project.path,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import { Button, buttonVariants } from "../../ui/button"
@@ -120,6 +120,18 @@ export function AgentsProjectWorktreeTab({
   const [unixCommands, setUnixCommands] = useState<string[]>([])
   const [windowsCommands, setWindowsCommands] = useState<string[]>([])
   const [showPlatformSpecific, setShowPlatformSpecific] = useState(false)
+  const [worktreeLocation, setWorktreeLocation] = useState<string>("")
+
+  // Compute default worktree path for this project
+  const computedDefault = useMemo(() => {
+    if (!project?.path) return ""
+
+    // Mimic the backend logic: parent/wt-{projectname}-1
+    const pathParts = project.path.split("/")
+    const projectName = pathParts[pathParts.length - 1]
+    const parentDir = pathParts.slice(0, -1).join("/")
+    return `${parentDir}/wt-${projectName}-1`
+  }, [project])
 
   // Sync from server data
   useEffect(() => {
@@ -152,6 +164,9 @@ export function AgentsProjectWorktreeTab({
           Array.isArray(win) ? win : win ? [win] : [],
         )
 
+        // Worktree location
+        setWorktreeLocation(configData.config["worktree-location"] || "")
+
         // Show platform section if any platform-specific commands exist
         if (unix || win) {
           setShowPlatformSpecific(true)
@@ -160,6 +175,7 @@ export function AgentsProjectWorktreeTab({
         setCommands([""])
         setUnixCommands([])
         setWindowsCommands([])
+        setWorktreeLocation("")
       }
     }
   }, [configData])
@@ -167,7 +183,7 @@ export function AgentsProjectWorktreeTab({
   const handleSave = () => {
     if (!projectId) return
 
-    const config: Record<string, string[]> = {}
+    const config: Record<string, string[] | string> = {}
     const filteredCommands = commands.filter((c) => c.trim())
     const filteredUnix = unixCommands.filter((c) => c.trim())
     const filteredWin = windowsCommands.filter((c) => c.trim())
@@ -180,6 +196,9 @@ export function AgentsProjectWorktreeTab({
     }
     if (filteredWin.length > 0) {
       config["setup-worktree-windows"] = filteredWin
+    }
+    if (worktreeLocation.trim()) {
+      config["worktree-location"] = worktreeLocation.trim()
     }
 
     saveMutation.mutate({
@@ -304,6 +323,43 @@ export function AgentsProjectWorktreeTab({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Worktree Directory Location */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">
+            Worktree Directory Location
+          </h4>
+        </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-3">
+            <div className="flex-1">
+              <Label className="text-sm font-medium">Directory Path</Label>
+              <p className="text-xs text-muted-foreground">
+                Where git worktrees will be created. Leave empty to use default (sibling directory).
+              </p>
+            </div>
+            <Input
+              value={worktreeLocation}
+              onChange={(e) => setWorktreeLocation(e.target.value)}
+              placeholder={computedDefault || "wt-{projectname}-1 in parent directory"}
+              className="font-mono text-xs"
+            />
+            {project?.name && (
+              <p className="text-xs text-muted-foreground">
+                Default for <span className="font-mono">{project.name}</span>:{" "}
+                <code className="bg-muted px-1.5 py-0.5 rounded text-[11px]">
+                  {computedDefault}
+                </code>
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              This overrides the global worktree location setting for this project only.
+            </p>
           </div>
         </div>
       </div>
