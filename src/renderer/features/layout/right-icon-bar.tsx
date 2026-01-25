@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useMemo } from "react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { GitBranch, ListTree } from "lucide-react"
 import {
   Tooltip,
@@ -12,6 +12,7 @@ import { Kbd } from "../../components/ui/kbd"
 import { cn } from "../../lib/utils"
 import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily } from "../agents/atoms"
 import { sessionFlowSidebarOpenAtom } from "../session-flow/atoms"
+import { workflowPanelOpenAtom } from "../workflows/atoms"
 
 interface RightIconBarProps {
   className?: string
@@ -30,6 +31,9 @@ export function RightIconBar({ className }: RightIconBarProps) {
   // Session flow sidebar state - global
   const [isSessionFlowOpen, setIsSessionFlowOpen] = useAtom(sessionFlowSidebarOpenAtom)
 
+  // Workflow panel state - global (for mutual exclusivity with Session Flow)
+  const [workflowPanelOpen, setWorkflowPanelOpen] = useAtom(workflowPanelOpenAtom)
+
   const handleChangesClick = () => {
     if (!selectedChatId) return
     // Toggle diff sidebar, close session flow if opening diff
@@ -40,9 +44,15 @@ export function RightIconBar({ className }: RightIconBarProps) {
   }
 
   const handleSessionFlowClick = () => {
-    // Toggle session flow sidebar, close diff if opening session flow
-    if (!isSessionFlowOpen && selectedChatId) {
-      setIsDiffOpen(false)
+    // Toggle session flow sidebar
+    if (!isSessionFlowOpen) {
+      // Close diff and workflow panel when opening session flow
+      if (selectedChatId) {
+        setIsDiffOpen(false)
+      }
+      if (workflowPanelOpen !== null) {
+        setWorkflowPanelOpen(null)
+      }
     }
     setIsSessionFlowOpen(!isSessionFlowOpen)
   }

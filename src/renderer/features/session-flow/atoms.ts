@@ -25,6 +25,16 @@ export const sessionFlowTodosSplitAtom = atomWithStorage<number>(
   { getOnInit: true },
 )
 
+// Track if user has manually scrolled in the session flow
+export const sessionFlowUserScrolledAtom = atom<boolean>(false)
+
+// Track expanded node details (nodeId -> true/false)
+export const sessionFlowExpandedNodesAtom = atom<Set<string>>(new Set())
+
+// Dialog/modal view state
+export const sessionFlowDialogOpenAtom = atom<boolean>(false)
+export const sessionFlowFullScreenAtom = atom<boolean>(false)
+
 // Todo item type from TodoWrite tool
 export interface SessionTodoItem {
   content: string
@@ -76,4 +86,77 @@ export const sessionFlowTodosAtom = atom<ExtractedTodos>((get) => {
   }
 
   return { todos: [], messageId: null, partIndex: null }
+})
+
+// Tab selection atom for bottom panel
+export const sessionFlowBottomTabAtom = atomWithStorage<"todos" | "subAgents">(
+  "session-flow-bottom-tab",
+  "todos",
+  undefined,
+  { getOnInit: true },
+)
+
+// Sub-agent from Task tool
+export interface SessionSubAgent {
+  agentId: string
+  type: string // subagent_type
+  description: string
+  status: "running" | "completed" | "failed"
+  output?: string
+  error?: string
+  duration?: number
+  messageId: string
+  partIndex: number
+}
+
+// Selected sub-agent for output dialog
+export const selectedSubAgentAtom = atom<SessionSubAgent | null>(null)
+export const subAgentOutputDialogOpenAtom = atom<boolean>(false)
+
+// Derive sub-agents from messages
+// Finds all Task tool calls in the current session
+export const sessionFlowSubAgentsAtom = atom<SessionSubAgent[]>((get) => {
+  const messageIds = get(messageIdsAtom)
+  const subAgents: SessionSubAgent[] = []
+
+  // Search through all messages to find Task tools
+  for (let i = 0; i < messageIds.length; i++) {
+    const msgId = messageIds[i]
+    if (!msgId) continue
+
+    const message = get(messageAtomFamily(msgId))
+    if (!message || !message.parts) continue
+
+    // Search all parts for Task tools
+    for (let partIdx = 0; partIdx < message.parts.length; partIdx++) {
+      const part = message.parts[partIdx]
+      if (!part) continue
+
+      // Check if this is a Task tool call
+      if (
+        part.type === "tool-Task" ||
+        (part.type === "tool-invocation" && part.toolName === "Task")
+      ) {
+        // Determine status based on output presence
+        let status: "running" | "completed" | "failed" = "running"
+        if (part.output) {
+          status = part.output.error ? "failed" : "completed"
+        }
+
+        subAgents.push({
+          agentId: part.toolCallId || `task-${msgId}-${partIdx}`,
+          type: part.input?.subagent_type || "unknown-agent",
+          description: part.input?.description || "Task",
+          status,
+          output: part.output?.result || part.output?.output,
+          error: part.output?.error,
+          duration: part.output?.duration || part.output?.duration_ms,
+          messageId: msgId,
+          partIndex: partIdx,
+        })
+      }
+    }
+  }
+
+  return subAgents
 })

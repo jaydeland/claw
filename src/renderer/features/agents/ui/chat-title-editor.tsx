@@ -174,7 +174,7 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
             hasRealName ? "text-foreground cursor-pointer" : "cursor-default",
           )}
         >
-          <span className="block overflow-hidden text-ellipsis line-clamp-2">
+          <span className="block">
             <TypewriterText
               text={name}
               placeholder={placeholder}

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { Plus, X, TerminalSquare, FolderOpen } from "lucide-react"
+import { Plus, X, TerminalSquare } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import {
   Tooltip,
@@ -10,11 +10,13 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
-import { selectedAgentChatIdAtom } from "../../agents/atoms"
+import { selectedAgentChatIdAtom, selectedProjectAtom } from "../../agents/atoms"
 import {
   terminalsAtom,
   activeTerminalIdAtom,
   terminalCwdAtom,
+  terminalSidebarOpenAtom,
+  GLOBAL_TERMINAL_ID,
 } from "../../terminal/atoms"
 import { trpc } from "../../../lib/trpc"
 import type { TerminalInstance } from "../../terminal/types"
@@ -65,11 +67,13 @@ function getShortPath(cwd: string | undefined, initialCwd: string): string {
 
 export function TerminalTabContent({ className }: TerminalTabContentProps) {
   const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
   const terminalCwds = useAtomValue(terminalCwdAtom)
+  const [, setTerminalSidebarOpen] = useAtom(terminalSidebarOpenAtom)
 
-  // Get chat data for worktree path
+  // Get chat data for worktree path (if chat is selected)
   const { data: chatData } = trpc.chats.get.useQuery(
     { id: selectedChatId! },
     { enabled: !!selectedChatId }
@@ -77,27 +81,31 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
 
   const worktreePath = chatData?.worktreePath as string | undefined
 
+  // Determine default working directory: worktree → project path → home directory
+  const defaultCwd = worktreePath || selectedProject?.path || "~"
+
+  // Use global terminal ID if no chat is selected
+  const terminalContextId = selectedChatId || GLOBAL_TERMINAL_ID
+
   // tRPC mutation for killing terminal sessions
   const killMutation = trpc.terminal.kill.useMutation()
 
-  // Get terminals for this chat
+  // Get terminals for this context (chat or global)
   const terminals = useMemo(
-    () => (selectedChatId ? allTerminals[selectedChatId] || [] : []),
-    [allTerminals, selectedChatId]
+    () => allTerminals[terminalContextId] || [],
+    [allTerminals, terminalContextId]
   )
 
-  // Get active terminal ID for this chat
+  // Get active terminal ID for this context
   const activeTerminalId = useMemo(
-    () => (selectedChatId ? allActiveIds[selectedChatId] || null : null),
-    [allActiveIds, selectedChatId]
+    () => allActiveIds[terminalContextId] || null,
+    [allActiveIds, terminalContextId]
   )
 
-  // Create a new terminal
+  // Create a new terminal and open the sidebar
   const createTerminal = useCallback(() => {
-    if (!selectedChatId) return
-
     const id = generateTerminalId()
-    const paneId = generatePaneId(selectedChatId, id)
+    const paneId = generatePaneId(terminalContextId, id)
     const name = getNextTerminalName(terminals)
 
     const newTerminal: TerminalInstance = {
@@ -109,33 +117,36 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
 
     setAllTerminals((prev) => ({
       ...prev,
-      [selectedChatId]: [...(prev[selectedChatId] || []), newTerminal],
+      [terminalContextId]: [...(prev[terminalContextId] || []), newTerminal],
     }))
 
     // Set as active
     setAllActiveIds((prev) => ({
       ...prev,
-      [selectedChatId]: id,
+      [terminalContextId]: id,
     }))
-  }, [selectedChatId, terminals, setAllTerminals, setAllActiveIds])
 
-  // Select a terminal
+    // Open the terminal sidebar when creating a new terminal
+    setTerminalSidebarOpen(true)
+  }, [terminalContextId, terminals, setAllTerminals, setAllActiveIds, setTerminalSidebarOpen])
+
+  // Select a terminal and open the sidebar
   const selectTerminal = useCallback(
     (id: string) => {
-      if (!selectedChatId) return
       setAllActiveIds((prev) => ({
         ...prev,
-        [selectedChatId]: id,
+        [terminalContextId]: id,
       }))
+      // Open the terminal sidebar when selecting a terminal
+      setTerminalSidebarOpen(true)
     },
-    [selectedChatId, setAllActiveIds]
+    [terminalContextId, setAllActiveIds, setTerminalSidebarOpen]
   )
 
   // Close a terminal
   const closeTerminal = useCallback(
     (id: string, e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!selectedChatId) return
 
       const terminal = terminals.find((t) => t.id === id)
       if (!terminal) return
@@ -147,7 +158,7 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
       const newTerminals = terminals.filter((t) => t.id !== id)
       setAllTerminals((prev) => ({
         ...prev,
-        [selectedChatId]: newTerminals,
+        [terminalContextId]: newTerminals,
       }))
 
       // If we closed the active terminal, switch to another
@@ -155,12 +166,12 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
         const newActive = newTerminals[newTerminals.length - 1]?.id || null
         setAllActiveIds((prev) => ({
           ...prev,
-          [selectedChatId]: newActive,
+          [terminalContextId]: newActive,
         }))
       }
     },
     [
-      selectedChatId,
+      terminalContextId,
       terminals,
       activeTerminalId,
       setAllTerminals,
@@ -168,46 +179,6 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
       killMutation,
     ]
   )
-
-  // No chat selected
-  if (!selectedChatId) {
-    return (
-      <div
-        className={cn(
-          "flex flex-col h-full items-center justify-center p-4",
-          className
-        )}
-      >
-        <TerminalSquare className="h-8 w-8 text-muted-foreground/50 mb-2" />
-        <span className="text-sm text-muted-foreground text-center">
-          No Workspace Selected
-        </span>
-        <span className="text-xs text-muted-foreground/70 text-center mt-1">
-          Select a workspace to view terminals
-        </span>
-      </div>
-    )
-  }
-
-  // No worktree path (terminal not available)
-  if (!worktreePath) {
-    return (
-      <div
-        className={cn(
-          "flex flex-col h-full items-center justify-center p-4",
-          className
-        )}
-      >
-        <FolderOpen className="h-8 w-8 text-muted-foreground/50 mb-2" />
-        <span className="text-sm text-muted-foreground text-center">
-          Terminal Not Available
-        </span>
-        <span className="text-xs text-muted-foreground/70 text-center mt-1">
-          Start a chat to enable terminal
-        </span>
-      </div>
-    )
-  }
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
@@ -254,7 +225,7 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
             {terminals.map((terminal) => {
               const isActive = terminal.id === activeTerminalId
               const cwd = terminalCwds[terminal.paneId]
-              const shortPath = getShortPath(cwd, worktreePath)
+              const shortPath = getShortPath(cwd, defaultCwd)
 
               return (
                 <div

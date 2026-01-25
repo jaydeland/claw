@@ -6,7 +6,8 @@ import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
-import { useAtomValue } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
+import { selectWorkflowItemAtom } from "../../workflows/atoms"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../main/lib/trpc/routers"
 
@@ -20,28 +21,6 @@ interface McpsTabContentProps {
 
 type McpAuthStatus = "no_auth_needed" | "configured" | "missing_credentials"
 
-/**
- * Badge component to show the source of an MCP server
- */
-function SourceBadge({ source }: { source: string }) {
-  const colors: Record<string, string> = {
-    project: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-    user: "bg-green-500/10 text-green-600 dark:text-green-400",
-    custom: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-    devyard: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-  }
-
-  return (
-    <span
-      className={cn(
-        "text-[10px] px-1.5 py-0.5 rounded-sm font-medium uppercase tracking-wide",
-        colors[source] || "bg-gray-500/10 text-gray-600 dark:text-gray-400",
-      )}
-    >
-      {source}
-    </span>
-  )
-}
 
 /**
  * Status indicator for MCP server auth status
@@ -76,11 +55,28 @@ function AuthStatusIndicator({ status }: { status: McpAuthStatus }) {
 export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
+  const selectWorkflowItem = useSetAtom(selectWorkflowItemAtom)
 
   // Fetch MCP servers using tRPC
   const { data: mcpServers, isLoading } = trpc.mcp.listServers.useQuery({
     projectPath: selectedProject?.path,
   })
+
+  // Debug logging for merged list
+  React.useEffect(() => {
+    if (mcpServers) {
+      console.log("[mcps-tab] Merged MCP servers:", mcpServers.servers.length, "servers")
+      console.log("[mcps-tab] Server details:", mcpServers.servers.map(s => ({
+        id: s.id,
+        name: s.name,
+        source: s.source?.type,
+        enabled: s.enabled
+      })))
+      if (mcpServers.conflicts) {
+        console.log("[mcps-tab] Conflicts detected:", mcpServers.conflicts)
+      }
+    }
+  }, [mcpServers])
 
   // Filter MCP servers by search query
   const filteredServers = useMemo((): McpServerType[] => {
@@ -94,28 +90,6 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
         server.id.toLowerCase().includes(query),
     )
   }, [mcpServers, searchQuery])
-
-  // Group servers by source
-  const groupedServers = useMemo(() => {
-    const groups: Record<string, McpServerType[]> = {}
-
-    for (const server of filteredServers) {
-      const source = server.source?.type || "user"
-      if (!groups[source]) {
-        groups[source] = []
-      }
-      groups[source].push(server)
-    }
-
-    return groups
-  }, [filteredServers])
-
-  const sourceLabels: Record<string, string> = {
-    project: "Project MCPs",
-    user: "User MCPs",
-    devyard: "Devyard MCPs",
-    custom: "Custom MCPs",
-  }
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
@@ -146,54 +120,55 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
             </span>
           </div>
         ) : (
-          Object.entries(groupedServers)
-            .filter(([_, serverList]) => serverList.length > 0)
-            .map(([source, serverList]) => (
-              <div key={source} className="mb-3">
-                <div className="flex items-center h-4 mb-1 px-1">
-                  <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                    {sourceLabels[source] || `${source} MCPs`}
-                  </h3>
+          <div className="space-y-0.5">
+            {filteredServers.map((server) => (
+              <button
+                key={server.id}
+                onClick={() => {
+                  // Use combined action to set both category and node atomically
+                  selectWorkflowItem({
+                    node: {
+                      id: server.id,
+                      name: server.name,
+                      type: "mcpServer",
+                      sourcePath: server.id, // Use server.id as sourcePath for MCPs
+                    },
+                    category: "mcps",
+                  })
+                }}
+                className={cn(
+                  "group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left",
+                  !server.enabled && "opacity-50",
+                )}
+              >
+                <Plug className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-foreground truncate flex-1">
+                      {server.name}
+                    </span>
+                    {server.source?.type === "project" && (
+                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
+                    )}
+                    {!server.enabled && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-gray-500/10 text-gray-500">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5">
+                    <AuthStatusIndicator status={server.authStatus} />
+                  </div>
+                  {server.credentialEnvVars.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
+                      Requires: {server.credentialEnvVars.join(", ")}
+                    </p>
+                  )}
                 </div>
-                <div className="space-y-0.5">
-                  {serverList.map((server) => (
-                    <div
-                      key={server.id}
-                      className={cn(
-                        "group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-default",
-                        !server.enabled && "opacity-50",
-                      )}
-                    >
-                      <Plug className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground truncate">
-                            {server.name}
-                          </span>
-                          {server.source?.type && (
-                            <SourceBadge source={server.source.type} />
-                          )}
-                          {!server.enabled && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-gray-500/10 text-gray-500">
-                              Disabled
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-0.5">
-                          <AuthStatusIndicator status={server.authStatus} />
-                        </div>
-                        {server.credentialEnvVars.length > 0 && (
-                          <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
-                            Requires: {server.credentialEnvVars.join(", ")}
-                          </p>
-                        )}
-                      </div>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
+                <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -4,6 +4,7 @@
  */
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
+import type { WorkflowNode } from "./index"
 
 // ============================================
 // WORKFLOW CATEGORY SELECTION
@@ -15,8 +16,37 @@ import { atomWithStorage } from "jotai/utils"
  * non-null = show workflow file browser
  */
 export const selectedWorkflowCategoryAtom = atom<
-  "agents" | "commands" | "skills" | null
+  "agents" | "commands" | "skills" | "mcps" | null
 >(null)
+
+// ============================================
+// SELECTED WORKFLOW NODE (base atom)
+// ============================================
+
+/**
+ * Base atom for selected workflow node
+ * Currently selected workflow node for preview panel
+ * null = no node selected
+ */
+export const selectedWorkflowNodeBaseAtom = atom<WorkflowNode | null>(null)
+
+// ============================================
+// COMBINED ACTION ATOM
+// ============================================
+
+/**
+ * Combined action to select a workflow item
+ * Sets both category and node atomically to prevent race conditions
+ * This should be used instead of setting selectedWorkflowNodeAtom and selectedWorkflowCategoryAtom separately
+ */
+export const selectWorkflowItemAtom = atom(
+  null,
+  (get, set, params: { node: WorkflowNode; category: "agents" | "commands" | "skills" | "mcps" }) => {
+    // Set both atoms in a single action - Jotai will batch these updates
+    set(selectedWorkflowCategoryAtom, params.category)
+    set(selectedWorkflowNodeBaseAtom, params.node)
+  }
+)
 
 // ============================================
 // FILE LIST SIDEBAR

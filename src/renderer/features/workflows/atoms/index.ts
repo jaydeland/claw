@@ -4,10 +4,20 @@ import { atomWithStorage } from "jotai/utils"
 // Export new workflow content atoms
 export {
   selectedWorkflowCategoryAtom,
+  selectedWorkflowNodeBaseAtom,
+  selectWorkflowItemAtom,
   workflowFileListWidthAtom,
   workflowFileListSearchAtom,
   workflowViewModeAtom,
 } from "./workflows-content-atoms"
+
+// Export workflow panel atoms
+export {
+  workflowPanelOpenAtom,
+  workflowPanelWidthAtom,
+  workflowPanelFileListWidthAtom,
+  type WorkflowPanelCategory,
+} from "./workflow-panel-atoms"
 
 // ============================================
 // WORKFOWS SIDEBAR STATE
@@ -164,8 +174,9 @@ export interface WorkflowNode {
 /**
  * Currently selected workflow node for preview panel
  * null = no node selected
+ * This is an alias for selectedWorkflowNodeBaseAtom for backward compatibility
  */
-export const selectedWorkflowNodeAtom = atom<WorkflowNode | null>(null)
+export { selectedWorkflowNodeBaseAtom as selectedWorkflowNodeAtom } from "./workflows-content-atoms"
 
 // ============================================
 // WORKFOWS REFRESH TRIGGER

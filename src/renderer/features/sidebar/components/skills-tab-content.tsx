@@ -6,41 +6,23 @@ import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
-import { selectedWorkflowCategoryAtom, selectedWorkflowNodeAtom } from "../../workflows/atoms"
-import { useAtomValue, useSetAtom } from "jotai"
+import { selectWorkflowItemAtom } from "../../workflows/atoms"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { groupWorkflowsByNamespace } from "../../workflows/lib/parse-workflow-name"
+import { CollapsibleWorkflowGroup } from "./collapsible-workflow-group"
+import { skillsExpansionAtom } from "../atoms/workflow-expansion-atoms"
 
 interface SkillsTabContentProps {
   className?: string
   isMobileFullscreen?: boolean
 }
 
-/**
- * Badge component to show the source of a skill
- */
-function SourceBadge({ source }: { source: "user" | "project" | "custom" }) {
-  const colors = {
-    project: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-    user: "bg-green-500/10 text-green-600 dark:text-green-400",
-    custom: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-  }
-
-  return (
-    <span
-      className={cn(
-        "text-[10px] px-1.5 py-0.5 rounded-sm font-medium uppercase tracking-wide",
-        colors[source],
-      )}
-    >
-      {source}
-    </span>
-  )
-}
 
 export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const setSelectedWorkflowNode = useSetAtom(selectedWorkflowNodeAtom)
-  const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
+  const selectWorkflowItem = useSetAtom(selectWorkflowItemAtom)
+  const [expandedGroups, setExpandedGroups] = useAtom(skillsExpansionAtom)
 
   // Fetch skills using tRPC
   const { data: skills, isLoading } = trpc.skills.list.useQuery({
@@ -60,25 +42,22 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
     )
   }, [skills, searchQuery])
 
-  // Group skills by source
+  // Group skills by namespace
   const groupedSkills = useMemo(() => {
-    const groups: Record<string, typeof filteredSkills> = {
-      project: [],
-      user: [],
-      custom: [],
-    }
-
-    for (const skill of filteredSkills) {
-      groups[skill.source].push(skill)
-    }
-
-    return groups
+    return groupWorkflowsByNamespace(filteredSkills)
   }, [filteredSkills])
 
-  const sourceLabels: Record<string, string> = {
-    project: "Project Skills",
-    user: "User Skills",
-    custom: "Custom Skills",
+  // Toggle group expansion
+  const toggleGroup = (namespace: string) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(namespace)) {
+        newSet.delete(namespace)
+      } else {
+        newSet.add(namespace)
+      }
+      return newSet
+    })
   }
 
   return (
@@ -110,52 +89,49 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
             </span>
           </div>
         ) : (
-          Object.entries(groupedSkills)
-            .filter(([_, skillList]) => skillList.length > 0)
-            .map(([source, skillList]) => (
-              <div key={source} className="mb-3">
-                <div className="flex items-center h-4 mb-1 px-1">
-                  <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                    {sourceLabels[source]}
-                  </h3>
-                </div>
-                <div className="space-y-0.5">
-                  {skillList.map((skill) => (
-                    <div
-                      key={skill.path}
-                      className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-pointer"
-                      onClick={() => {
-                        // Set the selected workflow node
-                        setSelectedWorkflowNode({
+          <div className="space-y-1">
+            {Object.entries(groupedSkills).map(([namespace, skills]) => (
+              <CollapsibleWorkflowGroup
+                key={namespace}
+                title={namespace}
+                count={skills.length}
+                expanded={expandedGroups.has(namespace)}
+                onToggle={() => toggleGroup(namespace)}
+              >
+                {skills.map((skill) => (
+                  <button
+                    key={skill.path}
+                    onClick={() => {
+                      // Use combined action to set both category and node atomically
+                      selectWorkflowItem({
+                        node: {
                           id: skill.name,
                           name: skill.name,
                           type: "skill",
                           sourcePath: skill.path,
-                        })
-                        // Switch to workflows view with skills category
-                        setWorkflowCategory("skills")
-                      }}
-                    >
-                      <Sparkles className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground truncate">
-                            {skill.name}
-                          </span>
-                          <SourceBadge source={skill.source} />
-                        </div>
-                        {skill.description && (
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {skill.description}
-                          </p>
+                        },
+                        category: "skills",
+                      })
+                    }}
+                    className="group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-foreground truncate flex-1">
+                          {skill.name}
+                        </span>
+                        {skill.source === "project" && (
+                          <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
                         )}
                       </div>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                  ))}
-                </div>
-              </div>
-            ))
+                    <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </CollapsibleWorkflowGroup>
+            ))}
+          </div>
         )}
       </div>
     </div>

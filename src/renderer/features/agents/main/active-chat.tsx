@@ -81,6 +81,8 @@ import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
 import { sessionFlowSidebarOpenAtom } from "../../session-flow/atoms"
 import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
+import { SessionFlowDialog } from "../../session-flow/ui/session-flow-dialog"
+import { SessionFlowFullScreen } from "../../session-flow/ui/session-flow-fullscreen"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -5922,17 +5924,21 @@ Make sure to preserve all functionality from both branches when resolving confli
           </ResizableSidebar>
         )}
 
-        {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
-        {worktreePath && (
-          <TerminalSidebar
-            chatId={chatId}
-            cwd={worktreePath}
-            workspaceId={chatId}
-          />
-        )}
+        {/* Terminal Sidebar - always available with smart default directory */}
+        <TerminalSidebar
+          chatId={chatId}
+          cwd={worktreePath || originalProjectPath || "~"}
+          workspaceId={chatId}
+        />
 
         {/* Session Flow Sidebar - shows session execution flow */}
         <SessionFlowSidebar onScrollToMessage={handleScrollToMessage} />
+
+        {/* Session Flow Dialog - modal view */}
+        <SessionFlowDialog onScrollToMessage={handleScrollToMessage} />
+
+        {/* Session Flow Full Screen - full screen view */}
+        <SessionFlowFullScreen onScrollToMessage={handleScrollToMessage} />
       </div>
     </div>
   )

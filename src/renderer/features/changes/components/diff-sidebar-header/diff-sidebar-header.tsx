@@ -20,7 +20,8 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "../../../../components/ui/tooltip";
-import { IconCloseSidebarRight, IconFetch, IconForcePush, IconSpinner, AgentIcon, CircleFilterIcon, IconReview, ExternalLinkIcon } from "../../../../components/ui/icons";
+import { IconFetch, IconForcePush, IconSpinner, AgentIcon, CircleFilterIcon, IconReview, ExternalLinkIcon } from "../../../../components/ui/icons";
+import { DialogIcons, DialogIconSizes } from "../../../../lib/dialog-icons";
 import { DiffViewModeSwitcher } from "./diff-view-mode-switcher";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { HiArrowPath, HiChevronDown } from "react-icons/hi2";
@@ -40,7 +41,6 @@ import {
 	Rows2,
 	Square,
 	Upload,
-	X,
 } from "lucide-react";
 import { trpc } from "../../../../lib/trpc";
 import { cn } from "../../../../lib/utils";
@@ -451,9 +451,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 					onClick={onClose}
 				>
 					{displayMode === "side-peek" ? (
-						<IconCloseSidebarRight className="size-4 text-muted-foreground" />
+						<DialogIcons.CloseSidebar className={`${DialogIconSizes.default} text-muted-foreground`} />
 					) : (
-						<X className="size-4 text-muted-foreground" />
+						<DialogIcons.Close className={`${DialogIconSizes.default} text-muted-foreground`} />
 					)}
 				</Button>
 

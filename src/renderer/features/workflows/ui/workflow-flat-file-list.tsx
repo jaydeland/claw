@@ -68,8 +68,11 @@ interface WorkflowItem {
 /**
  * Group header labels by category
  */
-function getGroupLabel(source: "user" | "project" | "custom", category: "agents" | "commands" | "skills"): string {
-  const categoryLabel = category === "agents" ? "Agents" : category === "commands" ? "Commands" : "Skills"
+function getGroupLabel(source: "user" | "project" | "custom", category: "agents" | "commands" | "skills" | "mcps"): string {
+  const categoryLabel = category === "agents" ? "Agents"
+    : category === "commands" ? "Commands"
+    : category === "skills" ? "Skills"
+    : "MCPs"
   const sourceLabel = source === "project" ? "Project" : source === "user" ? "User" : "Custom"
   return `${sourceLabel} ${categoryLabel}`
 }
@@ -77,7 +80,7 @@ function getGroupLabel(source: "user" | "project" | "custom", category: "agents"
 /**
  * Flat file list for workflows
  * Shows items grouped by source (project, user, custom)
- * Filters by selected category (agents, commands, skills)
+ * Filters by selected category (agents, commands, skills, mcps)
  */
 export function WorkflowFlatFileList() {
   const selectedCategory = useAtomValue(selectedWorkflowCategoryAtom)

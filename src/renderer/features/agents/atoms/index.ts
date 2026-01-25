@@ -259,7 +259,7 @@ export type DiffViewDisplayMode = "side-peek" | "center-peek" | "full-page"
 
 export const diffViewDisplayModeAtom = atomWithStorage<DiffViewDisplayMode>(
   "agents:diffViewDisplayMode",
-  "side-peek", // default to current behavior
+  "full-page", // default to full-screen view
   undefined,
   { getOnInit: true },
 )

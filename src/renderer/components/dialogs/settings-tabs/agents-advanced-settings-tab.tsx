@@ -565,7 +565,7 @@ export function AgentsAdvancedSettingsTab() {
                   setCustomWorktreeLocation(newValue)
                   setWorktreeLocationError(validateWorktreePath(newValue))
                 }}
-                placeholder="~/.claw/worktrees (default)"
+                placeholder="sibling directory wt-{name}-{n} (default)"
                 className={cn(
                   "font-mono text-xs",
                   worktreeLocationError && "border-red-500"
@@ -576,7 +576,7 @@ export function AgentsAdvancedSettingsTab() {
               )}
               <p className="text-xs text-muted-foreground">
                 Custom location for git worktrees. Supports environment variables like $HOME, $VIDYARD_PATH, or ~.
-                Leave empty to use default location (~/.claw/worktrees).
+                Leave empty to use default (sibling directory: <code className="text-xs">wt-&lt;projectname&gt;-&lt;number&gt;</code>).
               </p>
               <p className="text-xs text-muted-foreground">
                 Examples: <code className="text-xs">~/my-worktrees</code>, <code className="text-xs">$VIDYARD_PATH/.worktrees</code>

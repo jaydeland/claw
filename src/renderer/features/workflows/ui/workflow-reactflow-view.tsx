@@ -51,10 +51,17 @@ interface BackgroundTaskMetadata {
   agentName?: string
 }
 
+// Permission modes for subagents (Claude Code official modes)
+type PermissionMode = 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'plan'
+
 interface AgentWithDependencies {
   id: string
   name: string
   description: string
+  // New official Claude Code fields
+  permissionMode?: PermissionMode
+  disallowedTools?: string[]
+  skills?: string[]
   dependencies: {
     tools: string[]
     builtinTools?: string[]
@@ -67,6 +74,17 @@ interface AgentWithDependencies {
     cliApps: CliAppMetadata[]
     backgroundTasks: BackgroundTaskMetadata[]
   }
+}
+
+interface SkillWithMetadata {
+  id: string
+  name: string
+  description: string
+  context?: 'fork'
+  agent?: string
+  model?: string
+  userInvocable?: boolean
+  supportingFiles?: string[]
 }
 
 interface CommandWithDependencies {
@@ -133,6 +151,7 @@ function convertAgentToReactFlow(agent: AgentWithDependencies): {
     data: {
       name: agent.name,
       description: agent.description,
+      permissionMode: agent.permissionMode, // Include permission mode for badge
       width: 200,
       height: 80,
     },
@@ -575,17 +594,24 @@ function convertCommandToReactFlow(command: CommandWithDependencies): {
  */
 function convertSkillToReactFlow(
   name: string,
-  allAgents: AgentWithDependencies[]
+  allAgents: AgentWithDependencies[],
+  skillMetadata?: SkillWithMetadata
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
 
-  // Main skill node
+  // Main skill node with context metadata
   nodes.push({
     id: "main",
     type: "skill",
     position: { x: 0, y: 0 },
-    data: { name, width: 200, height: 60 },
+    data: {
+      name,
+      context: skillMetadata?.context, // Include fork context for badge
+      agent: skillMetadata?.agent,
+      width: 200,
+      height: 60,
+    },
   })
 
   // Find agents that use this skill
@@ -629,7 +655,19 @@ function WorkflowReactFlowInner() {
       if (!command) return { nodes: [], edges: [] }
       return convertCommandToReactFlow(command)
     } else if (selectedNode.type === "skill") {
-      return convertSkillToReactFlow(selectedNode.name, workflowGraph.agents)
+      // Find skill metadata for context badge
+      const skill = workflowGraph.skills.find((s) => s.id === selectedNode.id)
+      const skillMetadata: SkillWithMetadata | undefined = skill ? {
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        context: (skill as any).context, // Type assertion since backend now includes this
+        agent: (skill as any).agent,
+        model: (skill as any).model,
+        userInvocable: (skill as any).userInvocable,
+        supportingFiles: (skill as any).supportingFiles,
+      } : undefined
+      return convertSkillToReactFlow(selectedNode.name, workflowGraph.agents, skillMetadata)
     }
 
     return { nodes: [], edges: [] }

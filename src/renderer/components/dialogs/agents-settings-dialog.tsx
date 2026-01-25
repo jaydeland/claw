@@ -2,7 +2,8 @@ import { useAtom } from "jotai"
 import { useEffect, useState, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { X, ChevronLeft, ChevronRight, FolderOpen } from "lucide-react"
+import { FolderOpen } from "lucide-react"
+import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
 import { cn } from "../../lib/utils"
 import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms"
 import {
@@ -11,16 +12,13 @@ import {
   SlidersFilledIcon,
   SettingsIcon,
 } from "../../icons"
-import { SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon, BrainFilledIcon, FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
+import { BrainFilledIcon, FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
 import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
-import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
-import { AgentsCustomAgentsTab } from "./settings-tabs/agents-custom-agents-tab"
 import { AgentsModelsTab } from "./settings-tabs/agents-models-tab"
-import { AgentsMcpTab } from "./settings-tabs/agents-mcp-tab"
 import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
@@ -102,24 +100,6 @@ const ADVANCED_TABS = [
     description: "Advanced configuration and worktree settings",
   },
   {
-    id: "skills" as SettingsTab,
-    label: "Skills",
-    icon: SkillIconFilled,
-    description: "Custom Claude skills",
-  },
-  {
-    id: "agents" as SettingsTab,
-    label: "Custom Agents",
-    icon: CustomAgentIconFilled,
-    description: "Manage custom Claude agents",
-  },
-  {
-    id: "mcp" as SettingsTab,
-    label: "MCP Servers",
-    icon: OriginalMCPIcon,
-    description: "Model Context Protocol servers",
-  },
-  {
     id: "worktrees" as SettingsTab,
     label: "Worktrees",
     icon: FolderOpen,
@@ -198,7 +178,7 @@ function TabButton({ tab, isActive, onClick, isNarrow }: TabButtonProps) {
         </span>
       )}
       {isNarrow && (
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <DialogIcons.Forward className={`${DialogIconSizes.default} text-muted-foreground`} />
       )}
     </button>
   )
@@ -320,12 +300,6 @@ export function AgentsSettingsDialog({
         return <AgentsModelsTab />
       case "advanced":
         return <AgentsAdvancedSettingsTab />
-      case "skills":
-        return <AgentsSkillsTab />
-      case "agents":
-        return <AgentsCustomAgentsTab />
-      case "mcp":
-        return <AgentsMcpTab />
       case "worktrees":
         return <AgentsWorktreesTab />
       case "beta":
@@ -415,7 +389,7 @@ export function AgentsSettingsDialog({
                 onClick={() => setShowContent(false)}
                 className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <DialogIcons.Back className={DialogIconSizes.large} />
               </button>
             )}
             <h2
@@ -429,7 +403,7 @@ export function AgentsSettingsDialog({
               onClick={onClose}
               className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
             >
-              <X className="h-4 w-4" />
+              <DialogIcons.Close className={DialogIconSizes.default} />
               <span className="sr-only">Close</span>
             </button>
           </div>
@@ -556,7 +530,7 @@ export function AgentsSettingsDialog({
                 onClick={onClose}
                 className="absolute appearance-none outline-none select-none top-5 right-5 rounded-full cursor-pointer flex items-center justify-center ring-offset-background focus:ring-ring bg-secondary h-7 w-7 text-foreground/70 hover:text-foreground focus:outline-hidden disabled:pointer-events-none active:scale-95 transition-all duration-200 ease-in-out z-[60] focus:outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
               >
-                <X className="h-4 w-4" />
+                <DialogIcons.Close className={DialogIconSizes.default} />
                 <span className="sr-only">Close</span>
               </button>
             </motion.div>

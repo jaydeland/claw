@@ -10,5 +10,6 @@ export {
   dialogActiveTerminalIdAtom,
   terminalCwdAtom,
   terminalSearchOpenAtom,
+  GLOBAL_TERMINAL_ID,
 } from "./atoms"
 export type { TerminalProps, TerminalStreamEvent } from "./types"

@@ -339,11 +339,22 @@ export const chatsRouter = router({
           "[chats.create] creating worktree with baseBranch:",
           input.baseBranch,
         )
+
+        // Get custom worktree location from settings
+        const { claudeCodeSettings } = await import("../../db")
+        const settings = db
+          .select()
+          .from(claudeCodeSettings)
+          .where(eq(claudeCodeSettings.id, "default"))
+          .get()
+        const customWorktreeLocation = settings?.customWorktreeLocation || null
+
         const result = await createWorktreeForChat(
           project.path,
           project.id,
           chat.id,
           input.baseBranch,
+          customWorktreeLocation,
         )
         console.log("[chats.create] worktree result:", result)
 
@@ -1179,6 +1190,105 @@ export const chatsRouter = router({
       } catch (error) {
         console.error("[generateSubChatName] Error:", error)
         return { name: getFallbackName(input.userMessage) }
+      }
+    }),
+
+  /**
+   * Generate a name for a main chat using AI (triggered on first user message)
+   * Uses Ollama when offline, otherwise calls web API
+   */
+  generateChatName: publicProcedure
+    .input(z.object({
+      chatId: z.string(),
+      userMessage: z.string(),
+      ollamaModel: z.string().nullish(), // Optional model for offline mode
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+
+      // Check if chat already has a custom name (user renamed it)
+      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
+      if (!chat) {
+        throw new Error("Chat not found")
+      }
+
+      // Only generate title if it's still the default name
+      if (chat.name && !chat.name.startsWith("New Chat")) {
+        console.log("[generateChatName] Chat already has custom name, skipping")
+        return { name: chat.name, updated: false }
+      }
+
+      try {
+        // Check internet first - if offline, use Ollama
+        const hasInternet = await checkInternetConnection()
+
+        let generatedName: string | null = null
+
+        if (!hasInternet) {
+          console.log("[generateChatName] Offline - trying Ollama...")
+          generatedName = await generateChatNameWithOllama(input.userMessage, input.ollamaModel)
+          if (!generatedName) {
+            console.log("[generateChatName] Ollama failed, using fallback")
+            generatedName = getFallbackName(input.userMessage)
+          }
+        } else {
+          // Online - use web API
+          const authManager = getAuthManager()
+          const token = await authManager.getValidToken()
+          const apiUrl = "https://21st.dev"
+
+          console.log(
+            "[generateChatName] Online - calling API with token:",
+            token ? "present" : "missing",
+          )
+
+          const response = await fetch(
+            `${apiUrl}/api/agents/chat/generate-name`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token && { "X-Desktop-Token": token }),
+              },
+              body: JSON.stringify({ userMessage: input.userMessage }),
+            },
+          )
+
+          console.log("[generateChatName] Response status:", response.status)
+
+          if (!response.ok) {
+            const errorText = await response.text()
+            console.error(
+              "[generateChatName] API error:",
+              response.status,
+              errorText,
+            )
+            generatedName = getFallbackName(input.userMessage)
+          } else {
+            const data = await response.json()
+            generatedName = data.name || getFallbackName(input.userMessage)
+          }
+        }
+
+        // Update chat name in database
+        db.update(chats)
+          .set({ name: generatedName, updatedAt: new Date() })
+          .where(eq(chats.id, input.chatId))
+          .run()
+
+        console.log("[generateChatName] Generated and saved name:", generatedName)
+        return { name: generatedName, updated: true }
+      } catch (error) {
+        console.error("[generateChatName] Error:", error)
+        const fallbackName = getFallbackName(input.userMessage)
+
+        // Save fallback name
+        db.update(chats)
+          .set({ name: fallbackName, updatedAt: new Date() })
+          .where(eq(chats.id, input.chatId))
+          .run()
+
+        return { name: fallbackName, updated: true }
       }
     }),
 

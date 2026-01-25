@@ -9,9 +9,11 @@ import type {
 
 // Layout constants
 const X_MAIN = 80 // Main chain x position
-const X_BRANCH = 240 // Branch x position (tools to right)
-const Y_SPACING = 70 // Vertical spacing between main nodes
-const Y_BRANCH_SPACING = 40 // Vertical spacing for branch nodes
+const X_BRANCH = 320 // Branch x position (tools to right) - increased spacing
+const X_DETAIL = 500 // Detail nodes x position (expanded invocations)
+const Y_SPACING = 80 // Vertical spacing between main nodes - increased for better separation
+const Y_BRANCH_SPACING = 50 // Vertical spacing for branch nodes - increased
+const Y_DETAIL_SPACING = 45 // Vertical spacing for detail nodes
 
 // Tools that should branch to the right (opt-in list)
 // Show: agents, bash, thinking, questions, and web research
@@ -26,6 +28,8 @@ const BRANCHING_TOOLS = new Set([
 
 interface TransformOptions {
   onNodeClick: (messageId: string, partIndex?: number) => void
+  expandedNodes?: Set<string>
+  onToggleExpansion?: (nodeId: string) => void
 }
 
 interface TransformResult {
@@ -130,6 +134,19 @@ export function transformMessagesToFlow(
       const responseNodeId = `response-${message.id}`
       // Extract token data from message metadata (flat structure from transform.ts)
       const metadata = message.metadata as { inputTokens?: number; outputTokens?: number } | undefined
+
+      // Debug logging to trace token data
+      if (metadata) {
+        console.log("[session-flow] Message metadata:", {
+          messageId: message.id,
+          inputTokens: metadata.inputTokens,
+          outputTokens: metadata.outputTokens,
+          fullMetadata: metadata
+        })
+      } else {
+        console.log("[session-flow] No metadata for message:", message.id)
+      }
+
       nodes.push({
         id: responseNodeId,
         type: "assistantResponse",
@@ -260,6 +277,7 @@ export function transformMessagesToFlow(
       // Add consolidated Bash node if there were any
       if (bashCount > 0 && bashFirstPartIndex >= 0) {
         const toolNodeId = `tool-${message.id}-bash`
+        const isExpanded = options.expandedNodes?.has(toolNodeId) || false
 
         nodes.push({
           id: toolNodeId,
@@ -270,7 +288,11 @@ export function transformMessagesToFlow(
             toolName: "Bash",
             state: bashState,
             count: bashCount,
+            isExpanded,
             onClick: () => options.onNodeClick(message.id, bashFirstPartIndex),
+            onToggleExpansion: bashCount > 1 && options.onToggleExpansion
+              ? () => options.onToggleExpansion(toolNodeId)
+              : undefined,
           } as ToolCallNodeData,
         })
 
@@ -287,6 +309,59 @@ export function transformMessagesToFlow(
           },
         })
 
+        // Create detail nodes if expanded
+        if (isExpanded && bashCount > 1) {
+          let detailY = branchY
+          let detailIndex = 0
+
+          for (let partIndex = 0; partIndex < parts.length; partIndex++) {
+            const part = parts[partIndex]
+            if (part.type === "tool-Bash") {
+              const detailNodeId = `detail-${message.id}-bash-${partIndex}`
+              const state = getToolState(part)
+
+              // Extract input/output for detail display
+              const input = part.input
+              const output = part.output || part.result
+              const error = part.error || part.errorText
+
+              // Extract command preview from input
+              const commandPreview = input?.command ? truncateText(input.command, 30) : undefined
+
+              nodes.push({
+                id: detailNodeId,
+                type: "toolCall",
+                position: { x: X_DETAIL, y: detailY },
+                data: {
+                  toolCallId: part.toolCallId || `bash-${partIndex}`,
+                  toolName: "Bash",
+                  state,
+                  commandPreview,
+                  input,
+                  output,
+                  error,
+                  onClick: () => options.onNodeClick(message.id, partIndex),
+                } as ToolCallNodeData,
+              })
+
+              // Connect detail node to consolidated node
+              edges.push({
+                id: `${toolNodeId}-${detailNodeId}`,
+                source: toolNodeId,
+                sourceHandle: "details",
+                target: detailNodeId,
+                style: {
+                  stroke: state === "error" ? "#ef4444" : "#10b981",
+                  strokeWidth: 1,
+                },
+              })
+
+              detailY += Y_DETAIL_SPACING
+              detailIndex++
+            }
+          }
+        }
+
         branchY += Y_BRANCH_SPACING
         branchIndex++
       }
@@ -294,6 +369,7 @@ export function transformMessagesToFlow(
       // Add consolidated Thinking node if there were any
       if (thinkingCount > 0 && thinkingFirstPartIndex >= 0) {
         const toolNodeId = `tool-${message.id}-thinking`
+        const isExpanded = options.expandedNodes?.has(toolNodeId) || false
 
         nodes.push({
           id: toolNodeId,
@@ -304,7 +380,11 @@ export function transformMessagesToFlow(
             toolName: "Thinking",
             state: thinkingState,
             count: thinkingCount,
+            isExpanded,
             onClick: () => options.onNodeClick(message.id, thinkingFirstPartIndex),
+            onToggleExpansion: thinkingCount > 1 && options.onToggleExpansion
+              ? () => options.onToggleExpansion(toolNodeId)
+              : undefined,
           } as ToolCallNodeData,
         })
 
@@ -320,6 +400,59 @@ export function transformMessagesToFlow(
             strokeWidth: 1.5,
           },
         })
+
+        // Create detail nodes if expanded
+        if (isExpanded && thinkingCount > 1) {
+          let detailY = branchY
+          let detailIndex = 0
+
+          for (let partIndex = 0; partIndex < parts.length; partIndex++) {
+            const part = parts[partIndex]
+            if (part.type === "tool-Thinking") {
+              const detailNodeId = `detail-${message.id}-thinking-${partIndex}`
+              const state = getToolState(part)
+
+              // Extract input/output for detail display
+              const input = part.input
+              const output = part.output || part.result
+              const error = part.error || part.errorText
+
+              // Extract text preview from input
+              const thinkingText = input?.text ? truncateText(input.text, 40) : undefined
+
+              nodes.push({
+                id: detailNodeId,
+                type: "toolCall",
+                position: { x: X_DETAIL, y: detailY },
+                data: {
+                  toolCallId: part.toolCallId || `thinking-${partIndex}`,
+                  toolName: "Thinking",
+                  state,
+                  commandPreview: thinkingText,
+                  input,
+                  output,
+                  error,
+                  onClick: () => options.onNodeClick(message.id, partIndex),
+                } as ToolCallNodeData,
+              })
+
+              // Connect detail node to consolidated node
+              edges.push({
+                id: `${toolNodeId}-${detailNodeId}`,
+                source: toolNodeId,
+                sourceHandle: "details",
+                target: detailNodeId,
+                style: {
+                  stroke: state === "error" ? "#ef4444" : "#10b981",
+                  strokeWidth: 1,
+                },
+              })
+
+              detailY += Y_DETAIL_SPACING
+              detailIndex++
+            }
+          }
+        }
 
         branchY += Y_BRANCH_SPACING
         branchIndex++

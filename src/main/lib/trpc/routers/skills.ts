@@ -60,10 +60,13 @@ function parseSkillMd(content: string): { name?: string; description?: string } 
 
 /**
  * Scan a directory for SKILL.md files
+ * Supports nested directory structures (e.g., skills/namespace/skill-name/SKILL.md)
+ * @param namePrefix - Namespace prefix for nested skills (e.g., "gsd" for gsd:skill-name)
  */
 async function scanSkillsDirectory(
   dir: string,
   source: "user" | "project" | "custom",
+  namePrefix = "",
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
 
@@ -86,21 +89,35 @@ async function scanSkillsDirectory(
         continue
       }
 
-      const skillMdPath = path.join(dir, entry.name, "SKILL.md")
+      const entryPath = path.join(dir, entry.name)
+      const skillMdPath = path.join(entryPath, "SKILL.md")
+
+      // Build the skill name with namespace prefix
+      const skillName = namePrefix
+        ? `${namePrefix}:${entry.name}`
+        : entry.name
 
       try {
         await fs.access(skillMdPath)
+        // SKILL.md exists - this is a skill directory
         const content = await fs.readFile(skillMdPath, "utf-8")
         const parsed = parseSkillMd(content)
 
         skills.push({
-          name: parsed.name || entry.name,
+          name: parsed.name || skillName,  // Use frontmatter name or derived name
           description: parsed.description || "",
           source,
           path: skillMdPath,
         })
-      } catch (err) {
-        // Skill directory doesn't have SKILL.md or read failed - skip it
+      } catch {
+        // No SKILL.md in this directory - check if it's a namespace directory
+        // Recurse to find nested skills
+        const nestedSkills = await scanSkillsDirectory(
+          entryPath,
+          source,
+          skillName,  // Pass current name as prefix for nested skills
+        )
+        skills.push(...nestedSkills)
       }
     }
   } catch (err) {

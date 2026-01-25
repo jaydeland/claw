@@ -118,12 +118,18 @@ export function WorkflowFileList() {
     setWorkflowContentPath(file.sourcePath)
   }
 
+  // Get display label for category (agents -> subagents)
+  const categoryLabel = selectedCategory === "agents" ? "Subagents" : selectedCategory
+
   return (
     <div className="flex flex-col h-full">
       {/* Header with search */}
       <div className="p-3 border-b space-y-3">
-        <h3 className="text-sm font-semibold capitalize">
-          {selectedCategory || "Workflows"}
+        <h3
+          className="text-sm font-semibold capitalize"
+          title={selectedCategory === "agents" ? "Subagents (formerly called agents)" : undefined}
+        >
+          {categoryLabel || "Workflows"}
         </h3>
 
         {/* Search Input */}

@@ -2,14 +2,13 @@
 
 import { useEffect } from "react"
 import { useAtomValue } from "jotai"
-import { workflowFileListWidthAtom, selectedWorkflowCategoryAtom } from "../atoms"
-import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
-import { WorkflowFlatFileList } from "./workflow-flat-file-list"
+import { selectedWorkflowCategoryAtom } from "../atoms"
 import { WorkflowDetail } from "./workflow-detail"
 
 /**
  * Main workflows content area
- * Shows file list sidebar on left and detail panel on right
+ * Shows full-width detail panel for selected workflow item
+ * File list is shown in left sidebar, so only detail view is displayed here
  * Displayed when a workflow category is selected
  */
 export function WorkflowsContent() {
@@ -28,17 +27,7 @@ export function WorkflowsContent() {
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
-      {/* Debug indicator */}
-      <div className="absolute top-4 right-4 z-50 px-3 py-1 bg-purple-500 text-white text-xs rounded">
-        Workflows: {selectedCategory}
-      </div>
-
-      {/* File List Sidebar */}
-      <div className="w-[280px] border-r overflow-hidden bg-background flex-shrink-0">
-        <WorkflowFlatFileList />
-      </div>
-
-      {/* Detail Panel */}
+      {/* Full-width Detail Panel - file list is already shown in left sidebar */}
       <div className="flex-1 overflow-hidden bg-background">
         <WorkflowDetail />
       </div>

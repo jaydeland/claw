@@ -2,6 +2,9 @@ import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 import type { TerminalInstance } from "./types"
 
+// Special ID for global terminals (not tied to any specific chat)
+export const GLOBAL_TERMINAL_ID = "__global__"
+
 export const terminalSidebarOpenAtom = atomWithStorage<boolean>(
   "terminal-sidebar-open",
   false,

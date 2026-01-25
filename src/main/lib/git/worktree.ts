@@ -883,6 +883,32 @@ export interface WorktreeResult {
 }
 
 /**
+ * Generate default worktree location as sibling directory
+ * Pattern: <parent>/wt-<projectname>-<number>
+ * @param projectPath - Path to the main repository
+ * @returns Default worktree path with auto-incremented number
+ */
+export async function getDefaultWorktreePath(projectPath: string): Promise<string> {
+	const { existsSync } = await import("node:fs");
+	const { dirname, basename } = await import("node:path");
+
+	// Get parent directory and project name
+	const parentDir = dirname(projectPath);
+	const projectName = basename(projectPath);
+
+	// Find available number (check for existing wt- directories)
+	let number = 1;
+	let worktreePath = join(parentDir, `wt-${projectName}-${number}`);
+
+	while (existsSync(worktreePath)) {
+		number++;
+		worktreePath = join(parentDir, `wt-${projectName}-${number}`);
+	}
+
+	return worktreePath;
+}
+
+/**
  * Create a git worktree for a chat (wrapper for chats.ts)
  * @param projectPath - Path to the main repository
  * @param projectId - Project ID for worktree directory
@@ -909,19 +935,19 @@ export async function createWorktreeForChat(
 
 		const branch = generateBranchName();
 
-		// Determine worktrees base directory
-		let worktreesDir: string;
+		// Determine worktree path
+		let worktreePath: string;
 		if (customWorktreeLocation) {
 			// Use custom location with env var expansion
 			const { expandEnvVars } = await import("../path-utils");
-			worktreesDir = expandEnvVars(customWorktreeLocation);
+			const worktreesDir = expandEnvVars(customWorktreeLocation);
 			console.log(`[worktree] Using custom location: ${customWorktreeLocation} → ${worktreesDir}`);
+			worktreePath = join(worktreesDir, projectId, chatId);
 		} else {
-			// Default: ~/.21st/worktrees
-			worktreesDir = join(homedir(), ".21st", "worktrees");
+			// Default: sibling directory wt-<projectname>-<number>
+			worktreePath = await getDefaultWorktreePath(projectPath);
+			console.log(`[worktree] Using default sibling location: ${worktreePath}`);
 		}
-
-		const worktreePath = join(worktreesDir, projectId, chatId);
 
 		await createWorktree(projectPath, branch, worktreePath, `origin/${baseBranch}`);
 

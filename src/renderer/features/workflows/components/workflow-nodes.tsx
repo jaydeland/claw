@@ -1,12 +1,69 @@
 import { useState } from "react"
 import { Handle, Position } from "reactflow"
-import { ChevronRight, Terminal, Zap } from "lucide-react"
+import { ChevronRight, Terminal, Zap, Lock, Unlock, FileEdit, BookOpen, Settings, GitFork } from "lucide-react"
 
-export function AgentNode({ data }: { data: { name: string; description: string } }) {
+// Permission mode badge configuration
+type PermissionMode = 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'plan'
+
+interface PermissionBadgeConfig {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  className: string
+  tooltip: string
+}
+
+const permissionBadges: Record<PermissionMode, PermissionBadgeConfig> = {
+  bypassPermissions: {
+    icon: Unlock,
+    label: "Bypass",
+    className: "bg-red-500/30 text-red-200 border-red-400/50",
+    tooltip: "Bypasses all permission checks (dangerous)",
+  },
+  acceptEdits: {
+    icon: FileEdit,
+    label: "Accept",
+    className: "bg-green-500/30 text-green-200 border-green-400/50",
+    tooltip: "Auto-accepts file edits",
+  },
+  plan: {
+    icon: BookOpen,
+    label: "Plan",
+    className: "bg-blue-500/30 text-blue-200 border-blue-400/50",
+    tooltip: "Read-only plan mode",
+  },
+  dontAsk: {
+    icon: Settings,
+    label: "Auto",
+    className: "bg-yellow-500/30 text-yellow-200 border-yellow-400/50",
+    tooltip: "Auto-approves actions without asking",
+  },
+  default: {
+    icon: Lock,
+    label: "Default",
+    className: "bg-gray-500/30 text-gray-200 border-gray-400/50",
+    tooltip: "Standard permission mode",
+  },
+}
+
+export function AgentNode({ data }: { data: { name: string; description: string; permissionMode?: PermissionMode } }) {
+  const badge = data.permissionMode ? permissionBadges[data.permissionMode] : null
+  const BadgeIcon = badge?.icon
+
   return (
     <div className="px-6 py-4 shadow-lg rounded-lg bg-purple-600 text-white border-2 border-purple-700 min-w-[200px]">
       <Handle type="target" position={Position.Top} />
-      <div className="font-bold text-lg">{data.name}</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-bold text-lg">{data.name}</div>
+        {badge && BadgeIcon && (
+          <div
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${badge.className}`}
+            title={badge.tooltip}
+          >
+            <BadgeIcon className="h-3 w-3" />
+            <span>{badge.label}</span>
+          </div>
+        )}
+      </div>
       {data.description && (
         <div className="text-sm opacity-80 mt-1 line-clamp-2">{data.description}</div>
       )}
@@ -32,11 +89,27 @@ export function ToolNode({ data }: { data: { name: string; category?: string; se
   )
 }
 
-export function SkillNode({ data }: { data: { name: string } }) {
+export function SkillNode({ data }: { data: { name: string; context?: 'fork'; agent?: string } }) {
+  const hasForkContext = data.context === 'fork'
+
   return (
     <div className="px-4 py-2 shadow-md rounded-md bg-green-500 text-white border border-green-600">
       <Handle type="target" position={Position.Top} />
-      <div className="text-sm">{data.name}</div>
+      <div className="flex items-center gap-2">
+        <div className="text-sm">{data.name}</div>
+        {hasForkContext && (
+          <div
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded text-xs bg-green-700/50 border border-green-400/50"
+            title="Runs in forked context (separate execution)"
+          >
+            <GitFork className="h-3 w-3" />
+            <span>Fork</span>
+          </div>
+        )}
+      </div>
+      {data.agent && (
+        <div className="text-xs opacity-75 mt-0.5">Agent: {data.agent}</div>
+      )}
       <Handle type="source" position={Position.Bottom} />
     </div>
   )

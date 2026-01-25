@@ -717,9 +717,11 @@ export function AgentsContent() {
   // Check if diff can be shown (sandbox exists)
   const canShowDiff = !!chatData?.sandbox_id
 
-  // Check if terminal can be shown (worktree exists - desktop only)
+  // Get worktree path and determine default working directory for terminals
   const worktreePath = (chatData as any)?.worktreePath as string | undefined
-  const canShowTerminal = !!worktreePath
+  const originalProjectPath = (chatData as any)?.project?.path as string | undefined
+  const terminalCwd = worktreePath || originalProjectPath || "~"
+  const canShowTerminal = true // Terminals are always available with smart default directory
 
   // Mobile layout - completely different structure
   if (isMobile) {
@@ -760,13 +762,11 @@ export function AgentsContent() {
             isMobile={true}
             onClose={() => setMobileViewMode("chat")}
           />
-        ) : mobileViewMode === "terminal" &&
-          selectedChatId &&
-          canShowTerminal ? (
+        ) : mobileViewMode === "terminal" && selectedChatId ? (
           // Terminal Mode - fullscreen terminal
           <TerminalSidebar
             chatId={selectedChatId}
-            cwd={worktreePath!}
+            cwd={terminalCwd}
             workspaceId={selectedChatId}
             isMobileFullscreen={true}
             onClose={() => setMobileViewMode("chat")}
@@ -797,14 +797,10 @@ export function AgentsContent() {
                 onOpenDiff={
                   canShowDiff ? () => setMobileViewMode("diff") : undefined
                 }
-                onOpenTerminal={
-                  canShowTerminal
-                    ? () => {
-                        setTerminalSidebarOpen(true)
-                        setMobileViewMode("terminal")
-                      }
-                    : undefined
-                }
+                onOpenTerminal={() => {
+                  setTerminalSidebarOpen(true)
+                  setMobileViewMode("terminal")
+                }}
               />
             ) : (
               // NewChatForm for creating new agent
@@ -833,7 +829,7 @@ export function AgentsContent() {
   }
 
   // If workflow category is selected, show workflow browser
-  // This handles commands, agents, and skills categories
+  // This handles commands, agents, skills, and mcps categories
   if (selectedWorkflowCategory) {
     return <WorkflowsContent />
   }
