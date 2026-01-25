@@ -15,7 +15,6 @@ import {
   terminalsAtom,
   activeTerminalIdAtom,
   terminalCwdAtom,
-  terminalSidebarOpenAtom,
   GLOBAL_TERMINAL_ID,
 } from "../../terminal/atoms"
 import { trpc } from "../../../lib/trpc"
@@ -71,7 +70,6 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
   const terminalCwds = useAtomValue(terminalCwdAtom)
-  const [, setTerminalSidebarOpen] = useAtom(terminalSidebarOpenAtom)
 
   // Get chat data for worktree path (if chat is selected)
   const { data: chatData } = trpc.chats.get.useQuery(
@@ -143,10 +141,9 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
       return updated
     })
 
-    // Open the terminal sidebar when creating a new terminal
-    console.log("[TerminalTabContent] Opening terminal sidebar")
-    setTerminalSidebarOpen(true)
-  }, [terminalContextId, terminals, selectedChatId, defaultCwd, setAllTerminals, setAllActiveIds, setTerminalSidebarOpen])
+    // Note: Terminal content now renders in main content area when terminal tab is selected
+    // No need to open a sidebar
+  }, [terminalContextId, terminals, selectedChatId, defaultCwd, setAllTerminals, setAllActiveIds])
 
   // Select a terminal and open the sidebar
   const selectTerminal = useCallback(
@@ -155,10 +152,10 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
         ...prev,
         [terminalContextId]: id,
       }))
-      // Open the terminal sidebar when selecting a terminal
-      setTerminalSidebarOpen(true)
+      // Note: Terminal content now renders in main content area when terminal tab is selected
+      // No need to open a sidebar
     },
-    [terminalContextId, setAllActiveIds, setTerminalSidebarOpen]
+    [terminalContextId, setAllActiveIds]
   )
 
   // Close a terminal

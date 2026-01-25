@@ -33,7 +33,7 @@ import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
 import { AgentPreview } from "./agent-preview"
 import { AgentDiffView } from "./agent-diff-view"
-import { TerminalSidebar, terminalSidebarOpenAtom } from "../../terminal"
+import { TerminalSidebar, TerminalMainView, terminalSidebarOpenAtom } from "../../terminal"
 import {
   useAgentSubChatStore,
   type SubChatMeta,
@@ -860,6 +860,11 @@ export function AgentsContent() {
                 <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
               </div>
             )
+          ) : selectedSidebarTab === "terminal" ? (
+            // Terminal tab - show terminal main view
+            <div className="h-full flex flex-col relative overflow-hidden">
+              <TerminalMainView />
+            </div>
           ) : (
             // For other tabs, show a placeholder detail view
             <div className="h-full flex items-center justify-center">

@@ -1,16 +1,19 @@
 "use client"
 
-import { Terminal } from "lucide-react"
+import { Terminal, ChevronRight } from "lucide-react"
 import { trpc } from "../../../lib/trpc"
+import { useAtom, useAtomValue } from "jotai"
+import { selectedProjectAtom } from "../atoms"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem,
 } from "../../../components/ui/dropdown-menu"
 import { IconChevronDown, IconSpinner } from "../../../components/ui/icons"
-import { useState, useRef } from "react"
-import { createPortal } from "react-dom"
+import { useMemo } from "react"
+import { cn } from "../../../lib/utils"
+import { groupWorkflowsHierarchically } from "../../workflows/lib/parse-workflow-name"
+import { commandsExpansionAtom } from "../../sidebar/atoms/workflow-expansion-atoms"
 
 interface CommandsDropdownProps {
   onCommandSelect: (command: string) => void
@@ -21,24 +24,35 @@ export function CommandsDropdown({
   onCommandSelect,
   disabled = false,
 }: CommandsDropdownProps) {
-  // Fetch repository commands from workflows router
-  const { data: workflowCommands = [], isLoading } =
-    trpc.workflows.listCommands.useQuery(undefined, {
+  const selectedProject = useAtomValue(selectedProjectAtom)
+  const [expandedGroups, setExpandedGroups] = useAtom(commandsExpansionAtom)
+
+  // Fetch commands using the commands router (same as commands-tab-content)
+  const { data: commands = [], isLoading } = trpc.commands.list.useQuery(
+    { projectPath: selectedProject?.path },
+    {
       staleTime: 30_000, // Cache for 30 seconds
       refetchOnWindowFocus: false,
+    }
+  )
+
+  // Group commands hierarchically (same as commands-tab-content)
+  const hierarchicalGroups = useMemo(() => {
+    return groupWorkflowsHierarchically(commands)
+  }, [commands])
+
+  // Toggle group expansion
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(key)) {
+        newSet.delete(key)
+      } else {
+        newSet.add(key)
+      }
+      return newSet
     })
-
-  // Note: workflowCommands returns repository commands only (no builtin commands)
-  const repositoryCommands = workflowCommands
-
-  // Tooltip state for showing command descriptions on hover
-  const [tooltip, setTooltip] = useState<{
-    visible: boolean
-    position: { top: number; left: number }
-    description: string
-  } | null>(null)
-  const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasShownTooltipRef = useRef(false)
+  }
 
   return (
     <DropdownMenu>
@@ -52,95 +66,100 @@ export function CommandsDropdown({
           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[220px]">
+      <DropdownMenuContent align="start" className="w-[280px] max-h-[400px] overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
             <IconSpinner className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
-        ) : repositoryCommands.length === 0 ? (
+        ) : hierarchicalGroups.length === 0 ? (
           <div className="px-2 py-4 text-sm text-muted-foreground text-center">
-            No repository commands found
+            No commands found
           </div>
         ) : (
-          repositoryCommands.map((command) => (
-            <DropdownMenuItem
-              key={command.id}
-              onClick={() => {
-                // Clear tooltip before closing dropdown
-                if (tooltipTimeoutRef.current) {
-                  clearTimeout(tooltipTimeoutRef.current)
-                  tooltipTimeoutRef.current = null
-                }
-                setTooltip(null)
-                onCommandSelect(`/${command.name}`)
-              }}
-              className="flex items-center gap-1.5"
-              onMouseEnter={(e) => {
-                if (!command.description) return
+          <div className="py-1">
+            {hierarchicalGroups.map((group) => {
+              const isExpanded = expandedGroups.has(group.namespace)
+              return (
+                <div key={group.namespace} className="mb-1 last:mb-0">
+                  {/* Namespace header */}
+                  <button
+                    onClick={() => toggleGroup(group.namespace)}
+                    className={cn(
+                      "w-full flex items-center gap-1 px-2 py-1.5 text-xs font-semibold",
+                      "hover:bg-accent/50 transition-colors rounded-sm"
+                    )}
+                  >
+                    <ChevronRight className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-90")} />
+                    <span>{group.namespace}</span>
+                    <span className="text-[10px] opacity-60 ml-auto">({group.totalCount})</span>
+                  </button>
 
-                // Clear any existing timeout
-                if (tooltipTimeoutRef.current) {
-                  clearTimeout(tooltipTimeoutRef.current)
-                  tooltipTimeoutRef.current = null
-                }
+                  {/* Namespace contents */}
+                  {isExpanded && (
+                    <div className="pl-2">
+                      {/* Sub-groups */}
+                      {group.subGroups.map((subGroup) => {
+                        const subGroupKey = `${group.namespace}:${subGroup.name}`
+                        const isSubExpanded = expandedGroups.has(subGroupKey)
+                        return (
+                          <div key={subGroupKey} className="mb-1">
+                            {/* Sub-group header */}
+                            <button
+                              onClick={() => toggleGroup(subGroupKey)}
+                              className={cn(
+                                "w-full flex items-center gap-1 px-2 py-1 text-xs font-medium",
+                                "hover:bg-accent/50 transition-colors rounded-sm"
+                              )}
+                            >
+                              <ChevronRight className={cn("h-3 w-3 transition-transform", isSubExpanded && "rotate-90")} />
+                              <span>{subGroup.name}</span>
+                              <span className="text-[10px] opacity-60 ml-auto">({subGroup.items.length})</span>
+                            </button>
 
-                const rect = e.currentTarget.getBoundingClientRect()
-                const showTooltip = () => {
-                  setTooltip({
-                    visible: true,
-                    position: {
-                      top: rect.top,
-                      left: rect.right + 8,
-                    },
-                    description: command.description,
-                  })
-                  hasShownTooltipRef.current = true
-                  tooltipTimeoutRef.current = null
-                }
+                            {/* Sub-group items */}
+                            {isSubExpanded && (
+                              <div className="pl-2">
+                                {subGroup.items.map((cmd) => (
+                                  <button
+                                    key={cmd.path}
+                                    onClick={() => onCommandSelect(`/${cmd.name}`)}
+                                    className={cn(
+                                      "w-full flex items-center gap-1.5 px-2 py-1.5 text-xs",
+                                      "hover:bg-accent transition-colors rounded-sm text-left"
+                                    )}
+                                  >
+                                    <Terminal className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <span className="flex-1 truncate">/{cmd.displayName}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
 
-                // Show immediately if user has already seen one tooltip
-                if (hasShownTooltipRef.current) {
-                  showTooltip()
-                } else {
-                  // Otherwise delay 1 second
-                  tooltipTimeoutRef.current = setTimeout(showTooltip, 1000)
-                }
-              }}
-              onMouseLeave={() => {
-                if (tooltipTimeoutRef.current) {
-                  clearTimeout(tooltipTimeoutRef.current)
-                  tooltipTimeoutRef.current = null
-                }
-                setTooltip(null)
-              }}
-            >
-              <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span>/{command.name}</span>
-            </DropdownMenuItem>
-          ))
+                      {/* Flat items in namespace */}
+                      {group.flatItems.map((cmd) => (
+                        <button
+                          key={cmd.path}
+                          onClick={() => onCommandSelect(`/${cmd.name}`)}
+                          className={cn(
+                            "w-full flex items-center gap-1.5 px-2 py-1.5 text-xs",
+                            "hover:bg-accent transition-colors rounded-sm text-left"
+                          )}
+                        >
+                          <Terminal className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="flex-1 truncate">/{cmd.displayName}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </DropdownMenuContent>
-
-      {/* Tooltip portal for command descriptions */}
-      {tooltip?.visible &&
-        createPortal(
-          <div
-            className="fixed z-[100000]"
-            style={{
-              top: tooltip.position.top + 14,
-              left: tooltip.position.left,
-              transform: "translateY(-50%)",
-            }}
-          >
-            <div
-              data-tooltip="true"
-              className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[250px]"
-            >
-              <span>{tooltip.description}</span>
-            </div>
-          </div>,
-          document.body,
-        )}
     </DropdownMenu>
   )
 }

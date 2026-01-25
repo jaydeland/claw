@@ -13,11 +13,13 @@ import {
 } from "react"
 import { createPortal } from "react-dom"
 import { IconSpinner } from "../../../components/ui/icons"
+import { ChevronRight } from "lucide-react"
 import type { SlashCommandOption, SlashTriggerPayload } from "./types"
 import {
   filterBuiltinCommands,
   BUILTIN_SLASH_COMMANDS,
 } from "./builtin-commands"
+import { groupWorkflowsHierarchically } from "../../workflows/lib/parse-workflow-name"
 
 interface AgentsSlashCommandProps {
   isOpen: boolean
@@ -45,6 +47,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const placementRef = useRef<"above" | "below" | null>(null)
   const [debouncedSearchText, setDebouncedSearchText] = useState(searchText)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   // Debounce search text (300ms to match file mention)
   useEffect(() => {
@@ -120,8 +123,8 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     [onSelect, onClose, trpcUtils],
   )
 
-  // Combine builtin and repository commands, filtered by search
-  const options: SlashCommandOption[] = useMemo(() => {
+  // Combine and filter commands, then group hierarchically
+  const { hierarchicalGroups, flatOptions } = useMemo(() => {
     let builtinFiltered = filterBuiltinCommands(debouncedSearchText)
 
     // Hide /plan when already in Plan mode, hide /agent when already in Agent mode
@@ -151,9 +154,72 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       )
     }
 
-    // Return custom commands first, then builtin
-    return [...customFiltered, ...builtinFiltered]
-  }, [debouncedSearchText, customCommands, isPlanMode, disabledCommands])
+    // Combine all commands
+    const allCommands = [...customFiltered, ...builtinFiltered]
+
+    // Group hierarchically
+    const groups = groupWorkflowsHierarchically(allCommands)
+
+    // Flatten for keyboard navigation (build a flat array including group headers)
+    const flat: Array<{ type: "command" | "namespace" | "subgroup"; data: any; index: number }> = []
+    let cmdIndex = 0
+
+    for (const group of groups) {
+      // Add namespace header
+      flat.push({ type: "namespace", data: { namespace: group.namespace, count: group.totalCount }, index: cmdIndex++ })
+
+      // Only show contents if expanded or searching
+      const groupKey = group.namespace
+      if (expandedGroups.has(groupKey) || debouncedSearchText) {
+        // Add sub-groups
+        for (const subGroup of group.subGroups) {
+          flat.push({ type: "subgroup", data: { namespace: group.namespace, name: subGroup.name, count: subGroup.items.length }, index: cmdIndex++ })
+
+          // Only show sub-group items if expanded or searching
+          const subGroupKey = `${group.namespace}:${subGroup.name}`
+          if (expandedGroups.has(subGroupKey) || debouncedSearchText) {
+            for (const item of subGroup.items) {
+              flat.push({ type: "command", data: item, index: cmdIndex++ })
+            }
+          }
+        }
+
+        // Add flat items
+        for (const item of group.flatItems) {
+          flat.push({ type: "command", data: item, index: cmdIndex++ })
+        }
+      }
+    }
+
+    return { hierarchicalGroups: groups, flatOptions: flat }
+  }, [debouncedSearchText, customCommands, isPlanMode, disabledCommands, expandedGroups])
+
+  // Toggle group/subgroup expansion
+  const toggleGroup = useCallback((key: string) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(key)) {
+        newSet.delete(key)
+      } else {
+        newSet.add(key)
+      }
+      return newSet
+    })
+  }, [])
+
+  // Auto-expand all groups when searching
+  useEffect(() => {
+    if (debouncedSearchText) {
+      const allKeys = new Set<string>()
+      for (const group of hierarchicalGroups) {
+        allKeys.add(group.namespace)
+        for (const subGroup of group.subGroups) {
+          allKeys.add(`${group.namespace}:${subGroup.name}`)
+        }
+      }
+      setExpandedGroups(allKeys)
+    }
+  }, [debouncedSearchText, hierarchicalGroups])
 
   // Track previous values for smarter selection reset
   const prevIsOpenRef = useRef(isOpen)
@@ -164,19 +230,21 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     const didJustOpen = isOpen && !prevIsOpenRef.current
     const didSearchChange = debouncedSearchText !== prevSearchRef.current
 
-    // Reset to 0 when opening or search changes
+    // Reset to first command when opening or search changes
     if (didJustOpen || didSearchChange) {
-      setSelectedIndex(0)
+      // Find first command item (skip headers)
+      const firstCmdIndex = flatOptions.findIndex(item => item.type === "command")
+      setSelectedIndex(firstCmdIndex >= 0 ? firstCmdIndex : 0)
     }
     // Clamp to valid range if options shrunk
-    else if (options.length > 0 && selectedIndex >= options.length) {
-      setSelectedIndex(Math.max(0, options.length - 1))
+    else if (flatOptions.length > 0 && selectedIndex >= flatOptions.length) {
+      setSelectedIndex(Math.max(0, flatOptions.length - 1))
     }
 
     // Update refs
     prevIsOpenRef.current = isOpen
     prevSearchRef.current = debouncedSearchText
-  }, [isOpen, debouncedSearchText, options.length, selectedIndex])
+  }, [isOpen, debouncedSearchText, flatOptions.length, selectedIndex, flatOptions])
 
   // Reset placement when closed
   useEffect(() => {
@@ -195,20 +263,50 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
           e.preventDefault()
           e.stopPropagation()
           e.stopImmediatePropagation()
-          // Guard against modulo by zero when no options
-          if (options.length > 0) {
-            setSelectedIndex((prev) => (prev + 1) % options.length)
+          if (flatOptions.length > 0) {
+            // Find next command item (skip headers)
+            let nextIndex = (selectedIndex + 1) % flatOptions.length
+            while (nextIndex !== selectedIndex && flatOptions[nextIndex].type !== "command") {
+              nextIndex = (nextIndex + 1) % flatOptions.length
+            }
+            setSelectedIndex(nextIndex)
           }
           break
         case "ArrowUp":
           e.preventDefault()
           e.stopPropagation()
           e.stopImmediatePropagation()
-          // Guard against modulo by zero when no options
-          if (options.length > 0) {
-            setSelectedIndex(
-              (prev) => (prev - 1 + options.length) % options.length,
-            )
+          if (flatOptions.length > 0) {
+            // Find previous command item (skip headers)
+            let prevIndex = (selectedIndex - 1 + flatOptions.length) % flatOptions.length
+            while (prevIndex !== selectedIndex && flatOptions[prevIndex].type !== "command") {
+              prevIndex = (prevIndex - 1 + flatOptions.length) % flatOptions.length
+            }
+            setSelectedIndex(prevIndex)
+          }
+          break
+        case "ArrowRight":
+          // Expand group/subgroup if on header
+          e.preventDefault()
+          e.stopPropagation()
+          e.stopImmediatePropagation()
+          const currentItem = flatOptions[selectedIndex]
+          if (currentItem?.type === "namespace") {
+            toggleGroup(currentItem.data.namespace)
+          } else if (currentItem?.type === "subgroup") {
+            toggleGroup(`${currentItem.data.namespace}:${currentItem.data.name}`)
+          }
+          break
+        case "ArrowLeft":
+          // Collapse group/subgroup if on header
+          e.preventDefault()
+          e.stopPropagation()
+          e.stopImmediatePropagation()
+          const item = flatOptions[selectedIndex]
+          if (item?.type === "namespace") {
+            toggleGroup(item.data.namespace)
+          } else if (item?.type === "subgroup") {
+            toggleGroup(`${item.data.namespace}:${item.data.name}`)
           }
           break
         case "Enter":
@@ -216,8 +314,13 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
           e.preventDefault()
           e.stopPropagation()
           e.stopImmediatePropagation()
-          if (options[selectedIndex]) {
-            handleSelect(options[selectedIndex])
+          const selected = flatOptions[selectedIndex]
+          if (selected?.type === "command") {
+            handleSelect(selected.data)
+          } else if (selected?.type === "namespace") {
+            toggleGroup(selected.data.namespace)
+          } else if (selected?.type === "subgroup") {
+            toggleGroup(`${selected.data.namespace}:${selected.data.name}`)
           }
           break
         case "Escape":
@@ -230,8 +333,9 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
           e.preventDefault()
           e.stopPropagation()
           e.stopImmediatePropagation()
-          if (options[selectedIndex]) {
-            handleSelect(options[selectedIndex])
+          const tabSelected = flatOptions[selectedIndex]
+          if (tabSelected?.type === "command") {
+            handleSelect(tabSelected.data)
           }
           break
       }
@@ -240,7 +344,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     window.addEventListener("keydown", handleKeyDown, { capture: true })
     return () =>
       window.removeEventListener("keydown", handleKeyDown, { capture: true })
-  }, [isOpen, options, selectedIndex, handleSelect, onClose])
+  }, [isOpen, flatOptions, selectedIndex, handleSelect, onClose, toggleGroup])
 
   // Auto-scroll selected item into view
   useEffect(() => {
@@ -281,11 +385,10 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   const dropdownWidth = 320
   const itemHeight = 28  // h-7 = 28px to match file mention
   const headerHeight = 24
-  // Single "Commands" header for all options
-  const headersCount = options.length > 0 ? 1 : 0
+  // Calculate total height based on visible items
   const requestedHeight = Math.min(
-    options.length * itemHeight + headersCount * headerHeight + 8,
-    200,  // Match file mention maxHeight
+    flatOptions.length * itemHeight + 8,
+    300,  // Slightly taller for hierarchical view
   )
   const gap = 8
 
@@ -348,27 +451,88 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         msOverflowStyle: 'none',
       } as React.CSSProperties}
     >
-      {/* All commands in one section - custom first, then builtin */}
-      {options.length > 0 && (
+      {/* Hierarchical command groups */}
+      {flatOptions.length > 0 && (
         <>
-          <div className="px-2.5 py-1.5 mx-1 text-xs font-medium text-muted-foreground">
-            Commands
-          </div>
-          {options.map((option, index) => {
+          {flatOptions.map((item, index) => {
             const isSelected = selectedIndex === index
+
+            // Namespace header
+            if (item.type === "namespace") {
+              const isExpanded = expandedGroups.has(item.data.namespace) || !!debouncedSearchText
+              return (
+                <div
+                  key={`ns:${item.data.namespace}`}
+                  data-option-index={index}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    toggleGroup(item.data.namespace)
+                  }}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  className={cn(
+                    "group inline-flex w-[calc(100%-8px)] mx-1 items-center outline-none",
+                    "h-6 px-1.5 justify-start text-xs font-medium rounded-md",
+                    "transition-colors cursor-pointer select-none",
+                    isSelected
+                      ? "dark:bg-neutral-800 bg-accent text-foreground"
+                      : "text-muted-foreground dark:hover:bg-neutral-800 hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  <ChevronRight className={cn("h-3 w-3 transition-transform mr-1", isExpanded && "rotate-90")} />
+                  <span className="font-semibold">{item.data.namespace}</span>
+                  <span className="text-[10px] ml-1.5 opacity-60">({item.data.count})</span>
+                </div>
+              )
+            }
+
+            // Sub-group header
+            if (item.type === "subgroup") {
+              const groupKey = `${item.data.namespace}:${item.data.name}`
+              const isExpanded = expandedGroups.has(groupKey) || !!debouncedSearchText
+              return (
+                <div
+                  key={groupKey}
+                  data-option-index={index}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    toggleGroup(groupKey)
+                  }}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  className={cn(
+                    "group inline-flex w-[calc(100%-8px)] mx-1 items-center outline-none",
+                    "h-6 px-1.5 justify-start text-xs font-medium rounded-md pl-5",
+                    "transition-colors cursor-pointer select-none",
+                    isSelected
+                      ? "dark:bg-neutral-800 bg-accent text-foreground"
+                      : "text-muted-foreground dark:hover:bg-neutral-800 hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  <ChevronRight className={cn("h-3 w-3 transition-transform mr-1", isExpanded && "rotate-90")} />
+                  <span>{item.data.name}</span>
+                  <span className="text-[10px] ml-1.5 opacity-60">({item.data.count})</span>
+                </div>
+              )
+            }
+
+            // Command item
+            const cmd = item.data as SlashCommandOption
             return (
               <div
-                key={option.id}
+                key={cmd.id}
                 data-option-index={index}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  handleSelect(option)
+                  handleSelect(cmd)
                 }}
                 onMouseEnter={() => setSelectedIndex(index)}
                 className={cn(
                   "group inline-flex w-[calc(100%-8px)] mx-1 items-center whitespace-nowrap outline-none",
                   "h-7 px-1.5 justify-start text-xs rounded-md",
+                  // Indent based on depth (namespace + subgroup or just namespace)
+                  item.data.displayName ? "pl-7" : "pl-4",
                   "transition-colors cursor-pointer select-none",
                   isSelected
                     ? "dark:bg-neutral-800 bg-accent text-foreground"
@@ -377,12 +541,10 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
               >
                 <span className="flex items-center gap-1 w-full min-w-0">
                   <span className="shrink-0 whitespace-nowrap font-medium">
-                    {option.command}
+                    /{item.data.displayName || cmd.name}
                   </span>
-                  <span
-                    className="text-muted-foreground flex-1 min-w-0 ml-2 overflow-hidden text-[10px] truncate"
-                  >
-                    {option.description}
+                  <span className="text-muted-foreground flex-1 min-w-0 ml-2 overflow-hidden text-[10px] truncate">
+                    {cmd.description}
                   </span>
                 </span>
               </div>
@@ -400,7 +562,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       )}
 
       {/* Empty state */}
-      {!isLoading && options.length === 0 && (
+      {!isLoading && flatOptions.length === 0 && (
         <div className="h-7 px-1.5 mx-1 flex items-center text-xs text-muted-foreground">
           {debouncedSearchText
             ? `No commands matching "${debouncedSearchText}"`

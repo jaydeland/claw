@@ -23,6 +23,7 @@ import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
+import { queryBackgroundSession, isBackgroundSessionReady } from "../../claude/background-session"
 import { publicProcedure, router } from "../index"
 
 // Fallback to truncated user message if AI generation fails
@@ -1134,7 +1135,7 @@ export const chatsRouter = router({
 
   /**
    * Generate a name for a sub-chat using AI
-   * Uses Ollama when offline, otherwise calls web API
+   * Uses background Claude session, falls back to Ollama if unavailable
    */
   generateSubChatName: publicProcedure
     .input(z.object({
@@ -1143,57 +1144,34 @@ export const chatsRouter = router({
     }))
     .mutation(async ({ input }) => {
       try {
-        // Check internet first - if offline, use Ollama
-        const hasInternet = await checkInternetConnection()
+        // Try background Claude session first (fastest and most reliable)
+        if (isBackgroundSessionReady()) {
+          console.log("[generateSubChatName] Using background Claude session...")
+          const prompt = `Generate a short, descriptive name (2-5 words, no quotes or punctuation) for a chat that starts with this message: "${input.userMessage.slice(0, 200)}"`
 
-        if (!hasInternet) {
-          console.log("[generateSubChatName] Offline - trying Ollama...")
-          const ollamaName = await generateChatNameWithOllama(input.userMessage, input.ollamaModel)
-          if (ollamaName) {
-            console.log("[generateSubChatName] Generated name via Ollama:", ollamaName)
-            return { name: ollamaName }
+          const result = await queryBackgroundSession(prompt, { maxTokens: 50 })
+
+          if (result.success && result.text.trim()) {
+            const name = result.text.trim().replace(/^["']|["']$/g, '') // Remove quotes if present
+            console.log("[generateSubChatName] Generated name via background session:", name)
+            return { name }
           }
-          console.log("[generateSubChatName] Ollama failed, using fallback")
-          return { name: getFallbackName(input.userMessage) }
+
+          console.log("[generateSubChatName] Background session returned empty, trying fallback...")
+        } else {
+          console.log("[generateSubChatName] Background session not ready, trying Ollama...")
         }
 
-        // Online - use web API
-        const authManager = getAuthManager()
-        const token = await authManager.getValidToken()
-        const apiUrl = "https://21st.dev"
-
-        console.log(
-          "[generateSubChatName] Online - calling API with token:",
-          token ? "present" : "missing",
-        )
-
-        const response = await fetch(
-          `${apiUrl}/api/agents/sub-chat/generate-name`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token && { "X-Desktop-Token": token }),
-            },
-            body: JSON.stringify({ userMessage: input.userMessage }),
-          },
-        )
-
-        console.log("[generateSubChatName] Response status:", response.status)
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error(
-            "[generateSubChatName] API error:",
-            response.status,
-            errorText,
-          )
-          return { name: getFallbackName(input.userMessage) }
+        // Fallback to Ollama if background session unavailable or failed
+        const ollamaName = await generateChatNameWithOllama(input.userMessage, input.ollamaModel)
+        if (ollamaName) {
+          console.log("[generateSubChatName] Generated name via Ollama:", ollamaName)
+          return { name: ollamaName }
         }
 
-        const data = await response.json()
-        console.log("[generateSubChatName] Generated name:", data.name)
-        return { name: data.name || getFallbackName(input.userMessage) }
+        // Final fallback to truncated message
+        console.log("[generateSubChatName] All AI methods failed, using fallback")
+        return { name: getFallbackName(input.userMessage) }
       } catch (error) {
         console.error("[generateSubChatName] Error:", error)
         return { name: getFallbackName(input.userMessage) }
