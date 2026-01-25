@@ -14,6 +14,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Wrench,
+  Sparkles,
 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { toast } from "sonner"
@@ -192,6 +193,37 @@ export function WorkflowMarkdownView() {
     return diagnostics
   }, [validationErrors, lintResult])
 
+  // Count fixable issues
+  const fixableCount = useMemo(() => {
+    return allDiagnostics.filter(d => d.fixable && d.fix).length
+  }, [allDiagnostics])
+
+  // Handler to apply all fixable issues
+  const handleFixAll = useCallback(() => {
+    if (!fileContent || !selectedNode?.sourcePath) return
+
+    const fixableDiagnostics = allDiagnostics.filter(d => d.fixable && d.fix)
+    if (fixableDiagnostics.length === 0) return
+
+    try {
+      // Apply fixes sequentially to the content
+      let currentContent = fileContent
+      for (const diagnostic of fixableDiagnostics) {
+        if (diagnostic.fix) {
+          currentContent = diagnostic.fix(currentContent)
+        }
+      }
+
+      writeFileMutation.mutate({
+        path: selectedNode.sourcePath,
+        content: currentContent,
+      })
+      toast.success(`Applied ${fixableDiagnostics.length} fix${fixableDiagnostics.length !== 1 ? 'es' : ''}`)
+    } catch (err) {
+      toast.error(`Failed to apply fixes: ${err instanceof Error ? err.message : "Unknown error"}`)
+    }
+  }, [fileContent, selectedNode?.sourcePath, allDiagnostics, writeFileMutation])
+
   // Syntax highlighted markdown
   const highlightedHtml = useMemo(() => {
     if (!fileContent || !highlighter) return null
@@ -270,18 +302,42 @@ export function WorkflowMarkdownView() {
                 </span>
               )}
             </div>
-            {allDiagnostics.length > 0 && (
-              <button
-                onClick={() => setLintExpanded(!lintExpanded)}
-                className="p-1 hover:bg-accent rounded transition-colors"
-              >
-                {lintExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Fix All button */}
+              {fixableCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFixAll}
+                  disabled={writeFileMutation.isPending}
+                  className="h-7 px-3 gap-1.5 text-xs font-medium border-green-500/50 text-green-600 hover:text-green-700 hover:bg-green-500/20"
+                >
+                  {writeFileMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Fixing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {fixableCount === 1 ? "Fix Issue" : `Fix All (${fixableCount})`}
+                    </>
+                  )}
+                </Button>
+              )}
+              {allDiagnostics.length > 0 && (
+                <button
+                  onClick={() => setLintExpanded(!lintExpanded)}
+                  className="p-1 hover:bg-accent rounded transition-colors"
+                >
+                  {lintExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -347,8 +403,14 @@ function DiagnosticItem({ diagnostic, onFix, isFixing }: DiagnosticItemProps) {
     info: "text-blue-500",
   }[diagnostic.severity]
 
+  const fixButtonColor = {
+    error: "text-red-600 hover:text-red-700 hover:bg-red-500/20 border-red-500/50",
+    warning: "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-500/20 border-yellow-500/50",
+    info: "text-blue-600 hover:text-blue-700 hover:bg-blue-500/20 border-blue-500/50",
+  }[diagnostic.severity]
+
   const handleClick = () => {
-    if (diagnostic.suggestion) {
+    if (diagnostic.suggestion && !onFix) {
       setExpanded(!expanded)
     }
   }
@@ -361,8 +423,8 @@ function DiagnosticItem({ diagnostic, onFix, isFixing }: DiagnosticItemProps) {
   return (
     <div
       className={cn(
-        "border rounded-lg p-3 flex items-start gap-3 transition-opacity",
-        diagnostic.suggestion && "cursor-pointer hover:opacity-90",
+        "border rounded-lg p-3 flex items-start gap-3 transition-all",
+        diagnostic.suggestion && !onFix && "cursor-pointer hover:opacity-90",
         bgColor
       )}
       onClick={handleClick}
@@ -383,11 +445,17 @@ function DiagnosticItem({ diagnostic, onFix, isFixing }: DiagnosticItemProps) {
           <span className={cn("text-xs font-semibold uppercase", labelColor)}>
             {diagnostic.severity}
           </span>
+          {/* Fixable badge */}
+          {diagnostic.fixable && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-600 font-medium">
+              Auto-fixable
+            </span>
+          )}
         </div>
         <p className="text-sm">{diagnostic.message}</p>
         {diagnostic.suggestion && (
           <div className={cn("text-xs text-muted-foreground", expanded && "mt-2")}>
-            {expanded ? (
+            {expanded || onFix ? (
               <div className="bg-background/50 rounded p-2 font-mono">
                 Suggestion: {diagnostic.suggestion}
               </div>
@@ -400,14 +468,26 @@ function DiagnosticItem({ diagnostic, onFix, isFixing }: DiagnosticItemProps) {
       {/* Fix button */}
       {onFix && (
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={handleFix}
           disabled={isFixing}
-          className="flex-shrink-0 h-7 px-2 gap-1.5 text-xs hover:bg-background/50"
+          className={cn(
+            "flex-shrink-0 h-8 px-3 gap-1.5 text-xs font-medium border",
+            fixButtonColor
+          )}
         >
-          <Wrench className="h-3.5 w-3.5" />
-          {isFixing ? "Fixing..." : "Fix"}
+          {isFixing ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Fixing...
+            </>
+          ) : (
+            <>
+              <Wrench className="h-3.5 w-3.5" />
+              Fix
+            </>
+          )}
         </Button>
       )}
     </div>

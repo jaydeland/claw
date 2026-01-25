@@ -133,7 +133,7 @@ function parseFrontmatter(content: string): { data: Record<string, any>; startLi
       value = value
         .slice(1, -1)
         .split(",")
-        .map((v) => v.trim().replace(/^["']|["']$/g, ""))
+        .map((v: string) => v.trim().replace(/^["']|["']$/g, ""))
     } else if (value === "true") {
       value = true
     } else if (value === "false") {
@@ -196,11 +196,19 @@ function validateSkillFrontmatter(data: Record<string, any>, _content: string): 
         message: "'name' must be a string",
       })
     } else if (!/^[a-z][a-z0-9-]*$/.test(data.name)) {
+      const suggestedName = data.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-")
       diagnostics.push({
         severity: "warning",
         field: "name",
         message: "'name' should use lowercase letters, numbers, and hyphens only",
-        suggestion: data.name.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+        suggestion: suggestedName,
+        fixable: true,
+        fix: (content: string) => {
+          return content.replace(
+            new RegExp(`(name:\\s*)${escapeRegExp(data.name)}`, "m"),
+            `$1${suggestedName}`
+          )
+        },
       })
     } else if (data.name.length > 64) {
       diagnostics.push({
@@ -217,6 +225,22 @@ function validateSkillFrontmatter(data: Record<string, any>, _content: string): 
       severity: "warning",
       field: "description",
       message: "'description' is recommended so Claude knows when to use the skill",
+      suggestion: "Add a description field to the frontmatter",
+      fixable: true,
+      fix: (content: string) => {
+        // Add description after name field, or at the start of frontmatter
+        if (content.includes("name:")) {
+          return content.replace(
+            /(name:[^\n]*\n)/m,
+            "$1description: TODO - Add a description for this skill\n"
+          )
+        } else {
+          return content.replace(
+            /^---\n/m,
+            "---\ndescription: TODO - Add a description for this skill\n"
+          )
+        }
+      },
     })
   } else if (typeof data.description !== "string") {
     diagnostics.push({
@@ -363,6 +387,14 @@ function validateAgentFrontmatter(data: Record<string, any>, _content: string): 
       severity: "warning",
       field: "name",
       message: "'name' is recommended for agents",
+      suggestion: "Add a name field to the frontmatter",
+      fixable: true,
+      fix: (content: string) => {
+        return content.replace(
+          /^---\n/m,
+          "---\nname: TODO - Add agent name\n"
+        )
+      },
     })
   } else if (typeof data.name !== "string") {
     diagnostics.push({
@@ -371,11 +403,19 @@ function validateAgentFrontmatter(data: Record<string, any>, _content: string): 
       message: "'name' must be a string",
     })
   } else if (!/^[a-z][a-z0-9-]*$/.test(data.name)) {
+    const suggestedName = data.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-")
     diagnostics.push({
       severity: "warning",
       field: "name",
       message: "'name' should use lowercase letters, numbers, and hyphens only",
-      suggestion: data.name.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+      suggestion: suggestedName,
+      fixable: true,
+      fix: (content: string) => {
+        return content.replace(
+          new RegExp(`(name:\\s*)${escapeRegExp(data.name)}`, "m"),
+          `$1${suggestedName}`
+        )
+      },
     })
   }
 
@@ -385,6 +425,22 @@ function validateAgentFrontmatter(data: Record<string, any>, _content: string): 
       severity: "warning",
       field: "description",
       message: "'description' is recommended - Claude uses it to decide when to delegate tasks",
+      suggestion: "Add a description field to the frontmatter",
+      fixable: true,
+      fix: (content: string) => {
+        // Add description after name field, or at the start of frontmatter
+        if (content.includes("name:")) {
+          return content.replace(
+            /(name:[^\n]*\n)/m,
+            "$1description: TODO - Add a description for this agent\n"
+          )
+        } else {
+          return content.replace(
+            /^---\n/m,
+            "---\ndescription: TODO - Add a description for this agent\n"
+          )
+        }
+      },
     })
   } else if (typeof data.description !== "string") {
     diagnostics.push({

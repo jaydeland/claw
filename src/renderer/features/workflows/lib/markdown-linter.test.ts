@@ -2,6 +2,7 @@
  * Tests for markdown-linter.ts
  */
 
+// @ts-expect-error - bun:test is a Bun-specific module not recognized by TypeScript
 import { describe, expect, test } from "bun:test"
 import { lintWorkflowFile, getLintStatusSummary } from "./markdown-linter"
 
@@ -268,6 +269,141 @@ No frontmatter here.
 
       expect(result.warnings.some(w => w.field === "frontmatter")).toBe(true)
     })
+  })
+})
+
+describe("fixable diagnostics", () => {
+  test("provides fix function for invalid name format", () => {
+    const content = `---
+name: My Skill Name
+description: test
+---
+
+Content
+`
+    const result = lintWorkflowFile(content, "skill")
+
+    const nameWarning = result.warnings.find(w => w.field === "name")
+    expect(nameWarning).toBeDefined()
+    expect(nameWarning?.fixable).toBe(true)
+    expect(nameWarning?.fix).toBeDefined()
+
+    // Apply the fix
+    if (nameWarning?.fix) {
+      const fixedContent = nameWarning.fix(content)
+      expect(fixedContent).toContain("name: my-skill-name")
+    }
+  })
+
+  test("provides fix function for invalid model", () => {
+    const content = `---
+name: test
+description: test
+model: invalid-model
+---
+
+Content
+`
+    const result = lintWorkflowFile(content, "skill")
+
+    const modelError = result.errors.find(e => e.field === "model")
+    expect(modelError).toBeDefined()
+    expect(modelError?.fixable).toBe(true)
+    expect(modelError?.fix).toBeDefined()
+
+    // Apply the fix
+    if (modelError?.fix) {
+      const fixedContent = modelError.fix(content)
+      expect(fixedContent).toContain("model: sonnet")
+    }
+  })
+
+  test("provides fix function for missing description in skills", () => {
+    const content = `---
+name: my-skill
+---
+
+Content
+`
+    const result = lintWorkflowFile(content, "skill")
+
+    const descWarning = result.warnings.find(w => w.field === "description")
+    expect(descWarning).toBeDefined()
+    expect(descWarning?.fixable).toBe(true)
+    expect(descWarning?.fix).toBeDefined()
+
+    // Apply the fix
+    if (descWarning?.fix) {
+      const fixedContent = descWarning.fix(content)
+      expect(fixedContent).toContain("description:")
+    }
+  })
+
+  test("provides fix function for missing description in agents", () => {
+    const content = `---
+name: my-agent
+---
+
+Content
+`
+    const result = lintWorkflowFile(content, "agent")
+
+    const descWarning = result.warnings.find(w => w.field === "description")
+    expect(descWarning).toBeDefined()
+    expect(descWarning?.fixable).toBe(true)
+    expect(descWarning?.fix).toBeDefined()
+
+    // Apply the fix
+    if (descWarning?.fix) {
+      const fixedContent = descWarning.fix(content)
+      expect(fixedContent).toContain("description:")
+    }
+  })
+
+  test("provides fix function for invalid permissionMode", () => {
+    const content = `---
+name: test
+description: test
+permissionMode: invalid
+---
+
+Content
+`
+    const result = lintWorkflowFile(content, "agent")
+
+    const modeError = result.errors.find(e => e.field === "permissionMode")
+    expect(modeError).toBeDefined()
+    expect(modeError?.fixable).toBe(true)
+    expect(modeError?.fix).toBeDefined()
+
+    // Apply the fix
+    if (modeError?.fix) {
+      const fixedContent = modeError.fix(content)
+      expect(fixedContent).toContain("permissionMode: default")
+    }
+  })
+
+  test("provides fix function for invalid context", () => {
+    const content = `---
+name: test
+description: test
+context: invalid
+---
+
+Content
+`
+    const result = lintWorkflowFile(content, "skill")
+
+    const contextError = result.errors.find(e => e.field === "context")
+    expect(contextError).toBeDefined()
+    expect(contextError?.fixable).toBe(true)
+    expect(contextError?.fix).toBeDefined()
+
+    // Apply the fix
+    if (contextError?.fix) {
+      const fixedContent = contextError.fix(content)
+      expect(fixedContent).toContain("context: fork")
+    }
   })
 })
 
