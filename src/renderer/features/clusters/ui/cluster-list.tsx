@@ -5,7 +5,7 @@ import { useAtom } from "jotai"
 import { Search, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { selectedClusterIdAtom, clusterSearchAtom } from "../atoms"
+import { selectedClusterIdAtom, clusterSearchAtom, getDefaultCluster } from "../atoms"
 
 function getStatusIcon(status: string) {
   switch (status) {
@@ -63,12 +63,15 @@ export function ClusterList() {
     )
   }, [clusters, search])
 
-  // Auto-select first cluster if none selected
+  // Auto-select default cluster (prefer staging-cluster) if none selected
   useEffect(() => {
-    if (!selectedCluster && filteredClusters.length > 0) {
-      setSelectedCluster(filteredClusters[0].name)
+    if (!selectedCluster && clusters && clusters.length > 0) {
+      const defaultCluster = getDefaultCluster(clusters)
+      if (defaultCluster) {
+        setSelectedCluster(defaultCluster)
+      }
     }
-  }, [filteredClusters, selectedCluster, setSelectedCluster])
+  }, [clusters, selectedCluster, setSelectedCluster])
 
   if (isLoading) {
     return (

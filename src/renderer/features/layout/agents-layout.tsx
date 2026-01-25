@@ -35,7 +35,6 @@ import {
   AgentsTabContent,
   SkillsTabContent,
   McpsTabContent,
-  ClustersTabContent,
   TerminalTabContent,
 } from "../sidebar/components"
 import { RightIconBar } from "./right-icon-bar"
@@ -264,7 +263,8 @@ export function AgentsLayout() {
           )}
 
           {/* Sidebar Content Panel - shows list/navigation for selected tab */}
-          {!isMobile && !isContentCollapsed && (
+          {/* Note: clusters tab doesn't show sidebar content - cluster selection is via dropdown in main view */}
+          {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && (
             <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background overflow-hidden">
               {selectedSidebarTab === "history" ? (
                 <HistoryTabContent className="h-full" />
@@ -280,8 +280,6 @@ export function AgentsLayout() {
                 <SkillsTabContent className="h-full" />
               ) : selectedSidebarTab === "mcps" ? (
                 <McpsTabContent className="h-full" />
-              ) : selectedSidebarTab === "clusters" ? (
-                <ClustersTabContent className="h-full" />
               ) : null}
             </div>
           )}

@@ -1,16 +1,23 @@
 "use client"
 
-import { useState } from "react"
-import { useAtomValue } from "jotai"
-import { Copy, Check, AlertCircle, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { useAtom, useAtomValue } from "jotai"
+import { Copy, Check, AlertCircle, Loader2, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { selectedClusterIdAtom, selectedClusterTabAtom } from "../atoms"
+import { selectedClusterIdAtom, selectedClusterTabAtom, getDefaultCluster } from "../atoms"
 import { ClusterTabs } from "./cluster-tabs"
 import { DashboardTab } from "./dashboard-tab"
 import { NodesTab } from "./nodes-tab"
 import { LogsTab } from "./logs-tab"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select"
 
 function InfoRow({
   label,
@@ -49,11 +56,29 @@ function InfoRow({
 }
 
 export function ClusterDetail() {
-  const selectedClusterId = useAtomValue(selectedClusterIdAtom)
+  const [selectedClusterId, setSelectedClusterId] = useAtom(selectedClusterIdAtom)
   const selectedTab = useAtomValue(selectedClusterTabAtom)
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
-  // Get cluster details
+  // Get list of all clusters for the dropdown
+  const {
+    data: clusters,
+    isLoading: clustersLoading,
+    refetch: refetchClusters,
+    isRefetching,
+  } = trpc.clusters.discover.useQuery()
+
+  // Auto-select default cluster (prefer staging-cluster) if none selected
+  useEffect(() => {
+    if (clusters && !selectedClusterId) {
+      const defaultCluster = getDefaultCluster(clusters)
+      if (defaultCluster) {
+        setSelectedClusterId(defaultCluster)
+      }
+    }
+  }, [clusters, selectedClusterId, setSelectedClusterId])
+
+  // Get cluster details for selected cluster
   const { data: cluster, isLoading: clusterLoading } = trpc.clusters.get.useQuery(
     { clusterName: selectedClusterId! },
     { enabled: !!selectedClusterId }
@@ -70,6 +95,37 @@ export function ClusterDetail() {
     setCopiedField(field)
     toast.success(`Copied ${field} to clipboard`)
     setTimeout(() => setCopiedField(null), 2000)
+  }
+
+  const handleClusterChange = (clusterName: string) => {
+    setSelectedClusterId(clusterName)
+  }
+
+  // Loading state for initial clusters fetch
+  if (clustersLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  // No clusters available
+  if (!clusters || clusters.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+        <AlertCircle className="h-6 w-6" />
+        <p>No clusters available</p>
+        <button
+          type="button"
+          onClick={() => refetchClusters()}
+          className="text-sm text-primary hover:underline flex items-center gap-1"
+        >
+          <RefreshCw className={cn("h-3 w-3", isRefetching && "animate-spin")} />
+          Refresh
+        </button>
+      </div>
+    )
   }
 
   if (!selectedClusterId) {
@@ -98,24 +154,50 @@ export function ClusterDetail() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
+      {/* Header with cluster selector */}
       <div className="p-6 pb-4 flex-shrink-0">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">{cluster.name}</h2>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            {/* Cluster selector dropdown */}
+            <Select value={selectedClusterId} onValueChange={handleClusterChange}>
+              <SelectTrigger className="w-auto max-w-[300px] h-auto border-0 bg-transparent shadow-none px-0 py-0 text-xl font-semibold hover:bg-muted/50 rounded-md focus:ring-0 focus:ring-offset-0">
+                <SelectValue placeholder="Select a cluster" />
+              </SelectTrigger>
+              <SelectContent>
+                {clusters.map((c) => (
+                  <SelectItem key={c.name} value={c.name}>
+                    <div className="flex items-center gap-2">
+                      <span>{c.name}</span>
+                      <span className="text-xs text-muted-foreground">({c.region})</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-sm text-muted-foreground mt-1">
               Kubernetes {cluster.version} in {cluster.region}
             </p>
           </div>
-          <div
-            className={cn(
-              "px-2 py-1 text-xs rounded-full font-medium",
-              status?.connected
-                ? "bg-emerald-500/10 text-emerald-500"
-                : "bg-red-500/10 text-red-500"
-            )}
-          >
-            {status?.connected ? "Connected" : "Disconnected"}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => refetchClusters()}
+              disabled={isRefetching}
+              className="text-muted-foreground hover:text-foreground p-1.5 rounded hover:bg-muted transition-colors"
+              title="Refresh clusters"
+            >
+              <RefreshCw className={cn("h-4 w-4", isRefetching && "animate-spin")} />
+            </button>
+            <div
+              className={cn(
+                "px-2 py-1 text-xs rounded-full font-medium",
+                status?.connected
+                  ? "bg-emerald-500/10 text-emerald-500"
+                  : "bg-red-500/10 text-red-500"
+              )}
+            >
+              {status?.connected ? "Connected" : "Disconnected"}
+            </div>
           </div>
         </div>
 

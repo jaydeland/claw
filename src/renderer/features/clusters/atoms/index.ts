@@ -26,6 +26,21 @@ export const selectedClusterIdAtom = atomWithStorage<string | null>(
   { getOnInit: true }
 )
 
+/**
+ * Helper function to get the default cluster from a list
+ * Prefers "staging-cluster" if available, otherwise returns the first cluster
+ */
+export function getDefaultCluster(clusters: Array<{ name: string }>): string | null {
+  if (!clusters || clusters.length === 0) return null
+
+  // Prefer staging-cluster if available
+  const stagingCluster = clusters.find((c) => c.name === "staging-cluster")
+  if (stagingCluster) return stagingCluster.name
+
+  // Fallback to first cluster
+  return clusters[0].name
+}
+
 // ============================================
 // CLUSTERS SEARCH STATE
 // ============================================

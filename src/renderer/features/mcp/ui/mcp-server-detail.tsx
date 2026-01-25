@@ -12,6 +12,9 @@ import {
   Settings,
   Power,
   PowerOff,
+  Wrench,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -203,6 +206,144 @@ export function McpServerDetail() {
               ? "Configure Credentials"
               : "Update Credentials"}
           </Button>
+        </div>
+      )}
+
+      {/* Available Tools */}
+      <ToolsSection serverId={server.id} enabled={server.enabled} />
+    </div>
+  )
+}
+
+/**
+ * Tools section that queries and displays MCP server tools
+ */
+function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolean }) {
+  const [isExpanded, setIsExpanded] = React.useState(true)
+
+  // Query tools (only when server is enabled)
+  const { data: toolsData, isLoading, error } = trpc.mcp.getServerTools.useQuery(
+    { serverId },
+    {
+      enabled: enabled,
+      retry: false, // Don't retry on error (server might be misconfigured)
+      staleTime: 30000, // Cache for 30 seconds
+    }
+  )
+
+  if (!enabled) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Wrench className="h-4 w-4" />
+          Available Tools
+        </div>
+        <div className="bg-muted/50 rounded-lg p-3">
+          <p className="text-xs text-muted-foreground">
+            Enable the server to query available tools.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Wrench className="h-4 w-4" />
+          Available Tools
+        </div>
+        <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">Querying tools...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Handle tRPC query error
+  if (error) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Wrench className="h-4 w-4" />
+          Available Tools
+        </div>
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-medium text-red-600">Failed to query tools</p>
+              <p className="text-xs text-muted-foreground mt-1">{error.message}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Handle error returned in the response
+  if (toolsData?.error) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Wrench className="h-4 w-4" />
+          Available Tools
+        </div>
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-medium text-yellow-700 dark:text-yellow-500">
+                Could not load tools
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{toolsData.error}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const tools = toolsData?.tools || []
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-2 text-sm font-medium w-full hover:text-foreground/80"
+      >
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4" />
+        ) : (
+          <ChevronRight className="h-4 w-4" />
+        )}
+        <Wrench className="h-4 w-4" />
+        <span>Available Tools</span>
+        <span className="text-xs text-muted-foreground font-normal">({tools.length})</span>
+      </button>
+
+      {isExpanded && (
+        <div className="bg-muted/50 rounded-lg divide-y divide-border max-h-[300px] overflow-y-auto">
+          {tools.length === 0 ? (
+            <div className="p-3">
+              <p className="text-xs text-muted-foreground">
+                This server does not provide any tools.
+              </p>
+            </div>
+          ) : (
+            tools.map((tool) => (
+              <div key={tool.name} className="p-3">
+                <code className="text-xs font-medium">{tool.name}</code>
+                {tool.description && (
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {tool.description}
+                  </p>
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
