@@ -185,6 +185,21 @@ export const appSettings = sqliteTable("app_settings", {
   ),
 })
 
+// ============ CLAUDE BINARY VERSIONS ============
+// Stores downloaded Claude Code binary versions for runtime switching
+export const claudeBinaryVersions = sqliteTable("claude_binary_versions", {
+  id: text("id").primaryKey(), // Version string e.g. "2.1.5"
+  platform: text("platform").notNull(), // "darwin-arm64", "darwin-x64", "linux-x64", "win32-x64"
+  path: text("path").notNull(), // Full path to binary
+  checksum: text("checksum"), // SHA256 for verification
+  size: integer("size"), // File size in bytes
+  downloadedAt: integer("downloaded_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
+  isBundled: integer("is_bundled", { mode: "boolean" }).notNull().default(false),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -202,3 +217,5 @@ export type ConfigSource = typeof configSources.$inferSelect
 export type NewConfigSource = typeof configSources.$inferInsert
 export type AppSettings = typeof appSettings.$inferSelect
 export type NewAppSettings = typeof appSettings.$inferInsert
+export type ClaudeBinaryVersion = typeof claudeBinaryVersions.$inferSelect
+export type NewClaudeBinaryVersion = typeof claudeBinaryVersions.$inferInsert
