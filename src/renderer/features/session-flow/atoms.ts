@@ -4,7 +4,7 @@ import { messageIdsAtom, messageAtomFamily } from "../agents/stores/message-stor
 
 export const sessionFlowSidebarOpenAtom = atomWithStorage<boolean>(
   "session-flow-sidebar-open",
-  false,
+  true,
   undefined,
   { getOnInit: true },
 )
@@ -29,7 +29,7 @@ export const sessionFlowTodosSplitAtom = atomWithStorage<number>(
 export const sessionFlowUserScrolledAtom = atom<boolean>(false)
 
 // Track expanded node details (nodeId -> true/false)
-export const sessionFlowExpandedNodesAtom = atom<Set<string>>(new Set())
+export const sessionFlowExpandedNodesAtom = atom<Set<string>>(new Set<string>())
 
 // Dialog/modal view state
 export const sessionFlowDialogOpenAtom = atom<boolean>(false)
