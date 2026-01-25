@@ -99,7 +99,9 @@ export function WorkflowFlatFileList() {
 
   // Debug logging
   useEffect(() => {
-    console.log("[workflow-flat-file-list] Component mounted, category:", selectedCategory)
+    console.log("[workflow-flat-file-list] Component mounted")
+    console.log("[workflow-flat-file-list] category:", selectedCategory)
+    console.log("[workflow-flat-file-list] selectedNode:", selectedNode)
     console.log("[workflow-flat-file-list] isLoading:", isLoading, "hasData:", !!workflowGraph, "error:", error)
     if (workflowGraph) {
       console.log("[workflow-flat-file-list] Data:", {
@@ -108,7 +110,7 @@ export function WorkflowFlatFileList() {
         skills: workflowGraph.skills?.length,
       })
     }
-  }, [selectedCategory, isLoading, workflowGraph, error])
+  }, [selectedCategory, selectedNode, isLoading, workflowGraph, error])
 
   // Transform items based on selected category
   const items = useMemo((): WorkflowItem[] => {

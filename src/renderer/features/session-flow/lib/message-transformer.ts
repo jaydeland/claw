@@ -160,8 +160,10 @@ export function transformMessagesToFlow(
       let branchY = currentMainY
       let branchIndex = 0
 
-      // Track unique bash commands and thinking invocations for consolidation
-      const bashCommands = new Map<string, { count: number; firstPartIndex: number; state: "call" | "result" | "error" }>()
+      // Track bash and thinking invocations for consolidation
+      let bashCount = 0
+      let bashFirstPartIndex = -1
+      let bashState: "call" | "result" | "error" = "call"
       let thinkingCount = 0
       let thinkingFirstPartIndex = -1
       let thinkingState: "call" | "result" | "error" = "call"
@@ -182,23 +184,19 @@ export function transformMessagesToFlow(
             if (state === "error") thinkingState = "error"
             else if (state === "result" && thinkingState !== "error") thinkingState = "result"
           } else if (toolName === "Bash") {
-            const command = part.input?.command || "bash"
-            const existing = bashCommands.get(command)
-            const state = getToolState(part)
-
-            if (existing) {
-              existing.count++
-              // Update state priority: error > result > call
-              if (state === "error") existing.state = "error"
-              else if (state === "result" && existing.state !== "error") existing.state = "result"
-            } else {
-              bashCommands.set(command, { count: 1, firstPartIndex: partIndex, state })
+            if (bashCount === 0) {
+              bashFirstPartIndex = partIndex
             }
+            bashCount++
+            const state = getToolState(part)
+            // Update state priority: error > result > call
+            if (state === "error") bashState = "error"
+            else if (state === "result" && bashState !== "error") bashState = "result"
           }
         }
       }
 
-      // Second pass: create nodes for unique tools
+      // Second pass: create nodes for non-consolidated tools
       for (let partIndex = 0; partIndex < parts.length; partIndex++) {
         const part = parts[partIndex]
 
@@ -207,15 +205,8 @@ export function transformMessagesToFlow(
 
           if (!BRANCHING_TOOLS.has(toolName)) continue
 
-          // Skip Thinking - handled after loop
-          if (toolName === "Thinking") continue
-
-          // For Bash, only create node for first occurrence of each unique command
-          if (toolName === "Bash") {
-            const command = part.input?.command || "bash"
-            const bashData = bashCommands.get(command)
-            if (!bashData || bashData.firstPartIndex !== partIndex) continue // Skip duplicates
-          }
+          // Skip Thinking and Bash - handled after loop
+          if (toolName === "Thinking" || toolName === "Bash") continue
 
           const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
           const state = getToolState(part)
@@ -233,26 +224,8 @@ export function transformMessagesToFlow(
                 onClick: () => options.onNodeClick(message.id, partIndex),
               } as AgentSpawnNodeData,
             })
-          } else if (toolName === "Bash") {
-            const command = part.input?.command || "bash"
-            const bashData = bashCommands.get(command)
-            const count = bashData?.count || 1
-            const consolidatedState = bashData?.state || state
-
-            nodes.push({
-              id: toolNodeId,
-              type: "toolCall",
-              position: { x: X_BRANCH, y: branchY },
-              data: {
-                toolCallId: part.toolCallId || "",
-                toolName,
-                state: consolidatedState,
-                count: count > 1 ? count : undefined, // Only show count if > 1
-                commandPreview: truncateText(command, 30),
-                onClick: () => options.onNodeClick(message.id, partIndex),
-              } as ToolCallNodeData,
-            })
           } else {
+            // Other tools (AskUserQuestion, WebSearch, WebFetch)
             nodes.push({
               id: toolNodeId,
               type: "toolCall",
@@ -282,6 +255,40 @@ export function transformMessagesToFlow(
           branchY += Y_BRANCH_SPACING
           branchIndex++
         }
+      }
+
+      // Add consolidated Bash node if there were any
+      if (bashCount > 0 && bashFirstPartIndex >= 0) {
+        const toolNodeId = `tool-${message.id}-bash`
+
+        nodes.push({
+          id: toolNodeId,
+          type: "toolCall",
+          position: { x: X_BRANCH, y: branchY },
+          data: {
+            toolCallId: "bash",
+            toolName: "Bash",
+            state: bashState,
+            count: bashCount,
+            onClick: () => options.onNodeClick(message.id, bashFirstPartIndex),
+          } as ToolCallNodeData,
+        })
+
+        // Connect bash node to response node
+        edges.push({
+          id: `${responseNodeId}-${toolNodeId}`,
+          source: responseNodeId,
+          sourceHandle: "tools",
+          target: toolNodeId,
+          animated: bashState === "call",
+          style: {
+            stroke: bashState === "error" ? "#ef4444" : "#ec4899",
+            strokeWidth: 1.5,
+          },
+        })
+
+        branchY += Y_BRANCH_SPACING
+        branchIndex++
       }
 
       // Add consolidated Thinking node if there were any

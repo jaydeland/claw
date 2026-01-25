@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { useAtomValue } from "jotai"
 import { selectedWorkflowNodeAtom, workflowViewModeAtom } from "../atoms"
 import { WorkflowDetailHeader } from "./workflow-detail-header"
@@ -13,6 +14,11 @@ import { WorkflowReactFlowView } from "./workflow-reactflow-view"
 export function WorkflowDetail() {
   const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
   const viewMode = useAtomValue(workflowViewModeAtom)
+
+  // Debug logging
+  useEffect(() => {
+    console.log("[workflow-detail] selectedNode:", selectedNode)
+  }, [selectedNode])
 
   if (!selectedNode) {
     return (
