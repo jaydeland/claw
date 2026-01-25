@@ -27,9 +27,7 @@ import {
   parseLaunchDirectory,
 } from "./lib/cli"
 import { cleanupGitWatchers } from "./lib/git/watcher"
-<<<<<<< HEAD
 import { initBackgroundSession, closeBackgroundSession } from "./lib/claude/background-session"
-=======
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
 import {
   createMainWindow,
@@ -38,7 +36,6 @@ import {
   getAllWindows,
 } from "./windows/main"
 import { windowManager } from "./windows/window-manager"
->>>>>>> upstream/main
 
 import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
 
@@ -939,7 +936,6 @@ if (gotTheLock) {
       }
     }, 3000)
 
-<<<<<<< HEAD
     // Initialize background Claude session 5 seconds after startup (dev mode only for now)
     // This provides a persistent session for utility tasks like title generation
     if (IS_DEV) {
@@ -952,10 +948,9 @@ if (gotTheLock) {
         }
       }, 5000)
     }
-=======
+
     // Handle directory argument from CLI (e.g., `1code /path/to/project`)
     parseLaunchDirectory()
->>>>>>> upstream/main
 
     // Handle deep link from app launch (Windows/Linux)
     const deepLinkUrl = process.argv.find((arg) =>

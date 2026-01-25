@@ -40,7 +40,6 @@
     {
       "idx": 5,
       "version": "6",
-<<<<<<< HEAD
       "when": 1768682497018,
       "tag": "0005_bouncy_sister_grimm",
       "breakpoints": true
@@ -148,10 +147,13 @@
       "version": "6",
       "when": 1737848400000,
       "tag": "0020_add_claude_binary_versions",
-=======
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
       "when": 1769310092745,
-      "tag": "0005_marvelous_master_chief",
->>>>>>> upstream/main
+      "tag": "0021_marvelous_master_chief",
       "breakpoints": true
     }
   ]
