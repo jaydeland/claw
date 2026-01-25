@@ -25,6 +25,9 @@ import {
   sessionFlowDialogOpenAtom,
   sessionFlowFullScreenAtom,
   sessionFlowBottomTabAtom,
+  sessionFlowTodosAtom,
+  sessionFlowSubAgentsAtom,
+  sessionFlowBackgroundTasksAtom,
 } from "../atoms"
 import {
   DropdownMenu,
@@ -50,6 +53,15 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
   const [bottomTab, setBottomTab] = useAtom(sessionFlowBottomTabAtom)
   const [isResizing, setIsResizing] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Get counts for tab badges
+  const todosData = useAtomValue(sessionFlowTodosAtom)
+  const subAgents = useAtomValue(sessionFlowSubAgentsAtom)
+  const backgroundTasks = useAtomValue(sessionFlowBackgroundTasksAtom)
+
+  const todosCount = todosData.todos.length
+  const subAgentsCount = subAgents.length
+  const backgroundTasksCount = backgroundTasks.length
 
   // Get all messages for export
   const messageIds = useAtomValue(messageIdsAtom)
@@ -283,7 +295,7 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 }`}
               >
-                Todos
+                Todos {todosCount > 0 && <span className="ml-1 opacity-60">({todosCount})</span>}
               </Button>
               <Button
                 variant="ghost"
@@ -295,7 +307,7 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 }`}
               >
-                Sub Agents
+                Sub Agents {subAgentsCount > 0 && <span className="ml-1 opacity-60">({subAgentsCount})</span>}
               </Button>
               <Button
                 variant="ghost"
@@ -307,7 +319,7 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 }`}
               >
-                Background
+                Background {backgroundTasksCount > 0 && <span className="ml-1 opacity-60">({backgroundTasksCount})</span>}
               </Button>
             </div>
 
