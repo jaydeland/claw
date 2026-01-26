@@ -2,7 +2,7 @@
   "name": "21st-desktop",
   "version": "0.0.31",
   "private": true,
-  "description": "1Code - UI for parallel work with AI agents",
+  "description": "Claw - UI for parallel work with AI agents",
   "author": {
     "name": "21st.dev",
     "email": "support@21st.dev"
@@ -135,7 +135,7 @@
   },
   "build": {
     "appId": "dev.21st.agents",
-    "productName": "1Code",
+    "productName": "Claw",
     "npmRebuild": true,
     "directories": {
       "buildResources": "build",

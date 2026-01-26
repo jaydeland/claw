@@ -1,4 +1,4 @@
-# Contributing to 1Code
+# Contributing to Claw
 
 ## Building from Source
 
@@ -10,22 +10,6 @@ bun run dev      # Development with hot reload
 bun run build    # Production build
 bun run package:mac  # Create distributable
 ```
-
-## Open Source vs Hosted Version
-
-This is the open-source version of 1Code. Some features require the hosted backend at 1code.dev:
-
-| Feature | Open Source | Hosted (1code.dev) |
-|---------|-------------|-------------------|
-| Local AI chat | Yes | Yes |
-| Claude Code integration | Yes | Yes |
-| Git worktrees | Yes | Yes |
-| Terminal | Yes | Yes |
-| Sign in / Sync | No | Yes |
-| Background agents | No | Yes |
-| Auto-updates | No | Yes |
-| Private Discord & support | No | Yes |
-| Early access to new features | No | Yes |
 
 ## Analytics & Telemetry
 

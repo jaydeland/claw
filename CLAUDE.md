@@ -63,7 +63,7 @@ Add to your MCP config file:
 
 ## Development Environment
 
-This project uses **Flox** for reproducible development environments. The 1code environment inherits from the devyard environment (TypeScript tooling, Node.js, Python, etc.) and adds app-specific dependencies (bun, electron).
+This project uses **Flox** for reproducible development environments. The claw environment inherits from the devyard environment (TypeScript tooling, Node.js, Python, etc.) and adds app-specific dependencies (bun, electron).
 
 ### Inheritance Pattern
 
@@ -73,7 +73,7 @@ devyard/.flox/env/manifest.toml
   ├─ Node.js, Python, etc.
   └─ Claude Code LSP integration
 
-1code/.flox/env/manifest.toml
+claw/.flox/env/manifest.toml
   ├─ [include] → devyard (via symlink)
   ├─ bun (package manager)
   └─ electron (desktop framework)
@@ -87,8 +87,8 @@ This follows the same pattern as the avatar project. TypeScript LSP is available
 # Install Flox (if not already installed)
 curl -fsSL https://install.flox.dev | bash
 
-# Activate the 1Code environment (inherits from devyard)
-cd /Users/jdeland/1code
+# Activate the Claw environment (inherits from devyard)
+cd /Users/jdeland/claw
 flox activate
 ```
 
@@ -389,10 +389,10 @@ npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 |------|---------|
 | `latest-mac.yml` | Manifest for arm64 auto-updates |
 | `latest-mac-x64.yml` | Manifest for Intel auto-updates |
-| `1Code-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
-| `1Code-{version}-mac.zip` | Auto-update payload (Intel) |
-| `1Code-{version}-arm64.dmg` | Manual download (arm64) |
-| `1Code-{version}.dmg` | Manual download (Intel) |
+| `Claw-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
+| `Claw-{version}-mac.zip` | Auto-update payload (Intel) |
+| `Claw-{version}-arm64.dmg` | Manual download (arm64) |
+| `Claw-{version}.dmg` | Manual download (Intel) |
 
 ### Auto-Update Flow
 

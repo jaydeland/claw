@@ -73,7 +73,7 @@ common = '''
   export ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
   # Helpful activation message
-  echo "✓ 1Code development environment activated"
+  echo "✓ Claw development environment activated"
   echo "  Bun: $(bun --version)"
   echo "  Electron: $(electron --version)"
   echo "  TypeScript LSP: $(which typescript-language-server) (via devyard)"

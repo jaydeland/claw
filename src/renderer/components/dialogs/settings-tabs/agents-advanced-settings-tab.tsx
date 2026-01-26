@@ -482,7 +482,7 @@ export function AgentsAdvancedSettingsTab() {
                 <div className="space-y-1 text-xs text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <Badge variant="default" className="text-xs">1</Badge>
-                    <span>Project configs (.1code/mcp.json)</span>
+                    <span>Project configs (.claw/mcp.json)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="text-xs">2</Badge>
