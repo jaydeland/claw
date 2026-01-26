@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/claw-logo.png" alt="Claw Logo" width="400" />
+</p>
+
 # Claw - The Claude Code Wrapper
 
 Desktop UI for Claude Code with local agent execution using AWS SSO and Bedrock
