@@ -180,14 +180,16 @@ export class EksService {
     })
 
     // Get credentials - either explicit (SSO) or from default chain (profile)
-    const credentials = this.credentials || (async () => {
+    let credentials
+    if (this.credentials) {
+      credentials = this.credentials
+    } else {
       // Profile mode - resolve credentials from default chain
-      const { STSClient, GetCallerIdentityCommand } = await import("@aws-sdk/client-sts")
+      const { STSClient } = await import("@aws-sdk/client-sts")
       const sts = new STSClient({ region: this.region })
       // This will use AWS_PROFILE env var or default credentials
-      const resolvedCreds = await sts.config.credentials()
-      return resolvedCreds
-    })()
+      credentials = await sts.config.credentials()
+    }
 
     // Sign the request
     const signer = new SignatureV4({
