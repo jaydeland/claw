@@ -32,6 +32,7 @@ export interface AwsCredentials {
   secretAccessKey: string
   sessionToken?: string
   region: string
+  profileName?: string // AWS profile name for profile mode
 }
 
 /**
@@ -73,11 +74,12 @@ export function getAwsCredentials(): AwsCredentials | null {
     }
 
     // Profile mode - rely on AWS SDK to load from ~/.aws/
-    // Just return the region, credentials will be loaded by SDK
+    // Just return the region and profile name, credentials will be loaded by SDK
     return {
       accessKeyId: "", // SDK will load from profile
       secretAccessKey: "",
       region: settings.bedrockRegion || "us-east-1",
+      profileName: settings.awsProfileName || undefined,
     }
   } catch (error) {
     console.error("[claude-env] Failed to get AWS credentials:", error)
@@ -315,7 +317,13 @@ export function buildClaudeEnv(options?: {
     env.MAX_MCP_OUTPUT_TOKENS = String(settings?.maxMcpOutputTokens ?? 200000)
     env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 1000000)
 
-    // Only set credentials if available (SSO mode)
+    // Profile mode - set AWS_PROFILE for Claude SDK
+    if (awsCreds.profileName) {
+      env.AWS_PROFILE = awsCreds.profileName
+      console.log(`[claude-env] Using AWS profile: ${awsCreds.profileName}`)
+    }
+
+    // SSO mode - set explicit credentials
     // Profile mode will use AWS SDK's default credential chain
     if (awsCreds.accessKeyId && awsCreds.secretAccessKey) {
       env.AWS_ACCESS_KEY_ID = awsCreds.accessKeyId
@@ -323,6 +331,7 @@ export function buildClaudeEnv(options?: {
       if (awsCreds.sessionToken) {
         env.AWS_SESSION_TOKEN = awsCreds.sessionToken
       }
+      console.log(`[claude-env] Using AWS SSO credentials (explicit)`)
     }
   }
 
