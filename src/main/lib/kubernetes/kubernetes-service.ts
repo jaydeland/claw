@@ -93,7 +93,7 @@ function getAuthOpts(client: KubernetesClient) {
  */
 export async function listNodes(client: KubernetesClient): Promise<K8sNode[]> {
   const opts = getAuthOpts(client)
-  const response = await client.listCoreV1Node({}, opts)
+  const response = await client.listCoreV1Node({ query: {} }, opts)
 
   return (response.items || []).map((node) => {
     const conditions = node.status?.conditions || []
@@ -131,7 +131,7 @@ export async function listNamespaces(
   client: KubernetesClient
 ): Promise<K8sNamespace[]> {
   const opts = getAuthOpts(client)
-  const response = await client.listCoreV1Namespace({}, opts)
+  const response = await client.listCoreV1Namespace({ query: {} }, opts)
 
   return (response.items || []).map((ns) => ({
     name: ns.metadata?.name || "",
@@ -150,7 +150,7 @@ export async function listPods(
   namespace: string
 ): Promise<K8sPod[]> {
   const opts = getAuthOpts(client)
-  const response = await client.listCoreV1NamespacedPod({ namespace }, opts)
+  const response = await client.listCoreV1NamespacedPod({ path: { namespace }, query: {} }, opts)
 
   return (response.items || []).map((pod) => {
     const containerStatuses = pod.status?.containerStatuses || []
@@ -186,7 +186,7 @@ export async function listDeployments(
 ): Promise<K8sDeployment[]> {
   const opts = getAuthOpts(client)
   const response = await client.listAppsV1NamespacedDeployment(
-    { namespace },
+    { path: { namespace }, query: {} },
     opts
   )
 
@@ -216,7 +216,7 @@ export async function listServices(
   namespace: string
 ): Promise<K8sService[]> {
   const opts = getAuthOpts(client)
-  const response = await client.listCoreV1NamespacedService({ namespace }, opts)
+  const response = await client.listCoreV1NamespacedService({ path: { namespace }, query: {} }, opts)
 
   return (response.items || []).map((svc) => {
     const spec = svc.spec || {}
