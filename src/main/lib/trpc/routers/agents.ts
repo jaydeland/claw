@@ -53,7 +53,6 @@ const listAgentsProcedure = publicProcedure
   .query(async ({ input }) => {
     const locations = getScanLocations("agents", input?.cwd)
 
-<<<<<<< HEAD
     // Get custom plugin directories from database
     const customDirs = getCustomPluginDirectories()
 
@@ -61,14 +60,8 @@ const listAgentsProcedure = publicProcedure
     const scanPromises: Promise<FileAgent[]>[] = []
 
     // Project agents (highest priority)
-    if (locations.projectDir) {
-      scanPromises.push(scanAgentsDirectory(locations.projectDir, "project"))
-=======
-    let projectAgentsPromise = Promise.resolve<FileAgent[]>([])
-    if (input?.cwd) {
-      const projectAgentsDir = path.join(input.cwd, ".claude", "agents")
-      projectAgentsPromise = scanAgentsDirectory(projectAgentsDir, "project", input.cwd)
->>>>>>> upstream/main
+    if (locations.projectDir && input?.cwd) {
+      scanPromises.push(scanAgentsDirectory(locations.projectDir, "project", input.cwd))
     }
 
     // User agents

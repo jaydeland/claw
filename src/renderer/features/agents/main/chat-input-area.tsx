@@ -27,16 +27,7 @@ import {
   PromptInputActions,
   PromptInputContextItems,
 } from "../../../components/ui/prompt-input"
-<<<<<<< HEAD
-import { cn } from "../../../lib/utils"
-import { isPlanModeAtom, lastSelectedModelIdAtom } from "../atoms"
-import { AgentsSlashCommand, COMMAND_PROMPTS, type SlashCommandOption } from "../commands"
-import { AgentSendButton } from "../components/agent-send-button"
-import { CommandsDropdown } from "../components/commands-dropdown"
-import { AgentsDropdown } from "../components/agents-dropdown"
-=======
 import { Switch } from "../../../components/ui/switch"
->>>>>>> upstream/main
 import {
   autoOfflineModeAtom,
   customClaudeConfigAtom,
@@ -50,6 +41,8 @@ import { cn } from "../../../lib/utils"
 import { isPlanModeAtom, lastSelectedModelIdAtom, type SubChatFileChange } from "../atoms"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
+import { CommandsDropdown } from "../components/commands-dropdown"
+import { AgentsDropdown } from "../components/agents-dropdown"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import {
   clearSubChatDraft,
@@ -792,7 +785,6 @@ export const ChatInputArea = memo(function ChatInputArea({
     [isPlanMode, setIsPlanMode, onCreateNewSubChat, onCompact, editorRef],
   )
 
-<<<<<<< HEAD
   // Handle command selection from Commands dropdown
   const handleCommandSelect = useCallback((command: string) => {
     const currentValue = editorRef.current?.getValue() || ""
@@ -825,10 +817,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     }, 0)
   }, [editorRef])
 
-  // Paste handler for images and plain text
-=======
   // Paste handler for images, plain text, and large text (saved as files)
->>>>>>> upstream/main
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => handlePasteEvent(e, onAddAttachments, onAddPastedText),
     [onAddAttachments, onAddPastedText],

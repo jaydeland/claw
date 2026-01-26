@@ -300,14 +300,10 @@ function registerIpcHandlers(): void {
     } catch (err) {
       console.error("[Auth] Failed to clear cookie:", err)
     }
-<<<<<<< HEAD
-    // Renderer will handle navigation after logout
-=======
     // Show login page in all windows
     for (const win of windowManager.getAll()) {
       showLoginPageInWindow(win)
     }
->>>>>>> upstream/main
   })
 
   ipcMain.handle("auth:start-flow", (event) => {
@@ -345,10 +341,6 @@ function registerIpcHandlers(): void {
   registerThemeScannerIPC()
 }
 
-<<<<<<< HEAD
-// Current window reference
-let currentWindow: BrowserWindow | null = null
-=======
 /**
  * Show login page in a specific window
  */
@@ -375,7 +367,9 @@ export function showLoginPage(): void {
   if (!win) return
   showLoginPageInWindow(win)
 }
->>>>>>> upstream/main
+
+// Current window reference
+let currentWindow: BrowserWindow | null = null
 
 // Singleton IPC handler (prevents duplicate handlers on macOS window recreation)
 let ipcHandler: ReturnType<typeof createIPCHandler> | null = null
@@ -538,11 +532,6 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
 
   console.log("[Main] Loading main app")
 
-<<<<<<< HEAD
-  if (devServerUrl) {
-    window.loadURL(devServerUrl)
-    window.webContents.openDevTools()
-=======
   if (isAuth) {
     console.log("[Main] ✓ User authenticated, loading app")
     // Get stable window ID from manager (assigned during register)
@@ -573,7 +562,6 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
         hash: hashParams.toString(),
       })
     }
->>>>>>> upstream/main
   } else {
     window.loadFile(join(__dirname, "../renderer/index.html"))
   }

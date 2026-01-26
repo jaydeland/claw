@@ -325,16 +325,14 @@ export function AgentsModelsTab() {
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
 
-<<<<<<< HEAD
   // Get SDK version info
   const { data: versionInfo } = trpc.claude.getVersionInfo.useQuery()
-=======
+
   // OpenAI API key state
   const [storedOpenAIKey, setStoredOpenAIKey] = useAtom(openaiApiKeyAtom)
   const [openaiKey, setOpenaiKey] = useState(storedOpenAIKey)
   const setOpenAIKeyMutation = trpc.voice.setOpenAIKey.useMutation()
   const trpcUtils = trpc.useUtils()
->>>>>>> upstream/main
 
   useEffect(() => {
     setModel(storedConfig.model)
@@ -387,10 +385,9 @@ export function AgentsModelsTab() {
     }
   }
 
-<<<<<<< HEAD
   // Determine current model being used
   const currentModel = storedConfig.model || "claude-sonnet-4-5-20250929"
-=======
+
   // OpenAI key handlers
   const trimmedOpenAIKey = openaiKey.trim()
   const canSaveOpenAI = trimmedOpenAIKey !== storedOpenAIKey
@@ -424,7 +421,6 @@ export function AgentsModelsTab() {
       toast.error("Failed to remove OpenAI API key")
     }
   }
->>>>>>> upstream/main
 
   return (
     <div className="p-6 space-y-6">

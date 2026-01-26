@@ -4185,17 +4185,6 @@ export function ChatView({
     () => planSidebarOpenAtomFamily(activeSubChatIdForPlan || ""),
     [activeSubChatIdForPlan],
   )
-<<<<<<< HEAD
-  const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
-    sessionFlowSidebarOpenAtom,
-  )
-  const [diffStats, setDiffStatsRaw] = useState({
-    fileCount: 0,
-    additions: 0,
-    deletions: 0,
-    isLoading: true,
-    hasChanges: false,
-=======
   const [isPlanSidebarOpen, setIsPlanSidebarOpen] = useAtom(planSidebarAtom)
   const currentPlanPathAtom = useMemo(
     () => currentPlanPathAtomFamily(activeSubChatIdForPlan || ""),
@@ -4263,7 +4252,6 @@ export function ChatView({
     planClosedByDetails: false,
     terminalClosedByDetails: false,
     diffClosedByDetails: false,
->>>>>>> upstream/main
   })
 
   // Track previous states to detect opens/closes

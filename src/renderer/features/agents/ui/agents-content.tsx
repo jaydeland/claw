@@ -59,25 +59,18 @@ const useIsAdmin = () => false
 // Main Component
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
-<<<<<<< HEAD
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
-
-=======
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
->>>>>>> upstream/main
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [previewSidebarOpen, setPreviewSidebarOpen] = useAtom(
     agentsPreviewSidebarOpenAtom,
   )
   const [mobileViewMode, setMobileViewMode] = useAtom(agentsMobileViewModeAtom)
-<<<<<<< HEAD
-  const setTerminalSidebarOpen = useSetAtom(terminalSidebarOpenAtom)
-=======
   const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
     agentsSubChatsSidebarModeAtom,
   )
@@ -87,7 +80,6 @@ export function AgentsContent() {
     [selectedChatId],
   )
   const setTerminalSidebarOpen = useSetAtom(terminalSidebarAtom)
->>>>>>> upstream/main
 
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -875,13 +867,13 @@ export function AgentsContent() {
           className="flex-1 min-w-0 overflow-hidden"
           style={{ minWidth: "350px" }}
         >
-<<<<<<< HEAD
           {/* Show appropriate content based on selected sidebar tab */}
           {selectedSidebarTab === "chats" ? (
             // Workspaces tab - show chat view
             selectedChatId ? (
               <div className="h-full flex flex-col relative overflow-hidden">
                 <ChatView
+                  key={selectedChatId}
                   chatId={selectedChatId}
                   isSidebarOpen={sidebarOpen}
                   onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
@@ -889,10 +881,12 @@ export function AgentsContent() {
                   selectedTeamImageUrl={selectedTeam?.image_url}
                 />
               </div>
-            ) : (
+            ) : selectedDraftId || showNewChatForm ? (
               <div className="h-full flex flex-col relative overflow-hidden">
                 <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
               </div>
+            ) : (
+              <KanbanView />
             )
           ) : (
             // For other tabs, show a placeholder detail view
@@ -902,25 +896,7 @@ export function AgentsContent() {
                   Select an item from the {selectedSidebarTab} list to view details
                 </p>
               </div>
-=======
-          {selectedChatId ? (
-            <div className="h-full flex flex-col relative overflow-hidden">
-              <ChatView
-                key={selectedChatId}
-                chatId={selectedChatId}
-                isSidebarOpen={sidebarOpen}
-                onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-                selectedTeamName={selectedTeam?.name}
-                selectedTeamImageUrl={selectedTeam?.image_url}
-              />
             </div>
-          ) : selectedDraftId || showNewChatForm ? (
-            <div className="h-full flex flex-col relative overflow-hidden">
-              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
->>>>>>> upstream/main
-            </div>
-          ) : (
-            <KanbanView />
           )}
         </div>
       </div>

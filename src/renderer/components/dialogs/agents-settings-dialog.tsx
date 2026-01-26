@@ -1,37 +1,16 @@
 import { useAtom } from "jotai"
-import { ChevronLeft, ChevronRight, FolderOpen, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, FolderOpen, X, Server } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-<<<<<<< HEAD
-import { FolderOpen, Server } from "lucide-react"
-import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
-import { cn } from "../../lib/utils"
-import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms"
-=======
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
->>>>>>> upstream/main
+import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
 import {
   EyeOpenFilledIcon,
   ProfileIconFilled,
-  SlidersFilledIcon
-} from "../../icons"
-<<<<<<< HEAD
-import { BrainFilledIcon, FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
-import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
-import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
-import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
-import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
-import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
-import { AgentsModelsTab } from "./settings-tabs/agents-models-tab"
-import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
-import { AgentsKubernetesTab } from "./settings-tabs/agents-kubernetes-tab"
-import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
-import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
-import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
-import { AgentsClaudeCodeTab } from "../../features/agents/components/settings-tabs/agents-claude-code-tab"
-=======
+  SlidersFilledIcon,
+  SettingsIcon
+} from "../../components/ui/icons"
 import { agentsSettingsDialogActiveTabAtom, devToolsUnlockedAtom, type SettingsTab } from "../../lib/atoms"
->>>>>>> upstream/main
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
 import { BrainFilledIcon, BugFilledIcon, CustomAgentIconFilled, FlaskFilledIcon, KeyboardFilledIcon, OriginalMCPIcon, SkillIconFilled } from "../ui/icons"
@@ -46,6 +25,10 @@ import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { AgentsSkillsTab } from "./settings-tabs/agents-skills-tab"
+import { AgentsKubernetesTab } from "./settings-tabs/agents-kubernetes-tab"
+import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
+import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
+import { AgentsClaudeCodeTab } from "../../features/agents/components/settings-tabs/agents-claude-code-tab"
 
 // GitHub avatar icon with loading placeholder
 function GitHubAvatarIcon({ gitOwner, className }: { gitOwner: string; className?: string }) {
@@ -387,6 +370,12 @@ export function AgentsSettingsDialog({
         return <AgentsPreferencesTab />
       case "models":
         return <AgentsModelsTab />
+      case "skills":
+        return <AgentsSkillsTab />
+      case "agents":
+        return <AgentsCustomAgentsTab />
+      case "mcps":
+        return <AgentsMcpTab />
       case "kubernetes":
         return <AgentsKubernetesTab />
       case "advanced":

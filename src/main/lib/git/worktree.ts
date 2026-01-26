@@ -933,11 +933,8 @@ export async function createWorktreeForChat(
 	projectSlug: string,
 	chatId: string,
 	selectedBaseBranch?: string,
-<<<<<<< HEAD
-	customWorktreeLocation?: string | null,
-=======
 	branchType?: "local" | "remote",
->>>>>>> upstream/main
+	customWorktreeLocation?: string | null,
 ): Promise<WorktreeResult> {
 	try {
 		const git = simpleGit(projectPath);
@@ -951,7 +948,6 @@ export async function createWorktreeForChat(
 		const baseBranch = selectedBaseBranch || await getDefaultBranch(projectPath);
 
 		const branch = generateBranchName();
-<<<<<<< HEAD
 
 		// Determine worktree path
 		let worktreePath: string;
@@ -960,18 +956,15 @@ export async function createWorktreeForChat(
 			const { expandEnvVars } = await import("../path-utils");
 			const worktreesDir = expandEnvVars(customWorktreeLocation);
 			console.log(`[worktree] Using custom location: ${customWorktreeLocation} → ${worktreesDir}`);
-			worktreePath = join(worktreesDir, projectId, chatId);
+			worktreePath = join(worktreesDir, projectSlug, chatId);
 		} else {
-			// Default: sibling directory wt-<projectname>-<number>
-			worktreePath = await getDefaultWorktreePath(projectPath);
-			console.log(`[worktree] Using default sibling location: ${worktreePath}`);
+			// Default: ~/.21st/worktrees/<project-slug>/<folder-name>
+			const worktreesDir = join(homedir(), ".21st", "worktrees");
+			const projectWorktreeDir = join(worktreesDir, projectSlug);
+			const folderName = generateWorktreeFolderName(projectWorktreeDir);
+			worktreePath = join(projectWorktreeDir, folderName);
+			console.log(`[worktree] Using default location: ${worktreePath}`);
 		}
-=======
-		const worktreesDir = join(homedir(), ".21st", "worktrees");
-		const projectWorktreeDir = join(worktreesDir, projectSlug);
-		const folderName = generateWorktreeFolderName(projectWorktreeDir);
-		const worktreePath = join(projectWorktreeDir, folderName);
->>>>>>> upstream/main
 
 		// Determine startPoint based on branch type
 		// For local branches, use the local ref directly

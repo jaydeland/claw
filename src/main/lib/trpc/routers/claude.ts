@@ -161,35 +161,11 @@ const activeSessions = new Map<string, AbortController>()
 // Cache for symlinks (track which subChatIds have already set up symlinks)
 const symlinksCreated = new Set<string>()
 
-<<<<<<< HEAD
-// Cache for MCP server statuses (to filter out failed/needs-auth servers)
-// Maps project path -> server name -> status
-const mcpServerStatusCache = new Map<string, Map<string, string>>()
-
-// Disk cache types and configuration for MCP server statuses
-interface CachedMcpStatus {
-  status: string
-  cachedAt: number
-}
-
-interface McpCacheData {
-  version: number
-  entries: Record<string, {
-    servers: Record<string, CachedMcpStatus>
-    updatedAt: number
-  }>
-}
-
-const MCP_STATUS_TTL = 5 * 60 * 1000 // 5 minutes
-const MCP_CACHE_PATH = join(app.getPath("userData"), "cache", "mcp-status.json")
-let diskCacheLastLoadTime = 0 // Track when disk cache was last loaded
-=======
 // Cache for MCP config (avoid re-reading ~/.claude.json on every message)
 const mcpConfigCache = new Map<string, {
   config: Record<string, any> | undefined
   mtime: number
 }>()
->>>>>>> upstream/main
 
 const pendingToolApprovals = new Map<
   string,
@@ -231,14 +207,9 @@ export type ImageAttachment = z.infer<typeof imageAttachmentSchema>
 export function clearClaudeCaches() {
   cachedClaudeQuery = null
   symlinksCreated.clear()
-<<<<<<< HEAD
-  mcpServerStatusCache.clear()
-  diskCacheLastLoadTime = 0
-=======
   mcpConfigCache.clear()
   console.log("[claude] All caches cleared")
 }
->>>>>>> upstream/main
 
 /**
  * Determine server status based on config
@@ -809,34 +780,9 @@ export const claudeRouter = router({
               // Get merged MCP config from all sources (project, custom, user, custom)
               // This consolidates configs in priority order: project (10) → custom (20) → user (100)
               try {
-<<<<<<< HEAD
                 const lookupPath = input.projectPath || input.cwd
                 const mergedConfig = await getMergedMcpConfig(lookupPath)
                 mcpServersForSdk = mergedConfig.mcpServers
-=======
-                const stats = await fs.stat(claudeJsonSource).catch(() => null)
-
-                if (stats) {
-                  const currentMtime = stats.mtimeMs
-                  const cached = mcpConfigCache.get(claudeJsonSource)
-                  const lookupPath = input.projectPath || input.cwd
-
-                  // Get or refresh cached config
-                  let claudeConfig: any
-                  if (cached && cached.mtime === currentMtime) {
-                    claudeConfig = cached.config
-                  } else {
-                    claudeConfig = JSON.parse(await fs.readFile(claudeJsonSource, "utf-8"))
-                    mcpConfigCache.set(claudeJsonSource, { config: claudeConfig, mtime: currentMtime })
-                  }
-
-                  // Merge global + project servers (project overrides global)
-                  // getProjectMcpServers resolves worktree paths internally
-                  const globalServers = claudeConfig.mcpServers || {}
-                  const projectServers = getProjectMcpServers(claudeConfig, lookupPath) || {}
-                  mcpServersForSdk = { ...globalServers, ...projectServers }
-                }
->>>>>>> upstream/main
               } catch (configErr) {
                 console.error(`[claude] Failed to get merged MCP config:`, configErr)
               }
@@ -1871,17 +1817,13 @@ ${prompt}
   /**
    * Get MCP servers configuration for a project
    * This allows showing MCP servers in UI before starting a chat session
-<<<<<<< HEAD
    * Uses consolidated config from all sources (project, custom, user, custom)
-=======
    * NOTE: Does NOT fetch OAuth metadata here - that's done lazily when user clicks Auth
->>>>>>> upstream/main
    */
   getMcpConfig: publicProcedure
     .input(z.object({ projectPath: z.string() }))
     .query(async ({ input }) => {
       try {
-<<<<<<< HEAD
         // Get merged config from all sources
         const mergedConfig = await getMergedMcpConfig(input.projectPath)
 
@@ -1889,26 +1831,10 @@ ${prompt}
           return { mcpServers: [], projectPath: input.projectPath }
         }
 
-        // Convert to array format with names
-        const mcpServers = Object.entries(mergedConfig.mcpServers).map(([name, serverConfig]) => ({
-          name,
-          // Status will be "pending" until SDK actually connects
-          status: "pending" as const,
-          // Include config details for display (command, args, etc)
-          config: serverConfig as Record<string, unknown>,
-        }))
-=======
-        const config = await readClaudeConfig()
-        const projectMcpServers = getProjectMcpServers(config, input.projectPath)
-
-        if (!projectMcpServers) {
-          return { mcpServers: [], projectPath: input.projectPath }
-        }
-
         // Convert to array format - determine status from config (no caching)
-        const mcpServers = Object.entries(projectMcpServers).map(([name, serverConfig]) => {
+        const mcpServers = Object.entries(mergedConfig.mcpServers).map(([name, serverConfig]) => {
           const configObj = serverConfig as Record<string, unknown>
-          const status = getServerStatusFromConfig(configObj)
+          const status = getServerStatusFromConfig(configObj as McpServerConfig)
           const hasUrl = !!configObj.url
 
           return {
@@ -1917,7 +1843,6 @@ ${prompt}
             config: { ...configObj, _hasUrl: hasUrl },
           }
         })
->>>>>>> upstream/main
 
         return { mcpServers, projectPath: input.projectPath }
       } catch (error) {

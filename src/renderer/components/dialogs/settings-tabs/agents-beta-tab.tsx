@@ -2,17 +2,13 @@ import { useAtom } from "jotai"
 import { useState, useEffect } from "react"
 import {
   historyEnabledAtom,
-<<<<<<< HEAD
-=======
   showOfflineModeFeaturesAtom,
   autoOfflineModeAtom,
   selectedOllamaModelAtom,
   betaKanbanEnabledAtom,
->>>>>>> upstream/main
 } from "../../../lib/atoms"
+import { trpc } from "../../../lib/trpc"
 import { Switch } from "../../ui/switch"
-<<<<<<< HEAD
-=======
 import {
   Select,
   SelectContent,
@@ -24,7 +20,10 @@ import { ExternalLinkIcon } from "../../ui/icons"
 import { Copy, Check, RefreshCw } from "lucide-react"
 import { Button } from "../../ui/button"
 import { cn } from "../../../lib/utils"
->>>>>>> upstream/main
+
+// Recommended model for offline mode
+const RECOMMENDED_MODEL = "qwen2.5-coder:7b"
+const MINIMUM_OLLAMA_VERSION = "0.5.0"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -46,8 +45,6 @@ function useIsNarrowScreen(): boolean {
 export function AgentsBetaTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [historyEnabled, setHistoryEnabled] = useAtom(historyEnabledAtom)
-<<<<<<< HEAD
-=======
   const [showOfflineFeatures, setShowOfflineFeatures] = useAtom(showOfflineModeFeaturesAtom)
   const [autoOffline, setAutoOffline] = useAtom(autoOfflineModeAtom)
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
@@ -99,7 +96,6 @@ export function AgentsBetaTab() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
->>>>>>> upstream/main
 
   return (
     <div className="p-6 space-y-6">
@@ -115,7 +111,7 @@ export function AgentsBetaTab() {
 
       {/* Beta Features Section */}
       <div className="bg-background rounded-lg border border-border overflow-hidden">
-        <div className="p-4">
+        <div className="p-4 space-y-4">
           {/* Rollback Toggle */}
           <div className="flex items-start justify-between">
             <div className="flex flex-col space-y-1">
@@ -131,10 +127,6 @@ export function AgentsBetaTab() {
               onCheckedChange={setHistoryEnabled}
             />
           </div>
-<<<<<<< HEAD
-        </div>
-      </div>
-=======
 
           {/* Offline Mode Toggle */}
           <div className="flex items-start justify-between">
@@ -347,7 +339,6 @@ export function AgentsBetaTab() {
           </div>
         </div>
       </div>
->>>>>>> upstream/main
     </div>
   )
 }

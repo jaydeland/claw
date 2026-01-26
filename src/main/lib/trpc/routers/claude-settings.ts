@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import fs from "node:fs/promises"
 import path from "node:path"
 import os from "node:os"
@@ -7,6 +6,8 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { eq } from "drizzle-orm"
+
+const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json")
 
 /**
  * Parse JSON safely with fallback
@@ -45,6 +46,30 @@ function decryptApiKey(encrypted: string): string | null {
     console.error("[claude-settings] Failed to decrypt API key:", error)
     return null
   }
+}
+
+/**
+ * Read Claude settings.json file
+ * Returns empty object if file doesn't exist
+ */
+async function readClaudeSettings(): Promise<Record<string, unknown>> {
+  try {
+    const content = await fs.readFile(CLAUDE_SETTINGS_PATH, "utf-8")
+    return JSON.parse(content)
+  } catch (error) {
+    // File doesn't exist or is invalid JSON
+    return {}
+  }
+}
+
+/**
+ * Write Claude settings.json file
+ * Creates the .claude directory if it doesn't exist
+ */
+async function writeClaudeSettings(settings: Record<string, unknown>): Promise<void> {
+  const dir = path.dirname(CLAUDE_SETTINGS_PATH)
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8")
 }
 
 export const claudeSettingsRouter = router({
@@ -280,42 +305,9 @@ export const claudeSettingsRouter = router({
 
     return { servers }
   }),
-=======
-import * as fs from "fs/promises"
-import * as path from "path"
-import * as os from "os"
-import { z } from "zod"
-import { router, publicProcedure } from "../index"
 
-const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json")
-
-/**
- * Read Claude settings.json file
- * Returns empty object if file doesn't exist
- */
-async function readClaudeSettings(): Promise<Record<string, unknown>> {
-  try {
-    const content = await fs.readFile(CLAUDE_SETTINGS_PATH, "utf-8")
-    return JSON.parse(content)
-  } catch (error) {
-    // File doesn't exist or is invalid JSON
-    return {}
-  }
-}
-
-/**
- * Write Claude settings.json file
- * Creates the .claude directory if it doesn't exist
- */
-async function writeClaudeSettings(settings: Record<string, unknown>): Promise<void> {
-  const dir = path.dirname(CLAUDE_SETTINGS_PATH)
-  await fs.mkdir(dir, { recursive: true })
-  await fs.writeFile(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8")
-}
-
-export const claudeSettingsRouter = router({
   /**
-   * Get the includeCoAuthoredBy setting
+   * Get the includeCoAuthoredBy setting from ~/.claude/settings.json
    * Returns true if setting is not explicitly set to false
    */
   getIncludeCoAuthoredBy: publicProcedure.query(async () => {
@@ -326,7 +318,7 @@ export const claudeSettingsRouter = router({
   }),
 
   /**
-   * Set the includeCoAuthoredBy setting
+   * Set the includeCoAuthoredBy setting in ~/.claude/settings.json
    */
   setIncludeCoAuthoredBy: publicProcedure
     .input(z.object({ enabled: z.boolean() }))
@@ -344,5 +336,4 @@ export const claudeSettingsRouter = router({
       await writeClaudeSettings(settings)
       return { success: true }
     }),
->>>>>>> upstream/main
 })

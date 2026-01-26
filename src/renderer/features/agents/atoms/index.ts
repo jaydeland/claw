@@ -263,11 +263,7 @@ export type DiffViewDisplayMode = "side-peek" | "center-peek" | "full-page"
 
 export const diffViewDisplayModeAtom = atomWithStorage<DiffViewDisplayMode>(
   "agents:diffViewDisplayMode",
-<<<<<<< HEAD
   "full-page", // default to full-screen view
-=======
-  "center-peek", // default to dialog for new users
->>>>>>> upstream/main
   undefined,
   { getOnInit: true },
 )
@@ -664,7 +660,6 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
   ),
 )
 
-<<<<<<< HEAD
 // ============================================
 // COMMAND SELECTION
 // ============================================
@@ -697,19 +692,10 @@ export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" 
 export const selectedSidebarTabAtom = atomWithStorage<SidebarTab>(
   "agents:selectedSidebarTab",
   "chats",
-=======
-// Plan sidebar state atoms
-
-// Plan sidebar width (global, persisted)
-export const agentsPlanSidebarWidthAtom = atomWithStorage<number>(
-  "agents-plan-sidebar-width",
-  500,
->>>>>>> upstream/main
   undefined,
   { getOnInit: true },
 )
 
-<<<<<<< HEAD
 /**
  * Sidebar content collapsed state (persisted)
  * When collapsed, only the tab bar is shown, not the tab content
@@ -747,7 +733,18 @@ export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
     },
   },
   { getOnInit: true },
-=======
+)
+
+// Plan sidebar state atoms
+
+// Plan sidebar width (global, persisted)
+export const agentsPlanSidebarWidthAtom = atomWithStorage<number>(
+  "agents-plan-sidebar-width",
+  500,
+  undefined,
+  { getOnInit: true },
+)
+
 // Plan sidebar open state storage - stores per chatId (persisted)
 // Uses window-scoped storage so each window can have independent plan sidebar states
 const planSidebarOpenStorageAtom = atomWithWindowStorage<Record<string, boolean>>(
@@ -863,5 +860,4 @@ export const workspaceDiffCacheAtomFamily = atomFamily((chatId: string) =>
       })
     },
   ),
->>>>>>> upstream/main
 )

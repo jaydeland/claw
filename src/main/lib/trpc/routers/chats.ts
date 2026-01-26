@@ -371,11 +371,8 @@ export const chatsRouter = router({
           sanitizeProjectName(project.name),
           chat.id,
           input.baseBranch,
-<<<<<<< HEAD
-          customWorktreeLocation,
-=======
           input.branchType,
->>>>>>> upstream/main
+          customWorktreeLocation,
         )
         console.log("[chats.create] worktree result:", result)
 

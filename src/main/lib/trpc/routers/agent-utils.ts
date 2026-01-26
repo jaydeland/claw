@@ -159,12 +159,8 @@ export async function loadAgent(
  */
 export async function scanAgentsDirectory(
   dir: string,
-<<<<<<< HEAD
-  source: "user" | "project" | "custom"
-=======
-  source: "user" | "project",
+  source: "user" | "project" | "custom",
   basePath?: string // For project agents, the cwd to make paths relative to
->>>>>>> upstream/main
 ): Promise<FileAgent[]> {
   const agents: FileAgent[] = []
 

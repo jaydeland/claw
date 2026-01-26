@@ -65,13 +65,9 @@ function parseSkillMd(content: string): { name?: string; description?: string } 
  */
 async function scanSkillsDirectory(
   dir: string,
-<<<<<<< HEAD
   source: "user" | "project" | "custom",
-  namePrefix = "",
-=======
-  source: "user" | "project",
   basePath?: string, // For project skills, the cwd to make paths relative to
->>>>>>> upstream/main
+  namePrefix = "",
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
 
@@ -132,6 +128,7 @@ async function scanSkillsDirectory(
         const nestedSkills = await scanSkillsDirectory(
           entryPath,
           source,
+          basePath,
           skillName,  // Pass current name as prefix for nested skills
         )
         skills.push(...nestedSkills)
@@ -156,7 +153,6 @@ const listSkillsProcedure = publicProcedure
   .query(async ({ input }) => {
     const locations = getScanLocations("skills", input?.cwd)
 
-<<<<<<< HEAD
     // Get custom plugin directories from database
     const customDirs = getCustomPluginDirectories()
 
@@ -164,14 +160,8 @@ const listSkillsProcedure = publicProcedure
     const scanPromises: Promise<FileSkill[]>[] = []
 
     // Project skills (highest priority)
-    if (locations.projectDir) {
-      scanPromises.push(scanSkillsDirectory(locations.projectDir, "project"))
-=======
-    let projectSkillsPromise = Promise.resolve<FileSkill[]>([])
-    if (input?.cwd) {
-      const projectSkillsDir = path.join(input.cwd, ".claude", "skills")
-      projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project", input.cwd)
->>>>>>> upstream/main
+    if (locations.projectDir && input?.cwd) {
+      scanPromises.push(scanSkillsDirectory(locations.projectDir, "project", input.cwd))
     }
 
     // User skills

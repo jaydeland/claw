@@ -3,26 +3,9 @@ import { atomFamily, atomWithStorage } from "jotai/utils"
 import { atomWithWindowStorage } from "../../lib/window-storage"
 import type { TerminalInstance } from "./types"
 
-<<<<<<< HEAD
 // Special ID for global terminals (not tied to any specific chat)
 export const GLOBAL_TERMINAL_ID = "__global__"
 
-export const terminalSidebarOpenAtom = atomWithStorage<boolean>(
-  "terminal-sidebar-open",
-  false,
-  undefined,
-  { getOnInit: true },
-)
-
-// Terminal dialog open state (modal version, opened with Cmd+`)
-export const terminalDialogOpenAtom = atomWithStorage<boolean>(
-  "terminal-dialog-open",
-  false,
-  undefined,
-  { getOnInit: true },
-)
-
-=======
 // Storage atom for persisting per-chat terminal sidebar state - window-scoped
 const terminalSidebarOpenStorageAtom = atomWithWindowStorage<Record<string, boolean>>(
   "terminal-sidebar-open-by-chat",
@@ -45,7 +28,13 @@ export const terminalSidebarOpenAtomFamily = atomFamily((chatId: string) =>
 // Use terminalSidebarOpenAtomFamily(chatId) instead
 export const terminalSidebarOpenAtom = atom(false)
 
->>>>>>> upstream/main
+// Terminal dialog open state (modal version, opened with Cmd+`)
+export const terminalDialogOpenAtom = atomWithStorage<boolean>(
+  "terminal-dialog-open",
+  false,
+  undefined,
+  { getOnInit: true },
+)
 export const terminalSidebarWidthAtom = atomWithStorage<number>(
   "terminal-sidebar-width",
   500,
@@ -81,8 +70,7 @@ export const terminalsAtom = atomWithWindowStorage<
  */
 export const activeTerminalIdAtom = atomWithWindowStorage<
   Record<string, string | null>
-<<<<<<< HEAD
->("active-terminal-by-chat", {}, undefined, { getOnInit: true })
+>("active-terminal-by-chat", {}, { getOnInit: true })
 
 // ============================================================================
 // Terminal Dialog State Management
@@ -108,6 +96,3 @@ export const dialogActiveTerminalIdAtom = atomWithStorage<string | null>(
   undefined,
   { getOnInit: true },
 )
-=======
->("active-terminal-by-chat", {}, { getOnInit: true })
->>>>>>> upstream/main

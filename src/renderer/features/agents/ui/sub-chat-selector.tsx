@@ -171,14 +171,11 @@ interface SubChatSelectorProps {
   canOpenPreview?: boolean
   onOpenDiff?: () => void
   canOpenDiff?: boolean
-<<<<<<< HEAD
-=======
   isDiffSidebarOpen?: boolean
   diffStats?: DiffStats
   onOpenTerminal?: () => void
   canOpenTerminal?: boolean
   chatId?: string
->>>>>>> upstream/main
 }
 
 export function SubChatSelector({
@@ -189,14 +186,11 @@ export function SubChatSelector({
   canOpenPreview = false,
   onOpenDiff,
   canOpenDiff = false,
-<<<<<<< HEAD
-=======
   isDiffSidebarOpen = false,
   diffStats,
   onOpenTerminal,
   canOpenTerminal = false,
   chatId,
->>>>>>> upstream/main
 }: SubChatSelectorProps) {
   // Use shallow comparison to prevent re-renders when arrays have same content
   const { activeSubChatId, openSubChatIds, pinnedSubChatIds, allSubChats, parentChatId, togglePinSubChat } = useAgentSubChatStore(
@@ -904,9 +898,6 @@ export function SubChatSelector({
         </div>
       )}
 
-<<<<<<< HEAD
-      {/* Diff button - only on mobile when diff is available (desktop uses RightIconBar) */}
-=======
       {/* Diff button - visible on desktop when unified sidebar is disabled OR diff widget is hidden */}
       {!isMobile && canOpenDiff && showDiffButton && (
         <div
@@ -978,7 +969,6 @@ export function SubChatSelector({
       )}
 
       {/* Diff button - only on mobile when diff is available */}
->>>>>>> upstream/main
       {isMobile && onOpenDiff && canOpenDiff && (
         <div
           className="rounded-md bg-background/10 backdrop-blur-[10px] flex items-center justify-center"
