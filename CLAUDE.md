@@ -381,7 +381,17 @@ npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 3. Re-upload stapled DMGs to R2 and GitHub (see RELEASE.md for commands)
 4. Update changelog: `gh release edit v0.0.X --notes "..."`
 5. **Upload manifests (triggers auto-updates!)** — see RELEASE.md
-6. Sync to public: `./scripts/sync-to-public.sh`
+6. **Update Homebrew cask:** `bun run release:homebrew`
+7. Sync to public: `./scripts/sync-to-public.sh`
+
+### Homebrew Distribution
+
+Users can install via Homebrew:
+```bash
+brew install jaydeland/claw/claw
+```
+
+The `release:homebrew` script updates the [homebrew-claw](https://github.com/jaydeland/homebrew-claw) tap with the new version and SHA256 hashes. Run this after uploading the stapled DMGs to CDN.
 
 ### Files Uploaded to CDN
 

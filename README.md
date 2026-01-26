@@ -55,14 +55,27 @@ Claude asks clarifying questions, builds structured plans, and shows clean markd
 
 ## Installation
 
-### Prerequisites
+### Homebrew (macOS - Recommended)
 
+```bash
+brew install jaydeland/claw/claw
+```
+
+After installation, Claw will auto-update itself.
+
+### Direct Download
+
+Download the latest release from [21st.dev](https://21st.dev) or the [GitHub releases page](https://github.com/jdeland/claw/releases).
+
+### Build from source
+
+**Prerequisites:**
 - **Flox** - For reproducible development environment ([install instructions](https://flox.dev/docs))
 - **Devyard environment** - Claw inherits TypeScript tooling from the devyard Flox environment (must be accessible via symlink at `./devyard`)
 - **Python 3** - For native module compilation (inherited from devyard)
 - **Xcode Command Line Tools** (macOS) - Run `xcode-select --install`
 
-### Build from source
+**Build steps:**
 
 ```bash
 # 1. Activate Flox environment (manages bun, electron, inherits from devyard)
