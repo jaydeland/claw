@@ -55,17 +55,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
 
   // Fetch all chats (we'll group them by project client-side)
-  const { data: allChats, isLoading: isLoadingChats } = trpc.chats.list.useQuery({})
-
-  // Debug: log data loading
-  useEffect(() => {
-    console.log('[WorkspacesTab] Data state:', JSON.stringify({
-      projectsCount: projects?.length,
-      chatsCount: allChats?.length,
-      isLoadingProjects,
-      isLoadingChats,
-    }))
-  }, [projects, allChats, isLoadingProjects, isLoadingChats])
+  const { data: allChats, isLoading: isLoadingChats} = trpc.chats.list.useQuery({})
 
   const utils = trpc.useUtils()
 
@@ -202,10 +192,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
   // Handle workspace click
   const handleWorkspaceClick = useCallback((workspace: any) => {
-    console.log('[WorkspacesTab] Workspace clicked:', workspace.id, workspace.name)
     toggleWorkspaceExpanded(workspace.id)
     // Also set as selected project
-    const projectToSet = {
+    setSelectedProject({
       id: workspace.id,
       name: workspace.name,
       path: workspace.path,
@@ -213,9 +202,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
       gitProvider: workspace.gitProvider as "github" | "gitlab" | "bitbucket" | null,
       gitOwner: workspace.gitOwner,
       gitRepo: workspace.gitRepo,
-    }
-    console.log('[WorkspacesTab] Setting selectedProject:', projectToSet)
-    setSelectedProject(projectToSet)
+    })
   }, [toggleWorkspaceExpanded, setSelectedProject])
 
   // Handle new chat

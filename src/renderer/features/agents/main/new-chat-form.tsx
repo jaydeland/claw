@@ -177,29 +177,9 @@ export function NewChatForm({
   const [lastSelectedRepo, setLastSelectedRepo] = useAtom(lastSelectedRepoAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
 
-  // Debug: log selectedProject state
-  useEffect(() => {
-    console.log('[NewChatForm] selectedProject atom value:', JSON.stringify({
-      hasValue: !!selectedProject,
-      id: selectedProject?.id,
-      name: selectedProject?.name,
-    }))
-  }, [selectedProject])
-
   // Fetch projects to validate selectedProject exists
   const { data: projectsList, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
-
-  // Debug: log projects list state
-  useEffect(() => {
-    console.log('[NewChatForm] Projects list state:', JSON.stringify({
-      isLoading: isLoadingProjects,
-      projectsCount: projectsList?.length,
-      selectedProjectId: selectedProject?.id,
-      selectedProjectName: selectedProject?.name,
-      hasSelectedProject: !!selectedProject,
-    }))
-  }, [projectsList, isLoadingProjects, selectedProject])
 
   // Validate selected project exists in DB
   // While loading, trust the stored value to prevent flicker
@@ -1193,14 +1173,7 @@ export function NewChatForm({
           )}
 
           {/* Input Area or Select Repo State */}
-          {(() => {
-            console.log('[NewChatForm] RENDER: selectedProject check:', JSON.stringify({
-              hasSelectedProject: !!selectedProject,
-              selectedProjectId: selectedProject?.id,
-              willShowSelector: !selectedProject
-            }))
-            return !selectedProject
-          })() ? (
+          {!selectedProject ? (
             // No project selected - show select repo button (like Sign in button)
             <div className="flex justify-center">
               <button
