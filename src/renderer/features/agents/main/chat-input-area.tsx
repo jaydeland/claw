@@ -30,7 +30,7 @@ import {
 } from "../../../components/ui/prompt-input"
 import { cn } from "../../../lib/utils"
 import { isPlanModeAtom, lastSelectedModelIdAtom } from "../atoms"
-import { AgentsSlashCommand, COMMAND_PROMPTS, type SlashCommandOption } from "../commands"
+import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import { CommandsDropdown } from "../components/commands-dropdown"
 import { AgentsDropdown } from "../components/agents-dropdown"
@@ -114,6 +114,7 @@ export interface ChatInputAreaProps {
   onApprovePlan: () => void
   onCompact: () => void
   onCreateNewSubChat?: () => void
+  onShowTasks?: () => void
   // State from parent
   isStreaming: boolean
   hasUnapprovedPlan: boolean
@@ -526,11 +527,11 @@ export const ChatInputArea = memo(function ChatInputArea({
       editorRef.current?.clearSlashCommand()
       setShowSlashDropdown(false)
 
-      // Handle builtin commands
+      // Claw-only UI commands - handle locally, don't send to SDK
       if (command.category === "builtin") {
         switch (command.name) {
           case "clear":
-            // Create a new sub-chat (fresh conversation)
+            // Create a new sub-chat (Claw-specific behavior)
             if (onCreateNewSubChat) {
               onCreateNewSubChat()
             }
@@ -545,30 +546,30 @@ export const ChatInputArea = memo(function ChatInputArea({
               setIsPlanMode(false)
             }
             break
-          case "compact":
-            // Trigger context compaction
-            onCompact()
-            break
-          // Prompt-based commands - auto-send to agent
-          case "review":
-          case "pr-comments":
-          case "release-notes":
-          case "security-review":
-          case "commit": {
-            const prompt =
-              COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
-            if (prompt) {
-              editorRef.current?.setValue(prompt)
-              // Auto-send the prompt to agent
-              setTimeout(() => onSend(), 0)
+          case "tasks":
+            // Show background tasks panel (Claw-specific)
+            if (onShowTasks) {
+              onShowTasks()
             }
             break
-          }
         }
         return
       }
 
-      // Handle custom commands
+      // SDK commands (from SDK session-init) - send directly to SDK
+      if (command.id?.startsWith("sdk:")) {
+        if (command.argumentHint) {
+          // Command expects arguments - insert and wait for user
+          editorRef.current?.setValue(`/${command.name} `)
+        } else {
+          // Command without arguments - send immediately to SDK
+          editorRef.current?.setValue(`/${command.name}`)
+          setTimeout(() => onSend(), 0)
+        }
+        return
+      }
+
+      // Fallback: Old-style custom commands with fetched content
       if (command.argumentHint) {
         // Command expects arguments - insert command and let user add args
         editorRef.current?.setValue(`/${command.name} `)
@@ -578,7 +579,7 @@ export const ChatInputArea = memo(function ChatInputArea({
         setTimeout(() => onSend(), 0)
       }
     },
-    [isPlanMode, setIsPlanMode, onSend, onCreateNewSubChat, onCompact, editorRef],
+    [isPlanMode, setIsPlanMode, onSend, onCreateNewSubChat, onShowTasks, editorRef],
   )
 
   // Handle command selection from Commands dropdown

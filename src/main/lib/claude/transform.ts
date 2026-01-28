@@ -347,6 +347,20 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
             toolName: block.name,
             input: block.input,
           }
+
+          // Detect background Bash tasks
+          if (block.name === "Bash" && block.input && typeof block.input === "object") {
+            const input = block.input as any
+            if (input.run_in_background === true) {
+              yield {
+                type: "background-task-started",
+                toolCallId: compositeId,
+                command: String(input.command || ""),
+                description: input.description,
+                outputFile: undefined, // Will be filled from tool-output
+              }
+            }
+          }
         }
       }
     }
@@ -419,6 +433,7 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
           mcp_servers: msg.mcp_servers,
           plugins: msg.plugins,
           skills: msg.skills?.length,
+          slash_commands: msg.slash_commands?.length,
         })
         // Map MCP servers with validated status type and additional info
         const mcpServers: MCPServer[] = (msg.mcp_servers || []).map(
@@ -433,12 +448,20 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
             ...(s.error && { error: s.error }),
           }),
         )
+        // Map slash commands from SDK
+        const slashCommands = (msg.slash_commands || []).map((cmd: any) => ({
+          name: cmd.name,
+          description: cmd.description || "",
+          source: cmd.source || "custom",
+          argumentHint: cmd.argument_hint,
+        }))
         yield {
           type: "session-init",
           tools: msg.tools || [],
           mcpServers,
           plugins: msg.plugins || [],
           skills: msg.skills || [],
+          slashCommands,
         }
       }
 
@@ -466,9 +489,18 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
 
     // ===== RESULT (final) =====
     if (msg.type === "result") {
-      console.log("[transform] RESULT message, textStarted:", textStarted, "lastTextId:", lastTextId)
-      yield* endTextBlock()
-      yield* endToolInput()
+      console.log("[transform] RESULT message, textStarted:", textStarted, "lastTextId:", lastTextId, "subtype:", msg.subtype)
+
+      // Check for error subtype before processing
+      if (msg.subtype === "error_during_execution") {
+        console.error("[transform] ERROR_DURING_EXECUTION result - tool execution failed")
+        yield* endTextBlock()
+        yield* endToolInput()
+        // Note: error details will be in the result metadata
+      } else {
+        yield* endTextBlock()
+        yield* endToolInput()
+      }
 
       const inputTokens = msg.usage?.input_tokens
       const outputTokens = msg.usage?.output_tokens

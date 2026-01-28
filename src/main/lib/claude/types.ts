@@ -23,6 +23,14 @@ export type UIMessageChunk =
     }
   | { type: "tool-output-available"; toolCallId: string; output: unknown }
   | { type: "tool-output-error"; toolCallId: string; errorText: string }
+  // Background task tracking
+  | {
+      type: "background-task-started"
+      toolCallId: string
+      command: string
+      description?: string
+      outputFile?: string
+    }
   // Error & metadata
   | { type: "error"; errorText: string }
   | { type: "auth-error"; errorText: string }
@@ -50,7 +58,15 @@ export type UIMessageChunk =
       mcpServers: MCPServer[]
       plugins: { name: string; path: string }[]
       skills: string[]
+      slashCommands: SDKSlashCommand[]
     }
+
+export type SDKSlashCommand = {
+  name: string
+  description: string
+  source: "builtin" | "custom" | "skill" | "plugin"
+  argumentHint?: string
+}
 
 export type MCPServerStatus = "connected" | "failed" | "pending" | "needs-auth"
 

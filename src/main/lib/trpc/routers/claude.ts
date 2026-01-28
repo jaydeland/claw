@@ -15,7 +15,13 @@ import {
   checkOfflineFallback,
   type UIMessageChunk,
 } from "../../claude"
-import { chats, claudeCodeCredentials, getDatabase, subChats } from "../../db"
+import {
+  backgroundTasks,
+  chats,
+  claudeCodeCredentials,
+  getDatabase,
+  subChats,
+} from "../../db"
 import { createRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from "../../ollama"
 import { publicProcedure, router } from "../index"
@@ -801,9 +807,10 @@ export const claudeRouter = router({
                   const skillsTargetExists = await fs.lstat(skillsTarget).then(() => true).catch(() => false)
                   if (skillsSourceExists && !skillsTargetExists) {
                     await fs.symlink(skillsSource, skillsTarget, "dir")
+                    console.log(`[claude] Symlinked skills: ${skillsSource} → ${skillsTarget}`)
                   }
                 } catch (symlinkErr) {
-                  // Ignore symlink errors (might already exist or permission issues)
+                  console.error(`[claude] Failed to symlink skills directory:`, symlinkErr)
                 }
 
                 // Symlink agents directory if source exists and target doesn't
@@ -812,9 +819,38 @@ export const claudeRouter = router({
                   const agentsTargetExists = await fs.lstat(agentsTarget).then(() => true).catch(() => false)
                   if (agentsSourceExists && !agentsTargetExists) {
                     await fs.symlink(agentsSource, agentsTarget, "dir")
+                    console.log(`[claude] Symlinked agents: ${agentsSource} → ${agentsTarget}`)
                   }
                 } catch (symlinkErr) {
-                  // Ignore symlink errors (might already exist or permission issues)
+                  console.error(`[claude] Failed to symlink agents directory:`, symlinkErr)
+                }
+
+                // Symlink commands directory if source exists and target doesn't
+                try {
+                  const commandsSource = path.join(homeClaudeDir, "commands")
+                  const commandsTarget = path.join(isolatedConfigDir, "commands")
+                  const commandsSourceExists = await fs.stat(commandsSource).then(() => true).catch(() => false)
+                  const commandsTargetExists = await fs.lstat(commandsTarget).then(() => true).catch(() => false)
+                  if (commandsSourceExists && !commandsTargetExists) {
+                    await fs.symlink(commandsSource, commandsTarget, "dir")
+                    console.log(`[claude] Symlinked commands: ${commandsSource} → ${commandsTarget}`)
+                  }
+                } catch (symlinkErr) {
+                  console.error(`[claude] Failed to symlink commands directory:`, symlinkErr)
+                }
+
+                // Symlink rules directory if source exists and target doesn't
+                try {
+                  const rulesSource = path.join(homeClaudeDir, "rules")
+                  const rulesTarget = path.join(isolatedConfigDir, "rules")
+                  const rulesSourceExists = await fs.stat(rulesSource).then(() => true).catch(() => false)
+                  const rulesTargetExists = await fs.lstat(rulesTarget).then(() => true).catch(() => false)
+                  if (rulesSourceExists && !rulesTargetExists) {
+                    await fs.symlink(rulesSource, rulesTarget, "dir")
+                    console.log(`[claude] Symlinked rules: ${rulesSource} → ${rulesTarget}`)
+                  }
+                } catch (symlinkErr) {
+                  console.error(`[claude] Failed to symlink rules directory:`, symlinkErr)
                 }
 
                 symlinksCreated.add(cacheKey)
@@ -1080,8 +1116,8 @@ ${prompt}
                   allowDangerouslySkipPermissions: true,
                 }),
                 includePartialMessages: true,
-                // Load skills from project and user directories (skip for Ollama - not supported)
-                ...(!isUsingOllama && { settingSources: ["project" as const, "user" as const] }),
+                // Load skills from project, user, and local plugin directories (skip for Ollama - not supported)
+                ...(!isUsingOllama && { settingSources: ["project" as const, "user" as const, "local" as const] }),
                 canUseTool: async (
                   toolName: string,
                   toolInput: Record<string, unknown>,
@@ -1282,6 +1318,7 @@ ${prompt}
             let planCompleted = false // Flag to stop after ExitPlanMode in plan mode
             let exitPlanModeToolCallId: string | null = null // Track ExitPlanMode's toolCallId
             let firstMessageReceived = false
+            let resultReceived = false // Flag to stop after result message
             const streamIterationStart = Date.now()
 
             if (isUsingOllama) {
@@ -1294,8 +1331,13 @@ ${prompt}
 
             try {
               for await (const msg of stream) {
-                if (abortController.signal.aborted) {
-                  if (isUsingOllama) console.log(`[Ollama] Stream aborted by user`)
+                if (abortController.signal.aborted || resultReceived) {
+                  if (abortController.signal.aborted) {
+                    if (isUsingOllama) console.log(`[Ollama] Stream aborted by user`)
+                  }
+                  if (resultReceived) {
+                    console.log(`[SD] M:RESULT_EXIT sub=${subId} messageCount=${messageCount}`)
+                  }
                   break
                 }
 
@@ -1513,6 +1555,28 @@ ${prompt}
                         abortController.abort()
                       }
                       break
+                    case "background-task-started":
+                      // Insert background task record into database
+                      try {
+                        const taskDb = getDatabase()
+                        taskDb
+                          .insert(backgroundTasks)
+                          .values({
+                            subChatId: input.subChatId,
+                            chatId: input.chatId,
+                            toolCallId: chunk.toolCallId,
+                            command: chunk.command,
+                            description: chunk.description,
+                            outputFile: chunk.outputFile,
+                          })
+                          .run()
+                        console.log(
+                          `[Tasks] Created background task: ${chunk.command.slice(0, 50)}...`,
+                        )
+                      } catch (err) {
+                        console.error("[Tasks] Failed to create background task:", err)
+                      }
+                      break
                     case "message-metadata":
                       metadata = { ...metadata, ...chunk.messageMetadata }
                       break
@@ -1533,11 +1597,20 @@ ${prompt}
                       }
                       break
                   }
+                  // Detect result finish chunk
+                  if (chunk.type === "finish") {
+                    resultReceived = true
+                  }
                   // Break from chunk loop if plan is done
                   if (planCompleted) {
                     console.log(`[SD] M:PLAN_BREAK_CHUNK sub=${subId}`)
                     break
                   }
+                }
+                // Break from stream loop if result received
+                if (resultReceived) {
+                  console.log(`[SD] M:RESULT_BREAK sub=${subId} messageCount=${messageCount} chunkCount=${chunkCount}`)
+                  break
                 }
                 // Break from stream loop if plan is done
                 if (planCompleted) {

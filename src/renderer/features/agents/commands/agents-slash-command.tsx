@@ -12,6 +12,8 @@ import {
   memo,
 } from "react"
 import { createPortal } from "react-dom"
+import { useAtomValue } from "jotai"
+import { sessionInfoAtom } from "../../../lib/atoms"
 import { IconSpinner } from "../../../components/ui/icons"
 import { ChevronRight } from "lucide-react"
 import type { SlashCommandOption, SlashTriggerPayload } from "./types"
@@ -57,18 +59,37 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     return () => clearTimeout(timer)
   }, [searchText])
 
-  // Fetch custom commands from filesystem
+  // Get SDK-discovered commands from session info
+  const sessionInfo = useAtomValue(sessionInfoAtom)
+
+  // Map SDK commands to dropdown format
+  const sdkCommands: SlashCommandOption[] = useMemo(() => {
+    if (!sessionInfo?.slashCommands) return []
+
+    return sessionInfo.slashCommands.map((cmd) => ({
+      id: `sdk:${cmd.source}:${cmd.name}`,
+      name: cmd.name,
+      command: `/${cmd.name}`,
+      description: cmd.description,
+      category: "repository" as const,
+      argumentHint: cmd.argumentHint,
+      source: cmd.source,
+    }))
+  }, [sessionInfo?.slashCommands])
+
+  // Fallback: Fetch commands from filesystem if SDK hasn't provided them yet
   const { data: fileCommands = [], isLoading } = trpc.commands.list.useQuery(
     { projectPath },
     {
-      enabled: isOpen,
-      staleTime: 30_000, // Cache for 30 seconds
+      enabled: isOpen && !sessionInfo?.slashCommands?.length,
+      staleTime: 30_000,
       refetchOnWindowFocus: false,
     },
   )
 
-  // Transform FileCommand to SlashCommandOption
-  const customCommands: SlashCommandOption[] = useMemo(() => {
+  // Transform FileCommand to SlashCommandOption (fallback)
+  const fallbackCommands: SlashCommandOption[] = useMemo(() => {
+    if (sessionInfo?.slashCommands?.length) return [] // Use SDK commands if available
     return fileCommands.map((cmd) => ({
       id: `custom:${cmd.source}:${cmd.name}`,
       name: cmd.name,
@@ -78,7 +99,10 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       path: cmd.path,
       argumentHint: cmd.argumentHint,
     }))
-  }, [fileCommands])
+  }, [fileCommands, sessionInfo?.slashCommands])
+
+  // Use SDK commands or fallback to filesystem commands
+  const customCommands = sessionInfo?.slashCommands?.length ? sdkCommands : fallbackCommands
 
   // State for loading command content
   const [isLoadingContent, setIsLoadingContent] = useState(false)
@@ -86,7 +110,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   // tRPC utils for fetching command content
   const trpcUtils = trpc.useUtils()
 
-  // Handle command selection - fetch content for custom commands
+  // Handle command selection
   const handleSelect = useCallback(
     async (option: SlashCommandOption) => {
       // For builtin commands, call onSelect directly
@@ -95,7 +119,13 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         return
       }
 
-      // For custom commands, fetch the prompt content from filesystem
+      // For SDK commands, just pass through (SDK handles execution)
+      if (option.id.startsWith("sdk:")) {
+        onSelect(option)
+        return
+      }
+
+      // For old-style custom commands with path (fallback), fetch content
       if (option.path) {
         setIsLoadingContent(true)
         try {
@@ -110,7 +140,6 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
           })
         } catch (error) {
           console.error("Failed to fetch slash command content:", error)
-          // Still close the dropdown even on error
           onClose()
         } finally {
           setIsLoadingContent(false)

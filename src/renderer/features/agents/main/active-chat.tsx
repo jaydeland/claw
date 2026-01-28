@@ -84,7 +84,6 @@ import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
 import { SessionFlowDialog } from "../../session-flow/ui/session-flow-dialog"
 import { SessionFlowFullScreen } from "../../session-flow/ui/session-flow-fullscreen"
 import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
-import { BackgroundTaskOutputDialog } from "../../session-flow/ui/background-task-output-dialog"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -116,6 +115,7 @@ import {
   selectedAgentChatIdAtom,
   selectedCommitAtom,
   setLoading,
+  showTasksPanelAtom,
   subChatFilesAtom,
   undoStackAtom,
   type SelectedCommit
@@ -177,6 +177,7 @@ import { ChatTitleEditor } from "../ui/chat-title-editor"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
 import { SubChatSelector } from "../ui/sub-chat-selector"
 import { SubChatStatusCard } from "../ui/sub-chat-status-card"
+import { TasksPanel } from "../ui/tasks-panel"
 import { TextSelectionPopover } from "../ui/text-selection-popover"
 import { QuickCommentInput } from "../ui/quick-comment-input"
 import type { TextSelectionSource } from "../context/text-selection-context"
@@ -2023,6 +2024,9 @@ const ChatViewInner = memo(function ChatViewInner({
   // Plan mode state (read from global atom)
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
 
+  // Tasks panel visibility
+  const [showTasksPanel, setShowTasksPanel] = useAtom(showTasksPanelAtom)
+
   // Mutation for updating sub-chat mode in database
   const updateSubChatModeMutation = api.agents.updateSubChatMode.useMutation({
     onSuccess: () => {
@@ -2257,6 +2261,11 @@ const ChatViewInner = memo(function ChatViewInner({
       parts: [{ type: "text", text: "/compact" }],
     })
   }, [])
+
+  // Handler to show tasks panel
+  const handleShowTasks = useCallback(() => {
+    setShowTasksPanel(true)
+  }, [setShowTasksPanel])
 
   // Handler to stop streaming - memoized to prevent ChatInputArea re-renders
   const handleStop = useCallback(async () => {
@@ -3864,6 +3873,7 @@ const ChatViewInner = memo(function ChatViewInner({
         onApprovePlan={handleApprovePlan}
         onCompact={handleCompact}
         onCreateNewSubChat={onCreateNewSubChat}
+        onShowTasks={handleShowTasks}
         isStreaming={isStreaming}
         hasUnapprovedPlan={hasUnapprovedPlan}
         isCompacting={isCompacting}
@@ -3903,6 +3913,9 @@ const ChatViewInner = memo(function ChatViewInner({
         />
       </div>
     </SearchHighlightProvider>
+
+      {/* Tasks Panel Dialog */}
+      <TasksPanel isOpen={showTasksPanel} onClose={() => setShowTasksPanel(false)} />
     </TextSelectionProvider>
   )
 })
@@ -5942,10 +5955,9 @@ Make sure to preserve all functionality from both branches when resolving confli
         {/* Session Flow Full Screen - full screen view */}
         <SessionFlowFullScreen onScrollToMessage={handleScrollToMessage} />
 
-        {/* Sub-agent and Background Task output dialogs - rendered here to stay mounted */}
-        {/* These must be outside SessionFlowSidebar to prevent unmount issues when sidebar closes */}
+        {/* Sub-agent output dialog - rendered here to stay mounted */}
+        {/* This must be outside SessionFlowSidebar to prevent unmount issues when sidebar closes */}
         <SubAgentOutputDialog chatId={chatId} />
-        <BackgroundTaskOutputDialog chatId={chatId} />
       </div>
     </div>
   )

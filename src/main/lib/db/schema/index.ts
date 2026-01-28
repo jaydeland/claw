@@ -182,6 +182,44 @@ export const configSources = sqliteTable("config_sources", {
   ),
 })
 
+// ============ BACKGROUND TASKS ============
+// Tracks background tasks started by Claude via Bash tool with run_in_background: true
+export const backgroundTasks = sqliteTable("background_tasks", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  subChatId: text("sub_chat_id")
+    .notNull()
+    .references(() => subChats.id, { onDelete: "cascade" }),
+  chatId: text("chat_id")
+    .notNull()
+    .references(() => chats.id, { onDelete: "cascade" }),
+  toolCallId: text("tool_call_id").notNull(), // Links to the Bash tool call
+  command: text("command").notNull(), // The command that was run
+  description: text("description"), // Optional description from Claude
+  outputFile: text("output_file"), // Path to output file (from Bash tool)
+  status: text("status", { enum: ["running", "completed", "failed", "unknown"] })
+    .notNull()
+    .default("running"),
+  exitCode: integer("exit_code"), // Exit code when completed
+  startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  pid: integer("pid"), // Process ID if known
+})
+
+export const backgroundTasksRelations = relations(backgroundTasks, ({ one }) => ({
+  subChat: one(subChats, {
+    fields: [backgroundTasks.subChatId],
+    references: [subChats.id],
+  }),
+  chat: one(chats, {
+    fields: [backgroundTasks.chatId],
+    references: [chats.id],
+  }),
+}))
+
 // ============ APP SETTINGS ============
 // Stores application-level settings and migration tracking
 export const appSettings = sqliteTable("app_settings", {
@@ -207,5 +245,7 @@ export type McpCredential = typeof mcpCredentials.$inferSelect
 export type NewMcpCredential = typeof mcpCredentials.$inferInsert
 export type ConfigSource = typeof configSources.$inferSelect
 export type NewConfigSource = typeof configSources.$inferInsert
+export type BackgroundTask = typeof backgroundTasks.$inferSelect
+export type NewBackgroundTask = typeof backgroundTasks.$inferInsert
 export type AppSettings = typeof appSettings.$inferSelect
 export type NewAppSettings = typeof appSettings.$inferInsert

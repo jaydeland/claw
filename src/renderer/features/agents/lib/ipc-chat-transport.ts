@@ -238,6 +238,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   mcpServers: chunk.mcpServers,
                   plugins: chunk.plugins,
                   skills: chunk.skills?.length,
+                  slashCommands: chunk.slashCommands?.length,
                   // Debug: show all tools to check for MCP tools (format: mcp__servername__toolname)
                   allTools: chunk.tools,
                 })
@@ -246,6 +247,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   mcpServers: chunk.mcpServers,
                   plugins: chunk.plugins,
                   skills: chunk.skills,
+                  slashCommands: chunk.slashCommands,
                 })
               }
 

@@ -48,8 +48,6 @@ export {
   subChatFilesAtom,
 
   // Archive atoms
-  archivePopoverOpenAtom,
-  archiveSearchQueryAtom,
   archiveRepositoryFilterAtom,
 
   // UI state
@@ -655,11 +653,19 @@ export type MCPServer = {
   error?: string
 }
 
+export type SDKSlashCommand = {
+  name: string
+  description: string
+  source: "builtin" | "custom" | "skill" | "plugin"
+  argumentHint?: string
+}
+
 export type SessionInfo = {
   tools: string[]
   mcpServers: MCPServer[]
   plugins: { name: string; path: string }[]
   skills: string[]
+  slashCommands: SDKSlashCommand[]
 }
 
 // Session info from SDK init message

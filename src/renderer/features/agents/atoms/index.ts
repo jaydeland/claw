@@ -253,6 +253,9 @@ export const agentsChangesPanelCollapsedAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Tasks panel visibility (not persisted - resets on app restart)
+export const showTasksPanelAtom = atom<boolean>(false)
+
 // Diff view display mode - sidebar (side peek), center dialog, or fullscreen
 // Defined early because diffSidebarOpenAtomFamily depends on it
 export type DiffViewDisplayMode = "side-peek" | "center-peek" | "full-page"
@@ -394,12 +397,6 @@ export const currentTodosAtomFamily = atomFamily((subChatId: string) =>
 export const agentsSubChatUnseenChangesAtom = atom<Set<string>>(
   new Set<string>(),
 )
-
-// Archive popover open state
-export const archivePopoverOpenAtom = atom<boolean>(false)
-
-// Search query for archive
-export const archiveSearchQueryAtom = atom<string>("")
 
 // Repository filter for archive (null = all repositories)
 export const archiveRepositoryFilterAtom = atom<string | null>(null)
