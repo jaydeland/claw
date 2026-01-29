@@ -349,6 +349,124 @@ export async function queryBackgroundSession(
 }
 
 /**
+ * Check background task status using BashOutput tool
+ * Returns the raw tool output, not Claude's interpretation
+ *
+ * @param shellId - The background task ID
+ * @returns The BashOutput tool result
+ */
+export async function checkBackgroundTaskStatus(
+  shellId: string
+): Promise<{ output: string; status: string; exitCode?: number } | null> {
+  if (!isBackgroundSessionReady()) {
+    console.log("[background-session] Not ready for task check")
+    return null
+  }
+
+  try {
+    const claudeQuery = await getClaudeQuery()
+    const claudeCodeToken = getClaudeCodeToken()
+    const claudeEnv = buildClaudeEnv()
+
+    const finalEnv: Record<string, string> = {
+      ...claudeEnv,
+      ...(claudeCodeToken && {
+        CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
+      }),
+      ...(backgroundConfigDir && {
+        CLAUDE_CONFIG_DIR: backgroundConfigDir,
+      }),
+    }
+
+    const claudeBinaryPath = getBundledClaudeBinaryPath()
+    const queryAbortController = new AbortController()
+
+    const prompt = `Use the BashOutput tool to check the status of background shell ${shellId}. Return the exact fields from the tool result.`
+
+    // Define schema for structured output matching BashOutputToolOutput
+    const schema = {
+      type: 'object' as const,
+      properties: {
+        output: { type: 'string', description: 'Command output from the background shell' },
+        status: { type: 'string', enum: ['running', 'completed', 'failed', 'not found'], description: 'Shell status' },
+        exitCode: { type: 'number', description: 'Exit code if completed' }
+      },
+      required: ['status']
+    }
+
+    const queryOptions = {
+      prompt,
+      options: {
+        abortController: queryAbortController,
+        cwd: app.getPath("userData"),
+        systemPrompt: {
+          type: "preset" as const,
+          preset: "claude_code" as const,
+        },
+        env: finalEnv,
+        permissionMode: "bypassPermissions" as const,
+        allowDangerouslySkipPermissions: true,
+        pathToClaudeCodeExecutable: claudeBinaryPath,
+        resume: sessionState.sessionId || undefined,
+        continue: true,
+        model: "haiku",
+        outputFormat: {
+          type: 'json_schema' as const,
+          schema: schema
+        }
+      },
+    }
+
+    const stream = claudeQuery(queryOptions)
+    let structuredOutput: any = null
+
+    for await (const msg of stream) {
+      const msgAny = msg as any
+
+      // Update sessionId
+      if (msgAny.session_id) {
+        sessionState.sessionId = msgAny.session_id
+      }
+
+      // Check for structured_output in result message
+      if (msgAny.type === "result" && msgAny.structured_output) {
+        structuredOutput = msgAny.structured_output
+        console.log(`[background-session] Got structured output for ${shellId}:`, JSON.stringify(structuredOutput))
+        break
+      }
+    }
+
+    sessionState.requestCount++
+    sessionState.lastUsedTime = new Date()
+
+    // Use the structured output directly
+    if (structuredOutput) {
+      let status = structuredOutput.status || "unknown"
+      const exitCode = structuredOutput.exitCode
+      const output = structuredOutput.output || ""
+
+      // Handle "not found" - shell was already cleaned up after completion
+      if (status.toLowerCase().includes("not found") || status === "not found") {
+        status = "completed"
+        console.log(`[background-session] Shell ${shellId} not found but completed (was cleaned up)`)
+      }
+
+      return {
+        output,
+        status,
+        exitCode: exitCode ?? (status === "completed" ? 0 : undefined),
+      }
+    }
+
+    console.log(`[background-session] No structured output for ${shellId}`)
+    return null
+  } catch (error) {
+    console.error("[background-session] Task check failed:", error)
+    return null
+  }
+}
+
+/**
  * Generate a chat title from the first message
  *
  * @param firstMessage - The first message in the conversation

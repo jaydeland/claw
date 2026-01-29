@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect, useRef } from "react"
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { ChevronRight } from "lucide-react"
 import { AgentToolRegistry, getToolStatus } from "./agent-tool-registry"
 import { AgentToolCall } from "./agent-tool-call"
@@ -98,23 +98,27 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 
   const hasNestedTools = nestedTools.length > 0
 
-  // Build subtitle - always show description
-  const getSubtitle = () => {
+  // Memoize subtitle computation to avoid recomputation on every render
+  // Description truncation is cheap but called frequently during streaming
+  const subtitle = useMemo(() => {
     if (description) {
-      const truncated = description.length > 60 
-        ? description.slice(0, 57) + "..." 
+      return description.length > 60
+        ? description.slice(0, 57) + "..."
         : description
-      return truncated
     }
     return ""
-  }
+  }, [description])
 
-  const subtitle = getSubtitle()
-
-  // Get title text based on status
-  const getTitle = () => {
+  // Memoize title based on pending status to avoid string allocation on every render
+  const title = useMemo(() => {
     return isPending ? "Running Task" : "Completed Task"
-  }
+  }, [isPending])
+
+  // Memoize toggle handler to prevent creating new function on every render
+  // This is passed to onClick and re-renders are expensive during streaming
+  const handleToggleExpand = useCallback(() => {
+    setIsExpanded(prev => !prev)
+  }, [])
 
   // Show interrupted state if task was interrupted without completing
   if (isInterrupted && !part.output) {
@@ -125,7 +129,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
     <div>
       {/* Header - clickable to toggle, same style as AgentExploringGroup */}
       <div
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={handleToggleExpand}
         className="group flex items-start gap-1.5 py-0.5 px-2 cursor-pointer"
       >
         <div className="flex-1 min-w-0 flex items-center gap-1">
@@ -137,11 +141,11 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                 duration={1.2}
                 className="font-medium whitespace-nowrap flex-shrink-0"
               >
-                {getTitle()}
+                {title}
               </TextShimmer>
             ) : (
               <span className="font-medium whitespace-nowrap flex-shrink-0 text-muted-foreground">
-                {getTitle()}
+                {title}
               </span>
             )}
             {subtitle && (

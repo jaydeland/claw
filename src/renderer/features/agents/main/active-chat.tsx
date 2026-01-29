@@ -1,5 +1,25 @@
 "use client"
 
+/**
+ * active-chat.tsx - Main chat interface component
+ *
+ * UseEffect Hook Consolidation Status:
+ * - Before refactor: 53 useEffect/useLayoutEffect hooks
+ * - After refactor: 37 useEffect/useLayoutEffect hooks (30% reduction)
+ *
+ * Consolidated hooks used:
+ * - useChatKeyboardShortcuts: ESC/Ctrl+C, Cmd+Enter, Cmd+ArrowDown shortcuts
+ * - usePendingMessages: PR, Review, Conflict, Auth retry message watchers
+ * - useStreamingStatusSync: Loading status + streaming status sync
+ * - useRollbackSync: Rollback handler/state sync
+ * - usePendingPlanApprovalsSync: Plan approvals atom management
+ * - useSubChatMode: Mode-related state management
+ *
+ * Additional hooks available but not yet integrated (see HOOKS_REFACTOR_GUIDE.md):
+ * - useChatScroll: Scroll management (complex integration, deferred)
+ * - useDiffSidebarEffects: Diff sidebar effects (parent component, deferred)
+ */
+
 import {
   stripEmojis
 } from "../../../components/chat-markdown-renderer"
@@ -79,7 +99,7 @@ import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
-import { sessionFlowSidebarOpenAtom } from "../../session-flow/atoms"
+import { sessionFlowSidebarOpenAtom, sessionFlowBottomTabAtom } from "../../session-flow/atoms"
 import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
 import { SessionFlowDialog } from "../../session-flow/ui/session-flow-dialog"
 import { SessionFlowFullScreen } from "../../session-flow/ui/session-flow-fullscreen"
@@ -131,6 +151,18 @@ import { useHaptic } from "../hooks/use-haptic"
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import {
+  useChatKeyboardShortcuts,
+  navigateSubChat,
+  usePendingPlanApprovalsSync,
+  useRollbackSync,
+  useSubChatMode,
+  usePendingMessages,
+  useDiffSidebarEffects,
+  useThrottledDiffRefetch,
+  useChatScroll,
+  useStreamingStatusSync,
+} from "../hooks"
+import {
   clearSubChatDraft,
   getSubChatDraftFull
 } from "../lib/drafts"
@@ -177,7 +209,7 @@ import { ChatTitleEditor } from "../ui/chat-title-editor"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
 import { SubChatSelector } from "../ui/sub-chat-selector"
 import { SubChatStatusCard } from "../ui/sub-chat-status-card"
-import { TasksPanel } from "../ui/tasks-panel"
+// TasksPanel moved to Session Flow as a tab - see SessionFlowTasks component
 import { TextSelectionPopover } from "../ui/text-selection-popover"
 import { QuickCommentInput } from "../ui/quick-comment-input"
 import type { TextSelectionSource } from "../context/text-selection-context"
@@ -2024,7 +2056,11 @@ const ChatViewInner = memo(function ChatViewInner({
   // Plan mode state (read from global atom)
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
 
-  // Tasks panel visibility
+  // Session flow state
+  const [sessionFlowSidebarOpen, setSessionFlowSidebarOpen] = useAtom(sessionFlowSidebarOpenAtom)
+  const [, setSessionFlowBottomTab] = useAtom(sessionFlowBottomTabAtom)
+
+  // Tasks panel visibility (deprecated - now uses session flow Tasks tab)
   const [showTasksPanel, setShowTasksPanel] = useAtom(showTasksPanelAtom)
 
   // Mutation for updating sub-chat mode in database
@@ -2059,61 +2095,14 @@ const ChatViewInner = memo(function ChatViewInner({
     },
   })
 
-  // Track last initialized sub-chat to prevent re-initialization
-  const lastInitializedRef = useRef<string | null>(null)
-
-  // Initialize mode from sub-chat metadata ONLY when switching sub-chats
-  useEffect(() => {
-    if (subChatId && subChatId !== lastInitializedRef.current) {
-      const subChat = useAgentSubChatStore
-        .getState()
-        .allSubChats.find((sc) => sc.id === subChatId)
-
-      if (subChat?.mode) {
-        setIsPlanMode(subChat.mode === "plan")
-      }
-      lastInitializedRef.current = subChatId
-    }
-    // Dependencies: Only subChatId - setIsPlanMode is stable, useAgentSubChatStore is external
-  }, [subChatId, setIsPlanMode])
-
-  // NOTE: We no longer clear caches on deactivation.
-  // With proper subChatId isolation, each chat's caches are separate.
-  // Caches are only cleared on unmount (when tab is evicted from keep-alive pool).
-
-  // Cleanup message caches on unmount (when tab is evicted from keep-alive)
-  useEffect(() => {
-    const currentSubChatId = subChatId
-    return () => {
-      clearSubChatCaches(currentSubChatId)
-    }
-  }, [subChatId])
-
-  // Track last mode to detect actual user changes (not store updates)
-  const lastIsPlanModeRef = useRef<boolean>(isPlanMode)
-
-  // Update mode for current sub-chat when USER changes isPlanMode
-  useEffect(() => {
-    // Skip if isPlanMode didn't actually change
-    if (lastIsPlanModeRef.current === isPlanMode) {
-      return
-    }
-
-    const newMode = isPlanMode ? "plan" : "agent"
-
-    lastIsPlanModeRef.current = isPlanMode
-
-    if (subChatId) {
-      // Update local store immediately (optimistic update)
-      useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
-
-      // Save to database with error handling to maintain consistency
-      if (!subChatId.startsWith("temp-")) {
-        updateSubChatModeMutation.mutate({ subChatId, mode: newMode })
-      }
-    }
-    // Dependencies: updateSubChatModeMutation.mutate is stable, useAgentSubChatStore is external
-  }, [isPlanMode, subChatId, updateSubChatModeMutation.mutate])
+  // CONSOLIDATED: 3 mode-related effects -> 1 hook (useSubChatMode)
+  // Handles: mode initialization, cache cleanup on unmount, and mode sync
+  const { lastIsPlanModeRef } = useSubChatMode({
+    subChatId,
+    isPlanMode,
+    setIsPlanMode,
+    updateSubChatModeMutation,
+  })
 
   // File/image upload hook
   const {
@@ -2262,10 +2251,11 @@ const ChatViewInner = memo(function ChatViewInner({
     })
   }, [])
 
-  // Handler to show tasks panel
+  // Handler to show tasks panel - opens session flow Tasks tab
   const handleShowTasks = useCallback(() => {
-    setShowTasksPanel(true)
-  }, [setShowTasksPanel])
+    setSessionFlowSidebarOpen(true)
+    setSessionFlowBottomTab("tasks")
+  }, [setSessionFlowSidebarOpen, setSessionFlowBottomTab])
 
   // Handler to stop streaming - memoized to prevent ChatInputArea re-renders
   const handleStop = useCallback(async () => {
@@ -2344,76 +2334,35 @@ const ChatViewInner = memo(function ChatViewInner({
     setQuickCommentState(null)
   }, [])
 
-  // Sync loading status to atom for UI indicators
-  // When streaming starts, set loading. When it stops, clear loading.
-  // Unseen changes, sound notification, and sidebar refresh are handled in onFinish callback
+  // CONSOLIDATED: 2 streaming status effects -> 1 hook (useStreamingStatusSync)
+  // Syncs loading status to atom and streaming status to store
   const setLoadingSubChats = useSetAtom(loadingSubChatsAtom)
-
-  useEffect(() => {
-    const storedParentChatId = agentChatStore.getParentChatId(subChatId)
-    if (!storedParentChatId) return
-
-    if (isStreaming) {
-      setLoading(setLoadingSubChats, subChatId, storedParentChatId)
-    } else {
-      clearLoading(setLoadingSubChats, subChatId)
-    }
-  }, [isStreaming, subChatId, setLoadingSubChats])
-
-  // Watch for pending PR message and send it
-  const [pendingPrMessage, setPendingPrMessage] = useAtom(pendingPrMessageAtom)
-
-  useEffect(() => {
-    if (pendingPrMessage && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingPrMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingPrMessage }],
-      })
-
-      // Reset creating PR state after message is sent
-      setIsCreatingPr(false)
-    }
-  }, [pendingPrMessage, isStreaming, sendMessage, setPendingPrMessage])
-
-  // Watch for pending Review message and send it
-  const [pendingReviewMessage, setPendingReviewMessage] = useAtom(
-    pendingReviewMessageAtom,
+  const setStreamingStatusStore = useStreamingStatusStore((s) => s.setStatus)
+  useStreamingStatusSync(
+    subChatId,
+    isStreaming,
+    parentChatId,
+    setLoadingSubChats,
+    setStreamingStatusStore,
+    status
   )
 
-  useEffect(() => {
-    if (pendingReviewMessage && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingReviewMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingReviewMessage }],
-      })
+  // CONSOLIDATED: 4 pending message effects -> 1 hook (usePendingMessages)
+  // Handles PR, Review, Conflict, and Auth retry messages
+  const { setPendingPrMessage, setPendingReviewMessage, setPendingConflictMessage, setPendingAuthRetry } = usePendingMessages(
+    {
+      isStreaming,
+      subChatId,
+      sendMessage,
+      setIsCreatingPr,
+    },
+    {
+      pendingPrMessageAtom,
+      pendingReviewMessageAtom,
+      pendingConflictResolutionMessageAtom,
+      pendingAuthRetryMessageAtom,
     }
-  }, [pendingReviewMessage, isStreaming, sendMessage, setPendingReviewMessage])
-
-  // Watch for pending conflict resolution message and send it
-  const [pendingConflictMessage, setPendingConflictMessage] = useAtom(
-    pendingConflictResolutionMessageAtom,
   )
-
-  useEffect(() => {
-    if (pendingConflictMessage && !isStreaming) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingConflictMessage(null)
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts: [{ type: "text", text: pendingConflictMessage }],
-      })
-    }
-  }, [pendingConflictMessage, isStreaming, sendMessage, setPendingConflictMessage])
 
   // Pending user questions from AskUserQuestion tool
   const [pendingQuestionsMap, setPendingQuestionsMap] = useAtom(
@@ -2686,58 +2635,7 @@ const ChatViewInner = memo(function ChatViewInner({
     [pendingQuestions, handleSubmitWithQuestionAnswer],
   )
 
-  // Watch for pending auth retry message (after successful OAuth flow)
-  const [pendingAuthRetry, setPendingAuthRetry] = useAtom(
-    pendingAuthRetryMessageAtom,
-  )
-
-  useEffect(() => {
-    // Only retry when:
-    // 1. There's a pending message
-    // 2. readyToRetry is true (set by modal on OAuth success)
-    // 3. We're in the correct chat
-    // 4. Not currently streaming
-    if (
-      pendingAuthRetry &&
-      pendingAuthRetry.readyToRetry &&
-      pendingAuthRetry.subChatId === subChatId &&
-      !isStreaming
-    ) {
-      // Clear the pending message immediately to prevent double-sending
-      setPendingAuthRetry(null)
-
-      // Build message parts
-      const parts: Array<
-        { type: "text"; text: string } | { type: "data-image"; data: any }
-      > = [{ type: "text", text: pendingAuthRetry.prompt }]
-
-      // Add images if present
-      if (pendingAuthRetry.images && pendingAuthRetry.images.length > 0) {
-        for (const img of pendingAuthRetry.images) {
-          parts.push({
-            type: "data-image",
-            data: {
-              base64Data: img.base64Data,
-              mediaType: img.mediaType,
-              filename: img.filename,
-            },
-          })
-        }
-      }
-
-      // Send the message to Claude
-      sendMessage({
-        role: "user",
-        parts,
-      })
-    }
-  }, [
-    pendingAuthRetry,
-    isStreaming,
-    sendMessage,
-    setPendingAuthRetry,
-    subChatId,
-  ])
+  // NOTE: Pending auth retry message now handled by usePendingMessages hook above
 
   const handlePlanApproval = useCallback(
     async (toolUseId: string, approved: boolean) => {
@@ -2887,101 +2785,10 @@ const ChatViewInner = memo(function ChatViewInner({
   )
 
   // Expose rollback handler/state via atoms for message action bar
+  // CONSOLIDATED: 2 effects -> 1 hook (useRollbackSync)
   const setRollbackHandler = useSetAtom(rollbackHandlerAtom)
-  useEffect(() => {
-    setRollbackHandler(() => handleRollback)
-    return () => setRollbackHandler(null)
-  }, [handleRollback, setRollbackHandler])
-
   const setIsRollingBackAtom = useSetAtom(isRollingBackAtom)
-  useEffect(() => {
-    setIsRollingBackAtom(isRollingBack)
-  }, [isRollingBack, setIsRollingBackAtom])
-
-  // ESC, Ctrl+C and Cmd+Shift+Backspace handler for stopping stream
-  useEffect(() => {
-    // Skip keyboard handlers for inactive tabs (keep-alive)
-    if (!isActive) return
-
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      let shouldStop = false
-      let shouldSkipQuestions = false
-
-      // Check for Escape key without modifiers (works even from input fields, like terminal Ctrl+C)
-      // Ignore if Cmd/Ctrl is pressed (reserved for Cmd+Esc to focus input)
-      if (
-        e.key === "Escape" &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.shiftKey &&
-        !e.altKey &&
-        isStreaming
-      ) {
-        const target = e.target as HTMLElement
-
-        // Allow ESC to propagate if it originated from a modal/dialog/dropdown
-        const isInsideOverlay = target.closest(
-          '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper], [data-state="open"]',
-        )
-
-        // Also check if any dialog/modal is open anywhere in the document (not just at event target)
-        // This prevents stopping stream when settings dialog is open but not focused
-        const hasOpenDialog = document.querySelector(
-          '[role="dialog"][aria-modal="true"], [data-modal="agents-settings"]',
-        )
-
-        if (!isInsideOverlay && !hasOpenDialog) {
-          // If there are pending questions for this chat, skip them instead of stopping stream
-          if (pendingQuestions) {
-            shouldSkipQuestions = true
-          } else {
-            shouldStop = true
-          }
-        }
-      }
-
-      // Check for Ctrl+C (only Ctrl, not Cmd on Mac)
-      if (e.ctrlKey && !e.metaKey && e.code === "KeyC") {
-        if (!isStreaming) return
-
-        const selection = window.getSelection()
-        const hasSelection = selection && selection.toString().length > 0
-
-        // If there's a text selection, let browser handle copy
-        if (hasSelection) return
-
-        shouldStop = true
-      }
-
-      // Check for Cmd+Shift+Backspace (Mac) or Ctrl+Shift+Backspace (Windows/Linux)
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        e.shiftKey &&
-        e.key === "Backspace" &&
-        isStreaming
-      ) {
-        shouldStop = true
-      }
-
-      if (shouldSkipQuestions) {
-        e.preventDefault()
-        await handleQuestionsSkip()
-      } else if (shouldStop) {
-        e.preventDefault()
-        // Mark as manually aborted to prevent completion sound
-        agentChatStore.setManuallyAborted(subChatId, true)
-        await stop()
-        // Call DELETE endpoint to cancel server-side stream
-        await fetch(`/api/agents/chat?id=${encodeURIComponent(subChatId)}`, {
-          method: "DELETE",
-          credentials: "include",
-        })
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isActive, isStreaming, stop, subChatId, pendingQuestions, handleQuestionsSkip])
+  useRollbackSync(handleRollback, isRollingBack, setRollbackHandler, setIsRollingBackAtom)
 
   // Keyboard shortcut: Enter to focus input when not already focused
   useFocusInputOnEnter(editorRef)
@@ -3564,80 +3371,35 @@ const ChatViewInner = memo(function ChatViewInner({
   hasUnapprovedPlanRef.current = hasUnapprovedPlan
 
   // Update pending plan approvals atom for sidebar indicators
+  // CONSOLIDATED: 2 effects (sync + cleanup) -> 1 hook (usePendingPlanApprovalsSync)
   const setPendingPlanApprovals = useSetAtom(pendingPlanApprovalsAtom)
-  useEffect(() => {
-    setPendingPlanApprovals((prev: Set<string>) => {
-      const newSet = new Set(prev)
-      if (hasUnapprovedPlan) {
-        newSet.add(subChatId)
-      } else {
-        newSet.delete(subChatId)
-      }
-      // Only return new set if it changed
-      if (newSet.size !== prev.size || ![...newSet].every((id) => prev.has(id))) {
-        return newSet
-      }
-      return prev
-    })
-  }, [hasUnapprovedPlan, subChatId, setPendingPlanApprovals])
+  usePendingPlanApprovalsSync(subChatId, hasUnapprovedPlan, setPendingPlanApprovals)
 
-  // Keyboard shortcut: Cmd+Enter to approve plan
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.key === "Enter" &&
-        e.metaKey &&
-        !e.shiftKey &&
-        hasUnapprovedPlan &&
-        !isStreaming
-      ) {
-        e.preventDefault()
-        handleApprovePlan()
-      }
+  // CONSOLIDATED: Keyboard shortcuts hook replaces multiple effects (moved here after hasUnapprovedPlan definition)
+  // - ESC/Ctrl+C to stop streaming
+  // - Cmd+Enter to approve plan
+  // - Cmd+ArrowDown to scroll to bottom
+  useChatKeyboardShortcuts(
+    {
+      onStopStream: handleStop,
+      onSkipQuestions: handleQuestionsSkip,
+      onApprovePlan: handleApprovePlan,
+      onScrollToBottom: scrollToBottom,
+      onCreateNewSubChat: onCreateNewSubChat,
+      onRestoreWorkspace: onRestoreWorkspace,
+    },
+    {
+      isActive,
+      isStreaming,
+      hasUnapprovedPlan,
+      hasPendingQuestions: !!pendingQuestions,
+      canCreatePr: false, // Not used in ChatViewInner
+      isCreatingPr: false, // Not used in ChatViewInner
+      isArchived,
+      subChatId,
+      editorRef,
     }
-
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [hasUnapprovedPlan, isStreaming, handleApprovePlan])
-
-  // Cmd/Ctrl + Arrow Down to scroll to bottom (works even when focused in input)
-  // But don't intercept if input has content - let native cursor navigation work
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.key === "ArrowDown" &&
-        (e.metaKey || e.ctrlKey) &&
-        !e.altKey &&
-        !e.shiftKey
-      ) {
-        // Don't intercept if input has content - let native cursor navigation work
-        const inputValue = editorRef.current?.getValue() || ""
-        if (inputValue.trim().length > 0) {
-          return
-        }
-
-        e.preventDefault()
-        scrollToBottom()
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [scrollToBottom])
-
-  // Clean up pending plan approval when unmounting
-  useEffect(() => {
-    return () => {
-      setPendingPlanApprovals((prev: Set<string>) => {
-        if (prev.has(subChatId)) {
-          const newSet = new Set(prev)
-          newSet.delete(subChatId)
-          return newSet
-        }
-        return prev
-      })
-    }
-  }, [subChatId, setPendingPlanApprovals])
+  )
 
   // Compute sticky top class for user messages
   const stickyTopClass = isMobile
@@ -3657,11 +3419,7 @@ const ChatViewInner = memo(function ChatViewInner({
     syncMessages({ messages, status, subChatId })
   }, [messages, status, subChatId, syncMessages, isActive])
 
-  // Sync status to global streaming status store for queue processing
-  const setStreamingStatus = useStreamingStatusStore((s) => s.setStatus)
-  useEffect(() => {
-    setStreamingStatus(subChatId, status as "ready" | "streaming" | "submitted" | "error")
-  }, [subChatId, status, setStreamingStatus])
+  // NOTE: Streaming status sync now handled by useStreamingStatusSync hook above
 
   // Chat search - scroll to current match
   // Use ref to track scroll lock and prevent race conditions
@@ -3914,8 +3672,7 @@ const ChatViewInner = memo(function ChatViewInner({
       </div>
     </SearchHighlightProvider>
 
-      {/* Tasks Panel Dialog */}
-      <TasksPanel isOpen={showTasksPanel} onClose={() => setShowTasksPanel(false)} />
+      {/* Tasks Panel moved to Session Flow as a tab */}
     </TextSelectionProvider>
   )
 })

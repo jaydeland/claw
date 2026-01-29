@@ -12,6 +12,76 @@ import {
 import { extractTextMentions, TextMentionBlocks } from "../mentions/render-file-mentions"
 
 // ============================================================================
+// OPTIMIZATION STRATEGY
+// ============================================================================
+//
+// This file implements several key optimizations to minimize re-renders:
+//
+// 1. SHALLOW EQUALITY CHECKS
+//    - Custom shallowEqual function for comparing objects/arrays
+//    - Prevents re-renders when data hasn't actually changed
+//
+// 2. FINE-GRAINED SUBSCRIPTIONS
+//    - Components subscribe only to the data they need
+//    - MessageItemWrapper subscribes to isLast status only
+//    - Message content comes from Jotai atoms, not store subscriptions
+//
+// 3. REFERENCE STABILITY
+//    - Return cached values when data hasn't changed
+//    - Use refs to store previous values for comparison
+//    - Stabilize array references when contents are identical
+//
+// 4. CONSOLIDATED SELECTORS
+//    - Extract only the minimum required state slice
+//    - Avoid computing derived state in multiple places
+//
+// 5. MEMOIZATION BOUNDARIES
+//    - Custom arePropsEqual functions for memo components
+//    - MemoizedAssistantMessages only re-renders when IDs change
+//
+// ============================================================================
+
+// ============================================================================
+// UTILITY: Shallow Equality Helper
+// ============================================================================
+// Optimization: Reusable shallow comparison prevents duplicate equality logic
+// and ensures consistent behavior across all hooks.
+
+function shallowEqual<T>(a: T, b: T): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  if (typeof a !== 'object' || typeof b !== 'object') return false
+
+  // Handle arrays
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false
+    }
+    return true
+  }
+
+  // Handle objects
+  const keysA = Object.keys(a as object)
+  const keysB = Object.keys(b as object)
+  if (keysA.length !== keysB.length) return false
+
+  for (const key of keysA) {
+    if ((a as any)[key] !== (b as any)[key]) return false
+  }
+  return true
+}
+
+// Optimization: Compare arrays by value efficiently
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
+// ============================================================================
 // MESSAGE STORE - External store for fine-grained subscriptions
 // ============================================================================
 
@@ -31,8 +101,8 @@ function createMessageStore(): MessageStore {
   let status = "ready"
   let listeners = new Set<() => void>()
 
-  // Store snapshots of message state (not references!) to detect changes
-  // Since AI SDK mutates objects in place, we can't compare object references
+  // Optimization: Store snapshots of message state (not references!) to detect changes
+  // Since AI SDK mutates objects in place, we can't compare object references.
   //
   // NOTE: This is a thorough change detection that checks ALL parts.
   // Compare with message-store.ts hasMessageChanged() which only checks the
@@ -103,7 +173,8 @@ function createMessageStore(): MessageStore {
       anyChanged = true
     }
 
-    // Return new array reference if anything changed, so subscribers see the update
+    // Optimization: Return new array reference if anything changed, so subscribers see the update
+    // Return existing reference if nothing changed to prevent unnecessary re-renders
     return anyChanged ? [...newMessages] : messages
   }
 
@@ -129,7 +200,8 @@ function createMessageStore(): MessageStore {
 
     setMessages(newMessages: Message[], newStatus: string) {
       const stabilized = stabilizeMessages(newMessages)
-      // Only notify if something actually changed
+      // Optimization: Only notify if something actually changed
+      // This is the core optimization - prevents cascading re-renders
       const messagesChanged = stabilized !== messages
       const statusChanged = newStatus !== status
 
@@ -181,17 +253,56 @@ export function MessageStoreProvider({
   )
 }
 
-// Hook to get a specific message by ID - only triggers re-render when THIS message changes
+// ============================================================================
+// SELECTOR PATTERN: Reusable Selectors for State Slices
+// ============================================================================
+// Optimization: Centralized selectors ensure consistent state extraction
+// and make it easy to optimize specific queries.
+
+const selectors = {
+  // Get last message ID - used by multiple hooks
+  getLastMessageId: (messages: Message[]): string | null =>
+    messages.length > 0 ? messages[messages.length - 1]?.id : null,
+
+  // Check if status indicates streaming
+  isStatusStreaming: (status: string): boolean =>
+    status === "streaming" || status === "submitted",
+
+  // Get assistant message IDs only
+  getAssistantIds: (messages: Message[]): string[] =>
+    messages.filter(m => m.role === "assistant").map(m => m.id),
+
+  // Get user message IDs only
+  getUserIds: (messages: Message[]): string[] =>
+    messages.filter(m => m.role === "user").map(m => m.id),
+
+  // Find message by ID
+  findMessage: (messages: Message[], id: string): Message | undefined =>
+    messages.find(m => m.id === id),
+
+  // Find message index by ID
+  findMessageIndex: (messages: Message[], id: string): number =>
+    messages.findIndex(m => m.id === id),
+}
+
+// ============================================================================
+// HOOK: useMessage - Subscribe to specific message by ID
+// ============================================================================
+// Optimization: Only triggers re-render when THIS message changes.
+// Uses reference equality on the message object from the store.
+
 export function useMessage(messageId: string) {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useMessage must be used within MessageStoreProvider")
 
+  // Optimization: Track previous message reference to detect actual changes
   const prevMessageRef = useRef<any>(null)
 
   const subscribe = useCallback((onStoreChange: () => void) => {
     return store.subscribe(() => {
-      // Only notify if THIS message changed
-      const currentMsg = store.messages.find(m => m.id === messageId)
+      // Optimization: Only notify if THIS message changed
+      // This prevents re-renders when other messages update
+      const currentMsg = selectors.findMessage(store.messages, messageId)
       if (currentMsg !== prevMessageRef.current) {
         prevMessageRef.current = currentMsg
         onStoreChange()
@@ -200,7 +311,7 @@ export function useMessage(messageId: string) {
   }, [store, messageId])
 
   const getSnapshot = useCallback(() => {
-    const msg = store.messages.find(m => m.id === messageId)
+    const msg = selectors.findMessage(store.messages, messageId)
     prevMessageRef.current = msg
     return msg
   }, [store, messageId])
@@ -208,7 +319,12 @@ export function useMessage(messageId: string) {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-// Hook to get message IDs only (for list rendering)
+// ============================================================================
+// HOOK: useMessageIds - Subscribe to assistant message IDs only
+// ============================================================================
+// Optimization: Only re-renders when the list of IDs changes (add/remove).
+// Content changes don't affect this hook since we only track IDs.
+
 export function useMessageIds() {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useMessageIds must be used within MessageStoreProvider")
@@ -217,15 +333,14 @@ export function useMessageIds() {
     return store.subscribe(onStoreChange)
   }, [store])
 
+  // Optimization: Cache IDs array to maintain reference stability
   const idsRef = useRef<string[]>([])
 
   const getSnapshot = useCallback(() => {
-    const newIds = store.messages.filter(m => m.role === "assistant").map(m => m.id)
-    // Only return new array if IDs actually changed
-    if (
-      newIds.length === idsRef.current.length &&
-      newIds.every((id, i) => id === idsRef.current[i])
-    ) {
+    const newIds = selectors.getAssistantIds(store.messages)
+    // Optimization: Return cached array if IDs haven't changed
+    // This prevents child components from re-rendering unnecessarily
+    if (arraysEqual(newIds, idsRef.current)) {
       return idsRef.current
     }
     idsRef.current = newIds
@@ -235,18 +350,32 @@ export function useMessageIds() {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-// Hook to get streaming status - only triggers re-render when status actually changes
+// ============================================================================
+// HOOK: useStreamingStatus - Subscribe to streaming state
+// ============================================================================
+// Optimization: Consolidated hook that returns all streaming-related state.
+// Uses shallow equality to prevent re-renders when values haven't changed.
+
+interface StreamingState {
+  isStreaming: boolean
+  status: string
+  lastMessageId: string | null
+}
+
 export function useStreamingStatus() {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useStreamingStatus must be used within MessageStoreProvider")
 
-  const cacheRef = useRef<{ isStreaming: boolean; status: string; lastMessageId: string | null } | null>(null)
+  // Optimization: Single cache for all streaming state
+  // Prevents multiple object allocations and enables shallow comparison
+  const cacheRef = useRef<StreamingState | null>(null)
 
   const subscribe = useCallback((onStoreChange: () => void) => {
     return store.subscribe(() => {
-      const isStreaming = store.status === "streaming" || store.status === "submitted"
-      const lastMsgId = store.messages.length > 0 ? store.messages[store.messages.length - 1]?.id : null
+      const isStreaming = selectors.isStatusStreaming(store.status)
+      const lastMsgId = selectors.getLastMessageId(store.messages)
 
+      // Optimization: Only notify when streaming-relevant state changes
       if (
         !cacheRef.current ||
         cacheRef.current.isStreaming !== isStreaming ||
@@ -260,9 +389,10 @@ export function useStreamingStatus() {
   }, [store])
 
   const getSnapshot = useCallback(() => {
-    const isStreaming = store.status === "streaming" || store.status === "submitted"
-    const lastMsgId = store.messages.length > 0 ? store.messages[store.messages.length - 1]?.id : null
+    const isStreaming = selectors.isStatusStreaming(store.status)
+    const lastMsgId = selectors.getLastMessageId(store.messages)
 
+    // Optimization: Return cached object if state matches
     if (
       cacheRef.current &&
       cacheRef.current.isStreaming === isStreaming &&
@@ -290,19 +420,25 @@ interface MessageItemWrapperProps {
   sandboxSetupStatus: "cloning" | "ready" | "error"
 }
 
-// Hook that only re-renders THIS component when it becomes/stops being the last message
+// ============================================================================
+// HOOK: useIsLastMessage - Track if this message is last
+// ============================================================================
+// Optimization: Only re-renders THIS component when it becomes/stops being
+// the last message. Other messages don't re-render when a new message arrives.
+
 function useIsLastMessage(messageId: string) {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useIsLastMessage must be used within MessageStoreProvider")
 
+  // Optimization: Track previous value to detect actual changes
   const prevIsLastRef = useRef<boolean>(false)
 
   const subscribe = useCallback((onStoreChange: () => void) => {
     return store.subscribe(() => {
-      const lastMsgId = store.messages.length > 0 ? store.messages[store.messages.length - 1]?.id : null
+      const lastMsgId = selectors.getLastMessageId(store.messages)
       const isLast = messageId === lastMsgId
 
-      // Only notify if THIS message's "isLast" status changed
+      // Optimization: Only notify if THIS message's "isLast" status changed
       if (prevIsLastRef.current !== isLast) {
         prevIsLastRef.current = isLast
         onStoreChange()
@@ -311,7 +447,7 @@ function useIsLastMessage(messageId: string) {
   }, [store, messageId])
 
   const getSnapshot = useCallback(() => {
-    const lastMsgId = store.messages.length > 0 ? store.messages[store.messages.length - 1]?.id : null
+    const lastMsgId = selectors.getLastMessageId(store.messages)
     const isLast = messageId === lastMsgId
     prevIsLastRef.current = isLast
     return isLast
@@ -320,17 +456,27 @@ function useIsLastMessage(messageId: string) {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-// Hook that only re-renders when streaming status changes
+// ============================================================================
+// HOOK: useIsStreaming - Simplified streaming status hook
+// ============================================================================
+// Optimization: Lighter-weight alternative to useStreamingStatus when
+// only isStreaming boolean is needed. Uses same cache pattern.
+
+interface IsStreamingState {
+  isStreaming: boolean
+  status: string
+}
+
 function useIsStreaming() {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useIsStreaming must be used within MessageStoreProvider")
 
-  // Cache must be stable and only updated when values actually change
-  const cacheRef = useRef<{ isStreaming: boolean; status: string } | null>(null)
+  // Optimization: Cache must be stable and only updated when values actually change
+  const cacheRef = useRef<IsStreamingState | null>(null)
 
   const subscribe = useCallback((onStoreChange: () => void) => {
     return store.subscribe(() => {
-      const isStreaming = store.status === "streaming" || store.status === "submitted"
+      const isStreaming = selectors.isStatusStreaming(store.status)
       if (!cacheRef.current || cacheRef.current.isStreaming !== isStreaming || cacheRef.current.status !== store.status) {
         cacheRef.current = { isStreaming, status: store.status }
         onStoreChange()
@@ -339,7 +485,7 @@ function useIsStreaming() {
   }, [store])
 
   const getSnapshot = useCallback(() => {
-    const isStreaming = store.status === "streaming" || store.status === "submitted"
+    const isStreaming = selectors.isStatusStreaming(store.status)
     // Return cached value if it matches current state
     if (cacheRef.current && cacheRef.current.isStreaming === isStreaming && cacheRef.current.status === store.status) {
       return cacheRef.current
@@ -352,8 +498,13 @@ function useIsStreaming() {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-// For non-last messages - no streaming subscription needed
-// Subscribes to message via Jotai messageAtomFamily, passes message as prop to AssistantMessageItem
+// ============================================================================
+// NonStreamingMessageItem - For non-last messages
+// ============================================================================
+// Optimization: No streaming subscription needed for historical messages.
+// Subscribes to message via Jotai messageAtomFamily which handles its own
+// change detection, passes message as prop to AssistantMessageItem.
+
 const NonStreamingMessageItem = memo(function NonStreamingMessageItem({
   messageId,
   subChatId,
@@ -383,8 +534,12 @@ const NonStreamingMessageItem = memo(function NonStreamingMessageItem({
   )
 })
 
-// For the last message - subscribes to streaming status AND message via Jotai
-// Passes message as prop to AssistantMessageItem
+// ============================================================================
+// StreamingMessageItem - For the last message
+// ============================================================================
+// Optimization: Subscribes to streaming status AND message via Jotai.
+// Only the last message pays the cost of streaming status subscription.
+
 const StreamingMessageItem = memo(function StreamingMessageItem({
   messageId,
   subChatId,
@@ -418,7 +573,12 @@ const StreamingMessageItem = memo(function StreamingMessageItem({
   )
 })
 
-// Combined hook - get message AND isLast in one subscription to avoid double re-renders
+// ============================================================================
+// HOOK: useMessageWithLastStatus - Combined subscription
+// ============================================================================
+// Optimization: Get message AND isLast in one subscription to avoid double
+// re-renders. Uses stable object references when data hasn't changed.
+
 function useMessageWithLastStatus(messageId: string) {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useMessageWithLastStatus must be used within MessageStoreProvider")
@@ -428,14 +588,14 @@ function useMessageWithLastStatus(messageId: string) {
 
   const subscribe = useCallback((onStoreChange: () => void) => {
     return store.subscribe(() => {
-      const currentMsg = store.messages.find(m => m.id === messageId)
-      const lastMsgId = store.messages.length > 0 ? store.messages[store.messages.length - 1]?.id : null
+      const currentMsg = selectors.findMessage(store.messages, messageId)
+      const lastMsgId = selectors.getLastMessageId(store.messages)
       const isLast = messageId === lastMsgId
 
       const msgChanged = lastReturnedRef.current?.message !== currentMsg
       const isLastChanged = lastReturnedRef.current?.isLast !== isLast
 
-      // Only notify if message changed OR isLast changed
+      // Optimization: Only notify if message changed OR isLast changed
       // DO NOT update lastReturnedRef here - only in getSnapshot!
       if (!lastReturnedRef.current || msgChanged || isLastChanged) {
         onStoreChange()
@@ -444,11 +604,11 @@ function useMessageWithLastStatus(messageId: string) {
   }, [store, messageId])
 
   const getSnapshot = useCallback(() => {
-    const currentMsg = store.messages.find(m => m.id === messageId)
-    const lastMsgId = store.messages.length > 0 ? store.messages[store.messages.length - 1]?.id : null
+    const currentMsg = selectors.findMessage(store.messages, messageId)
+    const lastMsgId = selectors.getLastMessageId(store.messages)
     const isLast = messageId === lastMsgId
 
-    // Return cached object if nothing changed
+    // Optimization: Return cached object if nothing changed
     if (
       lastReturnedRef.current &&
       lastReturnedRef.current.message === currentMsg &&
@@ -465,6 +625,13 @@ function useMessageWithLastStatus(messageId: string) {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
+// ============================================================================
+// MessageItemWrapper - Entry point for rendering a message
+// ============================================================================
+// Optimization: Only subscribes to isLast status, not message content.
+// Delegates content subscription to child components, ensuring minimal
+// re-renders when messages update.
+
 export const MessageItemWrapper = memo(function MessageItemWrapper({
   messageId,
   subChatId,
@@ -472,7 +639,7 @@ export const MessageItemWrapper = memo(function MessageItemWrapper({
   sandboxSetupStatus,
 }: MessageItemWrapperProps) {
 
-  // Only subscribe to isLast - NOT to message content!
+  // Optimization: Only subscribe to isLast - NOT to message content!
   // StreamingMessageItem and NonStreamingMessageItem will subscribe to message themselves
   const isLast = useAtomValue(isLastMessageAtomFamily(messageId))
 
@@ -503,8 +670,7 @@ export const MessageItemWrapper = memo(function MessageItemWrapper({
 // ============================================================================
 // MEMOIZED ASSISTANT MESSAGES - Only re-renders when message IDs change
 // ============================================================================
-
-// This is the KEY optimization component.
+// Optimization: This is the KEY optimization component.
 // By wrapping the assistant messages .map() in a memoized component that
 // compares ONLY the message IDs (not the full message objects), we prevent
 // the parent's re-render from causing MessageItemWrapper to be called.
@@ -516,28 +682,22 @@ interface MemoizedAssistantMessagesProps {
   sandboxSetupStatus: "cloning" | "ready" | "error"
 }
 
+// Optimization: Custom equality function that uses efficient array comparison
 function areMemoizedAssistantMessagesEqual(
   prev: MemoizedAssistantMessagesProps,
   next: MemoizedAssistantMessagesProps
 ): boolean {
   // Only re-render if IDs changed (new message added/removed)
-  if (prev.assistantMsgIds.length !== next.assistantMsgIds.length) {
+  if (!arraysEqual(prev.assistantMsgIds, next.assistantMsgIds)) {
     return false
   }
 
-  // Check if all IDs are the same
-  for (let i = 0; i < prev.assistantMsgIds.length; i++) {
-    if (prev.assistantMsgIds[i] !== next.assistantMsgIds[i]) {
-      return false
-    }
-  }
-
   // Also check static props
-  if (prev.subChatId !== next.subChatId) return false
-  if (prev.isMobile !== next.isMobile) return false
-  if (prev.sandboxSetupStatus !== next.sandboxSetupStatus) return false
-
-  return true
+  return (
+    prev.subChatId === next.subChatId &&
+    prev.isMobile === next.isMobile &&
+    prev.sandboxSetupStatus === next.sandboxSetupStatus
+  )
 }
 
 export const MemoizedAssistantMessages = memo(function MemoizedAssistantMessages({
@@ -546,7 +706,7 @@ export const MemoizedAssistantMessages = memo(function MemoizedAssistantMessages
   isMobile,
   sandboxSetupStatus,
 }: MemoizedAssistantMessagesProps) {
-  // This component only re-renders when assistantMsgIds changes
+  // Optimization: This component only re-renders when assistantMsgIds changes
   // During streaming, IDs stay the same, so this doesn't re-render
   // Therefore, MessageItemWrapper is never called, and the store
   // subscription handles updates directly
@@ -574,6 +734,7 @@ export function useAllMessages() {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useAllMessages must be used within MessageStoreProvider")
 
+  // Optimization: Cache array reference to detect actual changes
   const cacheRef = useRef<Message[]>([])
 
   const subscribe = useCallback((onStoreChange: () => void) => {
@@ -581,7 +742,7 @@ export function useAllMessages() {
   }, [store])
 
   const getSnapshot = useCallback(() => {
-    // Return cached array if messages haven't changed
+    // Optimization: Return cached array if messages haven't changed
     if (cacheRef.current === store.messages) {
       return cacheRef.current
     }
@@ -592,8 +753,12 @@ export function useAllMessages() {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-// Hook to get message groups - computed from store, only updates when messages change
-// Returns stable references for groups that haven't changed
+// ============================================================================
+// HOOK: useMessageGroups - Computed groups with stable references
+// ============================================================================
+// Optimization: Returns stable references for groups that haven't changed.
+// Uses multi-level caching to minimize object allocations.
+
 interface MessageGroup {
   userMsg: Message
   assistantMsgIds: string[]
@@ -604,7 +769,7 @@ export function useMessageGroups() {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useMessageGroups must be used within MessageStoreProvider")
 
-  // Cache for stable group references
+  // Optimization: Multi-level cache for stable group references
   const groupsCacheRef = useRef<MessageGroup[]>([])
   const assistantIdsCacheRef = useRef<Map<string, string[]>>(new Map())
 
@@ -638,7 +803,7 @@ export function useMessageGroups() {
       groups.push(currentGroup)
     }
 
-    // Stabilize group references - only create new objects if content changed
+    // Optimization: Stabilize group references - only create new objects if content changed
     // Check if groups count changed
     if (groups.length !== groupsCacheRef.current.length) {
       // Stabilize individual groups
@@ -648,9 +813,7 @@ export function useMessageGroups() {
         const cachedIds = assistantIdsCacheRef.current.get(newGroup.userMsg.id)
 
         // Stabilize assistantMsgIds array
-        if (cachedIds &&
-            cachedIds.length === newGroup.assistantMsgIds.length &&
-            cachedIds.every((id, j) => id === newGroup.assistantMsgIds[j])) {
+        if (cachedIds && arraysEqual(cachedIds, newGroup.assistantMsgIds)) {
           newGroup.assistantMsgIds = cachedIds
         } else {
           assistantIdsCacheRef.current.set(newGroup.userMsg.id, newGroup.assistantMsgIds)
@@ -676,9 +839,7 @@ export function useMessageGroups() {
       const cachedIds = assistantIdsCacheRef.current.get(newGroup.userMsg.id)
 
       // Stabilize assistantMsgIds array
-      if (cachedIds &&
-          cachedIds.length === newGroup.assistantMsgIds.length &&
-          cachedIds.every((id, j) => id === newGroup.assistantMsgIds[j])) {
+      if (cachedIds && arraysEqual(cachedIds, newGroup.assistantMsgIds)) {
         newGroup.assistantMsgIds = cachedIds
       } else {
         assistantIdsCacheRef.current.set(newGroup.userMsg.id, newGroup.assistantMsgIds)
@@ -743,11 +904,14 @@ export const MessagesList = memo(function MessagesList({
 // ============================================================================
 // HOOK: useUserMessageIds - Only returns user message IDs (for groups)
 // ============================================================================
+// Optimization: Focused hook that only tracks user messages.
+// Uses efficient array comparison for stability.
 
 export function useUserMessageIds() {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useUserMessageIds must be used within MessageStoreProvider")
 
+  // Optimization: Cache IDs array for reference stability
   const idsRef = useRef<string[]>([])
 
   const subscribe = useCallback((onStoreChange: () => void) => {
@@ -755,12 +919,9 @@ export function useUserMessageIds() {
   }, [store])
 
   const getSnapshot = useCallback(() => {
-    const newIds = store.messages.filter(m => m.role === "user").map(m => m.id)
-    // Only return new array if IDs actually changed
-    if (
-      newIds.length === idsRef.current.length &&
-      newIds.every((id, i) => id === idsRef.current[i])
-    ) {
+    const newIds = selectors.getUserIds(store.messages)
+    // Optimization: Return cached array if IDs haven't changed
+    if (arraysEqual(newIds, idsRef.current)) {
       return idsRef.current
     }
     idsRef.current = newIds
@@ -773,22 +934,39 @@ export function useUserMessageIds() {
 // ============================================================================
 // HOOK: useUserMessageWithAssistants - Get user message and its assistant IDs
 // ============================================================================
+// Optimization: Consolidated subscription for a message group.
+// Computes assistant IDs efficiently and maintains stable references.
+
+interface UserMessageWithAssistantsState {
+  userMsg: Message | undefined
+  assistantMsgIds: string[]
+  isLastGroup: boolean
+}
 
 export function useUserMessageWithAssistants(userMsgId: string) {
   const store = useContext(MessageStoreContext)
   if (!store) throw new Error("useUserMessageWithAssistants must be used within MessageStoreProvider")
 
-  // Cache for stable return value
-  const cacheRef = useRef<{
-    userMsg: Message | undefined
-    assistantMsgIds: string[]
-    isLastGroup: boolean
-  } | null>(null)
+  // Optimization: Cache for stable return value
+  const cacheRef = useRef<UserMessageWithAssistantsState | null>(null)
+
+  // Optimization: Helper to compute assistant IDs for a user message
+  const computeAssistantIds = useCallback((messages: Message[], userIndex: number): string[] => {
+    const assistantMsgIds: string[] = []
+    for (let i = userIndex + 1; i < messages.length; i++) {
+      const msg = messages[i]
+      if (msg.role === "user") break  // Next user message = end of group
+      if (msg.role === "assistant") {
+        assistantMsgIds.push(msg.id)
+      }
+    }
+    return assistantMsgIds
+  }, [])
 
   const subscribe = useCallback((onStoreChange: () => void) => {
     return store.subscribe(() => {
       // Get user message
-      const userMsg = store.messages.find(m => m.id === userMsgId)
+      const userMsg = selectors.findMessage(store.messages, userMsgId)
       if (!userMsg) {
         if (cacheRef.current?.userMsg !== undefined) {
           onStoreChange()
@@ -797,25 +975,16 @@ export function useUserMessageWithAssistants(userMsgId: string) {
       }
 
       // Find assistant messages that follow this user message
-      const userIndex = store.messages.findIndex(m => m.id === userMsgId)
-      const assistantMsgIds: string[] = []
-      for (let i = userIndex + 1; i < store.messages.length; i++) {
-        const msg = store.messages[i]
-        if (msg.role === "user") break  // Next user message = end of group
-        if (msg.role === "assistant") {
-          assistantMsgIds.push(msg.id)
-        }
-      }
+      const userIndex = selectors.findMessageIndex(store.messages, userMsgId)
+      const assistantMsgIds = computeAssistantIds(store.messages, userIndex)
 
       // Check if this is the last group
-      const userMsgIds = store.messages.filter(m => m.role === "user").map(m => m.id)
+      const userMsgIds = selectors.getUserIds(store.messages)
       const isLastGroup = userMsgIds[userMsgIds.length - 1] === userMsgId
 
-      // Check if anything changed
+      // Optimization: Check if anything changed before notifying
       if (cacheRef.current) {
-        const idsChanged =
-          assistantMsgIds.length !== cacheRef.current.assistantMsgIds.length ||
-          !assistantMsgIds.every((id, i) => id === cacheRef.current!.assistantMsgIds[i])
+        const idsChanged = !arraysEqual(assistantMsgIds, cacheRef.current.assistantMsgIds)
         const isLastChanged = isLastGroup !== cacheRef.current.isLastGroup
         const userMsgChanged = userMsg !== cacheRef.current.userMsg
 
@@ -826,10 +995,10 @@ export function useUserMessageWithAssistants(userMsgId: string) {
 
       onStoreChange()
     })
-  }, [store, userMsgId])
+  }, [store, userMsgId, computeAssistantIds])
 
   const getSnapshot = useCallback(() => {
-    const userMsg = store.messages.find(m => m.id === userMsgId)
+    const userMsg = selectors.findMessage(store.messages, userMsgId)
     if (!userMsg) {
       if (!cacheRef.current || cacheRef.current.userMsg !== undefined) {
         cacheRef.current = { userMsg: undefined, assistantMsgIds: [], isLastGroup: false }
@@ -838,25 +1007,16 @@ export function useUserMessageWithAssistants(userMsgId: string) {
     }
 
     // Find assistant messages
-    const userIndex = store.messages.findIndex(m => m.id === userMsgId)
-    const assistantMsgIds: string[] = []
-    for (let i = userIndex + 1; i < store.messages.length; i++) {
-      const msg = store.messages[i]
-      if (msg.role === "user") break
-      if (msg.role === "assistant") {
-        assistantMsgIds.push(msg.id)
-      }
-    }
+    const userIndex = selectors.findMessageIndex(store.messages, userMsgId)
+    const assistantMsgIds = computeAssistantIds(store.messages, userIndex)
 
     // Check if this is the last group
-    const userMsgIds = store.messages.filter(m => m.role === "user").map(m => m.id)
+    const userMsgIds = selectors.getUserIds(store.messages)
     const isLastGroup = userMsgIds[userMsgIds.length - 1] === userMsgId
 
-    // Return cached value if nothing changed
+    // Optimization: Return cached value if nothing changed
     if (cacheRef.current) {
-      const idsMatch =
-        assistantMsgIds.length === cacheRef.current.assistantMsgIds.length &&
-        assistantMsgIds.every((id, i) => id === cacheRef.current!.assistantMsgIds[i])
+      const idsMatch = arraysEqual(assistantMsgIds, cacheRef.current.assistantMsgIds)
 
       if (
         userMsg === cacheRef.current.userMsg &&
@@ -866,7 +1026,7 @@ export function useUserMessageWithAssistants(userMsgId: string) {
         return cacheRef.current
       }
 
-      // Stabilize assistantMsgIds if they match
+      // Optimization: Stabilize assistantMsgIds if they match
       if (idsMatch) {
         cacheRef.current = {
           userMsg,
@@ -879,7 +1039,7 @@ export function useUserMessageWithAssistants(userMsgId: string) {
 
     cacheRef.current = { userMsg, assistantMsgIds, isLastGroup }
     return cacheRef.current
-  }, [store, userMsgId])
+  }, [store, userMsgId, computeAssistantIds])
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
@@ -887,7 +1047,7 @@ export function useUserMessageWithAssistants(userMsgId: string) {
 // ============================================================================
 // ISOLATED MESSAGE GROUP - Renders a single user message + its assistants
 // ============================================================================
-// This component subscribes to ONE user message and its assistant IDs.
+// Optimization: This component subscribes to ONE user message and its assistant IDs.
 // It only re-renders when:
 // - The user message content changes
 // - New assistant messages are added to this group
@@ -919,6 +1079,7 @@ interface SimpleIsolatedGroupProps {
   toolRegistry: Record<string, { icon: any; title: (args: any) => string }>
 }
 
+// Optimization: Custom equality check avoids re-renders when static props match
 function areSimpleGroupPropsEqual(
   prev: SimpleIsolatedGroupProps,
   next: SimpleIsolatedGroupProps
@@ -966,7 +1127,7 @@ export const SimpleIsolatedGroup = memo(function SimpleIsolatedGroup({
 
   const imageParts = userMsg.parts?.filter((p: any) => p.type === "data-image") || []
 
-  // Extract text mentions (quote/diff) to render separately above sticky block
+  // Optimization: Memoize text extraction to avoid recomputation
   const { textMentions, cleanedText: textContent } = useMemo(
     () => extractTextMentions(rawTextContent),
     [rawTextContent]
@@ -1090,6 +1251,7 @@ interface SimpleIsolatedListProps {
   toolRegistry: SimpleIsolatedGroupProps["toolRegistry"]
 }
 
+// Optimization: Efficient equality check for list props
 function areSimpleListPropsEqual(
   prev: SimpleIsolatedListProps,
   next: SimpleIsolatedListProps

@@ -21,6 +21,7 @@ import {
 } from "./lib/auto-updater"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { initBackgroundSession, closeBackgroundSession } from "./lib/claude/background-session"
+import { taskWatcher, taskEvents, startCleanupScheduler, stopCleanupScheduler, notifyTaskCompleted } from "./lib/background-tasks"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -686,6 +687,16 @@ if (gotTheLock) {
     // Create main window
     createMainWindow()
 
+    // Initialize task watcher and cleanup scheduler (after database init)
+    console.log("[App] Starting task watcher...")
+    taskWatcher.start()
+    startCleanupScheduler()
+
+    // Wire up desktop notifications for task completion
+    taskEvents.on("status-change", (update) => {
+      notifyTaskCompleted(update, getWindow)
+    })
+
     // Initialize auto-updater (production only)
     if (app.isPackaged) {
       await initAutoUpdater(getWindow)
@@ -747,6 +758,8 @@ if (gotTheLock) {
   // Cleanup before quit
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
+    taskWatcher.stop()
+    stopCleanupScheduler()
     await cleanupGitWatchers()
     await closeBackgroundSession()
     await shutdownAnalytics()
