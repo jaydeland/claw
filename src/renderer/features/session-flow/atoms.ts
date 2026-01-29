@@ -89,7 +89,7 @@ export const sessionFlowTodosAtom = atom<ExtractedTodos>((get) => {
 })
 
 // Tab selection atom for bottom panel
-export const sessionFlowBottomTabAtom = atomWithStorage<"todos" | "subAgents">(
+export const sessionFlowBottomTabAtom = atomWithStorage<"todos" | "subAgents" | "tasks">(
   "session-flow-bottom-tab",
   "todos",
   undefined,
@@ -112,6 +112,79 @@ export interface SessionSubAgent {
 // Selected sub-agent for output dialog
 export const selectedSubAgentAtom = atom<SessionSubAgent | null>(null)
 export const subAgentOutputDialogOpenAtom = atom<boolean>(false)
+
+// Background task from Bash tool with run_in_background: true
+export interface SessionBackgroundTask {
+  taskId: string
+  toolCallId: string
+  command: string
+  description?: string
+  status: "running" | "completed" | "failed" | "unknown"
+  messageId: string
+  partIndex: number
+}
+
+// Selected background task for output dialog
+export const selectedBackgroundTaskAtom = atom<SessionBackgroundTask | null>(null)
+export const backgroundTaskOutputDialogOpenAtom = atom<boolean>(false)
+
+// Derive background tasks from messages
+// Finds all Bash tool calls with run_in_background: true
+export const sessionFlowBackgroundTasksAtom = atom<SessionBackgroundTask[]>((get) => {
+  const messageIds = get(messageIdsAtom)
+  const tasks: SessionBackgroundTask[] = []
+
+  // Search through all messages to find background Bash tools
+  for (let i = 0; i < messageIds.length; i++) {
+    const msgId = messageIds[i]
+    if (!msgId) continue
+
+    const message = get(messageAtomFamily(msgId))
+    if (!message || !message.parts) continue
+
+    // Search all parts for Bash tools with run_in_background: true
+    for (let partIdx = 0; partIdx < message.parts.length; partIdx++) {
+      const part = message.parts[partIdx]
+      if (!part) continue
+
+      // Check if this is a Bash tool call with run_in_background
+      if (
+        part.type === "tool-Bash" ||
+        (part.type === "tool-invocation" && part.toolName === "Bash")
+      ) {
+        // Check if run_in_background is true
+        if (part.input?.run_in_background === true) {
+          // Determine status based on output presence
+          let status: "running" | "completed" | "failed" | "unknown" = "running"
+          if (part.output !== undefined || part.result !== undefined) {
+            const output = part.output || part.result
+            // Check for error indicators
+            if (part.error || part.errorText || output?.error) {
+              status = "failed"
+            } else if (output?.exitCode !== undefined) {
+              status = output.exitCode === 0 ? "completed" : "failed"
+            } else {
+              // Has output but no exit code - could still be running or completed
+              status = "unknown"
+            }
+          }
+
+          tasks.push({
+            taskId: part.toolCallId || `bg-task-${msgId}-${partIdx}`,
+            toolCallId: part.toolCallId || "",
+            command: part.input?.command || "",
+            description: part.input?.description,
+            status,
+            messageId: msgId,
+            partIndex: partIdx,
+          })
+        }
+      }
+    }
+  }
+
+  return tasks
+})
 
 // Derive sub-agents from messages
 // Finds all Task tool calls in the current session

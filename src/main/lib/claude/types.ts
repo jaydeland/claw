@@ -31,6 +31,13 @@ export type UIMessageChunk =
       description?: string
       outputFile?: string
     }
+  | {
+      type: "background-task-notification"
+      taskId: string // The task_id from the SDK (NOT a PID - it's a string identifier)
+      status: "completed" | "failed" | "stopped"
+      outputFile: string
+      summary: string
+    }
   // Error & metadata
   | { type: "error"; errorText: string }
   | { type: "auth-error"; errorText: string }

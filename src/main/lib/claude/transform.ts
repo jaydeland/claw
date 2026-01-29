@@ -351,7 +351,12 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
           // Detect background Bash tasks
           if (block.name === "Bash" && block.input && typeof block.input === "object") {
             const input = block.input as any
+            const path = require('path')
+            const { app } = require('electron')
+            const logPath = path.join(app.getPath('userData'), 'claw-debug.log')
+            require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] [TRANSFORM] Bash tool detected - has run_in_background: ${!!input.run_in_background}, value: ${input.run_in_background}`)
             if (input.run_in_background === true) {
+              require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] [TRANSFORM] Background task detected - toolCallId: ${compositeId}, command: ${input.command}`)
               yield {
                 type: "background-task-started",
                 toolCallId: compositeId,
@@ -484,6 +489,23 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
           state: "output-available",
         }
         lastCompactId = null // Clear for next compacting cycle
+      }
+
+      // Task notification - background task completed/failed
+      if (msg.subtype === "task_notification") {
+        console.log("[Transform] Task notification received:", {
+          task_id: msg.task_id,
+          status: msg.status,
+          output_file: msg.output_file,
+          summary: msg.summary?.slice(0, 100),
+        })
+        yield {
+          type: "background-task-notification",
+          taskId: msg.task_id,
+          status: msg.status,
+          outputFile: msg.output_file,
+          summary: msg.summary,
+        }
       }
     }
 

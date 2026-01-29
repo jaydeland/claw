@@ -16,6 +16,11 @@ import {
   GitBranch,
   ChevronDown,
   ChevronRight,
+  Activity,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Loader2,
 } from "lucide-react"
 import {
   Tooltip,
@@ -78,6 +83,14 @@ export interface AgentSpawnNodeData {
   agentId: string
   description: string
   status: "running" | "completed" | "error"
+  onClick: () => void
+}
+
+export interface BackgroundTaskNodeData {
+  taskId: string
+  command: string
+  description?: string
+  status: "running" | "completed" | "failed" | "unknown"
   onClick: () => void
 }
 
@@ -393,10 +406,108 @@ export const AgentSpawnNode = memo(function AgentSpawnNode({
   )
 })
 
+// Background Task Node - For Bash commands run with run_in_background: true
+// Color coded by status: blue (running), green (completed), red (failed), gray (unknown)
+export const BackgroundTaskNode = memo(function BackgroundTaskNode({
+  data,
+}: NodeProps<BackgroundTaskNodeData>) {
+  // Status-based styling
+  const bgColor =
+    data.status === "running"
+      ? "bg-blue-500 border-blue-600 hover:bg-blue-600"
+      : data.status === "completed"
+        ? "bg-green-500 border-green-600 hover:bg-green-600"
+        : data.status === "failed"
+          ? "bg-red-500 border-red-600 hover:bg-red-600"
+          : "bg-slate-500 border-slate-600 hover:bg-slate-600"
+
+  // Status icon
+  const StatusIcon =
+    data.status === "running"
+      ? Loader2
+      : data.status === "completed"
+        ? CheckCircle
+        : data.status === "failed"
+          ? XCircle
+          : Clock
+
+  // Truncate command for display
+  const commandPreview = data.command
+    ? data.command.length > 25
+      ? data.command.slice(0, 22) + "..."
+      : data.command
+    : "Background Task"
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={`px-2.5 py-1.5 shadow-md rounded-md ${bgColor} text-white border cursor-pointer transition-colors min-w-[110px] max-w-[150px]`}
+          onClick={data.onClick}
+        >
+          <Handle type="target" position={Position.Left} className="!bg-slate-600" />
+          <div className="flex items-center gap-1.5">
+            <Activity className="h-3 w-3 flex-shrink-0" />
+            <span className="text-[10px] font-medium truncate">Task</span>
+            <StatusIcon
+              className={`h-3 w-3 flex-shrink-0 ml-auto ${
+                data.status === "running" ? "animate-spin" : ""
+              }`}
+            />
+          </div>
+          <div className="text-[9px] font-mono truncate mt-0.5 opacity-80">
+            {commandPreview}
+          </div>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-sm">
+        <div className="text-xs">
+          <div className="font-semibold mb-1 flex items-center gap-1.5">
+            <Activity className="h-3.5 w-3.5" />
+            Background Task
+          </div>
+          <div className="text-muted-foreground">
+            Status:{" "}
+            <span
+              className={
+                data.status === "running"
+                  ? "text-blue-400"
+                  : data.status === "completed"
+                    ? "text-green-400"
+                    : data.status === "failed"
+                      ? "text-red-400"
+                      : "text-slate-400"
+              }
+            >
+              {data.status}
+            </span>
+          </div>
+          {data.command && (
+            <div className="text-[10px] text-muted-foreground mt-1 font-mono break-all">
+              {data.command.length > 100
+                ? data.command.slice(0, 100) + "..."
+                : data.command}
+            </div>
+          )}
+          {data.description && (
+            <div className="text-[10px] text-muted-foreground mt-1">
+              {data.description}
+            </div>
+          )}
+          <div className="text-[10px] text-muted-foreground mt-1 italic">
+            Click to navigate to task
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  )
+})
+
 // Export node types for ReactFlow
 export const sessionFlowNodeTypes = {
   userMessage: UserMessageNode,
   assistantResponse: AssistantResponseNode,
   toolCall: ToolCallNode,
   agentSpawn: AgentSpawnNode,
+  backgroundTask: BackgroundTaskNode,
 }

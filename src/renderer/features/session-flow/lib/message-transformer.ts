@@ -5,6 +5,7 @@ import type {
   AssistantResponseNodeData,
   ToolCallNodeData,
   AgentSpawnNodeData,
+  BackgroundTaskNodeData,
 } from "../components/session-flow-nodes"
 
 // Layout constants
@@ -16,10 +17,10 @@ const Y_BRANCH_SPACING = 50 // Vertical spacing for branch nodes - increased
 const Y_DETAIL_SPACING = 45 // Vertical spacing for detail nodes
 
 // Tools that should branch to the right (opt-in list)
-// Show: agents, bash, thinking, questions, and web research
+// Show: agents, bash (including background tasks), thinking, questions, and web research
 const BRANCHING_TOOLS = new Set([
-  "Task",              // Agent spawns and background tasks
-  "Bash",              // Shell commands
+  "Task",              // Agent spawns (sub-agents)
+  "Bash",              // Shell commands (regular + background tasks)
   "Thinking",          // Internal reasoning
   "AskUserQuestion",   // Questions to user
   "WebSearch",         // Web searches
@@ -185,6 +186,13 @@ export function transformMessagesToFlow(
       let thinkingFirstPartIndex = -1
       let thinkingState: "call" | "result" | "error" = "call"
 
+      // Track background tasks separately
+      const backgroundTasks: Array<{
+        partIndex: number
+        part: MessagePart
+        status: "running" | "completed" | "failed" | "unknown"
+      }> = []
+
       // First pass: collect and count tools
       for (let partIndex = 0; partIndex < parts.length; partIndex++) {
         const part = parts[partIndex]
@@ -201,14 +209,32 @@ export function transformMessagesToFlow(
             if (state === "error") thinkingState = "error"
             else if (state === "result" && thinkingState !== "error") thinkingState = "result"
           } else if (toolName === "Bash") {
-            if (bashCount === 0) {
-              bashFirstPartIndex = partIndex
+            // Check if this is a background task
+            if (part.input?.run_in_background === true) {
+              // Determine background task status
+              let status: "running" | "completed" | "failed" | "unknown" = "running"
+              if (part.output !== undefined || part.result !== undefined) {
+                const output = part.output || part.result
+                if (part.error || part.errorText || output?.error) {
+                  status = "failed"
+                } else if (output?.exitCode !== undefined) {
+                  status = output.exitCode === 0 ? "completed" : "failed"
+                } else {
+                  status = "unknown"
+                }
+              }
+              backgroundTasks.push({ partIndex, part, status })
+            } else {
+              // Regular Bash command
+              if (bashCount === 0) {
+                bashFirstPartIndex = partIndex
+              }
+              bashCount++
+              const state = getToolState(part)
+              // Update state priority: error > result > call
+              if (state === "error") bashState = "error"
+              else if (state === "result" && bashState !== "error") bashState = "result"
             }
-            bashCount++
-            const state = getToolState(part)
-            // Update state priority: error > result > call
-            if (state === "error") bashState = "error"
-            else if (state === "result" && bashState !== "error") bashState = "result"
           }
         }
       }
@@ -493,6 +519,49 @@ export function transformMessagesToFlow(
             }
           }
         }
+
+        branchY += Y_BRANCH_SPACING
+        branchIndex++
+      }
+
+      // Add background task nodes
+      for (const bgTask of backgroundTasks) {
+        const toolNodeId = `bg-task-${message.id}-${bgTask.part.toolCallId || bgTask.partIndex}`
+        const command = bgTask.part.input?.command || ""
+        const description = bgTask.part.input?.description
+
+        nodes.push({
+          id: toolNodeId,
+          type: "backgroundTask",
+          position: { x: X_BRANCH, y: branchY },
+          data: {
+            taskId: bgTask.part.toolCallId || `task-${bgTask.partIndex}`,
+            command: command,
+            description: description,
+            status: bgTask.status,
+            onClick: () => options.onNodeClick(message.id, bgTask.partIndex),
+          } as BackgroundTaskNodeData,
+        })
+
+        // Connect background task node to response node
+        edges.push({
+          id: `${responseNodeId}-${toolNodeId}`,
+          source: responseNodeId,
+          sourceHandle: "tools",
+          target: toolNodeId,
+          animated: bgTask.status === "running",
+          style: {
+            stroke:
+              bgTask.status === "running"
+                ? "#3b82f6" // blue
+                : bgTask.status === "completed"
+                  ? "#22c55e" // green
+                  : bgTask.status === "failed"
+                    ? "#ef4444" // red
+                    : "#64748b", // slate
+            strokeWidth: 1.5,
+          },
+        })
 
         branchY += Y_BRANCH_SPACING
         branchIndex++

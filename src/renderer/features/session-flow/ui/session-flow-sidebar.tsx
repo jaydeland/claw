@@ -13,6 +13,7 @@ import { DialogIcons, DialogIconSizes } from "@/lib/dialog-icons"
 import { SessionFlowPanel } from "./session-flow-panel"
 import { SessionFlowTodos } from "./session-flow-todos"
 import { SessionSubAgentsList } from "./session-sub-agents-list"
+import { SessionFlowTasks } from "./session-flow-tasks"
 // NOTE: SubAgentOutputDialog is now rendered in active-chat.tsx
 // They were moved outside the ResizableSidebar to ensure they remain mounted when the sidebar closes.
 // This prevents issues where the dialog state (Jotai atoms) would persist but the component would unmount,
@@ -27,6 +28,8 @@ import {
   sessionFlowTodosAtom,
   sessionFlowSubAgentsAtom,
 } from "../atoms"
+import { selectedAgentChatIdAtom } from "../../agents/atoms"
+import { trpc } from "../../../lib/trpc"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,9 +58,17 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
   // Get counts for tab badges
   const todosData = useAtomValue(sessionFlowTodosAtom)
   const subAgents = useAtomValue(sessionFlowSubAgentsAtom)
+  const chatId = useAtomValue(selectedAgentChatIdAtom)
 
   const todosCount = todosData.todos.length
   const subAgentsCount = subAgents.length
+
+  // Get running tasks count
+  const { data: runningCount } = trpc.tasks.getRunningCount.useQuery(
+    { chatId: chatId || "" },
+    { enabled: !!chatId, refetchInterval: 5000 }
+  )
+  const tasksCount = runningCount?.total ?? 0
 
   // Get all messages for export
   const messageIds = useAtomValue(messageIdsAtom)
@@ -305,14 +316,28 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
               >
                 Sub Agents {subAgentsCount > 0 && <span className="ml-1 opacity-60">({subAgentsCount})</span>}
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setBottomTab("tasks")}
+                className={`h-6 px-2 text-xs transition-colors ${
+                  bottomTab === "tasks"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                Tasks {tasksCount > 0 && <span className="ml-1 opacity-60">({tasksCount})</span>}
+              </Button>
             </div>
 
             {/* Tab content */}
             <div className="flex-1 min-h-0 overflow-hidden">
               {bottomTab === "todos" ? (
                 <SessionFlowTodos onScrollToMessage={onScrollToMessage} />
-              ) : (
+              ) : bottomTab === "subAgents" ? (
                 <SessionSubAgentsList onScrollToMessage={onScrollToMessage} />
+              ) : (
+                <SessionFlowTasks />
               )}
             </div>
           </div>

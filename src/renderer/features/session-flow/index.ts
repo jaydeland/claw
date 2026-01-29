@@ -12,9 +12,13 @@ export {
   sessionFlowSubAgentsAtom,
   selectedSubAgentAtom,
   subAgentOutputDialogOpenAtom,
+  sessionFlowBackgroundTasksAtom,
+  selectedBackgroundTaskAtom,
+  backgroundTaskOutputDialogOpenAtom,
   type SessionTodoItem,
   type ExtractedTodos,
   type SessionSubAgent,
+  type SessionBackgroundTask,
 } from "./atoms"
 
 // Components
