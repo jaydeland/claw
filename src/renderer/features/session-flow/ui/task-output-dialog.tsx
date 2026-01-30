@@ -30,6 +30,8 @@ import {
   backgroundTaskOutputDialogOpenAtom,
 } from "../atoms"
 import { CodeBlock } from "../../agents/ui/code-block"
+import { usePaginatedOutput } from "./use-paginated-output"
+import { ArrowUp } from "lucide-react"
 
 interface TaskOutputDialogProps {
   /** Chat ID - dialog closes when this changes */
@@ -45,26 +47,27 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
   const [wrapText, setWrapText] = useState(true)
   const prevChatIdRef = useRef(chatId)
 
-  // Fetch task with output from backend
-  const { data: taskDetail, isLoading } = trpc.tasks.getWithOutput.useQuery(
-    { taskId: selectedTask?.taskId || "", tailLines: 500 },
-    {
-      enabled: open && !!selectedTask?.taskId,
-      refetchInterval: (data) => {
-        // Poll every 2 seconds if task is running, otherwise stop polling
-        return data?.status === "running" ? 2000 : false
-      },
-      onSuccess: (data) => {
-        console.log('[TaskDialog] Received task data:', {
-          taskId: data?.id,
-          status: data?.status,
-          outputFile: data?.outputFile,
-          hasOutput: !!data?.output,
-          outputLength: data?.output?.length
-        })
-      }
-    }
-  )
+  // Use paginated output hook
+  const {
+    output,
+    totalLines,
+    oldestLoadedLine,
+    newestLoadedLine,
+    hasOlderLines,
+    hasNewOutput,
+    isLoading,
+    isLoadingMore,
+    loadMore,
+    refresh,
+    status: taskStatus,
+    exitCode,
+    command,
+    description,
+  } = usePaginatedOutput(selectedTask?.taskId || "", {
+    enabled: open && !!selectedTask?.taskId,
+    initialLimit: 500,
+    chunkSize: 500,
+  })
 
   // Close dialog when chat changes to prevent showing stale data
   useEffect(() => {
@@ -82,21 +85,21 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
   }, [setOpen, setSelectedTask])
 
   const handleCopy = useCallback(async () => {
-    if (!taskDetail?.output) return
+    if (!output) return
 
     try {
-      await navigator.clipboard.writeText(taskDetail.output)
+      await navigator.clipboard.writeText(output)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error("Failed to copy:", err)
     }
-  }, [taskDetail?.output])
+  }, [output])
 
   const handleDownload = useCallback(() => {
-    if (!taskDetail?.output || !selectedTask) return
+    if (!output || !selectedTask) return
 
-    const blob = new Blob([taskDetail.output], { type: "text/plain" })
+    const blob = new Blob([output], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
@@ -104,7 +107,7 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
     link.href = url
     link.click()
     URL.revokeObjectURL(url)
-  }, [taskDetail?.output, selectedTask])
+  }, [output, selectedTask])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -132,8 +135,8 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
     }
   }
 
-  const currentStatus = taskDetail?.status || selectedTask?.status || "unknown"
-  const output = taskDetail?.output || "(No output yet)"
+  const currentStatus = taskStatus || selectedTask?.status || "unknown"
+  const displayOutput = output || "(No output yet)"
 
   return (
     <Dialog open={open && !!selectedTask} onOpenChange={(newOpen) => {
@@ -164,17 +167,17 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
                 >
                   {currentStatus}
                 </Badge>
-                {taskDetail?.exitCode !== undefined && (
+                {exitCode !== undefined && (
                   <span className={cn(
                     "text-xs",
-                    taskDetail.exitCode === 0 ? "text-green-600" : "text-red-500"
+                    exitCode === 0 ? "text-green-600" : "text-red-500"
                   )}>
-                    Exit: {taskDetail.exitCode}
+                    Exit: {exitCode}
                   </span>
                 )}
-                {taskDetail?.pid && (
+                {totalLines > 0 && (
                   <span className="text-xs text-muted-foreground">
-                    PID: {taskDetail.pid}
+                    Lines {oldestLoadedLine + 1}-{newestLoadedLine + 1} of {totalLines}
                   </span>
                 )}
               </div>
@@ -185,24 +188,15 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
               <div>
                 <strong className="text-foreground">Command:</strong>
                 <pre className="text-muted-foreground font-mono mt-1 break-all whitespace-pre-wrap bg-muted/50 p-2 rounded">
-                  {taskDetail?.command || selectedTask.command}
+                  {command || selectedTask.command}
                 </pre>
               </div>
-              {(taskDetail?.description || selectedTask.description) && (
+              {(description || selectedTask.description) && (
                 <div>
                   <strong className="text-foreground">Description:</strong>
                   <p className="text-muted-foreground mt-1">
-                    {taskDetail?.description || selectedTask.description}
+                    {description || selectedTask.description}
                   </p>
-                </div>
-              )}
-              {taskDetail?.outputFile && (
-                <div className="flex items-center gap-2">
-                  <FileText className="h-3 w-3 text-muted-foreground" />
-                  <strong className="text-foreground">Output File:</strong>
-                  <code className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">
-                    {taskDetail.outputFile}
-                  </code>
                 </div>
               )}
             </div>
@@ -222,17 +216,54 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
                   <WrapText className="h-3 w-3 mr-1" />
                   Wrap
                 </Button>
+                {hasNewOutput && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={refresh}
+                    className="h-6 px-2 text-[10px] text-blue-500 hover:text-blue-600"
+                    title="Reload to see new output"
+                  >
+                    <ArrowUp className="h-3 w-3 mr-1" />
+                    New output available
+                  </Button>
+                )}
               </div>
 
+              {/* Load More button */}
+              {hasOlderLines && (
+                <div className="mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadMore}
+                    disabled={isLoadingMore}
+                    className="w-full h-8 text-xs"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowUp className="h-3 w-3 mr-2" />
+                        Load previous 500 lines ({oldestLoadedLine} more available)
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
               <div className="flex-1 overflow-y-auto border rounded-md bg-muted/30">
-                {isLoading && !taskDetail ? (
+                {isLoading && !output ? (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
                   <div className="p-4">
                     <CodeBlock
-                      code={output}
+                      code={displayOutput}
                       language="bash"
                       showLineNumbers={false}
                       wrap={wrapText}
@@ -247,7 +278,7 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
                 variant="outline"
                 size="sm"
                 onClick={handleCopy}
-                disabled={copied || !taskDetail?.output}
+                disabled={copied || !output}
               >
                 {copied ? (
                   <>
@@ -265,7 +296,7 @@ export const TaskOutputDialog = memo(function TaskOutputDialog({
                 variant="outline"
                 size="sm"
                 onClick={handleDownload}
-                disabled={!taskDetail?.output}
+                disabled={!output}
               >
                 <Download className="w-3.5 h-3.5 mr-1.5" />
                 Download

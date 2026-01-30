@@ -2,7 +2,7 @@ import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
 import * as fs from "fs/promises"
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync, statSync } from "fs"
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync, statSync, appendFileSync } from "fs"
 import * as os from "os"
 import path, { dirname, join } from "path"
 import { z } from "zod"
@@ -1551,7 +1551,7 @@ ${prompt}
                           const path = require('path')
                           const { app } = require('electron')
                           const logPath = path.join(app.getPath('userData'), 'claw-debug.log')
-                          fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Bash tool output detected`)
+                          appendFileSync(logPath, `\n[${new Date().toISOString()}] Bash tool output detected`)
                           try {
                             const output = chunk.output as any
 
@@ -1564,34 +1564,30 @@ ${prompt}
                               output_file: output?.output_file,
                               outputFile: output?.outputFile,
                             }
-                            fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Bash output: ${JSON.stringify(debugInfo)}`)
+                            appendFileSync(logPath, `\n[${new Date().toISOString()}] Bash output: ${JSON.stringify(debugInfo)}`)
 
                             // Extract fields - check multiple possible field names
                             const outputFileFromSdk = output.output_file || output.outputFile
                             // task_id is a string identifier from the SDK, NOT a PID!
                             const sdkTaskId = output.backgroundTaskId || output.task_id || output.taskId
 
-                            const fs = require('fs')
-                            const path = require('path')
-                            const { app } = require('electron')
-                            const logPath = path.join(app.getPath('userData'), 'claw-debug.log')
-                            fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Extracted - sdkTaskId: ${sdkTaskId}, outputFileFromSdk: ${outputFileFromSdk}`)
+                            appendFileSync(logPath, `\n[${new Date().toISOString()}] Extracted - sdkTaskId: ${sdkTaskId}, outputFileFromSdk: ${outputFileFromSdk}`)
 
                             if (outputFileFromSdk || sdkTaskId) {
-                              fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Entering update block - sdkTaskId: ${sdkTaskId}`)
+                              appendFileSync(logPath, `\n[${new Date().toISOString()}] Entering update block - sdkTaskId: ${sdkTaskId}`)
                               const taskDb = getDatabase()
                               const updateData: any = {}
 
                               // If SDK provides output file, use it. Otherwise construct from task ID
                               if (outputFileFromSdk) {
-                                fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Using SDK-provided output file: ${outputFileFromSdk}`)
+                                appendFileSync(logPath, `\n[${new Date().toISOString()}] Using SDK-provided output file: ${outputFileFromSdk}`)
                                 updateData.outputFile = outputFileFromSdk
                               } else if (sdkTaskId) {
                                 // SDK doesn't provide output_file in tool output, but we can construct it
                                 // Use the input.cwd which is the working directory for this session
                                 const workingDir = input.cwd
 
-                                fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Constructing path - workingDir: ${workingDir}, sdkTaskId: ${sdkTaskId}`)
+                                appendFileSync(logPath, `\n[${new Date().toISOString()}] Constructing path - workingDir: ${workingDir}, sdkTaskId: ${sdkTaskId}`)
 
                                 // Pattern: $CLAUDE_CODE_TMPDIR/claude/-{encoded-cwd}/tasks/{taskId}.output
                                 // The SDK uses CLAUDE_CODE_TMPDIR env var, fallback to TMPDIR or os.tmpdir()
@@ -1601,13 +1597,13 @@ ${prompt}
                                 const tasksDir = path.join(tmpBase, 'claude', `-${encodedCwd}`, 'tasks')
                                 updateData.outputFile = path.join(tasksDir, `${sdkTaskId}.output`)
 
-                                fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Constructed output file: ${updateData.outputFile}`)
+                                appendFileSync(logPath, `\n[${new Date().toISOString()}] Constructed output file: ${updateData.outputFile}`)
                               }
 
                               // Store as sdkTaskId (string), not pid (was incorrectly parsed as integer before)
                               if (sdkTaskId) updateData.sdkTaskId = String(sdkTaskId)
 
-                              fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] About to update database - toolCallId: ${chunk.toolCallId}`)
+                              appendFileSync(logPath, `\n[${new Date().toISOString()}] About to update database - toolCallId: ${chunk.toolCallId}`)
 
                               taskDb
                                 .update(backgroundTasks)
@@ -1615,7 +1611,7 @@ ${prompt}
                                 .where(eq(backgroundTasks.toolCallId, chunk.toolCallId))
                                 .run()
 
-                              fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Database updated - outputFile: ${updateData.outputFile}, sdkTaskId: ${sdkTaskId}`)
+                              appendFileSync(logPath, `\n[${new Date().toISOString()}] Database updated - outputFile: ${updateData.outputFile}, sdkTaskId: ${sdkTaskId}`)
                             }
                           } catch (err) {
                             console.error("[Tasks] Failed to update task with output info:", err)

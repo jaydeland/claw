@@ -47,6 +47,106 @@ async function parseExitCode(outputFile: string): Promise<number | undefined> {
 }
 
 /**
+ * Line count cache to avoid counting lines on every request
+ */
+interface LineCountCacheEntry {
+  count: number
+  mtime: number
+  timestamp: number
+}
+
+const lineCountCache = new Map<string, LineCountCacheEntry>()
+const CACHE_TTL = 10000 // 10 seconds
+
+/**
+ * Get cached line count for a file, or count lines if cache miss/expired
+ */
+async function getCachedLineCount(filePath: string): Promise<number> {
+  try {
+    const stats = await stat(filePath)
+    const mtime = stats.mtimeMs
+
+    // Check cache
+    const cached = lineCountCache.get(filePath)
+    if (cached && cached.mtime === mtime && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.count
+    }
+
+    // Count lines
+    const content = await readFile(filePath, "utf-8")
+    const count = content.split("\n").length
+
+    // Update cache
+    lineCountCache.set(filePath, {
+      count,
+      mtime,
+      timestamp: Date.now(),
+    })
+
+    return count
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Read lines from a file with efficient pagination support
+ */
+async function readFileLines(
+  filePath: string,
+  options: {
+    offset?: number // Start from line N (0-based)
+    limit?: number // Load up to N lines
+    fromEnd?: boolean // Read last N lines (for tailLines)
+  } = {}
+): Promise<{
+  lines: string[]
+  totalLines: number
+  startLine: number // 0-based index of first line in result
+  endLine: number // 0-based index of last line in result
+}> {
+  try {
+    const content = await readFile(filePath, "utf-8")
+    const allLines = content.split("\n")
+    const totalLines = allLines.length
+
+    let selectedLines: string[]
+    let startLine: number
+    let endLine: number
+
+    if (options.fromEnd) {
+      // TailLines mode: return last N lines
+      const limit = options.limit || totalLines
+      selectedLines = allLines.slice(-limit)
+      startLine = Math.max(0, totalLines - limit)
+      endLine = totalLines - 1
+    } else {
+      // Pagination mode: return lines from offset to offset+limit
+      const offset = options.offset || 0
+      const limit = options.limit || totalLines
+      selectedLines = allLines.slice(offset, offset + limit)
+      startLine = offset
+      endLine = offset + selectedLines.length - 1
+    }
+
+    return {
+      lines: selectedLines,
+      totalLines,
+      startLine,
+      endLine,
+    }
+  } catch (error) {
+    // File doesn't exist or can't be read
+    return {
+      lines: [],
+      totalLines: 0,
+      startLine: 0,
+      endLine: -1,
+    }
+  }
+}
+
+/**
  * Get derived status for a task based on SDK status, output file, or messages
  *
  * Priority:
@@ -295,7 +395,10 @@ export const tasksRouter = router({
     .input(
       z.object({
         taskId: z.string(),
-        tailLines: z.number().optional(), // Only get last N lines
+        tailLines: z.number().optional(), // LEGACY: Only get last N lines (backward compat)
+        offset: z.number().min(0).optional(), // NEW: Start from line N (0-based)
+        limit: z.number().min(1).max(5000).optional(), // NEW: Load N lines from offset
+        includeMetadata: z.boolean().optional().default(true), // NEW: Include totalLines metadata
       })
     )
     .query(async ({ input }) => {
@@ -318,36 +421,158 @@ export const tasksRouter = router({
       // Get output - for running tasks, always read from output file for real-time updates
       // For completed tasks, prefer messages output (more reliable)
       let output = ""
+      let outputMetadata: {
+        totalLines: number
+        startLine: number
+        endLine: number
+        hasMore: boolean
+      } | undefined
+
+      // Determine which mode to use for reading output
+      const useTailLines = input.tailLines !== undefined
+      const usePagination = input.offset !== undefined && input.limit !== undefined
 
       if (status === "running" && task.outputFile && existsSync(task.outputFile)) {
         // For running tasks, always read from output file for real-time updates
         try {
-          const content = await readFile(task.outputFile, "utf-8")
-          if (input.tailLines) {
-            const lines = content.split("\n")
-            output = lines.slice(-input.tailLines).join("\n")
+          if (useTailLines) {
+            // Backward compatibility: use tailLines
+            const result = await readFileLines(task.outputFile, {
+              fromEnd: true,
+              limit: input.tailLines,
+            })
+            output = result.lines.join("\n")
+            if (input.includeMetadata) {
+              outputMetadata = {
+                totalLines: result.totalLines,
+                startLine: result.startLine,
+                endLine: result.endLine,
+                hasMore: result.startLine > 0,
+              }
+            }
+          } else if (usePagination) {
+            // New pagination mode: use offset + limit
+            const result = await readFileLines(task.outputFile, {
+              offset: input.offset,
+              limit: input.limit,
+            })
+            output = result.lines.join("\n")
+            if (input.includeMetadata) {
+              outputMetadata = {
+                totalLines: result.totalLines,
+                startLine: result.startLine,
+                endLine: result.endLine,
+                hasMore: result.startLine > 0,
+              }
+            }
           } else {
-            output = content
+            // Default: return last 500 lines
+            const result = await readFileLines(task.outputFile, {
+              fromEnd: true,
+              limit: 500,
+            })
+            output = result.lines.join("\n")
+            if (input.includeMetadata) {
+              outputMetadata = {
+                totalLines: result.totalLines,
+                startLine: result.startLine,
+                endLine: result.endLine,
+                hasMore: result.startLine > 0,
+              }
+            }
           }
         } catch {
           output = "(Output file not available)"
         }
       } else if (messageOutput) {
         // For completed tasks, prefer messages output
-        output = messageOutput
-        if (input.tailLines) {
+        if (useTailLines) {
+          const result = await readFileLines(task.outputFile || "", {
+            fromEnd: true,
+            limit: input.tailLines,
+          })
+          output = result.lines.join("\n")
+          if (input.includeMetadata) {
+            outputMetadata = {
+              totalLines: result.totalLines,
+              startLine: result.startLine,
+              endLine: result.endLine,
+              hasMore: result.startLine > 0,
+            }
+          }
+        } else if (usePagination && task.outputFile) {
+          const result = await readFileLines(task.outputFile, {
+            offset: input.offset,
+            limit: input.limit,
+          })
+          output = result.lines.join("\n")
+          if (input.includeMetadata) {
+            outputMetadata = {
+              totalLines: result.totalLines,
+              startLine: result.startLine,
+              endLine: result.endLine,
+              hasMore: result.startLine > 0,
+            }
+          }
+        } else {
+          // Use message output as-is for completed tasks (already has all content)
+          output = messageOutput
           const lines = output.split("\n")
-          output = lines.slice(-input.tailLines).join("\n")
+          if (input.includeMetadata) {
+            outputMetadata = {
+              totalLines: lines.length,
+              startLine: 0,
+              endLine: lines.length - 1,
+              hasMore: false,
+            }
+          }
         }
       } else if (task.outputFile && existsSync(task.outputFile)) {
         // Fallback to output file if no message output
         try {
-          const content = await readFile(task.outputFile, "utf-8")
-          if (input.tailLines) {
-            const lines = content.split("\n")
-            output = lines.slice(-input.tailLines).join("\n")
+          if (useTailLines) {
+            const result = await readFileLines(task.outputFile, {
+              fromEnd: true,
+              limit: input.tailLines,
+            })
+            output = result.lines.join("\n")
+            if (input.includeMetadata) {
+              outputMetadata = {
+                totalLines: result.totalLines,
+                startLine: result.startLine,
+                endLine: result.endLine,
+                hasMore: result.startLine > 0,
+              }
+            }
+          } else if (usePagination) {
+            const result = await readFileLines(task.outputFile, {
+              offset: input.offset,
+              limit: input.limit,
+            })
+            output = result.lines.join("\n")
+            if (input.includeMetadata) {
+              outputMetadata = {
+                totalLines: result.totalLines,
+                startLine: result.startLine,
+                endLine: result.endLine,
+                hasMore: result.startLine > 0,
+              }
+            }
           } else {
-            output = content
+            // Default: return last 500 lines
+            const result = await readFileLines(task.outputFile, {
+              fromEnd: true,
+              limit: 500,
+            })
+            output = result.lines.join("\n")
+            if (input.includeMetadata) {
+              outputMetadata = {
+                totalLines: result.totalLines,
+                startLine: result.startLine,
+                endLine: result.endLine,
+                hasMore: result.startLine > 0,
+              }
+            }
           }
         } catch {
           output = "(Output file not available)"
@@ -361,10 +586,11 @@ export const tasksRouter = router({
         outputFile: task.outputFile,
         sdkTaskId: (task as any).sdkTaskId,
         hasOutput: !!output,
-        outputLength: output.length
+        outputLength: output.length,
+        outputMetadata,
       })
 
-      return { ...task, status, exitCode, output, command, description }
+      return { ...task, status, exitCode, output, command, description, outputMetadata }
     }),
 
   /**

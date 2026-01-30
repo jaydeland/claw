@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Trash2,
   Square,
+  ArrowUp,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { toast } from "sonner"
@@ -32,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog"
+import { usePaginatedOutput } from "../../session-flow/ui/use-paginated-output"
 
 interface TasksPanelProps {
   isOpen: boolean
@@ -49,11 +51,24 @@ export function TasksPanel({ isOpen, onClose }: TasksPanelProps) {
     { enabled: isOpen && !!chatId, refetchInterval: 5000 }
   )
 
-  // Fetch selected task with output
-  const { data: taskDetail } = trpc.tasks.getWithOutput.useQuery(
-    { taskId: selectedTaskId || "", tailLines: 100 },
-    { enabled: !!selectedTaskId, refetchInterval: selectedTaskId ? 2000 : false }
-  )
+  // Use paginated output hook for selected task
+  const {
+    output: taskOutput,
+    totalLines,
+    oldestLoadedLine,
+    newestLoadedLine,
+    hasOlderLines,
+    isLoadingMore,
+    loadMore,
+    status: taskStatus,
+    exitCode: taskExitCode,
+    command: taskCommand,
+    description: taskDescription,
+  } = usePaginatedOutput(selectedTaskId || "", {
+    enabled: !!selectedTaskId,
+    initialLimit: 100,
+    chunkSize: 100,
+  })
 
   // Refresh task statuses
   const refreshMutation = trpc.tasks.refreshStatuses.useMutation({
@@ -238,28 +253,33 @@ export function TasksPanel({ isOpen, onClose }: TasksPanelProps) {
 
             {/* Task Detail */}
             <div className="flex-1 border rounded-lg flex flex-col">
-              {selectedTaskId && taskDetail ? (
+              {selectedTaskId ? (
                 <>
                   <div className="p-3 border-b">
                     <div className="flex items-center gap-2 mb-2">
-                      {getStatusIcon(taskDetail.status)}
+                      {getStatusIcon(taskStatus || "unknown")}
                       <Badge
                         variant="outline"
-                        className={getStatusBadge(taskDetail.status)}
+                        className={getStatusBadge(taskStatus || "unknown")}
                       >
-                        {taskDetail.status}
+                        {taskStatus || "unknown"}
                       </Badge>
-                      {taskDetail.exitCode !== undefined && (
+                      {taskExitCode !== undefined && (
                         <span className="text-xs text-muted-foreground">
-                          Exit code: {taskDetail.exitCode}
+                          Exit code: {taskExitCode}
                         </span>
                       )}
-                      {taskDetail.status === "running" && (
+                      {totalLines > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          ({oldestLoadedLine + 1}-{newestLoadedLine + 1} of {totalLines})
+                        </span>
+                      )}
+                      {taskStatus === "running" && (
                         <Button
                           variant="destructive"
                           size="sm"
                           className="ml-auto"
-                          onClick={() => setTaskToKill(taskDetail.id)}
+                          onClick={() => setTaskToKill(selectedTaskId)}
                         >
                           <Square className="h-3 w-3 mr-1" />
                           Kill
@@ -267,53 +287,53 @@ export function TasksPanel({ isOpen, onClose }: TasksPanelProps) {
                       )}
                     </div>
                     <div className="text-xs space-y-2">
-                      {taskDetail.command && (
+                      {taskCommand && (
                         <div>
                           <strong className="text-foreground">Command:</strong>
                           <p className="text-muted-foreground font-mono mt-1 break-all">
-                            {taskDetail.command}
+                            {taskCommand}
                           </p>
                         </div>
                       )}
-                      {taskDetail.description && (
+                      {taskDescription && (
                         <div>
                           <strong className="text-foreground">Description:</strong>
                           <p className="text-muted-foreground mt-1">
-                            {taskDetail.description}
+                            {taskDescription}
                           </p>
                         </div>
                       )}
-                      <div className="text-muted-foreground space-y-1">
-                        <p>
-                          <strong>Task ID:</strong> {taskDetail.id}
-                        </p>
-                        <p>
-                          <strong>Tool Call:</strong> {taskDetail.toolCallId}
-                        </p>
-                        {taskDetail.pid && (
-                          <p>
-                            <strong>PID:</strong> {taskDetail.pid}
-                          </p>
-                        )}
-                      </div>
-                      {taskDetail.outputFile && (
-                        <p>
-                          <strong>Output:</strong>{" "}
-                          <code className="bg-muted px-1 rounded">
-                            {taskDetail.outputFile}
-                          </code>
-                        </p>
-                      )}
-                      {taskDetail.pid && (
-                        <p>
-                          <strong>PID:</strong> {taskDetail.pid}
-                        </p>
-                      )}
                     </div>
                   </div>
+
+                  {/* Load More button */}
+                  {hasOlderLines && (
+                    <div className="px-3 pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={loadMore}
+                        disabled={isLoadingMore}
+                        className="w-full h-7 text-xs"
+                      >
+                        {isLoadingMore ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <ArrowUp className="h-3 w-3 mr-1.5" />
+                            Load more ({oldestLoadedLine} lines)
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
                   <div className="flex-1 overflow-y-auto">
                     <pre className="p-3 text-xs font-mono whitespace-pre-wrap bg-muted/30">
-                      {taskDetail.output || "(No output yet)"}
+                      {taskOutput || "(No output yet)"}
                     </pre>
                   </div>
                 </>
