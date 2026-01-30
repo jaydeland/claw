@@ -16,7 +16,7 @@ import {
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { selectedProjectAtom } from "../../agents/atoms"
+import { selectedProjectAtom, selectedAgentChatIdAtom } from "../../agents/atoms"
 import {
   activeGsdTabAtom,
   selectedGsdProjectIdAtom,
@@ -213,6 +213,28 @@ function GsdPlans({
 }) {
   const [selectedDoc, setSelectedDoc] = useAtom(selectedPlanningDocAtom)
   const [expandedFolders, setExpandedFolders] = useAtom(expandedGsdFoldersAtom)
+  const selectedProjectId = useAtomValue(selectedGsdProjectIdAtom)
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
+  const utils = trpc.useUtils()
+
+  const createChatMutation = trpc.chats.create.useMutation({
+    onSuccess: (data) => {
+      utils.chats.list.invalidate()
+      setSelectedChatId(data.id)
+    },
+  })
+
+  const handleRunMapCodebase = () => {
+    if (!selectedProjectId) return
+
+    createChatMutation.mutate({
+      projectId: selectedProjectId,
+      name: "Map Codebase",
+      initialMessageParts: [{ type: "text", text: "/gsd:map-codebase" }],
+      useWorktree: true,
+      mode: "agent",
+    })
+  }
 
   // Check if project has .planning directory
   const { data: hasDocs, isLoading: isCheckingDocs } = trpc.gsd.hasPlanningDocs.useQuery(
@@ -268,9 +290,15 @@ function GsdPlans({
         <p className="text-xs text-muted-foreground mt-1 mb-4">
           Initialize GSD for this project to start planning
         </p>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={handleRunMapCodebase}
+          disabled={createChatMutation.isPending}
+        >
           <Play className="h-3.5 w-3.5" />
-          Run /gsd:map-codebase
+          {createChatMutation.isPending ? "Starting..." : "Run /gsd:map-codebase"}
         </Button>
       </div>
     )
