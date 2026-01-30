@@ -25,6 +25,8 @@ import {
   expandedWorkspaceIdsAtom,
   selectedDraftIdAtom,
 } from "../../agents/atoms"
+import { ChatStatusBadge } from "./chat-status-badge"
+import { useChatStatuses } from "../hooks/use-chat-status"
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
@@ -295,6 +297,14 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     }
   }, [selectedChatId, allChats, projects, expandedWorkspaceIds, setExpandedWorkspaceIds])
 
+  // Collect all chat IDs for status tracking
+  const allChatIds = useMemo(() => {
+    return workspacesWithChats.flatMap((w) => w.chats.map((c) => c.id))
+  }, [workspacesWithChats])
+
+  // Get status indicators for all chats
+  const chatStatuses = useChatStatuses(allChatIds)
+
   const isLoading = isLoadingProjects || isLoadingChats
 
   return (
@@ -442,6 +452,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                       {chats.map((chat) => {
                         const isPinned = pinnedIds.has(chat.id)
                         const isActive = selectedChatId === chat.id
+                        const chatStatus = chatStatuses.get(chat.id) ?? null
 
                         return (
                           <div key={chat.id} className="group relative">
@@ -458,7 +469,10 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                               {isPinned && (
                                 <Pin className="h-3 w-3 flex-shrink-0 text-primary" />
                               )}
-                              <MessageSquare className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                              <div className="relative flex-shrink-0">
+                                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                                <ChatStatusBadge status={chatStatus} isActive={isActive} />
+                              </div>
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm truncate">
                                   {chat.name || "Untitled"}
