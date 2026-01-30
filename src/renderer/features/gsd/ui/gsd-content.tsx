@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   Rocket,
@@ -12,7 +12,6 @@ import {
   Loader2,
   GitBranch,
   Play,
-  RefreshCw,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -125,14 +124,10 @@ function BranchSelector({ projectPath }: { projectPath: string }) {
 }
 
 /**
- * GSD Overview - shows bundled GSD documentation
+ * GSD Overview - shows README and Help
  */
 function GsdOverview() {
   const [selectedDoc, setSelectedDoc] = useAtom(selectedGsdDocAtom)
-  const [expandedFolders, setExpandedFolders] = useAtom(expandedGsdFoldersAtom)
-
-  // Fetch GSD docs list
-  const { data: docsData, isLoading: isLoadingDocs } = trpc.gsd.listGsdDocs.useQuery()
 
   // Default to README.md
   useEffect(() => {
@@ -147,38 +142,31 @@ function GsdOverview() {
     { enabled: !!selectedDoc }
   )
 
-  const toggleFolder = (path: string) => {
-    setExpandedFolders((prev) => ({
-      ...prev,
-      [path]: !prev[path],
-    }))
-  }
+  const isReadme = selectedDoc === "README.md"
+  const isHelp = selectedDoc === "commands/gsd/help.md"
 
   return (
-    <div className="flex h-full">
-      {/* File tree sidebar */}
-      <div className="w-56 border-r border-border flex-shrink-0 overflow-y-auto p-2">
-        <p className="text-[10px] uppercase text-muted-foreground/70 font-medium px-2 mb-2">
-          Documentation
-        </p>
-        {isLoadingDocs ? (
-          <div className="flex items-center justify-center h-20">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="space-y-0.5">
-            {docsData?.files?.map((file) => (
-              <FileTreeItem
-                key={file.path}
-                file={file}
-                selectedPath={selectedDoc}
-                expandedFolders={expandedFolders}
-                onSelect={setSelectedDoc}
-                onToggleFolder={toggleFolder}
-              />
-            ))}
-          </div>
-        )}
+    <div className="flex flex-col h-full">
+      {/* Tab selector */}
+      <div className="flex items-center gap-1 px-4 py-2 border-b border-border flex-shrink-0">
+        <Button
+          variant={isReadme ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => setSelectedDoc("README.md")}
+          className="h-7 text-xs"
+        >
+          <BookOpen className="h-3 w-3 mr-1.5" />
+          README
+        </Button>
+        <Button
+          variant={isHelp ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => setSelectedDoc("commands/gsd/help.md")}
+          className="h-7 text-xs"
+        >
+          <FileText className="h-3 w-3 mr-1.5" />
+          Help
+        </Button>
       </div>
 
       {/* Content area */}
@@ -194,7 +182,7 @@ function GsdOverview() {
         ) : (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
             <FileText className="h-8 w-8 mb-2 opacity-50" />
-            <p className="text-sm">Select a document to view</p>
+            <p className="text-sm">Unable to load document</p>
           </div>
         )}
       </div>
