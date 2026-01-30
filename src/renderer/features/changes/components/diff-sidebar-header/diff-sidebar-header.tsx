@@ -1001,6 +1001,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 				}}
 				onMergeWithAi={onMergeWithAi}
 				isMergingWithAi={isMergingWithAi}
+				onCloseDiffSidebar={onClose}
 			/>
 		)}
 		</>

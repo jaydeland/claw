@@ -37,6 +37,7 @@ interface MergeBranchDialogProps {
   onMergeComplete: () => void
   onMergeWithAi?: (targetBranch: string) => void
   isMergingWithAi?: boolean
+  onCloseDiffSidebar?: () => void
 }
 
 export function MergeBranchDialog({
@@ -49,6 +50,7 @@ export function MergeBranchDialog({
   onMergeComplete,
   onMergeWithAi,
   isMergingWithAi,
+  onCloseDiffSidebar,
 }: MergeBranchDialogProps) {
   const [targetBranch, setTargetBranch] = useState<string>("")
   const [targetBranchOpen, setTargetBranchOpen] = useState(false)
@@ -124,6 +126,9 @@ export function MergeBranchDialog({
 
     // Close dialog immediately (AI will handle from here)
     onOpenChange(false)
+
+    // Close diff sidebar to return to chat
+    onCloseDiffSidebar?.()
 
     // Trigger AI merge
     onMergeWithAi(targetBranch)
@@ -221,32 +226,16 @@ export function MergeBranchDialog({
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={mergeMutation.isPending || isMergingWithAi}
+            disabled={isMergingWithAi}
             className="transition-transform duration-150 active:scale-[0.97] rounded-md"
           >
             Cancel
           </Button>
-          <Button
-            type="button"
-            onClick={handleMerge}
-            disabled={!targetBranch.trim() || mergeMutation.isPending || isMergingWithAi}
-            className="transition-transform duration-150 active:scale-[0.97] rounded-md"
-          >
-            {mergeMutation.isPending ? (
-              <>
-                <IconSpinner className="w-4 h-4 mr-2" />
-                Merging...
-              </>
-            ) : (
-              "Merge"
-            )}
-          </Button>
           {onMergeWithAi && (
             <Button
               type="button"
-              variant="outline"
               onClick={handleMergeWithAi}
-              disabled={!targetBranch.trim() || mergeMutation.isPending || isMergingWithAi}
+              disabled={!targetBranch.trim() || isMergingWithAi}
               className="transition-transform duration-150 active:scale-[0.97] rounded-md"
             >
               {isMergingWithAi ? (
