@@ -42,6 +42,13 @@ export const AgentBashTool = memo(function AgentBashTool({
   const stderr = part.output?.stderr || ""
   const exitCode = part.output?.exitCode ?? part.output?.exit_code
 
+  // Detect background task - SDK docs confirm background tasks return a task ID
+  // and buffered output retrieved via TaskOutput tool (no stdout/stderr in initial response)
+  const isBackgroundTask = part.input?.run_in_background === true
+  // Handle multiple field name variants used by SDK (see claude.ts:1594-1600)
+  const taskId = part.output?.task_id || part.output?.taskId || part.output?.backgroundTaskId
+  const outputFile = part.output?.output_file || part.output?.outputFile
+
   // For bash tools, success/error is determined by exitCode, not by state
   // exitCode 0 = success, anything else (or undefined if no output yet) = error
   const isError = exitCode !== undefined && exitCode !== 0
@@ -107,8 +114,30 @@ export const AgentBashTool = memo(function AgentBashTool({
     })
   }
 
-  // If no output yet, return null (command still running)
+  // If no output yet but is a background task, show status indicator
   if (sections.length === 0) {
+    if (isBackgroundTask || taskId) {
+      return (
+        <div data-message-id={messageId} data-part-index={partIndex} data-part-type="tool-Bash">
+          <ExpandableOutputSplit
+            icon={Terminal}
+            title="Background task"
+            subtitle={commandSummary}
+            tooltipContent={command}
+            command={command}
+            sections={[{
+              content: `Task ID: ${taskId || 'pending'}\nOutput file: ${outputFile || 'pending'}`,
+              language: 'text',
+              className: 'text-muted-foreground',
+            }]}
+            maxCollapsedLines={2}
+            isPending={true}
+            isError={false}
+          />
+        </div>
+      )
+    }
+    // No output yet, command still running (non-background)
     return null
   }
 
