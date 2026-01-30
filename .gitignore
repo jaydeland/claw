@@ -34,6 +34,5 @@ resources/bin/
 # Flox lock files
 .flox/env/manifest.lock
 
-# Planning and logs
-.planning/
+# Logs
 logs/
