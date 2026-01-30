@@ -1569,11 +1569,7 @@ ${prompt}
 
                         // Update background task with output info from Bash tool output
                         if (toolPart.type === "tool-Bash" && chunk.output) {
-                          const fs = require('fs')
-                          const path = require('path')
-                          const { app } = require('electron')
-                          const logPath = path.join(app.getPath('userData'), 'claw-debug.log')
-                          appendFileSync(logPath, `\n[${new Date().toISOString()}] Bash tool output detected`)
+                          console.log("[Tasks] Bash tool output detected")
                           try {
                             const output = chunk.output as any
 
@@ -1586,30 +1582,40 @@ ${prompt}
                               output_file: output?.output_file,
                               outputFile: output?.outputFile,
                             }
-                            appendFileSync(logPath, `\n[${new Date().toISOString()}] Bash output: ${JSON.stringify(debugInfo)}`)
+                            console.log("[Tasks] Bash output structure:", debugInfo)
 
                             // Extract fields - check multiple possible field names
-                            const outputFileFromSdk = output.output_file || output.outputFile
-                            // task_id is a string identifier from the SDK, NOT a PID!
-                            const sdkTaskId = output.backgroundTaskId || output.task_id || output.taskId
+                            const outputFileFromSdk =
+                              output.output_file ||
+                              output.outputFile ||
+                              output.file ||
+                              output.logFile
 
-                            appendFileSync(logPath, `\n[${new Date().toISOString()}] Extracted - sdkTaskId: ${sdkTaskId}, outputFileFromSdk: ${outputFileFromSdk}`)
+                            // task_id is a string identifier from the SDK, NOT a PID!
+                            const sdkTaskId =
+                              output.backgroundTaskId ||
+                              output.background_task_id ||
+                              output.task_id ||
+                              output.taskId ||
+                              output.id
+
+                            console.log(`[Tasks] Extracted - sdkTaskId: ${sdkTaskId}, outputFileFromSdk: ${outputFileFromSdk}`)
 
                             if (outputFileFromSdk || sdkTaskId) {
-                              appendFileSync(logPath, `\n[${new Date().toISOString()}] Entering update block - sdkTaskId: ${sdkTaskId}`)
+                              console.log(`[Tasks] Entering update block - sdkTaskId: ${sdkTaskId}`)
                               const taskDb = getDatabase()
                               const updateData: any = {}
 
                               // If SDK provides output file, use it. Otherwise construct from task ID
                               if (outputFileFromSdk) {
-                                appendFileSync(logPath, `\n[${new Date().toISOString()}] Using SDK-provided output file: ${outputFileFromSdk}`)
+                                console.log(`[Tasks] Using SDK-provided output file: ${outputFileFromSdk}`)
                                 updateData.outputFile = outputFileFromSdk
                               } else if (sdkTaskId) {
                                 // SDK doesn't provide output_file in tool output, but we can construct it
                                 // Use the input.cwd which is the working directory for this session
                                 const workingDir = input.cwd
 
-                                appendFileSync(logPath, `\n[${new Date().toISOString()}] Constructing path - workingDir: ${workingDir}, sdkTaskId: ${sdkTaskId}`)
+                                console.log(`[Tasks] Constructing path - workingDir: ${workingDir}, sdkTaskId: ${sdkTaskId}`)
 
                                 // Pattern: $CLAUDE_CODE_TMPDIR/claude/-{encoded-cwd}/tasks/{taskId}.output
                                 // The SDK uses CLAUDE_CODE_TMPDIR env var, fallback to TMPDIR or os.tmpdir()
@@ -1619,21 +1625,53 @@ ${prompt}
                                 const tasksDir = path.join(tmpBase, 'claude', `-${encodedCwd}`, 'tasks')
                                 updateData.outputFile = path.join(tasksDir, `${sdkTaskId}.output`)
 
-                                appendFileSync(logPath, `\n[${new Date().toISOString()}] Constructed output file: ${updateData.outputFile}`)
+                                console.log(`[Tasks] Constructed output file: ${updateData.outputFile}`)
                               }
 
                               // Store as sdkTaskId (string), not pid (was incorrectly parsed as integer before)
                               if (sdkTaskId) updateData.sdkTaskId = String(sdkTaskId)
 
-                              appendFileSync(logPath, `\n[${new Date().toISOString()}] About to update database - toolCallId: ${chunk.toolCallId}`)
+                              console.log(`[Tasks] About to update database - toolCallId: ${chunk.toolCallId}`)
 
-                              taskDb
+                              const updateResult = taskDb
                                 .update(backgroundTasks)
                                 .set(updateData)
                                 .where(eq(backgroundTasks.toolCallId, chunk.toolCallId))
                                 .run()
 
-                              appendFileSync(logPath, `\n[${new Date().toISOString()}] Database updated - outputFile: ${updateData.outputFile}, sdkTaskId: ${sdkTaskId}`)
+                              console.log(`[Tasks] Primary update matched ${updateResult.changes} row(s)`)
+
+                              // Fallback: If no rows updated, try to match by recent pending task
+                              if (updateResult.changes === 0 && (sdkTaskId || outputFileFromSdk)) {
+                                console.log(`[Tasks] Primary update matched 0 rows, trying fallback for toolCallId: ${chunk.toolCallId}`)
+
+                                // Find most recent pending task in this subchat without sdkTaskId
+                                const pendingTasks = taskDb.select()
+                                  .from(backgroundTasks)
+                                  .where(eq(backgroundTasks.subChatId, input.subChatId))
+                                  .all()
+                                  .filter((t: any) => !t.sdkTaskId)
+                                  .sort((a, b) => a.id.localeCompare(b.id)) // Sort by ID (chronological)
+
+                                console.log(`[Tasks] Found ${pendingTasks.length} pending task(s) without sdkTaskId`)
+
+                                if (pendingTasks.length > 0) {
+                                  const taskToUpdate = pendingTasks[pendingTasks.length - 1]
+                                  console.log(`[Tasks] Fallback updating task ${taskToUpdate.id} (toolCallId: ${taskToUpdate.toolCallId})`)
+
+                                  const fallbackResult = taskDb
+                                    .update(backgroundTasks)
+                                    .set(updateData)
+                                    .where(eq(backgroundTasks.id, taskToUpdate.id))
+                                    .run()
+
+                                  console.log(`[Tasks] Fallback update matched ${fallbackResult.changes} row(s)`)
+                                } else {
+                                  console.log("[Tasks] No pending tasks found for fallback")
+                                }
+                              }
+
+                              console.log(`[Tasks] Database update complete - outputFile: ${updateData.outputFile}, sdkTaskId: ${sdkTaskId}`)
                             }
                           } catch (err) {
                             console.error("[Tasks] Failed to update task with output info:", err)
@@ -1670,8 +1708,8 @@ ${prompt}
                       break
                     case "background-task-started":
                       // Insert background task record into database
-                      // Note: command, description, status, exitCode, timestamps are derived from messages
-                      // Only store what cannot be derived: toolCallId, outputFile, sdkTaskId, sdkStatus
+                      // Store static metadata (command, description) immediately for UI display
+                      // Dynamic data (output, exitCode) will be derived from messages later
                       try {
                         const taskDb = getDatabase()
                         taskDb
@@ -1681,6 +1719,8 @@ ${prompt}
                             chatId: input.chatId,
                             toolCallId: chunk.toolCallId,
                             outputFile: chunk.outputFile,
+                            command: chunk.command,
+                            description: chunk.description,
                             // sdkTaskId and sdkStatus will be filled later from tool-output and task-notification
                           })
                           .run()

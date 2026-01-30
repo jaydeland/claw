@@ -1,17 +1,48 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo } from "react"
 import {
   GlobeIcon,
-  IconSpinner,
-  ExpandIcon,
-  CollapseIcon,
 } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
-import { cn } from "../../../lib/utils"
+import { ExpandableOutput } from "./expandable-output"
+
+// Detect content language for syntax highlighting
+function detectContentLanguage(content: string): string {
+  if (!content) return 'plaintext'
+  const trimmed = content.trim()
+
+  // Check for HTML
+  if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
+    return 'html'
+  }
+
+  // Check for markdown patterns
+  if (/^#{1,6}\s/.test(trimmed) || /\[.*?\]\(.*?\)/.test(trimmed)) {
+    return 'markdown'
+  }
+
+  // Check for XML
+  if (trimmed.startsWith('<?xml')) {
+    return 'xml'
+  }
+
+  // Check for JSON
+  if ((trimmed.startsWith('{') || trimmed.startsWith('[')) &&
+      (trimmed.endsWith('}') || trimmed.endsWith(']'))) {
+    try {
+      JSON.parse(trimmed)
+      return 'json'
+    } catch {
+      // Not valid JSON
+    }
+  }
+
+  return 'plaintext'
+}
 
 interface AgentWebFetchToolProps {
   part: any
@@ -22,7 +53,6 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
   part,
   chatStatus,
 }: AgentWebFetchToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
   const { isPending, isError, isInterrupted } = getToolStatus(part, chatStatus)
 
   const url = part.input?.url || ""
@@ -46,86 +76,55 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  const hasContent = result.length > 0
-
   // Show interrupted state if fetch was interrupted without completing
   if (isInterrupted && !result) {
     return <AgentToolInterrupted toolName="Fetch" subtitle={hostname} />
   }
 
-  return (
-    <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
-      {/* Header - clickable to toggle expand */}
-      <div
-        onClick={() => hasContent && !isPending && setIsExpanded(!isExpanded)}
-        className={cn(
-          "flex items-center justify-between px-2.5 h-7",
-          hasContent && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
-        )}
-      >
-        <div className="flex items-center gap-1.5 text-xs truncate flex-1 min-w-0">
+  // Build metadata string
+  let metadata = formatBytes(bytes)
+  if (statusCode) {
+    metadata += ` · ${statusCode}`
+  }
+
+  // Build title with shimmer for pending state
+  const titleComponent = isPending ? (
+    <TextShimmer as="span" duration={1.2} className="text-xs">
+      Fetching
+    </TextShimmer>
+  ) : (
+    "Fetched"
+  )
+
+  // If no content yet (still pending), show a simplified view
+  if (!result && isPending) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
+        <div className="flex items-center gap-1.5 px-2.5 h-7">
           <GlobeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
-          
-          {isPending ? (
-            <TextShimmer
-              as="span"
-              duration={1.2}
-              className="text-xs text-muted-foreground"
-            >
-              Fetching
-            </TextShimmer>
-          ) : (
-            <span className="text-xs text-muted-foreground">Fetched</span>
-          )}
-          
-          <span className="truncate text-foreground">{hostname}</span>
-        </div>
-
-        {/* Status and expand button */}
-        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-          <div className="flex items-center gap-1.5 text-xs">
-            {isPending ? (
-              <IconSpinner className="w-3 h-3" />
-            ) : isError || !isSuccess ? (
-              <span className="text-destructive">
-                {statusCode ? `Error ${statusCode}` : "Failed"}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">
-                {formatBytes(bytes)}
-              </span>
-            )}
-          </div>
-
-          {/* Expand/Collapse icon */}
-          {hasContent && !isPending && (
-            <div className="relative w-4 h-4">
-              <ExpandIcon
-                className={cn(
-                  "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                  isExpanded ? "opacity-0 scale-75" : "opacity-100 scale-100",
-                )}
-              />
-              <CollapseIcon
-                className={cn(
-                  "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                  isExpanded ? "opacity-100 scale-100" : "opacity-0 scale-75",
-                )}
-              />
-            </div>
-          )}
+          {titleComponent}
+          <span className="text-xs text-foreground truncate">{hostname}</span>
         </div>
       </div>
+    )
+  }
 
-      {/* Content - expandable */}
-      {hasContent && isExpanded && (
-        <div className="border-t border-border max-h-[300px] overflow-y-auto">
-          <pre className="px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap break-words font-mono">
-            {result}
-          </pre>
-        </div>
-      )}
-    </div>
+  if (!result) return null
+
+  return (
+    <ExpandableOutput
+      content={result}
+      language={detectContentLanguage(result)}
+      icon={GlobeIcon}
+      title={isPending ? "Fetching" : "Fetched"}
+      subtitle={hostname}
+      tooltipContent={url}
+      metadata={metadata}
+      dialogTitle={`Fetched: ${hostname}`}
+      dialogDisplayPath={url}
+      isPending={isPending}
+      isError={isError || !isSuccess}
+    />
   )
 }, areToolPropsEqual)
 

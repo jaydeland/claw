@@ -503,6 +503,10 @@ export const pendingReviewMessageAtom = atom<string | null>(null)
 // Set when user clicks "Fix Conflicts" button, consumed by ChatViewInner
 export const pendingConflictResolutionMessageAtom = atom<string | null>(null)
 
+// Pending post-merge message to send to chat
+// Set when user completes a merge, consumed by ChatViewInner
+export const pendingPostMergeMessageAtom = atom<string | null>(null)
+
 // Pending auth retry - stores failed message when auth-error occurs
 // After successful OAuth flow, this triggers automatic retry of the message
 export type PendingAuthRetryMessage = {
@@ -567,6 +571,17 @@ export type PendingUserQuestions = PendingUserQuestion
 // Track sub-chats with pending plan approval (plan ready but not yet implemented)
 // Set<subChatId>
 export const pendingPlanApprovalsAtom = atom<Set<string>>(new Set())
+
+// File content dialog state
+export interface FileContentDialogData {
+  filePath: string
+  displayPath: string
+  content: string
+  language?: string
+}
+
+export const fileContentDialogOpenAtom = atom<boolean>(false)
+export const selectedFileContentAtom = atom<FileContentDialogData | null>(null)
 
 // Store AskUserQuestion results by toolUseId for real-time updates
 // Map<toolUseId, result>

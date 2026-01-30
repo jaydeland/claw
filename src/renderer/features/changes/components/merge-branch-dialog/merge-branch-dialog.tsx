@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useSetAtom } from "jotai"
 import { toast } from "sonner"
-import { GitBranch, ChevronDown, Check, AlertCircle } from "lucide-react"
+import { GitBranch, ChevronDown, Check } from "lucide-react"
 import {
   Dialog,
   CanvasDialogContent,
@@ -24,6 +25,7 @@ import {
 import { IconSpinner } from "../../../../components/ui/icons"
 import { trpc } from "../../../../lib/trpc"
 import { cn } from "../../../../lib/utils"
+import { pendingPostMergeMessageAtom } from "../../../agents/atoms"
 
 interface MergeBranchDialogProps {
   open: boolean
@@ -34,9 +36,6 @@ interface MergeBranchDialogProps {
   defaultBranch: string
   onMergeComplete: () => void
 }
-
-// Protected branches that should show a warning
-const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"]
 
 export function MergeBranchDialog({
   open,
@@ -50,6 +49,9 @@ export function MergeBranchDialog({
   const [targetBranch, setTargetBranch] = useState<string>("")
   const [targetBranchOpen, setTargetBranchOpen] = useState(false)
   const [targetBranchSearch, setTargetBranchSearch] = useState("")
+
+  // Atom setter for auto-prompting Claude after merge
+  const setPendingPostMergeMessage = useSetAtom(pendingPostMergeMessageAtom)
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -72,9 +74,6 @@ export function MergeBranchDialog({
     return filtered.slice(0, 50)
   }, [localBranches, currentBranch, targetBranchSearch])
 
-  // Check if selected branch is protected
-  const isProtectedBranch = targetBranch && PROTECTED_BRANCHES.includes(targetBranch)
-
   const mergeMutation = trpc.changes.mergeIntoLocalBranch.useMutation({
     onSuccess: (data) => {
       const typeLabel =
@@ -85,7 +84,13 @@ export function MergeBranchDialog({
             : "Merge commit"
       toast.success(`${typeLabel} merge into '${targetBranch}' succeeded`)
       onMergeComplete()
+
+      // Close dialog immediately
       onOpenChange(false)
+
+      // Auto-prompt Claude to complete the merge
+      const promptMessage = `The merge from '${currentBranch}' into '${targetBranch}' was successful. Please review the changes and provide a summary of what was merged.`
+      setPendingPostMergeMessage(promptMessage)
     },
     onError: (error) => {
       toast.error(`Merge failed: ${error.message}`)
@@ -95,11 +100,6 @@ export function MergeBranchDialog({
   const handleMerge = () => {
     if (!targetBranch.trim()) {
       toast.error("Please select a target branch")
-      return
-    }
-
-    if (isProtectedBranch) {
-      toast.error(`Cannot merge into protected branch '${targetBranch}'`)
       return
     }
 
@@ -138,8 +138,7 @@ export function MergeBranchDialog({
                     "flex h-9 w-full items-center justify-between gap-2 rounded-[10px] border border-input bg-background px-3 py-2 text-sm shadow-sm",
                     "hover:bg-accent hover:text-accent-foreground",
                     "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                    "disabled:cursor-not-allowed disabled:opacity-50",
-                    isProtectedBranch && "border-yellow-600/50 bg-yellow-500/5"
+                    "disabled:cursor-not-allowed disabled:opacity-50"
                   )}
                   disabled={mergeMutation.isPending}
                 >
@@ -168,7 +167,6 @@ export function MergeBranchDialog({
                     ) : (
                       <CommandGroup>
                         {filteredTargetBranches.map((branch) => {
-                          const isProtected = PROTECTED_BRANCHES.includes(branch)
                           return (
                             <CommandItem
                               key={branch}
@@ -181,9 +179,6 @@ export function MergeBranchDialog({
                             >
                               <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
                               <span className="truncate flex-1">{branch}</span>
-                              {isProtected && (
-                                <AlertCircle className="h-4 w-4 text-yellow-600 shrink-0" />
-                              )}
                               {targetBranch === branch && (
                                 <Check className="h-4 w-4 shrink-0" />
                               )}
@@ -197,17 +192,6 @@ export function MergeBranchDialog({
               </PopoverPrimitive.Content>
             </PopoverPrimitive.Root>
           </div>
-
-          {/* Protected branch warning */}
-          {isProtectedBranch && (
-            <div className="flex gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-800 dark:text-yellow-200">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <div>
-                <strong>Protected branch</strong>
-                <p className="text-xs mt-1">This branch is protected and cannot be merged into.</p>
-              </div>
-            </div>
-          )}
         </CanvasDialogBody>
 
         <CanvasDialogFooter>
@@ -223,7 +207,7 @@ export function MergeBranchDialog({
           <Button
             type="button"
             onClick={handleMerge}
-            disabled={!targetBranch.trim() || isProtectedBranch || mergeMutation.isPending}
+            disabled={!targetBranch.trim() || mergeMutation.isPending}
             className="transition-transform duration-150 active:scale-[0.97] rounded-md"
           >
             {mergeMutation.isPending ? (

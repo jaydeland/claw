@@ -104,6 +104,7 @@ import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
 import { SessionFlowDialog } from "../../session-flow/ui/session-flow-dialog"
 import { SessionFlowFullScreen } from "../../session-flow/ui/session-flow-fullscreen"
 import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
+import { FileContentDialog } from "../ui/file-content-dialog"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -127,6 +128,7 @@ import {
   loadingSubChatsAtom,
   pendingAuthRetryMessageAtom,
   pendingConflictResolutionMessageAtom,
+  pendingPostMergeMessageAtom,
   pendingPlanApprovalsAtom,
   pendingPrMessageAtom,
   pendingReviewMessageAtom,
@@ -1146,7 +1148,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
       const handleElement = event.currentTarget as HTMLElement
 
       const minWidth = 200
-      const maxWidth = 450
+      const maxWidth = 800
 
       const clampWidth = (width: number) =>
         Math.max(minWidth, Math.min(maxWidth, width))
@@ -2347,9 +2349,9 @@ const ChatViewInner = memo(function ChatViewInner({
     status
   )
 
-  // CONSOLIDATED: 4 pending message effects -> 1 hook (usePendingMessages)
-  // Handles PR, Review, Conflict, and Auth retry messages
-  const { setPendingPrMessage, setPendingReviewMessage, setPendingConflictMessage, setPendingAuthRetry } = usePendingMessages(
+  // CONSOLIDATED: 5 pending message effects -> 1 hook (usePendingMessages)
+  // Handles PR, Review, Conflict, Post-Merge, and Auth retry messages
+  usePendingMessages(
     {
       isStreaming,
       subChatId,
@@ -2360,6 +2362,7 @@ const ChatViewInner = memo(function ChatViewInner({
       pendingPrMessageAtom,
       pendingReviewMessageAtom,
       pendingConflictResolutionMessageAtom,
+      pendingPostMergeMessageAtom,
       pendingAuthRetryMessageAtom,
     }
   )
@@ -3547,7 +3550,7 @@ const ChatViewInner = memo(function ChatViewInner({
         data-chat-container
       >
         <div
-          className="px-2 max-w-2xl mx-auto -mb-4 space-y-4"
+          className="px-2 max-w-[90%] mx-auto -mb-4 space-y-4"
           style={{
             paddingBottom: "32px",
           }}
@@ -3577,7 +3580,7 @@ const ChatViewInner = memo(function ChatViewInner({
       {/* Only show if the pending question belongs to THIS sub-chat */}
       {pendingQuestions && (
         <div className="px-4 relative z-20">
-          <div className="w-full px-2 max-w-2xl mx-auto">
+          <div className="w-full px-2 max-w-[90%] mx-auto">
             <AgentUserQuestion
               ref={questionRef}
               pendingQuestions={pendingQuestions}
@@ -3593,7 +3596,7 @@ const ChatViewInner = memo(function ChatViewInner({
       {!pendingQuestions &&
         (queue.length > 0 || changedFilesForSubChat.length > 0) && (
           <div className="px-2 -mb-6 relative z-10">
-            <div className="w-full max-w-2xl mx-auto px-2">
+            <div className="w-full max-w-[90%] mx-auto px-2">
               {/* Queue indicator card - top card */}
               {queue.length > 0 && (
                 <AgentQueueIndicator
@@ -5512,7 +5515,7 @@ Make sure to preserve all functionality from both branches when resolving confli
 
               {/* Disabled input while loading */}
               <div className="px-2 pb-2">
-                <div className="w-full max-w-2xl mx-auto">
+                <div className="w-full max-w-[90%] mx-auto">
                   <div className="relative w-full">
                     <PromptInput
                       className="border bg-input-background relative z-10 p-2 rounded-xl opacity-50 pointer-events-none"
@@ -5732,6 +5735,9 @@ Make sure to preserve all functionality from both branches when resolving confli
         {/* Sub-agent output dialog - rendered here to stay mounted */}
         {/* This must be outside SessionFlowSidebar to prevent unmount issues when sidebar closes */}
         <SubAgentOutputDialog chatId={chatId} />
+
+        {/* File content dialog - for viewing file contents from Read tool */}
+        <FileContentDialog chatId={chatId} />
       </div>
     </div>
   )

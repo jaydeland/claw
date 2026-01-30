@@ -458,8 +458,7 @@ export function TerminalSidebar({
       onClose={closeSidebar}
       widthAtom={terminalSidebarWidthAtom}
       side="right"
-      minWidth={300}
-      maxWidth={800}
+      minWidth={250}
       animationDuration={SIDEBAR_ANIMATION_DURATION_SECONDS}
       initialWidth={0}
       exitWidth={0}

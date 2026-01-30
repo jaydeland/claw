@@ -169,7 +169,11 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const { data: branchData, refetch: refetchBranches } =
 		trpc.changes.getBranches.useQuery(
 			{ worktreePath },
-			{ enabled: !!worktreePath }
+			{
+				enabled: !!worktreePath,
+				// Keep showing previous data during refetches to prevent dialog unmounting
+				placeholderData: (prev) => prev,
+			}
 		);
 
 	// Check if current branch is the default branch (main/master)
@@ -677,7 +681,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 									</DropdownMenuItem>
 								)}
 
-								{/* Merge/Rebase from default branch */}
+								{/* Merge/Rebase from default branch - requires upstream */}
 								{!isDefaultBranch && hasUpstream && (
 									<>
 										<DropdownMenuSeparator />
@@ -721,19 +725,22 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 												</span>
 											)}
 										</DropdownMenuItem>
+									</>
+								)}
+
+								{/* Merge into local branch - available even without upstream (purely local operation) */}
+								{!isDefaultBranch && (
+									<>
 										<DropdownMenuSeparator />
 										<DropdownMenuItem
 											onClick={() => setMergeBranchDialogOpen(true)}
-											disabled={isDefaultBranch}
 											className="text-xs"
 										>
 											<GitMerge className="mr-2 size-3.5" />
 											<div className="flex-1">
 												<div>Merge into local branch...</div>
 												<div className="text-[10px] text-muted-foreground">
-													{isDefaultBranch
-														? "Not available on default branch"
-														: "Merge current branch into another branch"}
+													Merge current branch into another branch
 												</div>
 											</div>
 										</DropdownMenuItem>
@@ -982,7 +989,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 				onOpenChange={setMergeBranchDialogOpen}
 				worktreePath={worktreePath}
 				currentBranch={currentBranch}
-				localBranches={branchData.local}
+				localBranches={branchData.local.map(b => b.branch)}
 				defaultBranch={branchData.defaultBranch}
 				onMergeComplete={() => {
 					refetchBranches();

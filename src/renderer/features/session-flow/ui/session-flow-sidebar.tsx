@@ -170,8 +170,7 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
       onClose={closeSidebar}
       widthAtom={sessionFlowSidebarWidthAtom}
       side="right"
-      minWidth={280}
-      maxWidth={500}
+      minWidth={200}
       animationDuration={0}
       initialWidth={0}
       exitWidth={0}

@@ -60,7 +60,11 @@ export function ChangesHeader({
 
 	const { data: branchData, isLoading } = trpc.changes.getBranches.useQuery(
 		{ worktreePath },
-		{ enabled: !!worktreePath },
+		{
+			enabled: !!worktreePath,
+			// Keep showing previous data during refetches
+			placeholderData: (prev) => prev,
+		},
 	);
 
 	const { pr, isLoading: isPRLoading } = usePRStatus({

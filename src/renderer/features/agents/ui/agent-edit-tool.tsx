@@ -2,6 +2,7 @@
 
 import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useSetAtom } from "jotai"
+import { Maximize2 } from "lucide-react"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
 import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
 import {
@@ -19,7 +20,13 @@ import { getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
-import { agentsDiffSidebarOpenAtom, agentsFocusedDiffFileAtom } from "../atoms"
+import {
+  agentsDiffSidebarOpenAtom,
+  agentsFocusedDiffFileAtom,
+  fileContentDialogOpenAtom,
+  selectedFileContentAtom,
+  type FileContentDialogData,
+} from "../atoms"
 import { cn } from "../../../lib/utils"
 
 interface AgentEditToolProps {
@@ -226,6 +233,10 @@ export const AgentEditTool = memo(function AgentEditTool({
   const setDiffSidebarOpen = useSetAtom(agentsDiffSidebarOpenAtom)
   const setFocusedDiffFile = useSetAtom(agentsFocusedDiffFileAtom)
 
+  // Atoms for dialog
+  const setDialogOpen = useSetAtom(fileContentDialogOpenAtom)
+  const setSelectedFile = useSetAtom(selectedFileContentAtom)
+
   // Determine tool type
   const isWriteMode = part.type === "tool-Write"
   const toolPrefix = isWriteMode ? "tool-Write" : "tool-Edit"
@@ -297,6 +308,26 @@ export const AgentEditTool = memo(function AgentEditTool({
       handleOpenInDiff()
     }
   }, [displayPath, handleOpenInDiff])
+
+  // Handler to open content in dialog
+  const handleOpenDialog = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    // For Write mode, use the write content; for Edit mode, use new_string
+    const content = isWriteMode ? writeContent : newString
+
+    // Compute language from filename
+    const lang = filename ? getLanguageFromFilename(filename) : "plaintext"
+
+    const fileData: FileContentDialogData = {
+      filePath,
+      displayPath,
+      content,
+      language: lang,
+    }
+    setSelectedFile(fileData)
+    setDialogOpen(true)
+  }, [isWriteMode, writeContent, newString, filePath, displayPath, filename, setSelectedFile, setDialogOpen])
 
   const handleExpandButtonClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -575,6 +606,23 @@ export const AgentEditTool = memo(function AgentEditTool({
               </>
             ) : null}
           </div>
+
+          {/* Open in dialog button - show when has content and not streaming */}
+          {hasVisibleContent && !isPending && !isInputStreaming && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleOpenDialog}
+                  className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
+                >
+                  <Maximize2 className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <span className="text-xs">Open in dialog</span>
+              </TooltipContent>
+            </Tooltip>
+          )}
 
           {/* Expand/Collapse button - show when has visible content and not streaming */}
           {hasVisibleContent && !isPending && !isInputStreaming && (

@@ -31,6 +31,74 @@ async function hasUpstreamBranch(
 /** Protected branches that should not be force-pushed to */
 const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"];
 
+/**
+ * Check if a branch is checked out in any worktree and return the worktree path if so.
+ * @param git - simple-git instance
+ * @param branchName - The branch name to check
+ * @returns The worktree path where the branch is checked out, or null if not checked out
+ */
+async function getBranchWorktreePath(
+	git: ReturnType<typeof simpleGit>,
+	branchName: string,
+): Promise<string | null> {
+	try {
+		const worktreeList = await git.raw(["worktree", "list", "--porcelain"]);
+		const lines = worktreeList.split("\n");
+
+		let currentWorktree: string | null = null;
+
+		for (const line of lines) {
+			if (line.startsWith("worktree ")) {
+				currentWorktree = line.substring(9); // Remove "worktree " prefix
+			} else if (line.startsWith("branch refs/heads/")) {
+				const branch = line.substring(18); // Remove "branch refs/heads/" prefix
+				if (branch === branchName && currentWorktree) {
+					return currentWorktree;
+				}
+			}
+		}
+
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Check if a fast-forward merge is possible from source to target branch.
+ * @param git - simple-git instance
+ * @param sourceBranch - The branch to merge from
+ * @param targetBranch - The branch to merge into
+ * @returns Object indicating if fast-forward is possible and if already up-to-date
+ */
+async function canFastForward(
+	git: ReturnType<typeof simpleGit>,
+	sourceBranch: string,
+	targetBranch: string,
+): Promise<{ canFF: boolean; alreadyUpToDate: boolean }> {
+	try {
+		// Get the commit hashes
+		const sourceCommit = (await git.revparse([sourceBranch])).trim();
+		const targetCommit = (await git.revparse([targetBranch])).trim();
+
+		// If they're the same, already up to date
+		if (sourceCommit === targetCommit) {
+			return { canFF: true, alreadyUpToDate: true };
+		}
+
+		// Check if target is an ancestor of source (meaning we can fast-forward)
+		try {
+			await git.raw(["merge-base", "--is-ancestor", targetBranch, sourceBranch]);
+			return { canFF: true, alreadyUpToDate: false };
+		} catch {
+			// Not an ancestor, can't fast-forward
+			return { canFF: false, alreadyUpToDate: false };
+		}
+	} catch {
+		return { canFF: false, alreadyUpToDate: false };
+	}
+}
+
 export const createGitOperationsRouter = () => {
 	return router({
 		// NOTE: saveFile is defined in file-contents.ts with hardened path validation
@@ -516,21 +584,21 @@ export const createGitOperationsRouter = () => {
 					assertRegisteredWorktree(input.worktreePath);
 
 					return withGitLock(input.worktreePath, async () => {
-						const git = createGitForNetwork(input.worktreePath);
+						const git = createGit(input.worktreePath);
 
-						// Get current branch
-						const currentBranch = (
+						// Get current branch (this is the source branch we're merging FROM)
+						const sourceBranch = (
 							await git.revparse(["--abbrev-ref", "HEAD"])
 						).trim();
 
 						// Validation: cannot merge into itself
-						if (currentBranch === input.targetBranch) {
+						if (sourceBranch === input.targetBranch) {
 							throw new Error(
 								"Cannot merge current branch into itself"
 							);
 						}
 
-						// Safety check: prevent merge with uncommitted changes
+						// Safety check: prevent merge with uncommitted changes in this worktree
 						if (await hasUncommittedChanges(input.worktreePath)) {
 							throw new Error(
 								"Cannot merge with uncommitted changes. Please commit or stash your changes first."
@@ -547,16 +615,8 @@ export const createGitOperationsRouter = () => {
 							);
 						}
 
-						// Check if target branch is protected
-						if (
-							PROTECTED_BRANCHES.includes(input.targetBranch)
-						) {
-							throw new Error(
-								`Cannot merge into protected branch '${input.targetBranch}'. Protected branches: ${PROTECTED_BRANCHES.join(
-									", "
-								)}`
-							);
-						}
+						// Note: No protected branch restriction for local merges.
+						// Protection rules don't apply locally - users can merge into any branch.
 
 						// Verify target branch exists locally
 						const branchSummary = await git.branch(["-a"]);
@@ -570,6 +630,98 @@ export const createGitOperationsRouter = () => {
 							);
 						}
 
+						// Check if fast-forward is possible
+						const ffCheck = await canFastForward(git, sourceBranch, input.targetBranch);
+
+						if (ffCheck.alreadyUpToDate) {
+							return { success: true, mergeType: "already-up-to-date" };
+						}
+
+						// If fast-forward only was requested but can't FF
+						if (input.fastForwardOnly && !ffCheck.canFF) {
+							throw new Error(
+								`Cannot fast-forward: branch '${input.targetBranch}' has diverged from '${sourceBranch}'. ` +
+								`The branches have different commits and require a merge commit.`
+							);
+						}
+
+						// Find where the target branch is checked out
+						const targetWorktreePath = await getBranchWorktreePath(git, input.targetBranch);
+
+						if (targetWorktreePath) {
+							// Target branch is checked out in a worktree - merge from there
+							// Check for uncommitted changes in the target worktree
+							if (await hasUncommittedChanges(targetWorktreePath)) {
+								throw new Error(
+									`Cannot merge into '${input.targetBranch}': the target worktree at '${targetWorktreePath}' has uncommitted changes. ` +
+									`Please commit or stash those changes first.`
+								);
+							}
+
+							// Check for ongoing rebase/merge in target worktree
+							const targetRepoState = await getRepositoryState(targetWorktreePath);
+							if (targetRepoState.isRebasing || targetRepoState.isMerging) {
+								throw new Error(
+									`Cannot merge into '${input.targetBranch}': the target worktree has a rebase or merge in progress. ` +
+									`Please complete or abort it first.`
+								);
+							}
+
+							// Create a git instance for the target worktree and run merge there
+							const targetGit = createGit(targetWorktreePath);
+
+							try {
+								// Merge the source branch into target (from target's perspective)
+								const mergeArgs = [sourceBranch, "--no-edit"];
+								if (input.fastForwardOnly) {
+									mergeArgs.push("--ff-only");
+								}
+
+								await withLockRetry(targetWorktreePath, () =>
+									targetGit.merge(mergeArgs)
+								);
+
+								// Determine merge type
+								if (ffCheck.canFF) {
+									return { success: true, mergeType: "fast-forward" };
+								}
+								return { success: true, mergeType: "merge-commit" };
+							} catch (error) {
+								const message =
+									error instanceof Error
+										? error.message
+										: String(error);
+
+								// Check for conflicts
+								if (
+									message.includes("CONFLICT") ||
+									message.includes("merge failed") ||
+									message.includes("could not apply")
+								) {
+									// Abort the merge
+									await targetGit.merge(["--abort"]).catch(() => {});
+									throw new Error(
+										`Merge failed due to conflicts. Operation aborted. ` +
+										`To resolve manually, go to '${targetWorktreePath}' and run: git merge ${sourceBranch}`
+									);
+								}
+
+								// Check for fast-forward only failure
+								if (
+									input.fastForwardOnly &&
+									message.includes("fatal: Not possible to fast-forward")
+								) {
+									throw new Error(
+										"Cannot fast-forward: target branch has diverged. Try without fast-forward only option."
+									);
+								}
+
+								throw error;
+							}
+						}
+
+						// Target branch is NOT checked out anywhere - we need to check it out to merge
+						// This is the fallback path for branches not in any worktree
 						let mergeType: "fast-forward" | "merge-commit" | "already-up-to-date" =
 							"merge-commit";
 
@@ -579,8 +731,8 @@ export const createGitOperationsRouter = () => {
 								git.checkout(input.targetBranch)
 							);
 
-							// Merge current branch into target
-							const mergeArgs = [currentBranch, "--no-edit"];
+							// Merge source branch into target
+							const mergeArgs = [sourceBranch, "--no-edit"];
 							if (input.fastForwardOnly) {
 								mergeArgs.push("--ff-only");
 							}
@@ -594,12 +746,12 @@ export const createGitOperationsRouter = () => {
 								const mergeBase = (
 									await git.raw([
 										"merge-base",
-										currentBranch,
+										sourceBranch,
 										input.targetBranch,
 									])
 								).trim();
 								const targetHead = (
-									await git.rev_parse("HEAD")
+									await git.revparse(["HEAD"])
 								).trim();
 
 								if (mergeBase === targetHead) {
@@ -610,7 +762,7 @@ export const createGitOperationsRouter = () => {
 										.raw([
 											"merge-base",
 											"--is-ancestor",
-											currentBranch,
+											sourceBranch,
 											"HEAD",
 										])
 										.catch(() => "");
@@ -628,6 +780,14 @@ export const createGitOperationsRouter = () => {
 								error instanceof Error
 									? error.message
 									: String(error);
+
+							// Check for worktree checkout error (shouldn't happen since we checked above, but just in case)
+							if (message.includes("already checked out")) {
+								throw new Error(
+									`Cannot merge into '${input.targetBranch}': this branch is checked out in another worktree. ` +
+									`Please merge from the worktree where '${input.targetBranch}' is checked out.`
+								);
+							}
 
 							// Check for conflicts
 							if (
@@ -655,7 +815,7 @@ export const createGitOperationsRouter = () => {
 							throw error;
 						} finally {
 							// CRITICAL: Always switch back to original branch
-							await git.checkout(currentBranch).catch(() => {});
+							await git.checkout(sourceBranch).catch(() => {});
 						}
 
 						return { success: true, mergeType };

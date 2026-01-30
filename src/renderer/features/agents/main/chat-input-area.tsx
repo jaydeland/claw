@@ -650,7 +650,7 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   return (
     <div className="px-2 pb-2 shadow-sm shadow-background relative z-10">
-      <div className="w-full max-w-2xl mx-auto">
+      <div className="w-full max-w-[90%] mx-auto">
         <div
           className="relative w-full"
           onDragOver={handleDragOver}

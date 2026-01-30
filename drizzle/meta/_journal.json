@@ -176,6 +176,13 @@
       "when": 1769646735542,
       "tag": "0024_plain_catseye",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1769795264054,
+      "tag": "0025_furry_thunderbird",
+      "breakpoints": true
     }
   ]
 }

@@ -102,7 +102,9 @@ export function ScaleControl({
             value={inputValue}
             onChange={handleInputChange}
             onFocus={(e) => {
-              e.target.select()
+              if (e.target instanceof HTMLInputElement) {
+                e.target.select()
+              }
               if (!isOpen) {
                 setIsOpen(true)
               }

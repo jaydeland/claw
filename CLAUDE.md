@@ -24,6 +24,33 @@ bun run db:generate      # Generate migrations from schema
 bun run db:push          # Push schema directly (dev only)
 ```
 
+## Troubleshooting
+
+### Architecture Mismatch (better-sqlite3)
+
+**Symptom:** App crashes with error:
+```
+ERR_DLOPEN_FAILED: mach-o file, but is an incompatible architecture
+(have 'x86_64', need 'arm64e' or 'arm64')
+```
+
+**Cause:** The better-sqlite3 native module was compiled for the wrong CPU architecture (x86_64/Intel instead of arm64/Apple Silicon, or vice versa).
+
+**Fix:**
+```bash
+# Clean reinstall better-sqlite3 for correct architecture
+rm -rf node_modules/better-sqlite3
+bun install
+
+# The postinstall script will automatically run electron-rebuild
+# which compiles native modules for your current architecture
+```
+
+**When this happens:**
+- After pulling code from another machine with different architecture
+- After switching between Rosetta and native mode
+- After npm/bun cache corruption
+
 ## Remote Debugging
 
 The app enables remote debugging on port **9223** in development mode for MCP server access.

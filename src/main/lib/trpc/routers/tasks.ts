@@ -214,12 +214,13 @@ async function getDerivedStatus(
 }
 
 /**
- * Extract command, description, and output from messages for a given toolCallId
+ * Extract output and exit code from messages for a given toolCallId
+ * Command and description are now stored in the background_tasks table
  * Also looks for TaskOutput tool results that reference the same task
  */
 function getTaskDataFromMessages(
   task: typeof backgroundTasks.$inferSelect
-): { command?: string; description?: string; output?: string; exitCode?: number } {
+): { output?: string; exitCode?: number } {
   try {
     const db = getDatabase()
     const subChat = db
@@ -234,8 +235,6 @@ function getTaskDataFromMessages(
 
     const messages = JSON.parse(subChat.messages as string) as any[]
 
-    let command: string | undefined
-    let description: string | undefined
     let output: string | undefined
     let exitCode: number | undefined
     let taskIdFromOutput: string | undefined
@@ -245,16 +244,6 @@ function getTaskDataFromMessages(
       if (message.type === "assistant" && message.parts) {
         for (const part of message.parts) {
           if (part.toolCallId === task.toolCallId) {
-            // Extract command and description from tool input
-            if (part.type === "tool-input" || part.type?.startsWith("tool-")) {
-              if (part.input?.command) {
-                command = part.input.command
-              }
-              if (part.input?.description) {
-                description = part.input.description
-              }
-            }
-
             // Extract output from tool result (stored in output or result field)
             const toolOutput = part.output || part.result
             if (toolOutput && typeof toolOutput === "object") {
@@ -307,7 +296,7 @@ function getTaskDataFromMessages(
       }
     }
 
-    return { command, description, output, exitCode }
+    return { output, exitCode }
   } catch (error) {
     console.error("[Tasks] Failed to extract task data from messages:", error)
     return {}
@@ -347,14 +336,14 @@ export const tasksRouter = router({
         .where(eq(backgroundTasks.subChatId, input.subChatId))
         .all()
 
-      // Derive status and command info for each task
+      // Derive status and output for each task
       const enhancedTasks: EnhancedTask[] = await Promise.all(
         tasks.map(async (task) => {
           const { status, exitCode: derivedExitCode } = await getDerivedStatus(task)
-          const { command, description, output, exitCode: messageExitCode } = getTaskDataFromMessages(task)
+          const { output, exitCode: messageExitCode } = getTaskDataFromMessages(task)
           // Prefer exit code from messages if available
           const exitCode = messageExitCode ?? derivedExitCode
-          return { ...task, status, exitCode, command, description, output }
+          return { ...task, status, exitCode, output }
         })
       )
 
@@ -374,14 +363,14 @@ export const tasksRouter = router({
         .where(eq(backgroundTasks.chatId, input.chatId))
         .all()
 
-      // Derive status and command info for each task
+      // Derive status and output for each task
       const enhancedTasks: EnhancedTask[] = await Promise.all(
         tasks.map(async (task) => {
           const { status, exitCode: derivedExitCode } = await getDerivedStatus(task)
-          const { command, description, output, exitCode: messageExitCode } = getTaskDataFromMessages(task)
+          const { output, exitCode: messageExitCode } = getTaskDataFromMessages(task)
           // Prefer exit code from messages if available
           const exitCode = messageExitCode ?? derivedExitCode
-          return { ...task, status, exitCode, command, description, output }
+          return { ...task, status, exitCode, output }
         })
       )
 
@@ -411,9 +400,9 @@ export const tasksRouter = router({
 
       if (!task) return null
 
-      // Get derived status and all task data from messages (primary source)
+      // Get derived status and output from messages (command/description now in task record)
       const { status, exitCode: derivedExitCode } = await getDerivedStatus(task)
-      const { command, description, output: messageOutput, exitCode: messageExitCode } = getTaskDataFromMessages(task)
+      const { output: messageOutput, exitCode: messageExitCode } = getTaskDataFromMessages(task)
 
       // Prefer exit code from messages if available
       const exitCode = messageExitCode ?? derivedExitCode
@@ -590,7 +579,7 @@ export const tasksRouter = router({
         outputMetadata,
       })
 
-      return { ...task, status, exitCode, output, command, description, outputMetadata }
+      return { ...task, status, exitCode, output, outputMetadata }
     }),
 
   /**

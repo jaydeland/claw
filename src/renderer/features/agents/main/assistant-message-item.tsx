@@ -12,6 +12,7 @@ import { AgentBashTool } from "../ui/agent-bash-tool"
 import { AgentEditTool } from "../ui/agent-edit-tool"
 import { AgentExitPlanModeTool } from "../ui/agent-exit-plan-mode-tool"
 import { AgentExploringGroup } from "../ui/agent-exploring-group"
+import { AgentReadTool } from "../ui/agent-read-tool"
 import {
   AgentMessageUsage,
   type AgentMessageMetadata,
@@ -32,8 +33,8 @@ import {
 import { MemoizedTextPart } from "./memoized-text-part"
 
 // Exploring tools - these get grouped when 3+ consecutive
+// Note: tool-Read is excluded because it has dedicated rendering with file content preview
 const EXPLORING_TOOLS = new Set([
-  "tool-Read",
   "tool-Grep",
   "tool-Glob",
   "tool-WebSearch",
@@ -392,6 +393,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
 
     if (part.type === "tool-Bash") return <AgentBashTool key={idx} part={part} messageId={message.id} partIndex={idx} chatStatus={status} />
     if (part.type === "tool-Thinking") return <AgentThinkingTool key={idx} part={part} chatStatus={status} />
+    if (part.type === "tool-Read") return <AgentReadTool key={idx} part={part} chatStatus={status} />
     if (part.type === "tool-Edit") return <AgentEditTool key={idx} part={part} messageId={message.id} partIndex={idx} chatStatus={status} />
     if (part.type === "tool-Write") return <AgentEditTool key={idx} part={part} messageId={message.id} partIndex={idx} chatStatus={status} />
     if (part.type === "tool-WebSearch") return <AgentWebSearchCollapsible key={idx} part={part} chatStatus={status} />

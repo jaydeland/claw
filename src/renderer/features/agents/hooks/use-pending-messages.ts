@@ -13,6 +13,7 @@ interface PendingMessageAtoms {
   pendingPrMessageAtom: PrimitiveAtom<string | null>
   pendingReviewMessageAtom: PrimitiveAtom<string | null>
   pendingConflictResolutionMessageAtom: PrimitiveAtom<string | null>
+  pendingPostMergeMessageAtom: PrimitiveAtom<string | null>
   pendingAuthRetryMessageAtom: PrimitiveAtom<{
     subChatId: string
     prompt: string
@@ -34,6 +35,7 @@ export function usePendingMessages(
   const [pendingPrMessage, setPendingPrMessage] = useAtom(atoms.pendingPrMessageAtom)
   const [pendingReviewMessage, setPendingReviewMessage] = useAtom(atoms.pendingReviewMessageAtom)
   const [pendingConflictMessage, setPendingConflictMessage] = useAtom(atoms.pendingConflictResolutionMessageAtom)
+  const [pendingPostMergeMessage, setPendingPostMergeMessage] = useAtom(atoms.pendingPostMergeMessageAtom)
   const [pendingAuthRetry, setPendingAuthRetry] = useAtom(atoms.pendingAuthRetryMessageAtom)
 
   // Keep sendMessage in ref to avoid effect re-runs
@@ -75,6 +77,16 @@ export function usePendingMessages(
       return
     }
 
+    // Process pending Post-Merge message
+    if (pendingPostMergeMessage) {
+      setPendingPostMergeMessage(null)
+      sendMessageRef.current({
+        role: "user",
+        parts: [{ type: "text", text: pendingPostMergeMessage }],
+      })
+      return
+    }
+
     // Process pending Auth retry
     if (pendingAuthRetry?.readyToRetry && pendingAuthRetry.subChatId === subChatId) {
       setPendingAuthRetry(null)
@@ -101,10 +113,12 @@ export function usePendingMessages(
     pendingPrMessage,
     pendingReviewMessage,
     pendingConflictMessage,
+    pendingPostMergeMessage,
     pendingAuthRetry,
     setPendingPrMessage,
     setPendingReviewMessage,
     setPendingConflictMessage,
+    setPendingPostMergeMessage,
     setPendingAuthRetry,
     setIsCreatingPr,
   ])
@@ -113,6 +127,7 @@ export function usePendingMessages(
     setPendingPrMessage,
     setPendingReviewMessage,
     setPendingConflictMessage,
+    setPendingPostMergeMessage,
     setPendingAuthRetry,
   }
 }

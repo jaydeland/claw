@@ -187,8 +187,9 @@ export const configSources = sqliteTable("config_sources", {
 
 // ============ BACKGROUND TASKS ============
 // Tracks minimal essential data for background tasks started by Claude
-// All display data (command, description, status, exitCode, timestamps) is derived from messages
-// This table only stores what cannot be derived: outputFile paths, task IDs, and status
+// Stores metadata for background tasks started by the Claude SDK
+// Static metadata (command, description) stored here for immediate availability
+// Dynamic data (output, exitCode) derived from messages for accuracy
 export const backgroundTasks = sqliteTable("background_tasks", {
   id: text("id")
     .primaryKey()
@@ -204,6 +205,8 @@ export const backgroundTasks = sqliteTable("background_tasks", {
   pid: integer("pid"), // DEPRECATED: Process ID - SDK doesn't provide PIDs, use sdkTaskId + sdkStatus instead
   sdkTaskId: text("sdk_task_id"), // The SDK's internal task identifier (NOT a PID - it's a string like "uuid-based-id")
   sdkStatus: text("sdk_status"), // Status from SDK task_notification: "completed" | "failed" | "stopped" | null (pending)
+  command: text("command"), // Command that was executed (e.g., "bun run dev")
+  description: text("description"), // Optional description of what the command does
 })
 
 export const backgroundTasksRelations = relations(backgroundTasks, ({ one }) => ({

@@ -17,7 +17,7 @@ import {
 } from "../../components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/tabs";
 import { toast } from "sonner";
-import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, memo, useDeferredValue } from "react";
 import { useAtom } from "jotai";
 import { trpc } from "../../lib/trpc";
 import { useChangesStore } from "../../lib/stores/changes-store";
@@ -202,18 +202,29 @@ export function ChangesView({
 		{ enabled: !!worktreePath },
 	);
 
-	const effectiveBaseBranch = baseBranch ?? branchData?.defaultBranch ?? "main";
+	// Stabilize effectiveBaseBranch to prevent query key changes during refetches
+	// Use useMemo to only recalculate when the underlying values actually change
+	const effectiveBaseBranch = useMemo(() => {
+		return baseBranch ?? branchData?.defaultBranch ?? "main";
+	}, [baseBranch, branchData?.defaultBranch]);
+
+	// Use deferred value to prevent UI blocking when base branch changes
+	const deferredBaseBranch = useDeferredValue(effectiveBaseBranch);
 
 	const {
 		data: status,
 		isLoading,
+		isFetching,
 		refetch,
 	} = trpc.changes.getStatus.useQuery(
-		{ worktreePath: worktreePath || "", defaultBranch: effectiveBaseBranch },
+		{ worktreePath: worktreePath || "", defaultBranch: deferredBaseBranch },
 		{
 			enabled: !!worktreePath,
-			refetchOnWindowFocus: true,
-			// Use default staleTime (5000ms) - GitWatcher handles real-time invalidation
+			// Disable refetchOnWindowFocus to prevent loading screen on popover interactions
+			// GitWatcher handles real-time invalidation via IPC events
+			refetchOnWindowFocus: false,
+			// Keep showing previous data when query key changes (e.g., base branch change)
+			placeholderData: (prev) => prev,
 		},
 	);
 
@@ -523,7 +534,8 @@ export function ChangesView({
 		);
 	}
 
-	if (isLoading) {
+	// Only show loading overlay on initial load, not during refetches when we have data
+	if (isLoading && !status) {
 		return (
 			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
 				Loading changes...

@@ -42,9 +42,10 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
     }
   }, [parts.length, isStreaming, isExpanded])
 
-  // Count files (Read, Grep, Glob) and searches (WebSearch, WebFetch)
+  // Count files (Grep, Glob) and searches (WebSearch, WebFetch)
+  // Note: tool-Read is not included as it has dedicated rendering with file content preview
   const fileCount = parts.filter((p) =>
-    ["tool-Read", "tool-Grep", "tool-Glob"].includes(p.type),
+    ["tool-Grep", "tool-Glob"].includes(p.type),
   ).length
   const searchCount = parts.filter((p) =>
     ["tool-WebSearch", "tool-WebFetch"].includes(p.type),

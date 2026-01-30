@@ -45,6 +45,8 @@ export const HistoryView = memo(function HistoryView({
 		{
 			enabled: !!worktreePath,
 			staleTime: 30000, // 30 seconds - history changes rarely
+			// Keep showing previous data during refetches
+			placeholderData: (prev) => prev,
 		},
 	);
 
@@ -65,6 +67,8 @@ export const HistoryView = memo(function HistoryView({
 		{
 			enabled: !!worktreePath && !!selectedCommitHash,
 			staleTime: 60000, // 1 minute - commit files don't change
+			// Keep showing previous data during refetches
+			placeholderData: (prev) => prev,
 		},
 	);
 
@@ -115,7 +119,8 @@ export const HistoryView = memo(function HistoryView({
 		[selectedCommitHash, onFileSelect],
 	);
 
-	if (isLoading) {
+	// Only show loading on initial load, not during refetches when we have data
+	if (isLoading && !commits) {
 		return (
 			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
 				Loading...
