@@ -209,6 +209,7 @@ import { ChatTitleEditor } from "../ui/chat-title-editor"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
 import { SubChatSelector } from "../ui/sub-chat-selector"
 import { SubChatStatusCard } from "../ui/sub-chat-status-card"
+import { SessionStatusBar } from "../ui/session-status-bar"
 // TasksPanel moved to Session Flow as a tab - see SessionFlowTasks component
 import { TextSelectionPopover } from "../ui/text-selection-popover"
 import { QuickCommentInput } from "../ui/quick-comment-input"
@@ -3589,37 +3590,40 @@ const ChatViewInner = memo(function ChatViewInner({
         </div>
       )}
 
-      {/* Stacked cards container - queue + status */}
-      {!pendingQuestions &&
-        (queue.length > 0 || changedFilesForSubChat.length > 0) && (
-          <div className="px-2 -mb-6 relative z-10">
-            <div className="w-full max-w-2xl mx-auto px-2">
-              {/* Queue indicator card - top card */}
-              {queue.length > 0 && (
-                <AgentQueueIndicator
-                  queue={queue}
-                  onRemoveItem={handleRemoveFromQueue}
-                  onSendNow={handleSendFromQueue}
-                  isStreaming={isStreaming}
-                  hasStatusCardBelow={changedFilesForSubChat.length > 0}
-                />
-              )}
-              {/* Status card - bottom card, only when there are changed files */}
-              {changedFilesForSubChat.length > 0 && (
-                <SubChatStatusCard
-                  chatId={parentChatId}
-                  subChatId={subChatId}
-                  isStreaming={isStreaming}
-                  isCompacting={isCompacting}
-                  changedFiles={changedFilesForSubChat}
-                  worktreePath={projectPath}
-                  onStop={handleStop}
-                  hasQueueCardAbove={queue.length > 0}
-                />
-              )}
-            </div>
+      {/* Stacked cards container - queue + status + session */}
+      {!pendingQuestions && (
+        <div className="px-2 -mb-6 relative z-10">
+          <div className="w-full max-w-2xl mx-auto px-2">
+            {/* Queue indicator card - top card */}
+            {queue.length > 0 && (
+              <AgentQueueIndicator
+                queue={queue}
+                onRemoveItem={handleRemoveFromQueue}
+                onSendNow={handleSendFromQueue}
+                isStreaming={isStreaming}
+                hasStatusCardBelow={changedFilesForSubChat.length > 0}
+              />
+            )}
+            {/* Status card - shows changed files */}
+            {changedFilesForSubChat.length > 0 && (
+              <SubChatStatusCard
+                chatId={parentChatId}
+                subChatId={subChatId}
+                isStreaming={isStreaming}
+                isCompacting={isCompacting}
+                changedFiles={changedFilesForSubChat}
+                worktreePath={projectPath}
+                onStop={handleStop}
+                hasQueueCardAbove={queue.length > 0}
+              />
+            )}
+            {/* Session status bar - shows tasks, agents, todos (renders only if has content) */}
+            <SessionStatusBar
+              hasQueueCardAbove={queue.length > 0 || changedFilesForSubChat.length > 0}
+            />
           </div>
-        )}
+        </div>
+      )}
 
       {/* Input - isolated component to prevent re-renders */}
       <ChatInputArea
