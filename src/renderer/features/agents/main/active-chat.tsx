@@ -209,7 +209,6 @@ import { ChatTitleEditor } from "../ui/chat-title-editor"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
 import { SubChatSelector } from "../ui/sub-chat-selector"
 import { SubChatStatusCard } from "../ui/sub-chat-status-card"
-import { SessionStatusBar } from "../ui/session-status-bar"
 // TasksPanel moved to Session Flow as a tab - see SessionFlowTasks component
 import { TextSelectionPopover } from "../ui/text-selection-popover"
 import { QuickCommentInput } from "../ui/quick-comment-input"
@@ -3604,22 +3603,16 @@ const ChatViewInner = memo(function ChatViewInner({
                 hasStatusCardBelow={changedFilesForSubChat.length > 0}
               />
             )}
-            {/* Status card - shows changed files */}
-            {changedFilesForSubChat.length > 0 && (
-              <SubChatStatusCard
-                chatId={parentChatId}
-                subChatId={subChatId}
-                isStreaming={isStreaming}
-                isCompacting={isCompacting}
-                changedFiles={changedFilesForSubChat}
-                worktreePath={projectPath}
-                onStop={handleStop}
-                hasQueueCardAbove={queue.length > 0}
-              />
-            )}
-            {/* Session status bar - shows tasks, agents, todos (renders only if has content) */}
-            <SessionStatusBar
-              hasQueueCardAbove={queue.length > 0 || changedFilesForSubChat.length > 0}
+            {/* Unified status bar - shows changes, tasks, agents, todos */}
+            <SubChatStatusCard
+              chatId={parentChatId}
+              subChatId={subChatId}
+              isStreaming={isStreaming}
+              isCompacting={isCompacting}
+              changedFiles={changedFilesForSubChat}
+              worktreePath={projectPath}
+              onStop={handleStop}
+              hasQueueCardAbove={queue.length > 0}
             />
           </div>
         </div>
