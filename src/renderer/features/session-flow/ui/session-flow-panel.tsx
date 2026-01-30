@@ -21,7 +21,8 @@ import {
 } from "../../agents/stores/message-store"
 import { sessionFlowNodeTypes } from "../components/session-flow-nodes"
 import { transformMessagesToFlow } from "../lib/message-transformer"
-import { sessionFlowUserScrolledAtom, sessionFlowExpandedNodesAtom } from "../atoms"
+import { sessionFlowUserScrolledAtom, sessionFlowExpandedNodesAtom, sessionFlowLiveAtom } from "../atoms"
+import { Play, Pause } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
@@ -58,10 +59,16 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [userScrolled, setUserScrolled] = useAtom(sessionFlowUserScrolledAtom)
   const [expandedNodes, setExpandedNodes] = useAtom(sessionFlowExpandedNodesAtom)
+  const [isLive, setIsLive] = useAtom(sessionFlowLiveAtom)
   const reactFlowInstance = useReactFlow()
   const previousNodeCountRef = useRef(0)
   const previousExpandedSizeRef = useRef(0)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
+
+  // Store pending nodes/edges when Live is off - these will be applied when Live turns on
+  const pendingNodesRef = useRef<typeof nodes>([])
+  const pendingEdgesRef = useRef<typeof edges>([])
+  const wasLiveRef = useRef(isLive)
 
   // Handle node click - scroll to message
   const handleNodeClick = useCallback(
@@ -99,6 +106,15 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
       onToggleExpansion: handleToggleExpansion,
     })
 
+    // Always store latest computed state in pending refs
+    pendingNodesRef.current = newNodes
+    pendingEdgesRef.current = newEdges
+
+    // If Live is off, don't update the display
+    if (!isLive) {
+      return
+    }
+
     const nodeCountChanged = newNodes.length !== previousNodeCountRef.current
     const expandedSizeChanged = expandedNodes.size !== previousExpandedSizeRef.current
     previousNodeCountRef.current = newNodes.length
@@ -107,27 +123,64 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
     setNodes(newNodes)
     setEdges(newEdges)
 
-    // Auto-adjust view when new nodes are added or expansion changes (but only if user hasn't manually scrolled)
+    // Auto-follow: center viewport on bottom-most nodes when new nodes are added
+    // (only if user hasn't manually scrolled - turning Live on resets scroll state)
     if ((nodeCountChanged || expandedSizeChanged) && newNodes.length > 0 && !userScrolled) {
       // Delay to allow nodes to render
       setTimeout(() => {
-        // Find the bottom-most nodes (highest Y position) to focus on
+        // Find the bottom-most node (highest Y position)
         const maxY = Math.max(...newNodes.map(n => n.position.y))
-        const bottomNodes = newNodes.filter(n => n.position.y >= maxY - 100)
+        const bottomNode = newNodes.find(n => n.position.y === maxY)
 
-        // Fit view to show full width of all nodes, but focus vertically on bottom nodes
-        reactFlowInstance.fitView({
-          padding: 0.2,
-          duration: 400,
-          // Include bottom nodes to ensure we scroll to bottom, but fitView will
-          // adjust to show the full width of the entire graph
-          nodes: bottomNodes.length > 0 ? bottomNodes : undefined,
-          minZoom: 0.3,
-          maxZoom: 1.2,
-        })
+        if (bottomNode) {
+          // Get current zoom level to preserve it
+          const { zoom } = reactFlowInstance.getViewport()
+
+          // Center on the bottom node (add offset for node height)
+          // NODE_HEIGHT is approximately 60-80px, center a bit above bottom
+          reactFlowInstance.setCenter(
+            bottomNode.position.x + 100, // Offset for node width (~200px / 2)
+            bottomNode.position.y + 40,  // Offset for node height
+            { duration: 400, zoom: Math.min(zoom, 1.2) }
+          )
+        }
       }, 100)
     }
-  }, [messages, handleNodeClick, expandedNodes, handleToggleExpansion, setNodes, setEdges, userScrolled, reactFlowInstance])
+  }, [messages, handleNodeClick, expandedNodes, handleToggleExpansion, setNodes, setEdges, isLive, userScrolled, reactFlowInstance])
+
+  // Handle Live toggle turning on - catch up to current state and reset scroll
+  useEffect(() => {
+    if (isLive && !wasLiveRef.current) {
+      // Live just turned on - catch up to pending state
+      if (pendingNodesRef.current.length > 0) {
+        setNodes(pendingNodesRef.current)
+        setEdges(pendingEdgesRef.current)
+        previousNodeCountRef.current = pendingNodesRef.current.length
+
+        // Reset user scroll state so auto-follow works
+        setUserScrolled(false)
+
+        // Center on bottom node after catching up
+        setTimeout(() => {
+          const newNodes = pendingNodesRef.current
+          if (newNodes.length > 0) {
+            const maxY = Math.max(...newNodes.map(n => n.position.y))
+            const bottomNode = newNodes.find(n => n.position.y === maxY)
+
+            if (bottomNode) {
+              const { zoom } = reactFlowInstance.getViewport()
+              reactFlowInstance.setCenter(
+                bottomNode.position.x + 100,
+                bottomNode.position.y + 40,
+                { duration: 400, zoom: Math.min(zoom, 1.2) }
+              )
+            }
+          }
+        }, 100)
+      }
+    }
+    wasLiveRef.current = isLive
+  }, [isLive, setNodes, setEdges, setUserScrolled, reactFlowInstance])
 
   // Detect user scroll/zoom actions
   const handleMove = useCallback(() => {
@@ -138,6 +191,11 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
   const handleFitView = useCallback(() => {
     setUserScrolled(false)
   }, [setUserScrolled])
+
+  // Toggle Live mode
+  const toggleLive = useCallback(() => {
+    setIsLive(prev => !prev)
+  }, [setIsLive])
 
   return (
     <div className="h-full w-full bg-background">
@@ -174,6 +232,35 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
           position="bottom-left"
           onFitView={handleFitView}
         />
+
+        {/* Live toggle control - positioned next to Controls */}
+        <div className="absolute bottom-2 left-[140px] z-10">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={toggleLive}
+                className={`
+                  flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium
+                  border shadow-sm transition-colors
+                  ${isLive
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                    : 'bg-muted/80 border-border text-muted-foreground hover:bg-muted'
+                  }
+                `}
+              >
+                {isLive ? (
+                  <Play className="h-3 w-3 fill-current" />
+                ) : (
+                  <Pause className="h-3 w-3" />
+                )}
+                <span>Live</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              {isLive ? 'Auto-following new nodes' : 'Paused - click to resume'}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </ReactFlow>
     </div>
   )

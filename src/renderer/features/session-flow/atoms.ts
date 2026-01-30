@@ -9,6 +9,14 @@ export const sessionFlowSidebarOpenAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Live mode toggle - when off, flow chart freezes; when on, catches up and auto-follows
+export const sessionFlowLiveAtom = atomWithStorage<boolean>(
+  "session-flow-live",
+  true,
+  undefined,
+  { getOnInit: true },
+)
+
 export const sessionFlowSidebarWidthAtom = atomWithStorage<number>(
   "session-flow-sidebar-width",
   320,
