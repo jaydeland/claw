@@ -189,7 +189,7 @@ import {
 } from "../search"
 import { agentChatStore } from "../stores/agent-chat-store"
 import { EMPTY_QUEUE, useMessageQueueStore } from "../stores/message-queue-store"
-import { clearSubChatCaches, isRollingBackAtom, rollbackHandlerAtom, syncMessagesWithStatusAtom } from "../stores/message-store"
+import { clearSubChatCaches, isRollingBackAtom, rollbackHandlerAtom, setMessageMetadataAtom, syncMessagesWithStatusAtom } from "../stores/message-store"
 import { useStreamingStatusStore } from "../stores/streaming-status-store"
 import {
   useAgentSubChatStore,
@@ -4708,6 +4708,18 @@ Make sure to preserve all functionality from both branches when resolving confli
       const subChat = agentSubChats.find((sc) => sc.id === subChatId)
       const messages = (subChat?.messages as any[]) || []
 
+      // Extract and store metadata before AI SDK strips it
+      // The AI SDK normalizes messages and removes custom fields like metadata
+      for (const msg of messages) {
+        if (msg.role === "assistant" && msg.metadata) {
+          appStore.set(setMessageMetadataAtom, {
+            subChatId,
+            messageId: msg.id,
+            metadata: msg.metadata,
+          })
+        }
+      }
+
       // Get mode from store metadata (falls back to current isPlanMode)
       const subChatMeta = useAgentSubChatStore
         .getState()
@@ -4799,6 +4811,24 @@ Make sure to preserve all functionality from both branches when resolving confli
 
           // Refresh diff stats after agent finishes making changes
           fetchDiffStatsRef.current()
+
+          // Refresh metadata from DB after streaming completes
+          // The AI SDK strips metadata during message normalization, so we need to
+          // fetch it separately and store it in our metadata atom family
+          trpcClient.chats.getSubChatMessageMetadata
+            .query({ subChatId })
+            .then((freshMetadata) => {
+              for (const [messageId, metadata] of Object.entries(freshMetadata)) {
+                appStore.set(setMessageMetadataAtom, {
+                  subChatId,
+                  messageId,
+                  metadata,
+                })
+              }
+            })
+            .catch((err) => {
+              console.error("[onFinish] Failed to refresh metadata:", err)
+            })
 
           // Note: sidebar timestamp update is handled via optimistic update in handleSend
           // No need to refetch here as it would overwrite the optimistic update with stale data
@@ -4955,6 +4985,24 @@ Make sure to preserve all functionality from both branches when resolving confli
 
           // Refresh diff stats after agent finishes making changes
           fetchDiffStatsRef.current()
+
+          // Refresh metadata from DB after streaming completes
+          // The AI SDK strips metadata during message normalization, so we need to
+          // fetch it separately and store it in our metadata atom family
+          trpcClient.chats.getSubChatMessageMetadata
+            .query({ subChatId: newId })
+            .then((freshMetadata) => {
+              for (const [messageId, metadata] of Object.entries(freshMetadata)) {
+                appStore.set(setMessageMetadataAtom, {
+                  subChatId: newId,
+                  messageId,
+                  metadata,
+                })
+              }
+            })
+            .catch((err) => {
+              console.error("[onFinish] Failed to refresh metadata:", err)
+            })
 
           // Note: sidebar timestamp update is handled via optimistic update in handleSend
           // No need to refetch here as it would overwrite the optimistic update with stale data

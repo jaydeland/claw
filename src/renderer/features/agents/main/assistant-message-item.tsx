@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useState } from "react"
 
 import { CollapseIcon, ExpandIcon, IconTextUndo } from "../../../components/ui/icons"
 import { cn } from "../../../lib/utils"
-import { isRollingBackAtom, rollbackHandlerAtom } from "../stores/message-store"
+import { isRollingBackAtom, messageMetadataAtomFamily, rollbackHandlerAtom } from "../stores/message-store"
 import { AgentAskUserQuestionTool } from "../ui/agent-ask-user-question-tool"
 import { AgentBashTool } from "../ui/agent-bash-tool"
 import { AgentEditTool } from "../ui/agent-edit-tool"
@@ -340,7 +340,9 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     [messageParts]
   )
 
-  const msgMetadata = message?.metadata as AgentMessageMetadata
+  // Read metadata from separate store - AI SDK strips custom fields during message normalization
+  const metadataKey = `${subChatId}:${message?.id || ""}`
+  const msgMetadata = useAtomValue(messageMetadataAtomFamily(metadataKey)) as AgentMessageMetadata
 
   const renderPart = useCallback((part: any, idx: number, isFinal = false) => {
     if (part.type === "step-start") return null

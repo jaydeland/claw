@@ -639,6 +639,59 @@ export const chatsRouter = router({
     }),
 
   /**
+   * Get metadata for all assistant messages in a sub-chat
+   * Used to populate metadata store after streaming completes (bypasses AI SDK normalization)
+   */
+  getSubChatMessageMetadata: publicProcedure
+    .input(z.object({ subChatId: z.string() }))
+    .query(({ input }) => {
+      const db = getDatabase()
+      const subChat = db
+        .select()
+        .from(subChats)
+        .where(eq(subChats.id, input.subChatId))
+        .get()
+
+      if (!subChat?.messages) return {}
+
+      const messages = JSON.parse(subChat.messages) as Array<{
+        id: string
+        role: string
+        metadata?: {
+          sessionId?: string
+          inputTokens?: number
+          outputTokens?: number
+          totalTokens?: number
+          totalCostUsd?: number
+          durationMs?: number
+          resultSubtype?: string
+          finalTextId?: string
+          sdkMessageUuid?: string
+        }
+      }>
+
+      const metadataMap: Record<string, {
+        sessionId?: string
+        inputTokens?: number
+        outputTokens?: number
+        totalTokens?: number
+        totalCostUsd?: number
+        durationMs?: number
+        resultSubtype?: string
+        finalTextId?: string
+        sdkMessageUuid?: string
+      }> = {}
+
+      for (const msg of messages) {
+        if (msg.role === "assistant" && msg.metadata) {
+          metadataMap[msg.id] = msg.metadata
+        }
+      }
+
+      return metadataMap
+    }),
+
+  /**
    * Create a new sub-chat
    */
   createSubChat: publicProcedure

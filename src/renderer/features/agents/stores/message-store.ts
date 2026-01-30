@@ -71,6 +71,39 @@ export const isRollingBackAtom = atom<boolean>(false)
 // Current subChatId - used to isolate caches per chat
 export const currentSubChatIdAtom = atom<string>("default")
 
+// ============================================================================
+// MESSAGE METADATA STORE - Separate from AI SDK messages
+// ============================================================================
+// The AI SDK strips custom fields from messages during normalization.
+// This store preserves metadata (tokens, cost, duration) independently.
+// ============================================================================
+
+export interface StoredMessageMetadata {
+  sessionId?: string
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  totalCostUsd?: number
+  durationMs?: number
+  resultSubtype?: string
+  finalTextId?: string
+  sdkMessageUuid?: string
+}
+
+// Atom family keyed by "subChatId:messageId"
+export const messageMetadataAtomFamily = atomFamily(
+  (_key: string) => atom<StoredMessageMetadata | null>(null)
+)
+
+// Write atom to set metadata
+export const setMessageMetadataAtom = atom(
+  null,
+  (_get, set, payload: { subChatId: string; messageId: string; metadata: StoredMessageMetadata }) => {
+    const key = `${payload.subChatId}:${payload.messageId}`
+    set(messageMetadataAtomFamily(key), payload.metadata)
+  }
+)
+
 // Last message ID - derived (uses stable messageIdsAtom)
 export const lastMessageIdAtom = atom((get) => {
   const ids = get(messageIdsAtom)
