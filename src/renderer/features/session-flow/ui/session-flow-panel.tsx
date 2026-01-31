@@ -133,15 +133,13 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
         const bottomNode = newNodes.find(n => n.position.y === maxY)
 
         if (bottomNode) {
-          // Get current zoom level to preserve it
-          const { zoom } = reactFlowInstance.getViewport()
-
           // Center on the bottom node (add offset for node height)
           // NODE_HEIGHT is approximately 60-80px, center a bit above bottom
+          // Reset zoom to 1.0 for optimal readability of new nodes
           reactFlowInstance.setCenter(
             bottomNode.position.x + 100, // Offset for node width (~200px / 2)
             bottomNode.position.y + 40,  // Offset for node height
-            { duration: 400, zoom: Math.min(zoom, 1.2) }
+            { duration: 400, zoom: 1.0 }
           )
         }
       }, 100)
@@ -168,11 +166,11 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
             const bottomNode = newNodes.find(n => n.position.y === maxY)
 
             if (bottomNode) {
-              const { zoom } = reactFlowInstance.getViewport()
+              // Reset zoom to 1.0 for optimal readability when catching up
               reactFlowInstance.setCenter(
                 bottomNode.position.x + 100,
                 bottomNode.position.y + 40,
-                { duration: 400, zoom: Math.min(zoom, 1.2) }
+                { duration: 400, zoom: 1.0 }
               )
             }
           }
