@@ -29,6 +29,7 @@ import { PodsTab } from "./pods-tab"
 import { ServicesTab } from "./services-tab"
 import { DeploymentsTab } from "./deployments-tab"
 import { LogsTab } from "./logs-tab"
+import { DevSpaceTab } from "./devspace-tab"
 import {
   Select,
   SelectContent,
@@ -294,6 +295,7 @@ export function ClusterDetail() {
         {selectedTab === "services" && <ServicesTab />}
         {selectedTab === "deployments" && <DeploymentsTab />}
         {selectedTab === "logs" && <LogsTab />}
+        {selectedTab === "devspace" && <DevSpaceTab />}
       </div>
 
       {/* Confirmation Dialog for changing default cluster */}

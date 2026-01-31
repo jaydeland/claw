@@ -20,6 +20,7 @@ import { configManagementRouter } from "./config-management"
 import { clustersRouter } from "./clusters"
 import { tasksRouter } from "./tasks"
 import { gsdRouter } from "./gsd"
+import { devspaceRouter } from "./devspace"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -50,6 +51,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     clusters: clustersRouter,
     tasks: tasksRouter,
     gsd: gsdRouter,
+    devspace: devspaceRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })
