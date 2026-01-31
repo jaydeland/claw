@@ -344,86 +344,80 @@ export const chatsRouter = router({
           input.baseBranch,
         )
 
-        // Check if a worktree already exists for this project (limit: 1 per workspace)
-        const existingWorktreeChat = db
-          .select()
-          .from(chats)
-          .where(
-            and(
-              eq(chats.projectId, input.projectId),
-              isNotNull(chats.branch), // Has a branch means it has a worktree
-            )
-          )
-          .get()
+        // Get custom worktree location from per-project config (preferred) or global settings (fallback)
+        const { detectWorktreeConfig } = await import("../../git/worktree-config")
+        const worktreeConfig = await detectWorktreeConfig(project.path)
+        const perProjectLocation = worktreeConfig.config?.["worktree-location"] || null
 
-        if (existingWorktreeChat) {
-          console.warn(
-            `[chats.create] worktree already exists for project ${input.projectId} (chat: ${existingWorktreeChat.id})`
-          )
-          // Use local mode instead - work directly in project directory
-          console.log("[chats.create] falling back to local mode (project path)")
+        const { claudeCodeSettings } = await import("../../db")
+        const settings = db
+          .select()
+          .from(claudeCodeSettings)
+          .where(eq(claudeCodeSettings.id, "default"))
+          .get()
+        const globalWorktreeLocation = settings?.customWorktreeLocation || null
+
+        // Prefer per-project config over global setting
+        const customWorktreeLocation = perProjectLocation || globalWorktreeLocation
+
+        const result = await createWorktreeForChat(
+          project.path,
+          project.id,
+          chat.id,
+          input.baseBranch,
+          customWorktreeLocation,
+        )
+        console.log("[chats.create] worktree result:", result)
+
+        if (result.success && result.worktreePath) {
+          // Set name to "Local (branch-name)" format for worktree chats
+          // Use the current branch from the main project directory
+          const currentBranch = await getCurrentBranch(project.path)
+          const worktreeName = `Local (${currentBranch || 'unknown'})`
+
+          db.update(chats)
+            .set({
+              worktreePath: result.worktreePath,
+              branch: result.branch,
+              baseBranch: result.baseBranch,
+              name: worktreeName,
+            })
+            .where(eq(chats.id, chat.id))
+            .run()
+          worktreeResult = {
+            worktreePath: result.worktreePath,
+            branch: result.branch,
+            baseBranch: result.baseBranch,
+          }
+        } else {
+          console.warn(`[Worktree] Failed: ${result.error}`)
+          // Fallback to project path
           db.update(chats)
             .set({ worktreePath: project.path })
             .where(eq(chats.id, chat.id))
             .run()
           worktreeResult = { worktreePath: project.path }
-        } else {
-          // Get custom worktree location from per-project config (preferred) or global settings (fallback)
-          const { detectWorktreeConfig } = await import("../../git/worktree-config")
-          const worktreeConfig = await detectWorktreeConfig(project.path)
-          const perProjectLocation = worktreeConfig.config?.["worktree-location"] || null
-
-          const { claudeCodeSettings } = await import("../../db")
-          const settings = db
-            .select()
-            .from(claudeCodeSettings)
-            .where(eq(claudeCodeSettings.id, "default"))
-            .get()
-          const globalWorktreeLocation = settings?.customWorktreeLocation || null
-
-          // Prefer per-project config over global setting
-          const customWorktreeLocation = perProjectLocation || globalWorktreeLocation
-
-          const result = await createWorktreeForChat(
-            project.path,
-            project.id,
-            chat.id,
-            input.baseBranch,
-            customWorktreeLocation,
-          )
-          console.log("[chats.create] worktree result:", result)
-
-          if (result.success && result.worktreePath) {
-            // Set name to "Local (branch-name)" format for worktree chats
-            // Use the current branch from the main project directory
-            const currentBranch = await getCurrentBranch(project.path)
-            const worktreeName = `Local (${currentBranch || 'unknown'})`
-
-            db.update(chats)
-              .set({
-                worktreePath: result.worktreePath,
-                branch: result.branch,
-                baseBranch: result.baseBranch,
-                name: worktreeName,
-              })
-              .where(eq(chats.id, chat.id))
-              .run()
-            worktreeResult = {
-              worktreePath: result.worktreePath,
-              branch: result.branch,
-              baseBranch: result.baseBranch,
-            }
-          } else {
-            console.warn(`[Worktree] Failed: ${result.error}`)
-            // Fallback to project path
-            db.update(chats)
-              .set({ worktreePath: project.path })
-              .where(eq(chats.id, chat.id))
-              .run()
-            worktreeResult = { worktreePath: project.path }
-          }
         }
       } else {
+        // Local mode: Check if local chat already exists (limit: 1 per project)
+        const existingLocalChat = db
+          .select()
+          .from(chats)
+          .where(
+            and(
+              eq(chats.projectId, input.projectId),
+              isNull(chats.branch), // No branch means local chat
+              isNull(chats.archivedAt) // Only count active chats
+            )
+          )
+          .get()
+
+        if (existingLocalChat) {
+          throw new Error(
+            "A local chat already exists for this project. Only one local chat is allowed per project to avoid conflicts. Please archive or delete the existing local chat, or create a worktree chat instead."
+          )
+        }
+
         // Local mode: use project path directly, no branch info
         console.log("[chats.create] local mode - using project path directly")
         db.update(chats)
