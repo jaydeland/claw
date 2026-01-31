@@ -14,6 +14,7 @@ import { chats, getDatabase, projects, subChats } from "../../db"
 import {
   createWorktreeForChat,
   fetchGitHubPRStatus,
+  getCurrentBranch,
   getWorktreeDiff,
   removeWorktree,
 } from "../../git"
@@ -393,11 +394,17 @@ export const chatsRouter = router({
           console.log("[chats.create] worktree result:", result)
 
           if (result.success && result.worktreePath) {
+            // Set name to "Local (branch-name)" format for worktree chats
+            // Use the current branch from the main project directory
+            const currentBranch = await getCurrentBranch(project.path)
+            const worktreeName = `Local (${currentBranch || 'unknown'})`
+
             db.update(chats)
               .set({
                 worktreePath: result.worktreePath,
                 branch: result.branch,
                 baseBranch: result.baseBranch,
+                name: worktreeName,
               })
               .where(eq(chats.id, chat.id))
               .run()
@@ -455,6 +462,54 @@ export const chatsRouter = router({
       return db
         .update(chats)
         .set({ name: input.name, updatedAt: new Date() })
+        .where(eq(chats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
+   * Sync worktree chat name with current branch from main project directory
+   * Only updates worktree chats (those with a branch field)
+   */
+  syncWorktreeChatName: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+
+      // Get the chat with its project
+      const chat = db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, input.id))
+        .get()
+
+      if (!chat || !chat.branch) {
+        // Not a worktree chat, skip
+        return null
+      }
+
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, chat.projectId))
+        .get()
+
+      if (!project) {
+        return null
+      }
+
+      // Get current branch from main project directory
+      const currentBranch = await getCurrentBranch(project.path)
+      const worktreeName = `Local (${currentBranch || 'unknown'})`
+
+      // Only update if the name has changed
+      if (chat.name === worktreeName) {
+        return chat
+      }
+
+      return db
+        .update(chats)
+        .set({ name: worktreeName, updatedAt: new Date() })
         .where(eq(chats.id, input.id))
         .returning()
         .get()
