@@ -26,6 +26,9 @@ const STRIPPED_ENV_KEYS = [
 let cachedBinaryPath: string | null = null
 let binaryPathComputed = false
 
+// Flag to prevent concurrent refresh attempts
+let isRefreshing = false
+
 // AWS Credentials interface for Bedrock
 export interface AwsCredentials {
   accessKeyId: string
@@ -89,6 +92,150 @@ export function getAwsCredentials(): AwsCredentials | null {
   } catch (error) {
     console.error("[claude-env] Failed to get AWS credentials:", error)
     return null
+  }
+}
+
+/**
+ * Result of credential refresh attempt
+ */
+export interface CredentialRefreshResult {
+  success: boolean
+  error?: string
+  expiresAt?: Date
+}
+
+/**
+ * Ensure AWS credentials are valid, auto-refreshing if needed.
+ * Call this BEFORE buildClaudeEnv() to ensure credentials are fresh.
+ *
+ * This handles the case where SSO credentials are expired but can be refreshed
+ * using the stored SSO access token (and refresh token if needed).
+ */
+export async function ensureValidAwsCredentials(): Promise<CredentialRefreshResult> {
+  // Prevent concurrent refresh attempts
+  if (isRefreshing) {
+    console.log("[claude-env] Credential refresh already in progress, waiting...")
+    // Wait a bit and check again
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    return ensureValidAwsCredentials()
+  }
+
+  try {
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    // Not in AWS mode - nothing to refresh
+    if (!settings || settings.authMode !== "aws") {
+      return { success: true }
+    }
+
+    // Profile mode - relies on system credentials, nothing to refresh in app
+    const connectionMethod = settings.bedrockConnectionMethod || "profile"
+    if (connectionMethod === "profile") {
+      return { success: true }
+    }
+
+    // SSO mode - check if credentials need refresh
+    const now = new Date()
+    const credentialsExpired = settings.awsCredentialsExpiresAt && settings.awsCredentialsExpiresAt < now
+    const credentialsMissing = !settings.awsAccessKeyId || !settings.awsSecretAccessKey
+
+    // Credentials are valid - no refresh needed
+    if (!credentialsExpired && !credentialsMissing) {
+      return { success: true, expiresAt: settings.awsCredentialsExpiresAt || undefined }
+    }
+
+    console.log("[claude-env] SSO credentials expired or missing, attempting auto-refresh...")
+    isRefreshing = true
+
+    // Check if we have SSO access token to refresh credentials
+    if (!settings.ssoAccessToken || !settings.ssoRegion) {
+      console.warn("[claude-env] No SSO access token available for refresh")
+      return { success: false, error: "SSO session not established. Please authenticate in Settings." }
+    }
+
+    if (!settings.ssoAccountId || !settings.ssoRoleName) {
+      console.warn("[claude-env] No SSO account/role selected for refresh")
+      return { success: false, error: "No AWS account/role selected. Please configure in Settings." }
+    }
+
+    // Dynamically import AwsSsoService to avoid circular deps
+    const { AwsSsoService } = await import("../aws/sso-service")
+    const ssoService = new AwsSsoService(settings.ssoRegion)
+
+    let accessToken = settings.ssoAccessToken
+
+    // Check if SSO access token itself is expired
+    const ssoTokenExpired = settings.ssoTokenExpiresAt && settings.ssoTokenExpiresAt < now
+    if (ssoTokenExpired) {
+      console.log("[claude-env] SSO access token expired, attempting token refresh...")
+
+      if (!settings.ssoRefreshToken || !settings.ssoClientId || !settings.ssoClientSecret) {
+        console.warn("[claude-env] No refresh token available - user must re-authenticate")
+        return { success: false, error: "SSO session expired. Please re-authenticate in Settings." }
+      }
+
+      try {
+        const newToken = await ssoService.refreshToken(
+          settings.ssoClientId,
+          settings.ssoClientSecret,
+          settings.ssoRefreshToken
+        )
+
+        accessToken = newToken.accessToken
+
+        // Save refreshed SSO token
+        db.update(claudeCodeSettings)
+          .set({
+            ssoAccessToken: newToken.accessToken,
+            ssoRefreshToken: newToken.refreshToken || settings.ssoRefreshToken,
+            ssoTokenExpiresAt: newToken.expiresAt,
+          })
+          .where(eq(claudeCodeSettings.id, "default"))
+          .run()
+
+        console.log("[claude-env] SSO access token refreshed successfully")
+      } catch (tokenError: any) {
+        console.error("[claude-env] Failed to refresh SSO token:", tokenError)
+        return { success: false, error: "Failed to refresh SSO session. Please re-authenticate in Settings." }
+      }
+    }
+
+    // Now get fresh role credentials using the (possibly refreshed) access token
+    try {
+      const credentials = await ssoService.getRoleCredentials(
+        accessToken,
+        settings.ssoAccountId,
+        settings.ssoRoleName
+      )
+
+      // Save new credentials
+      db.update(claudeCodeSettings)
+        .set({
+          awsAccessKeyId: credentials.accessKeyId,
+          awsSecretAccessKey: credentials.secretAccessKey,
+          awsSessionToken: credentials.sessionToken,
+          awsCredentialsExpiresAt: credentials.expiration,
+          updatedAt: new Date(),
+        })
+        .where(eq(claudeCodeSettings.id, "default"))
+        .run()
+
+      console.log("[claude-env] AWS credentials refreshed successfully, expires:", credentials.expiration)
+      return { success: true, expiresAt: credentials.expiration }
+    } catch (credError: any) {
+      console.error("[claude-env] Failed to get role credentials:", credError)
+      return { success: false, error: `Failed to get AWS credentials: ${credError.message}` }
+    }
+  } catch (error: any) {
+    console.error("[claude-env] Unexpected error during credential refresh:", error)
+    return { success: false, error: `Credential refresh failed: ${error.message}` }
+  } finally {
+    isRefreshing = false
   }
 }
 

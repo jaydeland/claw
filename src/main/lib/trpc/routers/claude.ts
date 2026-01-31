@@ -13,6 +13,7 @@ import {
   logClaudeEnv,
   logRawClaudeMessage,
   checkOfflineFallback,
+  ensureValidAwsCredentials,
   type UIMessageChunk,
 } from "../../claude"
 import {
@@ -382,6 +383,9 @@ export async function warmupMcpCache(): Promise<void> {
     // Get SDK
     const sdk = await import("@anthropic-ai/claude-agent-sdk")
     const claudeQuery = sdk.query
+
+    // Ensure AWS credentials are valid before warmup queries
+    await ensureValidAwsCredentials()
 
     // Warm up each project
     for (const project of projectsWithMcp) {
@@ -756,6 +760,14 @@ export const claudeRouter = router({
               }
 
               prompt = createPromptWithImages()
+            }
+
+            // Ensure AWS credentials are valid (auto-refresh if needed) before building env
+            const credentialRefreshResult = await ensureValidAwsCredentials()
+            if (!credentialRefreshResult.success && credentialRefreshResult.error) {
+              console.warn("[claude] AWS credential refresh failed:", credentialRefreshResult.error)
+              // Don't block the request - let it fall back to system credentials
+              // But log it so we can debug if needed
             }
 
             // Build full environment for Claude SDK (includes HOME, PATH, etc.)
