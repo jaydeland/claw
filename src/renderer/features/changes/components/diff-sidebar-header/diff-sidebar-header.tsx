@@ -751,8 +751,8 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 														<DropdownMenuItem
 															key={branch}
 															onClick={() => {
-																onCloseDiffSidebar?.();
-																onMergeWithAi(branch);
+																onClose();
+																onMergeWithAi?.(branch);
 															}}
 															disabled={isMergingWithAi}
 															className="text-xs"
