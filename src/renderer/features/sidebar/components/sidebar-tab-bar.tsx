@@ -3,7 +3,6 @@
 import React from "react"
 import { useAtom, useSetAtom } from "jotai"
 import {
-  MessageSquare,
   Terminal,
   TerminalSquare,
   Bot,

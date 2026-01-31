@@ -14,6 +14,7 @@ import { chats, getDatabase, projects, subChats } from "../../db"
 import {
   createWorktreeForChat,
   fetchGitHubPRStatus,
+  getCurrentBranch,
   getWorktreeDiff,
   removeWorktree,
 } from "../../git"
@@ -343,53 +344,84 @@ export const chatsRouter = router({
           input.baseBranch,
         )
 
-        // Get custom worktree location from per-project config (preferred) or global settings (fallback)
-        const { detectWorktreeConfig } = await import("../../git/worktree-config")
-        const worktreeConfig = await detectWorktreeConfig(project.path)
-        const perProjectLocation = worktreeConfig.config?.["worktree-location"] || null
-
-        const { claudeCodeSettings } = await import("../../db")
-        const settings = db
+        // Check if a worktree already exists for this project (limit: 1 per workspace)
+        const existingWorktreeChat = db
           .select()
-          .from(claudeCodeSettings)
-          .where(eq(claudeCodeSettings.id, "default"))
+          .from(chats)
+          .where(
+            and(
+              eq(chats.projectId, input.projectId),
+              isNotNull(chats.branch), // Has a branch means it has a worktree
+            )
+          )
           .get()
-        const globalWorktreeLocation = settings?.customWorktreeLocation || null
 
-        // Prefer per-project config over global setting
-        const customWorktreeLocation = perProjectLocation || globalWorktreeLocation
-
-        const result = await createWorktreeForChat(
-          project.path,
-          project.id,
-          chat.id,
-          input.baseBranch,
-          customWorktreeLocation,
-        )
-        console.log("[chats.create] worktree result:", result)
-
-        if (result.success && result.worktreePath) {
-          db.update(chats)
-            .set({
-              worktreePath: result.worktreePath,
-              branch: result.branch,
-              baseBranch: result.baseBranch,
-            })
-            .where(eq(chats.id, chat.id))
-            .run()
-          worktreeResult = {
-            worktreePath: result.worktreePath,
-            branch: result.branch,
-            baseBranch: result.baseBranch,
-          }
-        } else {
-          console.warn(`[Worktree] Failed: ${result.error}`)
-          // Fallback to project path
+        if (existingWorktreeChat) {
+          console.warn(
+            `[chats.create] worktree already exists for project ${input.projectId} (chat: ${existingWorktreeChat.id})`
+          )
+          // Use local mode instead - work directly in project directory
+          console.log("[chats.create] falling back to local mode (project path)")
           db.update(chats)
             .set({ worktreePath: project.path })
             .where(eq(chats.id, chat.id))
             .run()
           worktreeResult = { worktreePath: project.path }
+        } else {
+          // Get custom worktree location from per-project config (preferred) or global settings (fallback)
+          const { detectWorktreeConfig } = await import("../../git/worktree-config")
+          const worktreeConfig = await detectWorktreeConfig(project.path)
+          const perProjectLocation = worktreeConfig.config?.["worktree-location"] || null
+
+          const { claudeCodeSettings } = await import("../../db")
+          const settings = db
+            .select()
+            .from(claudeCodeSettings)
+            .where(eq(claudeCodeSettings.id, "default"))
+            .get()
+          const globalWorktreeLocation = settings?.customWorktreeLocation || null
+
+          // Prefer per-project config over global setting
+          const customWorktreeLocation = perProjectLocation || globalWorktreeLocation
+
+          const result = await createWorktreeForChat(
+            project.path,
+            project.id,
+            chat.id,
+            input.baseBranch,
+            customWorktreeLocation,
+          )
+          console.log("[chats.create] worktree result:", result)
+
+          if (result.success && result.worktreePath) {
+            // Set name to "Local (branch-name)" format for worktree chats
+            // Use the current branch from the main project directory
+            const currentBranch = await getCurrentBranch(project.path)
+            const worktreeName = `Local (${currentBranch || 'unknown'})`
+
+            db.update(chats)
+              .set({
+                worktreePath: result.worktreePath,
+                branch: result.branch,
+                baseBranch: result.baseBranch,
+                name: worktreeName,
+              })
+              .where(eq(chats.id, chat.id))
+              .run()
+            worktreeResult = {
+              worktreePath: result.worktreePath,
+              branch: result.branch,
+              baseBranch: result.baseBranch,
+            }
+          } else {
+            console.warn(`[Worktree] Failed: ${result.error}`)
+            // Fallback to project path
+            db.update(chats)
+              .set({ worktreePath: project.path })
+              .where(eq(chats.id, chat.id))
+              .run()
+            worktreeResult = { worktreePath: project.path }
+          }
         }
       } else {
         // Local mode: use project path directly, no branch info
@@ -430,6 +462,54 @@ export const chatsRouter = router({
       return db
         .update(chats)
         .set({ name: input.name, updatedAt: new Date() })
+        .where(eq(chats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
+   * Sync worktree chat name with current branch from main project directory
+   * Only updates worktree chats (those with a branch field)
+   */
+  syncWorktreeChatName: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+
+      // Get the chat with its project
+      const chat = db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, input.id))
+        .get()
+
+      if (!chat || !chat.branch) {
+        // Not a worktree chat, skip
+        return null
+      }
+
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, chat.projectId))
+        .get()
+
+      if (!project) {
+        return null
+      }
+
+      // Get current branch from main project directory
+      const currentBranch = await getCurrentBranch(project.path)
+      const worktreeName = `Local (${currentBranch || 'unknown'})`
+
+      // Only update if the name has changed
+      if (chat.name === worktreeName) {
+        return chat
+      }
+
+      return db
+        .update(chats)
+        .set({ name: worktreeName, updatedAt: new Date() })
         .where(eq(chats.id, input.id))
         .returning()
         .get()

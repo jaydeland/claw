@@ -6,6 +6,7 @@ interface AutoRenameParams {
   parentChatId: string
   userMessage: string
   isFirstSubChat: boolean
+  hasWorktree: boolean
   generateName: (userMessage: string) => Promise<{ name: string }>
   renameSubChat: (input: { subChatId: string; name: string }) => Promise<void>
   renameChat: (input: { chatId: string; name: string }) => Promise<void>
@@ -23,6 +24,7 @@ export async function autoRenameAgentChat({
   parentChatId,
   userMessage,
   isFirstSubChat,
+  hasWorktree,
   generateName,
   renameSubChat,
   renameChat,
@@ -30,6 +32,12 @@ export async function autoRenameAgentChat({
   updateChatName,
 }: AutoRenameParams) {
   console.log("[auto-rename] Called with:", { subChatId, parentChatId, userMessage: userMessage.slice(0, 50), isFirstSubChat })
+
+  // Skip auto-rename for worktree chats (they use "Local (branch)" format)
+  if (hasWorktree) {
+    console.log("[auto-rename] Skipping - chat has worktree (uses 'Local (branch)' format)")
+    return
+  }
 
   try {
     // 1. Generate name from LLM via tRPC

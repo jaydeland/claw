@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   FolderOpen,
-  MessageSquare,
+  House,
   ChevronRight,
   ChevronDown,
   Plus,
@@ -470,7 +470,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                                 <Pin className="h-3 w-3 flex-shrink-0 text-primary" />
                               )}
                               <div className="relative flex-shrink-0">
-                                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                                <House className="h-3.5 w-3.5 text-muted-foreground" />
                                 <ChatStatusBadge status={chatStatus} isActive={isActive} />
                               </div>
                               <div className="flex-1 min-w-0">

@@ -3943,6 +3943,12 @@ export function ChatView({
   const renameChatMutation = api.agents.renameChat.useMutation()
   const generateSubChatNameMutation =
     api.agents.generateSubChatName.useMutation()
+  const syncWorktreeChatNameMutation = trpc.chats.syncWorktreeChatName.useMutation({
+    onSuccess: () => {
+      // Invalidate chat query to refresh with new name
+      utils.agents.getAgentChat.invalidate({ chatId })
+    },
+  })
 
   // PR creation loading state - using atom to allow ChatViewInner to reset it
   const [isCreatingPr, setIsCreatingPr] = useAtom(isCreatingPrAtom)
@@ -4132,6 +4138,41 @@ export function ChatView({
 
   // Subscribe to GitWatcher for real-time file system monitoring (chokidar on main process)
   useGitWatcher(worktreePath)
+
+  // For worktree chats, also watch the main project directory for branch changes
+  // and sync the chat name to "Local (current-branch)" when the branch changes
+  useEffect(() => {
+    const hasBranch = !!(agentChat as any)?.branch
+    if (!originalProjectPath || !hasBranch) return
+
+    // Subscribe to git watcher for main project directory
+    const subscribe = async () => {
+      try {
+        await window.desktopApi?.subscribeToGitWatcher(originalProjectPath)
+      } catch (error) {
+        console.error("[active-chat] Failed to subscribe to main project git watcher:", error)
+      }
+    }
+
+    subscribe()
+
+    // Listen for git changes in main project (especially .git/HEAD for branch changes)
+    const cleanup = window.desktopApi?.onGitStatusChanged((data) => {
+      if (data.worktreePath === originalProjectPath) {
+        console.log("[active-chat] Main project git changed, syncing chat name")
+        // Sync the chat name with current branch
+        syncWorktreeChatNameMutation.mutate({ id: chatId })
+      }
+    })
+
+    return () => {
+      cleanup?.()
+      // Unsubscribe from git watcher
+      window.desktopApi?.unsubscribeFromGitWatcher(originalProjectPath).catch((error) => {
+        console.error("[active-chat] Failed to unsubscribe from main project git watcher:", error)
+      })
+    }
+  }, [originalProjectPath, chatId, agentChat, syncWorktreeChatNameMutation])
 
   // Extract port, repository, and quick setup flag from meta
   const meta = agentChat?.meta as {
@@ -5321,6 +5362,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         parentChatId: chatId,
         userMessage,
         isFirstSubChat: isFirst,
+        hasWorktree: !!(agentChat as any)?.branch,
         generateName: async (msg) => {
           return generateSubChatNameMutation.mutateAsync({ userMessage: msg, ollamaModel: selectedOllamaModel })
         },
