@@ -73,10 +73,15 @@ export function GsdContent() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === "overview" ? (
-          <GsdOverview />
-        ) : (
-          <GsdPlans projectPath={projectPath} projectName={projectName} />
+        {activeTab === "overview" && (
+          <GsdOverview key="gsd-overview" />
+        )}
+        {activeTab === "plans" && (
+          <GsdPlans
+            key="gsd-plans"
+            projectPath={projectPath}
+            projectName={projectName}
+          />
         )}
       </div>
     </div>
@@ -255,9 +260,9 @@ function GsdPlans({
   // No project selected
   if (!projectPath) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/10">
         <FolderOpen className="h-12 w-12 mb-3 opacity-50" />
-        <p className="text-sm font-medium">No project selected</p>
+        <p className="text-sm font-medium">Plans - No project selected</p>
         <p className="text-xs mt-1">Select a project from the sidebar to view planning docs</p>
       </div>
     )
@@ -275,16 +280,16 @@ function GsdPlans({
   // No .planning directory - show init prompt
   if (!hasDocs?.exists) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center px-4">
+      <div className="flex flex-col items-center justify-center h-full text-center px-4 bg-muted/10">
         <FileText className="h-12 w-12 mb-3 text-muted-foreground/50" />
         <p className="text-sm font-medium">No .planning directory found</p>
-        <p className="text-xs text-muted-foreground mt-1 mb-4">
-          Initialize GSD for this project to start planning
+        <p className="text-xs text-muted-foreground mt-1 mb-1">
+          {projectName ? `Project: ${projectName}` : "Initialize GSD for this project to start planning"}
         </p>
         <Button
           variant="outline"
           size="sm"
-          className="gap-2"
+          className="gap-2 mt-2"
           onClick={handleRunMapCodebase}
           disabled={createChatMutation.isPending}
         >
