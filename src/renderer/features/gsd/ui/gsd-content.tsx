@@ -196,6 +196,56 @@ function GsdOverview() {
 }
 
 /**
+ * Build a tree structure from flat file list
+ */
+interface FileTreeNode {
+  name: string
+  path: string
+  isDirectory: boolean
+  children?: FileTreeNode[]
+}
+
+function buildFileTree(
+  flatFiles: Array<{ name: string; path: string; isDirectory: boolean }>
+): FileTreeNode[] {
+  const tree: FileTreeNode[] = []
+  const nodeMap = new Map<string, FileTreeNode>()
+
+  // Sort files to ensure parents come before children
+  const sortedFiles = [...flatFiles].sort((a, b) => a.path.localeCompare(b.path))
+
+  for (const file of sortedFiles) {
+    const node: FileTreeNode = {
+      name: file.name,
+      path: file.path,
+      isDirectory: file.isDirectory,
+      children: file.isDirectory ? [] : undefined,
+    }
+
+    nodeMap.set(file.path, node)
+
+    // Find parent
+    const pathParts = file.path.split("/")
+    if (pathParts.length === 1) {
+      // Top-level item
+      tree.push(node)
+    } else {
+      // Nested item - find parent
+      const parentPath = pathParts.slice(0, -1).join("/")
+      const parent = nodeMap.get(parentPath)
+      if (parent && parent.children) {
+        parent.children.push(node)
+      } else {
+        // Parent not found, add to root (shouldn't happen with sorted list)
+        tree.push(node)
+      }
+    }
+  }
+
+  return tree
+}
+
+/**
  * GSD Plans - shows project .planning/ files
  */
 function GsdPlans({
@@ -243,6 +293,12 @@ function GsdPlans({
     { projectPath: projectPath || "" },
     { enabled: !!projectPath && hasDocs?.hasContent }
   )
+
+  // Build tree structure from flat list
+  const fileTree = useMemo(() => {
+    if (!docsData?.files) return []
+    return buildFileTree(docsData.files)
+  }, [docsData])
 
   // Fetch selected document content
   const { data: docContent, isLoading: isLoadingContent } = trpc.gsd.readPlanningDoc.useQuery(
@@ -311,21 +367,22 @@ function GsdPlans({
           <div className="flex items-center justify-center h-20">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
-        ) : docsData?.files?.length === 0 ? (
+        ) : fileTree.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-20 text-muted-foreground">
             <FileText className="h-6 w-6 mb-1 opacity-50" />
             <p className="text-xs">No files yet</p>
           </div>
         ) : (
           <div className="space-y-0.5">
-            {docsData?.files?.map((file) => (
+            {fileTree.map((node) => (
               <FileTreeItem
-                key={file.path}
-                file={file}
+                key={node.path}
+                node={node}
                 selectedPath={selectedDoc}
                 expandedFolders={expandedFolders}
                 onSelect={setSelectedDoc}
                 onToggleFolder={toggleFolder}
+                depth={0}
               />
             ))}
           </div>
@@ -359,51 +416,69 @@ function GsdPlans({
 }
 
 /**
- * File tree item component
+ * File tree item component with recursive rendering
  */
 interface FileTreeItemProps {
-  file: { name: string; path: string; isDirectory: boolean }
+  node: FileTreeNode
   selectedPath: string | null
   expandedFolders: Record<string, boolean>
   onSelect: (path: string) => void
   onToggleFolder: (path: string) => void
-  depth?: number
+  depth: number
 }
 
 function FileTreeItem({
-  file,
+  node,
   selectedPath,
   expandedFolders,
   onSelect,
   onToggleFolder,
-  depth = 0,
+  depth,
 }: FileTreeItemProps) {
-  const isExpanded = expandedFolders[file.path]
-  const isSelected = selectedPath === file.path
+  const isExpanded = expandedFolders[node.path]
+  const isSelected = selectedPath === node.path
 
-  if (file.isDirectory) {
+  if (node.isDirectory) {
     return (
-      <button
-        onClick={() => onToggleFolder(file.path)}
-        className={cn(
-          "flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-left hover:bg-foreground/5",
+      <>
+        <button
+          onClick={() => onToggleFolder(node.path)}
+          className={cn(
+            "flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-left hover:bg-foreground/5",
+          )}
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+          ) : (
+            <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+          )}
+          <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+          <span className="text-xs truncate">{node.name}</span>
+        </button>
+        {/* Recursively render children when expanded */}
+        {isExpanded && node.children && node.children.length > 0 && (
+          <div className="space-y-0.5">
+            {node.children.map((child) => (
+              <FileTreeItem
+                key={child.path}
+                node={child}
+                selectedPath={selectedPath}
+                expandedFolders={expandedFolders}
+                onSelect={onSelect}
+                onToggleFolder={onToggleFolder}
+                depth={depth + 1}
+              />
+            ))}
+          </div>
         )}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-      >
-        {isExpanded ? (
-          <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-        )}
-        <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-        <span className="text-xs truncate">{file.name}</span>
-      </button>
+      </>
     )
   }
 
   return (
     <button
-      onClick={() => onSelect(file.path)}
+      onClick={() => onSelect(node.path)}
       className={cn(
         "flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-left",
         isSelected ? "bg-primary/10 text-primary" : "hover:bg-foreground/5",
@@ -411,7 +486,7 @@ function FileTreeItem({
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
     >
       <FileText className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-      <span className="text-xs truncate">{file.name}</span>
+      <span className="text-xs truncate">{node.name}</span>
     </button>
   )
 }
