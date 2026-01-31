@@ -284,15 +284,10 @@ const ALLOWED_ENV_VARS = new Set([
   "GIT_EDITOR",
   "GIT_PAGER",
 
-  // AWS configuration (profile selection, not credentials)
-  "AWS_PROFILE",
-  "AWS_DEFAULT_REGION",
-  "AWS_REGION",
-  "AWS_CONFIG_FILE",
-  "AWS_SHARED_CREDENTIALS_FILE",
-  "AWS_PROFILE_OPERATIONS",
-  "AWS_PROFILE_STAGING",
-  "AWS_STAGING_CLUSTER",
+  // AWS configuration - INTENTIONALLY EXCLUDED
+  // System AWS credentials and config must not leak into terminals
+  // AWS access is managed through app-controlled Claude SDK environment only
+  // This ensures Claw's AWS SSO setup is completely isolated from user's system AWS
 
   // Docker configuration
   "DOCKER_HOST",
