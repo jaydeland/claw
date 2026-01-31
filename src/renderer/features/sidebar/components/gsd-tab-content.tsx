@@ -1,14 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   Rocket,
-  ChevronRight,
   Loader2,
-  BookOpen,
-  FileText,
-  RefreshCw,
   Download,
   Check,
   FolderOpen,
@@ -19,11 +15,9 @@ import { trpc } from "../../../lib/trpc"
 import { selectedProjectAtom, selectedAgentChatIdAtom } from "../../agents/atoms"
 import {
   selectedGsdCategoryAtom,
-  activeGsdTabAtom,
   selectedGsdProjectIdAtom,
   gsdUpdateInfoAtom,
   gsdUpdateInProgressAtom,
-  type GsdActiveTab,
 } from "../../gsd/atoms"
 import {
   DropdownMenu,
@@ -71,8 +65,7 @@ function VersionBadge({
   )
 }
 
-export function GsdTabContent({ className, isMobileFullscreen }: GsdTabContentProps) {
-  const [activeTab, setActiveTab] = useAtom(activeGsdTabAtom)
+export function GsdTabContent({ className }: GsdTabContentProps) {
   const [selectedProjectId, setSelectedProjectId] = useAtom(selectedGsdProjectIdAtom)
   const setSelectedCategory = useSetAtom(selectedGsdCategoryAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
@@ -81,7 +74,7 @@ export function GsdTabContent({ className, isMobileFullscreen }: GsdTabContentPr
   const selectedProject = useAtomValue(selectedProjectAtom)
 
   // Fetch GSD version
-  const { data: versionData, isLoading: isLoadingVersion } = trpc.gsd.getVersion.useQuery()
+  const { data: versionData } = trpc.gsd.getVersion.useQuery()
 
   // Check for updates
   const { data: updateData, isLoading: isCheckingUpdates } = trpc.gsd.checkForUpdates.useQuery(
@@ -98,7 +91,6 @@ export function GsdTabContent({ className, isMobileFullscreen }: GsdTabContentPr
     onSuccess: (result) => {
       setUpdateInProgress(false)
       if (result.success) {
-        // Show restart prompt - for now just refetch version
         window.location.reload()
       }
     },
@@ -136,9 +128,8 @@ export function GsdTabContent({ className, isMobileFullscreen }: GsdTabContentPr
     }
   }, [selectedProject, selectedProjectId, setSelectedProjectId])
 
-  // Handle tab click - shows main content
-  const handleTabClick = (tab: GsdActiveTab) => {
-    setActiveTab(tab)
+  // Handle opening GSD view
+  const handleOpenGsd = () => {
     setSelectedCategory("gsd")
     setSelectedChatId(null)
   }
@@ -226,158 +217,21 @@ export function GsdTabContent({ className, isMobileFullscreen }: GsdTabContentPr
         </DropdownMenu>
       </div>
 
-      {/* Tab navigation */}
-      <div className="px-2 pt-2 flex-shrink-0">
-        <div className="flex gap-1">
-          <button
-            onClick={() => handleTabClick("overview")}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors",
-              activeTab === "overview"
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
-            )}
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            Overview
-          </button>
-          <button
-            onClick={() => handleTabClick("plans")}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors",
-              activeTab === "plans"
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
-            )}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Plans
-          </button>
-        </div>
-      </div>
-
-      {/* Quick links section */}
-      <div className="flex-1 overflow-y-auto px-2 pt-3 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
-        <div className="space-y-0.5">
-          {/* Overview quick links */}
-          {activeTab === "overview" && (
-            <>
-              <p className="text-[10px] uppercase text-muted-foreground/70 font-medium px-2 mb-1">
-                Documentation
-              </p>
-              {[
-                { label: "README", icon: BookOpen },
-                { label: "Commands", icon: FileText },
-                { label: "Agents", icon: FileText },
-                { label: "Changelog", icon: FileText },
-              ].map((item) => (
-                <button
-                  key={item.label}
-                  onClick={() => handleTabClick("overview")}
-                  className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
-                >
-                  <item.icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs text-foreground">{item.label}</span>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-              ))}
-            </>
-          )}
-
-          {/* Plans quick links */}
-          {activeTab === "plans" && selectedProjectObj && (
-            <ProjectPlanningFiles projectPath={selectedProjectObj.path} />
-          )}
-
-          {activeTab === "plans" && !selectedProjectObj && (
-            <div className="flex flex-col items-center justify-center h-20 gap-2">
-              <FolderOpen className="h-6 w-6 text-muted-foreground/50" />
-              <span className="text-xs text-muted-foreground text-center">
-                Select a project to view planning docs
-              </span>
-            </div>
-          )}
-        </div>
+      {/* Open GSD View button */}
+      <div className="flex-1 px-2 pt-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleOpenGsd}
+          className="w-full h-8 text-xs"
+        >
+          <Rocket className="h-3.5 w-3.5 mr-1.5" />
+          Open Planning Docs
+        </Button>
+        <p className="text-[10px] text-muted-foreground text-center mt-2 px-2">
+          View documentation, README, and project planning files
+        </p>
       </div>
     </div>
-  )
-}
-
-/**
- * Component to display .planning files for a project
- */
-function ProjectPlanningFiles({ projectPath }: { projectPath: string }) {
-  const { data: hasDocs, isLoading: isCheckingDocs } = trpc.gsd.hasPlanningDocs.useQuery({
-    projectPath,
-  })
-
-  const { data: docsData, isLoading: isLoadingDocs } = trpc.gsd.listPlanningDocs.useQuery(
-    { projectPath },
-    { enabled: hasDocs?.hasContent }
-  )
-
-  const setSelectedCategory = useSetAtom(selectedGsdCategoryAtom)
-  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
-
-  const handleDocClick = () => {
-    setSelectedCategory("gsd")
-    setSelectedChatId(null)
-  }
-
-  if (isCheckingDocs || isLoadingDocs) {
-    return (
-      <div className="flex items-center justify-center h-20">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
-  if (!hasDocs?.exists) {
-    return (
-      <div className="flex flex-col items-center justify-center h-32 gap-2 text-center px-4">
-        <FileText className="h-6 w-6 text-muted-foreground/50" />
-        <span className="text-xs text-muted-foreground">
-          No .planning directory found
-        </span>
-        <span className="text-[10px] text-muted-foreground/70">
-          Run /gsd:map-codebase to initialize
-        </span>
-      </div>
-    )
-  }
-
-  if (!docsData?.files || docsData.files.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-20 gap-2">
-        <FileText className="h-6 w-6 text-muted-foreground/50" />
-        <span className="text-xs text-muted-foreground">No planning files yet</span>
-      </div>
-    )
-  }
-
-  // Group files by top-level directory
-  const topLevelItems = docsData.files.filter((f) => !f.path.includes("/"))
-
-  return (
-    <>
-      <p className="text-[10px] uppercase text-muted-foreground/70 font-medium px-2 mb-1">
-        Planning Files
-      </p>
-      {topLevelItems.map((file) => (
-        <button
-          key={file.path}
-          onClick={handleDocClick}
-          className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
-        >
-          {file.isDirectory ? (
-            <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
-          <span className="text-xs text-foreground truncate">{file.name}</span>
-          <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-        </button>
-      ))}
-    </>
   )
 }

@@ -12,9 +12,8 @@ import { atomWithStorage } from "jotai/utils"
 export const selectedGsdCategoryAtom = atom<"gsd" | null>(null)
 
 /**
- * Active tab within GSD view
- * - "overview": GSD documentation browser
- * - "plans": Project .planning/ files
+ * Active tab within GSD view (deprecated - kept for backwards compatibility)
+ * The GSD view now shows both documentation and planning files in a single view
  */
 export type GsdActiveTab = "overview" | "plans"
 export const activeGsdTabAtom = atomWithStorage<GsdActiveTab>(
