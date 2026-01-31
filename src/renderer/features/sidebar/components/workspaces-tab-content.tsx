@@ -5,6 +5,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   FolderOpen,
   House,
+  MessageSquare,
   ChevronRight,
   ChevronDown,
   Plus,
@@ -470,7 +471,11 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                                 <Pin className="h-3 w-3 flex-shrink-0 text-primary" />
                               )}
                               <div className="relative flex-shrink-0">
-                                <House className="h-3.5 w-3.5 text-muted-foreground" />
+                                {chat.branch ? (
+                                  <House className="h-3.5 w-3.5 text-muted-foreground" />
+                                ) : (
+                                  <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                                )}
                                 <ChatStatusBadge status={chatStatus} isActive={isActive} />
                               </div>
                               <div className="flex-1 min-w-0">
