@@ -472,9 +472,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                               )}
                               <div className="relative flex-shrink-0">
                                 {chat.branch ? (
-                                  <House className="h-3.5 w-3.5 text-muted-foreground" />
-                                ) : (
                                   <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                                ) : (
+                                  <House className="h-3.5 w-3.5 text-muted-foreground" />
                                 )}
                                 <ChatStatusBadge status={chatStatus} isActive={isActive} />
                               </div>
