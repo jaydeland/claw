@@ -654,8 +654,9 @@ export const selectedCommandAtom = atom<string | null>(null)
  * - "clusters": Cluster management
  * - "terminal": Terminal sessions list
  * - "gsd": GSD (Get Shit Done) planning framework
+ * - "conductor": Workflow conductor/orchestration
  */
-export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd"
+export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "conductor"
 
 /**
  * Currently selected sidebar tab (persisted)

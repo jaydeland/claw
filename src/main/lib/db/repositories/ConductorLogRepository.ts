@@ -82,21 +82,22 @@ export class ConductorLogRepository {
     options?: { limit?: number; offset?: number },
   ): ConductorLog[] {
     const db = getDatabase()
-    let query = db
+    const query = db
       .select()
       .from(conductorLogs)
       .where(eq(conductorLogs.jobId, jobId))
       .orderBy(desc(conductorLogs.timestamp))
 
-    if (options?.limit !== undefined) {
-      query = query.limit(options.limit)
-    }
+    // Apply pagination if provided
+    const paginatedQuery = options?.limit !== undefined
+      ? (options?.offset !== undefined
+          ? query.limit(options.limit).offset(options.offset)
+          : query.limit(options.limit))
+      : (options?.offset !== undefined
+          ? query.offset(options.offset)
+          : query)
 
-    if (options?.offset !== undefined) {
-      query = query.offset(options.offset)
-    }
-
-    return query.all()
+    return paginatedQuery.all()
   }
 
   /**
