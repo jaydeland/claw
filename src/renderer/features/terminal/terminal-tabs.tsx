@@ -403,7 +403,7 @@ export const TerminalTabs = memo(function TerminalTabs({
   }, [terminals])
 
   return (
-    <div className="relative flex-1 min-w-0 flex items-center h-7">
+    <div className="relative w-full min-w-0 flex items-center h-7">
       {/* Left gradient */}
       {showLeftGradient && (
         <div
