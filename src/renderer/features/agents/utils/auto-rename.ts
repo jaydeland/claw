@@ -33,11 +33,13 @@ export async function autoRenameAgentChat({
 }: AutoRenameParams) {
   console.log("[auto-rename] Called with:", { subChatId, parentChatId, userMessage: userMessage.slice(0, 50), isFirstSubChat })
 
-  // Skip auto-rename for worktree chats (they use "Local (branch)" format)
-  if (hasWorktree) {
-    console.log("[auto-rename] Skipping - chat has worktree (uses 'Local (branch)' format)")
+  // Skip auto-rename for LOCAL chats (they use "Local (branch)" format)
+  if (!hasWorktree) {
+    console.log("[auto-rename] Skipping - local chat (uses 'Local (branch)' format)")
     return
   }
+
+  // For worktree chats, auto-rename is allowed to improve the custom name part
 
   try {
     // 1. Generate name from LLM via tRPC

@@ -296,6 +296,19 @@ export const chatsRouter = router({
         .get()
       console.log("[chats.create] created chat:", chat)
 
+      // For local mode (no worktree), set name to "Local (branch)" format
+      if (!input.useWorktree) {
+        const currentBranch = await getCurrentBranch(project.path)
+        const localName = `Local (${currentBranch || 'unknown'})`
+
+        db.update(chats)
+          .set({ name: localName })
+          .where(eq(chats.id, chat.id))
+          .run()
+
+        chat.name = localName
+      }
+
       // Create initial sub-chat with user message (AI SDK format)
       // If initialMessageParts is provided, use it; otherwise fallback to text-only message
       let initialMessages = "[]"
@@ -370,10 +383,9 @@ export const chatsRouter = router({
         console.log("[chats.create] worktree result:", result)
 
         if (result.success && result.worktreePath) {
-          // Set name to "Local (branch-name)" format for worktree chats
-          // Use the current branch from the main project directory
-          const currentBranch = await getCurrentBranch(project.path)
-          const worktreeName = `Local (${currentBranch || 'unknown'})`
+          // Preserve custom name from user input, append the worktree's branch
+          // Format: "Custom Name (branch)"
+          const worktreeName = `${chat.name} (${result.branch})`
 
           db.update(chats)
             .set({
@@ -453,60 +465,46 @@ export const chatsRouter = router({
     .input(z.object({ id: z.string(), name: z.string().min(1) }))
     .mutation(({ input }) => {
       const db = getDatabase()
+
+      // Fetch the existing chat to check if it has a branch (worktree chat)
+      const existingChat = db.select().from(chats).where(eq(chats.id, input.id)).get()
+
+      let finalName = input.name
+
+      // For worktree chats, ensure the branch suffix is preserved
+      if (existingChat?.branch) {
+        // Remove any existing branch suffix from the input name
+        const nameWithoutBranch = input.name.replace(/\s*\([^)]+\)$/, '')
+        // Append the correct branch
+        finalName = `${nameWithoutBranch} (${existingChat.branch})`
+      }
+
       return db
         .update(chats)
-        .set({ name: input.name, updatedAt: new Date() })
+        .set({ name: finalName, updatedAt: new Date() })
         .where(eq(chats.id, input.id))
         .returning()
         .get()
     }),
 
   /**
-   * Sync worktree chat name with current branch from main project directory
-   * Only updates worktree chats (those with a branch field)
+   * DEPRECATED: This procedure is no longer needed with the new naming convention.
+   * Worktree chats now use "Custom Name (branch)" format where the branch is stable.
+   * Kept as no-op for backwards compatibility.
    */
   syncWorktreeChatName: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
 
-      // Get the chat with its project
+      // Get the chat and return it unchanged
       const chat = db
         .select()
         .from(chats)
         .where(eq(chats.id, input.id))
         .get()
 
-      if (!chat || !chat.branch) {
-        // Not a worktree chat, skip
-        return null
-      }
-
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, chat.projectId))
-        .get()
-
-      if (!project) {
-        return null
-      }
-
-      // Get current branch from main project directory
-      const currentBranch = await getCurrentBranch(project.path)
-      const worktreeName = `Local (${currentBranch || 'unknown'})`
-
-      // Only update if the name has changed
-      if (chat.name === worktreeName) {
-        return chat
-      }
-
-      return db
-        .update(chats)
-        .set({ name: worktreeName, updatedAt: new Date() })
-        .where(eq(chats.id, input.id))
-        .returning()
-        .get()
+      return chat || null
     }),
 
   /**
@@ -1384,25 +1382,37 @@ export const chatsRouter = router({
           }
         }
 
+        // For worktree chats, append the branch to the generated name
+        let finalName = generatedName
+        if (chat.branch) {
+          finalName = `${generatedName} (${chat.branch})`
+        }
+
         // Update chat name in database
         db.update(chats)
-          .set({ name: generatedName, updatedAt: new Date() })
+          .set({ name: finalName, updatedAt: new Date() })
           .where(eq(chats.id, input.chatId))
           .run()
 
-        console.log("[generateChatName] Generated and saved name:", generatedName)
-        return { name: generatedName, updated: true }
+        console.log("[generateChatName] Generated and saved name:", finalName)
+        return { name: finalName, updated: true }
       } catch (error) {
         console.error("[generateChatName] Error:", error)
         const fallbackName = getFallbackName(input.userMessage)
 
+        // For worktree chats, append the branch to the fallback name
+        let finalFallbackName = fallbackName
+        if (chat.branch) {
+          finalFallbackName = `${fallbackName} (${chat.branch})`
+        }
+
         // Save fallback name
         db.update(chats)
-          .set({ name: fallbackName, updatedAt: new Date() })
+          .set({ name: finalFallbackName, updatedAt: new Date() })
           .where(eq(chats.id, input.chatId))
           .run()
 
-        return { name: fallbackName, updated: true }
+        return { name: finalFallbackName, updated: true }
       }
     }),
 
