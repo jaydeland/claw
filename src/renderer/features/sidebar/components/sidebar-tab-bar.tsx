@@ -9,8 +9,8 @@ import {
   BookOpen,
   Server,
   History,
-  PanelLeftClose,
-  PanelLeft,
+  ChevronsLeft,
+  ChevronsRight,
   FolderOpen,
   Rocket,
 } from "lucide-react"
@@ -36,13 +36,13 @@ interface TabItem {
 const tabs: TabItem[] = [
   { id: "history", label: "History", icon: History },
   { id: "chats", label: "Workspaces", icon: FolderOpen },
-  { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "commands", label: "Commands", icon: Terminal },
-  { id: "agents", label: "Subagents", icon: Bot },
+  { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
   { id: "clusters", label: "Clusters", icon: Server },
-  { id: "gsd", label: "GSD", icon: Rocket },
+  { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
+  { id: "terminal", label: "Terminal", icon: TerminalSquare },
 ]
 
 interface SidebarTabBarProps {
@@ -53,6 +53,7 @@ interface SidebarTabBarProps {
 export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarProps) {
   const [selectedTab, setSelectedTab] = useAtom(selectedSidebarTabAtom)
   const [isContentCollapsed, setIsContentCollapsed] = useAtom(sidebarContentCollapsedAtom)
+  const [isIconBarExpanded, setIsIconBarExpanded] = React.useState(false)
 
   // Category atoms that control main content view - need to clear when switching tabs
   const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
@@ -88,11 +89,36 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
   return (
     <div
       className={cn(
-        "flex items-center gap-0.5 px-2 py-1.5 border-b border-border/50",
+        "flex items-center gap-0.5 px-2 py-1.5 border-b border-border/50 transition-all duration-200 ease-out",
         isCollapsed && "flex-col py-2",
+        isCollapsed && isIconBarExpanded && "w-48",
+        isCollapsed && !isIconBarExpanded && "w-14",
         className,
       )}
     >
+      {/* Expand/Collapse toggle at top (only shown when in collapsed/vertical mode) */}
+      {isCollapsed && (
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setIsIconBarExpanded(!isIconBarExpanded)}
+              className="mb-2 flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+              aria-label={isIconBarExpanded ? "Collapse icon bar" : "Expand icon bar"}
+            >
+              {isIconBarExpanded ? (
+                <ChevronsLeft className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <ChevronsRight className="h-4 w-4 flex-shrink-0" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {isIconBarExpanded ? "Collapse" : "Expand"}
+          </TooltipContent>
+        </Tooltip>
+      )}
+
       {tabs.map((tab) => {
         const Icon = tab.icon
         const isActive = selectedTab === tab.id
@@ -104,8 +130,10 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
                 type="button"
                 onClick={() => handleTabClick(tab.id)}
                 className={cn(
-                  "flex items-center justify-center rounded-md transition-all duration-150 ease-out",
-                  isCollapsed ? "h-8 w-8" : "h-7 w-7",
+                  "flex items-center rounded-md transition-all duration-150 ease-out",
+                  isCollapsed ? "h-8" : "h-7 w-7",
+                  isCollapsed && isIconBarExpanded ? "w-full justify-start px-3 gap-3" : "justify-center",
+                  isCollapsed && !isIconBarExpanded && "w-8",
                   isActive
                     ? "bg-foreground/10 text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
@@ -114,40 +142,20 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
                 aria-pressed={isActive}
               >
                 <Icon className={cn("flex-shrink-0", isCollapsed ? "h-4 w-4" : "h-3.5 w-3.5")} />
+                {isCollapsed && isIconBarExpanded && (
+                  <span className="text-sm font-medium truncate">{tab.label}</span>
+                )}
               </button>
             </TooltipTrigger>
-            <TooltipContent side={isCollapsed ? "right" : "bottom"}>
-              {tab.label}
-            </TooltipContent>
+            {(!isCollapsed || !isIconBarExpanded) && (
+              <TooltipContent side={isCollapsed ? "right" : "bottom"}>
+                {tab.label}
+              </TooltipContent>
+            )}
           </Tooltip>
         )
       })}
 
-      {/* Spacer and collapse toggle */}
-      <div className="flex-1" />
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={() => setIsContentCollapsed(!isContentCollapsed)}
-            className={cn(
-              "flex items-center justify-center rounded-md transition-all duration-150 ease-out",
-              isCollapsed ? "h-8 w-8" : "h-7 w-7",
-              "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-            )}
-            aria-label={isContentCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isContentCollapsed ? (
-              <PanelLeft className={cn("flex-shrink-0", isCollapsed ? "h-4 w-4" : "h-3.5 w-3.5")} />
-            ) : (
-              <PanelLeftClose className={cn("flex-shrink-0", isCollapsed ? "h-4 w-4" : "h-3.5 w-3.5")} />
-            )}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side={isCollapsed ? "right" : "bottom"}>
-          {isContentCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        </TooltipContent>
-      </Tooltip>
     </div>
   )
 }
