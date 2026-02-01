@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, projects, chats } from "../../db"
+import { getDatabase, projects, chats, claudeCodeSettings } from "../../db"
 import { eq, desc } from "drizzle-orm"
 import { dialog, BrowserWindow, app } from "electron"
 import { basename, join } from "path"
@@ -12,6 +12,20 @@ import { getGitRemoteInfo } from "../../git"
 import { trackProjectOpened } from "../../analytics"
 
 const execAsync = promisify(exec)
+
+/**
+ * Get default start commands from settings
+ */
+function getDefaultStartCommands(): string {
+  const db = getDatabase()
+  const settings = db
+    .select()
+    .from(claudeCodeSettings)
+    .where(eq(claudeCodeSettings.id, "default"))
+    .get()
+
+  return settings?.defaultStartCommands || "[]"
+}
 
 export const projectsRouter = router({
   /**
@@ -60,6 +74,7 @@ export const projectsRouter = router({
         gitProvider: null,
         gitOwner: null,
         gitRepo: null,
+        startCommands: getDefaultStartCommands(),
       })
       .returning()
       .get()
@@ -149,6 +164,7 @@ export const projectsRouter = router({
         gitProvider: gitInfo.provider,
         gitOwner: gitInfo.owner,
         gitRepo: gitInfo.repo,
+        startCommands: getDefaultStartCommands(),
       })
       .returning()
       .get()
@@ -194,6 +210,7 @@ export const projectsRouter = router({
           gitProvider: gitInfo.provider,
           gitOwner: gitInfo.owner,
           gitRepo: gitInfo.repo,
+          startCommands: getDefaultStartCommands(),
         })
         .returning()
         .get()
@@ -338,6 +355,7 @@ export const projectsRouter = router({
             gitProvider: gitInfo.provider,
             gitOwner: gitInfo.owner,
             gitRepo: gitInfo.repo,
+            startCommands: getDefaultStartCommands(),
           })
           .returning()
           .get()
@@ -369,6 +387,7 @@ export const projectsRouter = router({
           gitProvider: gitInfo.provider,
           gitOwner: gitInfo.owner,
           gitRepo: gitInfo.repo,
+          startCommands: getDefaultStartCommands(),
         })
         .returning()
         .get()

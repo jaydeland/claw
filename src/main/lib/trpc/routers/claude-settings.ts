@@ -109,6 +109,7 @@ export const claudeSettingsRouter = router({
         awsCredentialsExpiresAt: null,
         vpnCheckEnabled: false,
         vpnCheckUrl: null,
+        defaultStartCommands: "[]",
       }
     }
 
@@ -120,6 +121,10 @@ export const claudeSettingsRouter = router({
       ),
       customConfigDir: settings.customConfigDir,
       customWorktreeLocation: settings.customWorktreeLocation || null,
+      defaultStartCommands: parseJsonSafely<string[]>(
+        settings.defaultStartCommands || "[]",
+        []
+      ),
       mcpServerSettings: parseJsonSafely<Record<string, { enabled: boolean }>>(
         settings.mcpServerSettings ?? "{}",
         {}
@@ -152,6 +157,7 @@ export const claudeSettingsRouter = router({
         customEnvVars: z.record(z.string(), z.string()).optional(),
         customConfigDir: z.string().nullable().optional(),
         customWorktreeLocation: z.string().nullable().optional(),
+        defaultStartCommands: z.array(z.string()).optional(),
         mcpServerSettings: z.record(z.string(), z.object({ enabled: z.boolean() })).optional(),
         authMode: z.enum(["oauth", "aws", "apiKey"]).optional(),
         apiKey: z.string().optional(), // API key for apiKey mode
@@ -204,6 +210,9 @@ export const claudeSettingsRouter = router({
             }),
             ...(input.customWorktreeLocation !== undefined && {
               customWorktreeLocation: input.customWorktreeLocation,
+            }),
+            ...(input.defaultStartCommands !== undefined && {
+              defaultStartCommands: JSON.stringify(input.defaultStartCommands),
             }),
             ...(input.mcpServerSettings !== undefined && {
               mcpServerSettings: JSON.stringify(input.mcpServerSettings),
@@ -261,6 +270,7 @@ export const claudeSettingsRouter = router({
             customBinaryPath: input.customBinaryPath ?? null,
             customEnvVars: JSON.stringify(input.customEnvVars ?? {}),
             customConfigDir: input.customConfigDir ?? null,
+            defaultStartCommands: JSON.stringify(input.defaultStartCommands ?? []),
             mcpServerSettings: JSON.stringify(input.mcpServerSettings ?? {}),
             authMode: input.authMode ?? "oauth",
             bedrockRegion: input.bedrockRegion ?? "us-east-1",
