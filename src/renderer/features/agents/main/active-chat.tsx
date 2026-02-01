@@ -3964,12 +3964,13 @@ export function ChatView({
   const renameChatMutation = api.agents.renameChat.useMutation()
   const generateSubChatNameMutation =
     api.agents.generateSubChatName.useMutation()
-  const syncWorktreeChatNameMutation = trpc.chats.syncWorktreeChatName.useMutation({
-    onSuccess: () => {
-      // Invalidate chat query to refresh with new name
-      utils.agents.getAgentChat.invalidate({ chatId })
-    },
-  })
+  // DEPRECATED: syncWorktreeChatName is no longer needed with new naming convention
+  // const syncWorktreeChatNameMutation = trpc.chats.syncWorktreeChatName.useMutation({
+  //   onSuccess: () => {
+  //     // Invalidate chat query to refresh with new name
+  //     utils.agents.getAgentChat.invalidate({ chatId })
+  //   },
+  // })
 
   // PR creation loading state - using atom to allow ChatViewInner to reset it
   const [isCreatingPr, setIsCreatingPr] = useAtom(isCreatingPrAtom)
@@ -4180,9 +4181,10 @@ export function ChatView({
     // Listen for git changes in main project (especially .git/HEAD for branch changes)
     const cleanup = window.desktopApi?.onGitStatusChanged((data) => {
       if (data.worktreePath === originalProjectPath) {
-        console.log("[active-chat] Main project git changed, syncing chat name")
-        // Sync the chat name with current branch
-        syncWorktreeChatNameMutation.mutate({ id: chatId })
+        console.log("[active-chat] Main project git changed")
+        // NOTE: syncWorktreeChatName is deprecated with new naming convention
+        // Worktree chats now have stable "Custom Name (branch)" format
+        // Local chats already have "Local (branch)" format set at creation
       }
     })
 
@@ -4193,7 +4195,7 @@ export function ChatView({
         console.error("[active-chat] Failed to unsubscribe from main project git watcher:", error)
       })
     }
-  }, [originalProjectPath, chatId, agentChat, syncWorktreeChatNameMutation])
+  }, [originalProjectPath, chatId, agentChat])
 
   // Extract port, repository, and quick setup flag from meta
   const meta = agentChat?.meta as {
