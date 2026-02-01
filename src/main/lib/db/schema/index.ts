@@ -152,6 +152,10 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   vpnCheckEnabled: integer("vpn_check_enabled", { mode: "boolean" }).notNull().default(false), // Enable/disable VPN status monitoring
   vpnCheckUrl: text("vpn_check_url"), // Internal URL to check for VPN connectivity (e.g., https://internal.company.com)
 
+  // Default terminal start commands - JSON array of commands to run when a new project terminal is created
+  // These are used as defaults for new projects
+  defaultStartCommands: text("default_start_commands").notNull().default("[]"),
+
   // AWS Bedrock model overrides (for Bedrock API)
   bedrockOpusModel: text("bedrock_opus_model").default("global.anthropic.claude-opus-4-5-20251101-v1:0"),
   bedrockSonnetModel: text("bedrock_sonnet_model").default("us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"),

@@ -95,6 +95,9 @@ export function AgentsAdvancedSettingsTab() {
   const [customWorktreeLocation, setCustomWorktreeLocation] = useState("")
   const [worktreeLocationError, setWorktreeLocationError] = useState<string | null>(null)
 
+  // Default terminal start commands state
+  const [defaultStartCommands, setDefaultStartCommands] = useState<string[]>([""])
+
   // Compute example default worktree path for the selected project
   const computedDefaultWorktreePath = useMemo(() => {
     if (!selectedProject?.path) return null
@@ -121,6 +124,7 @@ export function AgentsAdvancedSettingsTab() {
     pluginDirs: false,
     resolution: false,
     advanced: false,
+    terminalCommands: false,
   })
 
   // Fetch Claude Code settings
@@ -208,6 +212,8 @@ export function AgentsAdvancedSettingsTab() {
     if (claudeSettings) {
       setCustomConfigDir(claudeSettings.customConfigDir || "")
       setCustomWorktreeLocation(claudeSettings.customWorktreeLocation || "")
+      const cmds = claudeSettings.defaultStartCommands || []
+      setDefaultStartCommands(cmds.length > 0 ? [...cmds, ""] : [""])
     }
   }, [claudeSettings])
 
@@ -247,6 +253,22 @@ export function AgentsAdvancedSettingsTab() {
   // Toggle section collapse
   const toggleSection = (section: keyof typeof sectionsCollapsed) => {
     setSectionsCollapsed(prev => ({ ...prev, [section]: !prev[section] }))
+  }
+
+  // Helper functions for default start commands
+  const updateDefaultStartCommand = (index: number, value: string) => {
+    const newList = [...defaultStartCommands]
+    newList[index] = value
+    setDefaultStartCommands(newList)
+  }
+
+  const removeDefaultStartCommand = (index: number) => {
+    if (defaultStartCommands.length <= 1) return
+    setDefaultStartCommands(defaultStartCommands.filter((_, i) => i !== index))
+  }
+
+  const addDefaultStartCommand = () => {
+    setDefaultStartCommands([...defaultStartCommands, ""])
   }
 
   return (
@@ -617,6 +639,73 @@ export function AgentsAdvancedSettingsTab() {
         )}
       </div>
 
+      {/* Default Terminal Start Commands Section */}
+      <div className="space-y-3">
+        <button
+          onClick={() => toggleSection('terminalCommands')}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-2">
+            {sectionsCollapsed.terminalCommands ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            <h3 className="text-sm font-semibold text-foreground">Default Terminal Start Commands</h3>
+          </div>
+        </button>
+
+        {!sectionsCollapsed.terminalCommands && (
+          <div className="pl-6 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm">Default Commands for New Projects</Label>
+              <p className="text-xs text-muted-foreground">
+                These commands will be used as defaults when creating new projects.
+                They run in the persistent shell session after the prompt is ready.
+              </p>
+            </div>
+
+            <div className="bg-background rounded-lg border border-border overflow-hidden">
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Commands</Label>
+                  <span className="text-xs text-muted-foreground">
+                    commands are joined with <code className="font-mono bg-muted px-1 py-0.5 rounded">&&</code>
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {defaultStartCommands.map((cmd, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={cmd}
+                        onChange={(e) => updateDefaultStartCommand(i, e.target.value)}
+                        placeholder="flox activate, nvm use, source .env"
+                        className="flex-1 font-mono text-sm"
+                      />
+                      {defaultStartCommands.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeDefaultStartCommand(i)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground"
+                  onClick={addDefaultStartCommand}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add command
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Save Button */}
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
@@ -626,9 +715,12 @@ export function AgentsAdvancedSettingsTab() {
               return
             }
 
+            const filteredCommands = defaultStartCommands.filter((c) => c.trim())
+
             updateSettings.mutate({
               customConfigDir: customConfigDir || null,
               customWorktreeLocation: customWorktreeLocation || null,
+              defaultStartCommands: filteredCommands,
             })
           }}
           disabled={updateSettings.isPending || !!worktreeLocationError}
