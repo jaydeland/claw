@@ -316,7 +316,7 @@ export function DevSpaceTab() {
               initialCwd: t.servicePath,
             }))}
             activeTerminalId={activeTerminalId}
-            terminalCwds={{}}
+            cwds={terminalCwds}
             onSelectTerminal={selectTerminal}
             onCloseTerminal={closeTerminal}
             onRenameTerminal={renameTerminal}

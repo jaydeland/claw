@@ -357,20 +357,22 @@ function getTerminalCoordsFromEvent(
   const y = event.clientY - rect.top
 
   // Access internal render service for cell dimensions
-  const dimensions = (
-    xterm as unknown as {
-      _core?: {
-        _renderService?: {
-          dimensions?: { css: { cell: { width: number; height: number } } }
-        }
+  const core = (xterm as unknown as {
+    _core?: {
+      _renderService?: {
+        dimensions?: { css: { cell: { width: number; height: number } } }
       }
     }
-  )._core?._renderService?.dimensions
+  })._core
+
+  if (!core?._renderService) return null
+
+  const dimensions = core._renderService.dimensions
 
   if (!dimensions?.css?.cell) return null
 
-  const cellWidth = dimensions?.css?.cell?.width
-  const cellHeight = dimensions?.css?.cell?.height
+  const cellWidth = dimensions.css.cell.width
+  const cellHeight = dimensions.css.cell.height
 
   if (!cellWidth || !cellHeight) return null
 
