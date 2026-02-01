@@ -43,7 +43,7 @@ export const AgentBashTool = memo(function AgentBashTool({
   const exitCode = part.output?.exitCode ?? part.output?.exit_code
 
   // Detect background task - SDK docs confirm background tasks return a task ID
-  // and buffered output retrieved via TaskOutput tool (no stdout/stderr in initial response)
+  // and buffered output retrieved via BashOutput tool (no stdout/stderr in initial response)
   const isBackgroundTask = part.input?.run_in_background === true
   // Handle multiple field name variants used by SDK (see claude.ts:1594-1600)
   const taskId = part.output?.task_id || part.output?.taskId || part.output?.backgroundTaskId

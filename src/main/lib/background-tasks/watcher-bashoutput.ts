@@ -9,14 +9,10 @@ import { queryBackgroundSession, isBackgroundSessionReady } from "../claude/back
 const CHECK_INTERVAL = 10000
 
 /**
- * TaskWatcher monitors background task status using SDK's TaskOutput tool
+ * TaskWatcher monitors background task status using SDK's BashOutput tool
  *
- * According to the Agent SDK docs, background tasks should be monitored using:
- * - TaskOutput tool (for tasks started by Claude Code CLI)
- * - BashOutput tool (for tasks started via Agent SDK directly)
- *
- * Since Claw uses Claude Code CLI which creates tasks with backgroundTaskId,
- * we use TaskOutput tool to check status.
+ * According to the Agent SDK docs, background bash tasks should be monitored using
+ * the BashOutput tool with the bash_id parameter.
  */
 export class TaskWatcher {
   private watcherInterval: NodeJS.Timeout | null = null
@@ -32,7 +28,7 @@ export class TaskWatcher {
       return
     }
 
-    console.log("[TaskWatcher] Starting with TaskOutput polling...")
+    console.log("[TaskWatcher] Starting with BashOutput polling...")
     this.isRunning = true
 
     // Wait for background session to be ready
@@ -63,7 +59,7 @@ export class TaskWatcher {
   }
 
   /**
-   * Check all running tasks using TaskOutput tool via background session
+   * Check all running tasks using BashOutput tool via background session
    */
   private async checkAllTasks(): Promise<void> {
     if (!isBackgroundSessionReady()) {
@@ -92,7 +88,7 @@ export class TaskWatcher {
   }
 
   /**
-   * Check a single task using TaskOutput tool through background session
+   * Check a single task using BashOutput tool through background session
    */
   private async checkTaskStatus(task: typeof backgroundTasks.$inferSelect): Promise<void> {
     const taskAny = task as any
@@ -101,8 +97,8 @@ export class TaskWatcher {
     if (!shellId) return
 
     try {
-      // Use background session to invoke TaskOutput tool
-      const prompt = `Check the status of background task ${shellId} using the TaskOutput tool. Return ONLY the tool output, no explanation.`
+      // Use background session to invoke BashOutput tool
+      const prompt = `Check the status of background task ${shellId} using the BashOutput tool. Return ONLY the tool output, no explanation.`
 
       const result = await queryBackgroundSession(prompt, { model: "haiku" })
 
@@ -118,7 +114,7 @@ export class TaskWatcher {
   }
 
   /**
-   * Parse the response from TaskOutput check
+   * Parse the response from BashOutput check
    */
   private async parseTaskResponse(
     task: typeof backgroundTasks.$inferSelect,

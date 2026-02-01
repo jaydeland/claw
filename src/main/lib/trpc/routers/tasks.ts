@@ -250,7 +250,7 @@ function getTaskDataFromMessages(
               const stdout = toolOutput.stdout || toolOutput.output || ""
               const stderr = toolOutput.stderr || ""
 
-              // For background tasks, also capture the task_id for finding TaskOutput results
+              // For background tasks, also capture the task_id for finding BashOutput results
               taskIdFromOutput = toolOutput.task_id || toolOutput.taskId
 
               // Combine stdout and stderr
@@ -266,20 +266,20 @@ function getTaskDataFromMessages(
             }
           }
 
-          // Also check for TaskOutput tool calls that reference this task
-          // TaskOutput is used to check on background tasks started earlier
+          // Also check for BashOutput tool calls that reference this task
+          // BashOutput is used to check on background tasks started earlier
           if (
-            (part.type === "tool-TaskOutput" || part.type?.includes("TaskOutput")) &&
+            (part.type === "tool-BashOutput" || part.type?.includes("BashOutput")) &&
             taskIdFromOutput &&
-            (part.input?.task_id === taskIdFromOutput || part.input?.taskId === taskIdFromOutput)
+            part.input?.bash_id === taskIdFromOutput
           ) {
-            const taskOutputResult = part.output || part.result
-            if (taskOutputResult && typeof taskOutputResult === "object") {
-              const taskStdout = taskOutputResult.stdout || taskOutputResult.output || ""
-              const taskStderr = taskOutputResult.stderr || ""
-              const taskExitCode = taskOutputResult.exit_code ?? taskOutputResult.exitCode
+            const bashOutputResult = part.output || part.result
+            if (bashOutputResult && typeof bashOutputResult === "object") {
+              const taskStdout = bashOutputResult.stdout || bashOutputResult.output || ""
+              const taskStderr = bashOutputResult.stderr || ""
+              const taskExitCode = bashOutputResult.exit_code ?? bashOutputResult.exitCode
 
-              // TaskOutput results override the initial background task output
+              // BashOutput results override the initial background task output
               if (taskStdout || taskStderr) {
                 const outputParts: string[] = []
                 if (taskStdout) outputParts.push(taskStdout)
