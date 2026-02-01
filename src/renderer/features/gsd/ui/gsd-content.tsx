@@ -13,6 +13,8 @@ import {
   GitBranch,
   Play,
   HelpCircle,
+  Download,
+  Check,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -25,6 +27,7 @@ import {
   expandedGsdFoldersAtom,
   selectedGsdCategoryAtom,
   gsdUpdateInfoAtom,
+  gsdUpdateInProgressAtom,
 } from "../atoms"
 import { Button } from "../../../components/ui/button"
 import {
@@ -37,18 +40,87 @@ import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer
 
 type DocType = "planning" | "gsd"
 
+/**
+ * Version badge component showing current GSD version and update status
+ */
+function VersionBadge({
+  version,
+  updateAvailable,
+  isChecking,
+}: {
+  version: string | null
+  updateAvailable: boolean
+  isChecking: boolean
+}) {
+  if (isChecking) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">
+        {version ? `v${version}` : ""}
+      </span>
+      {updateAvailable && (
+        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Update available" />
+      )}
+    </div>
+  )
+}
+
 export function GsdContent() {
-  const selectedProjectId = useAtomValue(selectedGsdProjectIdAtom)
+  const [selectedProjectId, setSelectedProjectId] = useAtom(selectedGsdProjectIdAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const [selectedPlanningDoc, setSelectedPlanningDoc] = useAtom(selectedPlanningDocAtom)
   const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocAtom)
-  const updateInfo = useAtomValue(gsdUpdateInfoAtom)
+  const [updateInfo, setUpdateInfo] = useAtom(gsdUpdateInfoAtom)
+  const [updateInProgress, setUpdateInProgress] = useAtom(gsdUpdateInProgressAtom)
 
   // Fetch projects to get the selected one
   const { data: projectsData } = trpc.projects.list.useQuery()
 
   // Fetch GSD version
   const { data: versionData } = trpc.gsd.getVersion.useQuery()
+
+  // Check for updates
+  const { data: updateData, isLoading: isCheckingUpdates } = trpc.gsd.checkForUpdates.useQuery(
+    undefined,
+    {
+      enabled: !!versionData?.version,
+      refetchOnMount: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  )
+
+  // Update mutation
+  const updateMutation = trpc.gsd.downloadUpdate.useMutation({
+    onSuccess: (result) => {
+      setUpdateInProgress(false)
+      if (result.success) {
+        window.location.reload()
+      }
+    },
+    onError: () => {
+      setUpdateInProgress(false)
+    },
+  })
+
+  // Update updateInfo atom when data changes
+  useEffect(() => {
+    if (updateData) {
+      setUpdateInfo({
+        available: updateData.updateAvailable,
+        currentVersion: updateData.currentVersion,
+        latestVersion: updateData.latestVersion,
+        releaseUrl: updateData.releaseUrl,
+        releaseNotes: updateData.releaseNotes,
+      })
+    }
+  }, [updateData, setUpdateInfo])
 
   // Find selected project
   const projectPath = useMemo(() => {
@@ -85,27 +157,105 @@ export function GsdContent() {
     setSelectedPlanningDoc(path)
   }
 
+  // Handle update download
+  const handleUpdate = () => {
+    if (updateData?.latestVersion && !updateInProgress) {
+      setUpdateInProgress(true)
+      updateMutation.mutate({ version: updateData.latestVersion })
+    }
+  }
+
+  // Default to current workspace project if none selected
+  useEffect(() => {
+    if (!selectedProjectId && selectedProject?.id) {
+      setSelectedProjectId(selectedProject.id)
+    }
+  }, [selectedProject, selectedProjectId, setSelectedProjectId])
+
+  // Find selected project object for dropdown display
+  const selectedProjectObj = useMemo(() => {
+    if (!projectsData || !selectedProjectId) return null
+    return projectsData.find((p) => p.id === selectedProjectId) || null
+  }, [projectsData, selectedProjectId])
+
   return (
     <div className="flex flex-col h-full">
-      {/* Compact header bar: Project / Version / Branch */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-border flex-shrink-0 bg-muted/30">
-        <Rocket className="h-4 w-4 text-primary flex-shrink-0" />
-        <span className="text-sm font-medium truncate">{projectName || "No project"}</span>
-        <span className="text-muted-foreground">/</span>
-        <span className="text-xs text-muted-foreground">
-          {versionData?.version ? `v${versionData.version}` : "GSD"}
-          {updateInfo?.available && (
-            <span className="ml-1 text-green-500" title="Update available">
-              *
-            </span>
+      {/* Header bar: LEFT (GSD logo, version, update) | RIGHT (project, branch) */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border flex-shrink-0 bg-muted/30">
+        {/* Left side: GSD branding, version, update */}
+        <div className="flex items-center gap-2">
+          <Rocket className="h-4 w-4 text-primary flex-shrink-0" />
+          <span className="text-sm font-semibold">GSD</span>
+          <VersionBadge
+            version={versionData?.version || null}
+            updateAvailable={updateInfo?.available || false}
+            isChecking={isCheckingUpdates}
+          />
+          {updateInfo?.available && updateInfo.latestVersion && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleUpdate}
+              disabled={updateInProgress}
+              className="h-6 text-[10px] px-2"
+            >
+              {updateInProgress ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Download className="h-3 w-3 mr-1" />
+                  Update to v{updateInfo.latestVersion}
+                </>
+              )}
+            </Button>
           )}
-        </span>
-        {projectPath && (
-          <>
-            <span className="text-muted-foreground">/</span>
-            <BranchSelector projectPath={projectPath} />
-          </>
-        )}
+        </div>
+
+        {/* Right side: Project selector, branch */}
+        <div className="flex items-center gap-2">
+          {/* Project selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-foreground/5 text-left">
+                <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs truncate max-w-[150px]">
+                  {selectedProjectObj?.name || "Select project..."}
+                </span>
+                <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {projectsData?.map((project) => (
+                <DropdownMenuItem
+                  key={project.id}
+                  onClick={() => setSelectedProjectId(project.id)}
+                  className="flex items-center gap-2"
+                >
+                  <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="truncate flex-1">{project.name}</span>
+                  {project.id === selectedProjectId && (
+                    <Check className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+              {(!projectsData || projectsData.length === 0) && (
+                <DropdownMenuItem disabled className="text-muted-foreground">
+                  No projects available
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {projectPath && (
+            <>
+              <span className="text-muted-foreground text-xs">/</span>
+              <BranchSelector projectPath={projectPath} />
+            </>
+          )}
+        </div>
       </div>
 
       {/* Main content area */}

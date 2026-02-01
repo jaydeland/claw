@@ -67,14 +67,21 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
     } else {
       // Clicking different tab switches and expands
       setSelectedTab(tabId)
-      setIsContentCollapsed(false)
 
       // Clear all category atoms to ensure correct main content view renders
       // These atoms control which view is shown in AgentsContent
       setWorkflowCategory(null)
       setClustersCategory(null)
       setMcpCategory(null)
-      setGsdCategory(null)
+
+      // GSD tab directly opens the doc view (no intermediate panel)
+      if (tabId === "gsd") {
+        setGsdCategory("gsd")
+        setIsContentCollapsed(true) // Collapse sidebar since GSD has its own file tree
+      } else {
+        setGsdCategory(null)
+        setIsContentCollapsed(false)
+      }
     }
   }
 
