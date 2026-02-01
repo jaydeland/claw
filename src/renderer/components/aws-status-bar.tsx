@@ -81,9 +81,8 @@ export function AwsStatusBar() {
     refetchInterval: 60000, // Update every minute
   })
 
-  // Query VPN status
+  // Query VPN status (runs independently - backend checks if enabled)
   const { data: vpnStatus } = trpc.awsSso.checkVpnStatus.useQuery(undefined, {
-    enabled: !!awsStatus?.authenticated,
     refetchInterval: 60000, // Check every minute
   })
 
