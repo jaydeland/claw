@@ -99,6 +99,11 @@ export function createTerminalInstance(
     isConnected: container.isConnected,
   })
 
+  // Ensure container has dimensions before creating terminal
+  if (rect.width === 0 || rect.height === 0) {
+    console.warn("[Terminal:create] Container has zero dimensions, terminal may not render correctly")
+  }
+
   // Use provided theme, or get theme based on isDark
   const theme = initialTheme ?? getTerminalTheme(isDark)
   const terminalOptions = { ...TERMINAL_OPTIONS, theme }
@@ -125,21 +130,34 @@ export function createTerminalInstance(
   const serializeAddon = new SerializeAddon()
   xterm.loadAddon(serializeAddon)
 
-  // 5. Load GPU-accelerated renderer
-  console.log("[Terminal:create] Step 5: Loading renderer")
-  const renderer = loadRenderer(xterm)
+  // 5. Fit first to ensure dimensions are set before loading renderer
+  console.log("[Terminal:create] Step 5: Initial fit")
+  try {
+    fitAddon.fit()
+    console.log("[Terminal:create] Initial fit successful - cols:", xterm.cols, "rows:", xterm.rows)
+  } catch (err) {
+    console.log("[Terminal:create] Initial fit failed:", err)
+  }
 
-  // Debug: Check dimensions after renderer
-  const coreAfter = (xterm as unknown as { _core?: { _renderService?: { dimensions?: unknown } } })._core
-  console.log("[Terminal:create] After renderer - dimensions:", coreAfter?._renderService?.dimensions)
+  // 6. Load GPU-accelerated renderer (deferred to next tick to ensure render service is ready)
+  let renderer: { dispose: () => void } = { dispose: () => {} }
+  console.log("[Terminal:create] Step 6: Scheduling renderer loading")
+  setTimeout(() => {
+    console.log("[Terminal:create] Loading renderer (deferred)")
+    renderer = loadRenderer(xterm)
 
-  // 6. Set up query response suppression
-  console.log("[Terminal:create] Step 6: Setting up query suppression")
+    // Debug: Check dimensions after renderer
+    const coreAfter = (xterm as unknown as { _core?: { _renderService?: { dimensions?: unknown } } })._core
+    console.log("[Terminal:create] After renderer - dimensions:", coreAfter?._renderService?.dimensions)
+  }, 0)
+
+  // 7. Set up query response suppression
+  console.log("[Terminal:create] Step 7: Setting up query suppression")
   const cleanupQuerySuppression = suppressQueryResponses(xterm)
 
-  // 7. Set up URL link provider using official WebLinksAddon
+  // 8. Set up URL link provider using official WebLinksAddon
   if (onUrlClick) {
-    console.log("[Terminal:create] Step 7: Registering WebLinksAddon")
+    console.log("[Terminal:create] Step 8: Registering WebLinksAddon")
     const webLinksAddon = new WebLinksAddon(
       (event: MouseEvent, uri: string) => {
         // Require Cmd+Click (Mac) or Ctrl+Click (Windows/Linux)
@@ -159,9 +177,9 @@ export function createTerminalInstance(
     xterm.loadAddon(webLinksAddon)
   }
 
-  // 8. Set up file path link provider
+  // 9. Set up file path link provider
   if (onFileLinkClick) {
-    console.log("[Terminal:create] Step 8: Registering file path link provider")
+    console.log("[Terminal:create] Step 9: Registering file path link provider")
     const filePathLinkProvider = new FilePathLinkProvider(
       xterm,
       (_event, path, line, column) => {
@@ -170,15 +188,6 @@ export function createTerminalInstance(
       }
     )
     xterm.registerLinkProvider(filePathLinkProvider)
-  }
-
-  // 9. Fit to get actual dimensions
-  console.log("[Terminal:create] Step 9: Fitting terminal")
-  try {
-    fitAddon.fit()
-    console.log("[Terminal:create] Fit successful - cols:", xterm.cols, "rows:", xterm.rows)
-  } catch (err) {
-    console.log("[Terminal:create] Fit failed:", err)
   }
 
   console.log("[Terminal:create] Complete!")
