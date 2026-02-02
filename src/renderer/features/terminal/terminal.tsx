@@ -45,6 +45,7 @@ export function Terminal({
   const [terminalCwd, setTerminalCwd] = useState<string | null>(
     initialCwd || cwd,
   )
+  const [initRetry, setInitRetry] = useState(0)
   const setGlobalCwds = useSetAtom(terminalCwdAtom)
 
   // Theme detection
@@ -135,10 +136,26 @@ export function Terminal({
     if (!container) return
 
     console.log("[Terminal:useEffect] MOUNT - paneId:", paneId)
-    console.log(
-      "[Terminal:useEffect] Container rect:",
-      container.getBoundingClientRect(),
-    )
+    const rect = container.getBoundingClientRect()
+    console.log("[Terminal:useEffect] Container rect:", rect)
+
+    // Wait for container to have dimensions before creating terminal
+    // This prevents initialization issues when container isn't fully laid out yet
+    if (rect.width === 0 || rect.height === 0) {
+      if (initRetry < 3) {
+        console.warn("[Terminal:useEffect] Container has no dimensions, retrying (attempt", initRetry + 1, ")")
+
+        // Use RAF to wait for layout to complete, then trigger retry
+        const rafId = requestAnimationFrame(() => {
+          setInitRetry(prev => prev + 1)
+        })
+
+        return () => cancelAnimationFrame(rafId)
+      } else {
+        console.error("[Terminal:useEffect] Container still has no dimensions after 3 retries")
+        return
+      }
+    }
 
     let isUnmounted = false
 
@@ -334,7 +351,7 @@ export function Terminal({
     }
     // Note: terminalCwd is accessed via ref to avoid remounting on cwd changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paneId, cwd, workspaceId, tabId, initialCwd, initialCommands, isDark])
+  }, [paneId, cwd, workspaceId, tabId, initialCwd, initialCommands, isDark, initRetry])
 
   // Update theme when isDark changes or VS Code theme changes (without recreating terminal)
   useEffect(() => {

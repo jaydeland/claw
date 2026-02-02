@@ -181,8 +181,6 @@ const SectionButton = memo(function SectionButton({
   isActive: boolean
   onClick: () => void
 }) {
-  if (count === 0) return null
-
   return (
     <button
       onClick={onClick}
@@ -393,19 +391,11 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
     return null
   }
 
-  // Build count detail strings
-  const changesDetail = changesTotals.fileCount > 0
-    ? `${changesTotals.fileCount} files +${changesTotals.additions} -${changesTotals.deletions}`
-    : undefined
-  const tasksDetail = tasksTotal > 0
-    ? tasksRunning > 0 ? `${tasksRunning} running` : `${tasksComplete} done`
-    : undefined
-  const agentsDetail = agentsTotal > 0
-    ? agentsRunning > 0 ? `${agentsRunning} running` : `${agentsComplete} done`
-    : undefined
-  const todosDetail = todosTotal > 0
-    ? `${todosComplete}/${todosTotal}`
-    : undefined
+  // Build count detail strings - always show even when zero
+  const changesDetail = `${changesTotals.fileCount} files +${changesTotals.additions} -${changesTotals.deletions}`
+  const tasksDetail = tasksRunning > 0 ? `${tasksRunning} running` : `${tasksComplete} done`
+  const agentsDetail = agentsRunning > 0 ? `${agentsRunning} running` : `${agentsComplete} done`
+  const todosDetail = `${todosComplete}/${todosTotal}`
 
   return (
     <div
@@ -417,7 +407,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
       {/* Header with section buttons */}
       <div className="flex items-center justify-between px-2 py-1.5">
         <div className="flex items-center gap-1 flex-1 min-w-0">
-          {/* Section buttons - always show when there's data */}
+          {/* Section buttons - always show all categories, even when counts are zero */}
           <SectionButton
             icon={FileCode}
             label="Changes"

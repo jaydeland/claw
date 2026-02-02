@@ -33,7 +33,7 @@ import { isPlanModeAtom, lastSelectedModelIdAtom } from "../atoms"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import { CommandsDropdown } from "../components/commands-dropdown"
-import { AgentsDropdown } from "../components/agents-dropdown"
+import { SkillsAndGsdDropdown } from "../components/skills-and-gsd-dropdown"
 import {
   AgentsMentionsEditor,
   type AgentsMentionsEditorHandle,
@@ -528,35 +528,6 @@ export const ChatInputArea = memo(function ChatInputArea({
       editorRef.current?.clearSlashCommand()
       setShowSlashDropdown(false)
 
-      // Claw-only UI commands - handle locally, don't send to SDK
-      if (command.category === "builtin") {
-        switch (command.name) {
-          case "clear":
-            // Create a new sub-chat (Claw-specific behavior)
-            if (onCreateNewSubChat) {
-              onCreateNewSubChat()
-            }
-            break
-          case "plan":
-            if (!isPlanMode) {
-              setIsPlanMode(true)
-            }
-            break
-          case "agent":
-            if (isPlanMode) {
-              setIsPlanMode(false)
-            }
-            break
-          case "tasks":
-            // Show background tasks panel (Claw-specific)
-            if (onShowTasks) {
-              onShowTasks()
-            }
-            break
-        }
-        return
-      }
-
       // SDK commands (from SDK session-init) - send directly to SDK
       if (command.id?.startsWith("sdk:")) {
         if (command.argumentHint) {
@@ -580,7 +551,7 @@ export const ChatInputArea = memo(function ChatInputArea({
         setTimeout(() => onSend(), 0)
       }
     },
-    [isPlanMode, setIsPlanMode, onSend, onCreateNewSubChat, onShowTasks, editorRef],
+    [onSend, editorRef],
   )
 
   // Handle command selection from Commands dropdown
@@ -599,9 +570,9 @@ export const ChatInputArea = memo(function ChatInputArea({
     }, 0)
   }, [editorRef])
 
-  // Handle agent selection from Agents dropdown
-  const handleAgentSelect = useCallback((agentId: string) => {
-    const command = `/${agentId} `
+  // Handle skill selection from Skills & GSD dropdown
+  const handleSkillSelect = useCallback((skillName: string) => {
+    const command = `/${skillName} `
     const currentValue = editorRef.current?.getValue() || ""
     const newValue = currentValue.trim()
       ? `${command}${currentValue}`
@@ -609,7 +580,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     editorRef.current?.setValue(newValue)
     editorRef.current?.focus()
 
-    // Position cursor right after the agent command and space
+    // Position cursor right after the skill command and space
     setTimeout(() => {
       editorRef.current?.setCursorPosition(command.length)
     }, 0)
@@ -1065,9 +1036,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                     disabled={isStreaming}
                   />
 
-                  {/* Agents Dropdown */}
-                  <AgentsDropdown
-                    onAgentSelect={handleAgentSelect}
+                  {/* Skills & GSD Dropdown */}
+                  <SkillsAndGsdDropdown
+                    onSkillSelect={handleSkillSelect}
                     disabled={isStreaming}
                   />
                 </div>

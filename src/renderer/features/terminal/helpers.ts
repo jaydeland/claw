@@ -139,17 +139,27 @@ export function createTerminalInstance(
     console.log("[Terminal:create] Initial fit failed:", err)
   }
 
-  // 6. Load GPU-accelerated renderer (deferred to next tick to ensure render service is ready)
+  // 6. Load GPU-accelerated renderer (deferred using RAF to ensure render service is ready)
   let renderer: { dispose: () => void } = { dispose: () => {} }
   console.log("[Terminal:create] Step 6: Scheduling renderer loading")
-  setTimeout(() => {
-    console.log("[Terminal:create] Loading renderer (deferred)")
-    renderer = loadRenderer(xterm)
 
-    // Debug: Check dimensions after renderer
-    const coreAfter = (xterm as unknown as { _core?: { _renderService?: { dimensions?: unknown } } })._core
-    console.log("[Terminal:create] After renderer - dimensions:", coreAfter?._renderService?.dimensions)
-  }, 0)
+  // Use double requestAnimationFrame to ensure at least one paint cycle has completed
+  // This gives xterm's internal render service time to initialize dimensions
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      console.log("[Terminal:create] Loading renderer (deferred after RAF)")
+
+      // Double-check that render service and dimensions exist before loading renderer
+      const core = (xterm as unknown as { _core?: { _renderService?: { dimensions?: unknown } } })._core
+      if (!core?._renderService) {
+        console.warn("[Terminal:create] Render service not ready, skipping renderer addon")
+        return
+      }
+
+      console.log("[Terminal:create] Render service ready, dimensions:", core._renderService.dimensions)
+      renderer = loadRenderer(xterm)
+    })
+  })
 
   // 7. Set up query response suppression
   console.log("[Terminal:create] Step 7: Setting up query suppression")

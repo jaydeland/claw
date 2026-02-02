@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback, useRef } from "react"
+import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import {
   FolderSync,
@@ -52,6 +52,15 @@ export function DevSpaceTab() {
 
   // tRPC mutation for killing terminal sessions
   const killMutation = trpc.terminal.kill.useMutation()
+
+  // Clear stale terminals on mount to prevent initialization issues
+  // DevSpace terminals should not persist across app restarts since PTY sessions won't survive
+  useEffect(() => {
+    console.log("[DevSpaceTab] Clearing stale terminals from localStorage")
+    setTerminals([])
+    setActiveTerminalId(null)
+  }, []) // Only run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 
   // Refs to avoid callback recreation
   const terminalsRef = useRef(terminals)
