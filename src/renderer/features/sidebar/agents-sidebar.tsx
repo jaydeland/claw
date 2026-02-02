@@ -40,6 +40,7 @@ import { DiscordIcon } from "../../icons"
 import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
 import { ConfirmArchiveDialog } from "../../components/confirm-archive-dialog"
 import { trpc } from "../../lib/trpc"
+import { keepPreviousData } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   DropdownMenu,
@@ -1489,13 +1490,13 @@ export function AgentsSidebar({
   // File changes stats from DB - only for open sub-chats
   const { data: fileStatsData } = trpc.chats.getFileStats.useQuery(
     { openSubChatIds: allOpenSubChatIds },
-    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: (prev) => prev }
+    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: keepPreviousData }
   )
 
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds: allOpenSubChatIds },
-    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: (prev) => prev }
+    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: keepPreviousData }
   )
 
   // Fetch all projects for git info

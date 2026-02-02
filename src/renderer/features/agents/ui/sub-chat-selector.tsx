@@ -9,6 +9,7 @@ import {
   pendingUserQuestionsAtom,
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
+import { keepPreviousData } from "@tanstack/react-query"
 import { X, Plus, AlignJustify, Play } from "lucide-react"
 import {
   IconSpinner,
@@ -199,7 +200,7 @@ export function SubChatSelector({
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds },
-    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: (prev) => prev }
+    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: keepPreviousData }
   )
   const pendingPlanApprovals = useMemo(() => {
     const set = new Set<string>()

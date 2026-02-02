@@ -35,6 +35,7 @@ import {
   type SubChatMeta,
 } from "../agents/stores/sub-chat-store"
 import { useShallow } from "zustand/react/shallow"
+import { keepPreviousData } from "@tanstack/react-query"
 import {
   PlusIcon,
   ArchiveIcon,
@@ -246,7 +247,7 @@ export function AgentsSubChatsSidebar({
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds },
-    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: (prev) => prev }
+    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: keepPreviousData }
   )
   const pendingPlanApprovals = useMemo(() => {
     const set = new Set<string>()
