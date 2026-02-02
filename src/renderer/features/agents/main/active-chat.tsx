@@ -224,6 +224,7 @@ import { autoRenameAgentChat } from "../utils/auto-rename"
 import { generateCommitToPrMessage, generateMergeMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
 import { ChatInputArea } from "./chat-input-area"
 import { IsolatedMessagesSection } from "./isolated-messages-section"
+import { AgentContinueButton } from "../ui/agent-continue-button"
 const clearSubChatSelectionAtom = atom(null, () => {})
 const isSubChatMultiSelectModeAtom = atom(false)
 const selectedSubChatIdsAtom = atom(new Set<string>())
@@ -3244,6 +3245,40 @@ const ChatViewInner = memo(function ChatViewInner({
     removeFromQueue(subChatId, itemId)
   }, [subChatId, removeFromQueue])
 
+  // Continue - resume interrupted session
+  const handleContinue = useCallback(async () => {
+    // Block if sandbox is not ready
+    if (sandboxSetupStatus !== "ready") {
+      return
+    }
+
+    // Block if archived
+    if (isArchived) {
+      return
+    }
+
+    // Send a continue message to resume the session
+    const parts: any[] = [
+      { type: "text", text: "continue" }
+    ]
+
+    // Track message sent
+    trackMessageSent({
+      workspaceId: subChatId,
+      messageLength: 8, // "continue"
+      mode: isPlanModeRef.current ? "plan" : "agent",
+    })
+
+    // Update timestamps
+    useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
+
+    // Enable auto-scroll and immediately scroll to bottom
+    shouldAutoScrollRef.current = true
+    scrollToBottom()
+
+    await sendMessageRef.current({ role: "user", parts })
+  }, [subChatId, sandboxSetupStatus, isArchived, scrollToBottom])
+
   // Force send - stop stream and send immediately, bypassing queue (Opt+Enter)
   const handleForceSend = useCallback(async () => {
     // Block sending while sandbox is still being set up
@@ -3638,6 +3673,12 @@ const ChatViewInner = memo(function ChatViewInner({
           </div>
         </div>
       )}
+
+      {/* Continue button - appears when session is interrupted */}
+      <AgentContinueButton
+        onContinue={handleContinue}
+        isStreaming={isStreaming}
+      />
 
       {/* Input - isolated component to prevent re-renders */}
       <ChatInputArea
