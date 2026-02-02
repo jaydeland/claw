@@ -348,6 +348,15 @@ export const historyEnabledAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Beta Features - Conductor
+// When enabled, show Conductor job management view
+export const conductorEnabledAtom = atomWithStorage<boolean>(
+  "beta:conductor-enabled",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
 // Preferences - Sound Notifications
 // When enabled, play a sound when agent completes work (if not viewing the chat)
 export const soundNotificationsEnabledAtom = atomWithStorage<boolean>(

@@ -27,6 +27,7 @@ import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { selectedGsdCategoryAtom } from "../../gsd/atoms"
+import { conductorEnabledAtom } from "../../../lib/atoms"
 
 interface TabItem {
   id: SidebarTab
@@ -56,12 +57,19 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
   const [selectedTab, setSelectedTab] = useAtom(selectedSidebarTabAtom)
   const [isContentCollapsed, setIsContentCollapsed] = useAtom(sidebarContentCollapsedAtom)
   const [isIconBarExpanded, setIsIconBarExpanded] = React.useState(false)
+  const [conductorEnabled] = useAtom(conductorEnabledAtom)
 
   // Category atoms that control main content view - need to clear when switching tabs
   const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const setMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const setGsdCategory = useSetAtom(selectedGsdCategoryAtom)
+
+  // Filter tabs based on beta flags
+  const visibleTabs = tabs.filter(tab => {
+    if (tab.id === "conductor") return conductorEnabled
+    return true
+  })
 
   const handleTabClick = (tabId: SidebarTab) => {
     if (selectedTab === tabId) {
@@ -121,7 +129,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
         </Tooltip>
       )}
 
-      {tabs.map((tab) => {
+      {visibleTabs.map((tab) => {
         const Icon = tab.icon
         const isActive = selectedTab === tab.id
 
