@@ -2,7 +2,8 @@
 
 import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { GitBranch, ListTree, ChevronsRight, ChevronsLeft } from "lucide-react"
+import { ChevronsRight, ChevronsLeft } from "lucide-react"
+import { IconSidePeek } from "../../components/ui/icons"
 import {
   Tooltip,
   TooltipContent,
@@ -126,7 +127,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
               )}
               aria-label="Expand sidebar"
             >
-              <ChevronsRight className="h-3 w-3 flex-shrink-0" />
+              <ChevronsRight className="h-4 w-4 flex-shrink-0" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="left">
@@ -155,7 +156,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                   aria-label="Changes"
                   aria-pressed={isDiffOpen}
                 >
-                  <GitBranch className="h-4 w-4 flex-shrink-0" />
+                  <IconSidePeek className="h-4 w-4 flex-shrink-0" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="left">
@@ -178,7 +179,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                 aria-label="Changes"
                 aria-pressed={isDiffOpen}
               >
-                <GitBranch className="h-4 w-4 flex-shrink-0" />
+                <IconSidePeek className="h-4 w-4 flex-shrink-0" />
                 <span className="text-sm">Changes</span>
               </button>
               <button
@@ -190,7 +191,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                 )}
                 aria-label="Collapse sidebar"
               >
-                <ChevronsLeft className="h-3 w-3 flex-shrink-0" />
+                <ChevronsLeft className="h-4 w-4 flex-shrink-0" />
               </button>
             </div>
           )}
@@ -215,7 +216,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                   aria-label="Session Flow"
                   aria-pressed={effectiveSessionFlowOpen}
                 >
-                  <ListTree className="h-4 w-4 flex-shrink-0" />
+                  <IconSidePeek className="h-4 w-4 flex-shrink-0" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="left">
@@ -236,7 +237,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                 aria-label="Session Flow"
                 aria-pressed={effectiveSessionFlowOpen}
               >
-                <ListTree className="h-4 w-4 flex-shrink-0" />
+                <IconSidePeek className="h-4 w-4 flex-shrink-0" />
                 <span className="text-sm">Session Flow</span>
               </button>
               <button
@@ -248,7 +249,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                 )}
                 aria-label="Collapse sidebar"
               >
-                <ChevronsLeft className="h-3 w-3 flex-shrink-0" />
+                <ChevronsLeft className="h-4 w-4 flex-shrink-0" />
               </button>
             </div>
           )}
