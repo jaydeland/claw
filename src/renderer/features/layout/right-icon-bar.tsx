@@ -2,13 +2,12 @@
 
 import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { GitBranch, ListTree } from "lucide-react"
+import { GitBranch, ListTree, ChevronsRight, ChevronsLeft } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "../../components/ui/tooltip"
-import { Kbd } from "../../components/ui/kbd"
 import { cn } from "../../lib/utils"
 import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily } from "../agents/atoms"
 import {
@@ -17,6 +16,7 @@ import {
   sessionFlowSidebarOpenRuntimeAtom,
 } from "../session-flow/atoms"
 import { workflowPanelOpenAtom } from "../workflows/atoms"
+import { rightIconBarExpandedAtom } from "./atoms"
 import { trpc } from "../../lib/trpc"
 
 interface RightIconBarProps {
@@ -25,6 +25,9 @@ interface RightIconBarProps {
 
 export function RightIconBar({ className }: RightIconBarProps) {
   const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+
+  // Icon bar expanded state
+  const [isExpanded, setIsExpanded] = useAtom(rightIconBarExpandedAtom)
 
   // Query current chat data to check for worktree
   const { data: chatData } = trpc.chats.get.useQuery(
@@ -105,60 +108,151 @@ export function RightIconBar({ className }: RightIconBarProps) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-0.5 px-1 py-2 border-l border-border/50 bg-background",
+        "flex flex-col items-center gap-0.5 px-1 py-2 border-l border-border/50 bg-background transition-all duration-200 ease-out overflow-hidden",
+        isExpanded ? "w-[200px] items-stretch" : "items-center",
         className,
       )}
     >
-      {/* Changes/Diff Button - show if git repo */}
-      {isGitRepo && (
+      {/* Expand button - only show when collapsed */}
+      {!isExpanded && (
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={handleChangesClick}
-              disabled={!selectedChatId}
+              onClick={() => setIsExpanded(true)}
               className={cn(
                 "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-                isDiffOpen && selectedChatId
-                  ? "bg-foreground/10 text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-                !selectedChatId && "opacity-50 cursor-not-allowed",
+                "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
               )}
-              aria-label="Changes"
-              aria-pressed={isDiffOpen}
+              aria-label="Expand sidebar"
             >
-              <GitBranch className="h-4 w-4 flex-shrink-0" />
+              <ChevronsRight className="h-3 w-3 flex-shrink-0" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="left">
-            {selectedChatId ? "Changes" : "Select a workspace to view changes"}
+            Expand
           </TooltipContent>
         </Tooltip>
       )}
 
+      {/* Changes/Diff Button - show if git repo */}
+      {isGitRepo && (
+        <>
+          {!isExpanded ? (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleChangesClick}
+                  disabled={!selectedChatId}
+                  className={cn(
+                    "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
+                    isDiffOpen && selectedChatId
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                    !selectedChatId && "opacity-50 cursor-not-allowed",
+                  )}
+                  aria-label="Changes"
+                  aria-pressed={isDiffOpen}
+                >
+                  <GitBranch className="h-4 w-4 flex-shrink-0" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                {selectedChatId ? "Changes" : "Select a workspace to view changes"}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="flex items-center justify-between gap-2 px-2 w-full">
+              <button
+                type="button"
+                onClick={handleChangesClick}
+                disabled={!selectedChatId}
+                className={cn(
+                  "flex items-center gap-2 rounded-md transition-all duration-150 ease-out h-8 px-2 flex-1",
+                  isDiffOpen && selectedChatId
+                    ? "bg-foreground/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                  !selectedChatId && "opacity-50 cursor-not-allowed",
+                )}
+                aria-label="Changes"
+                aria-pressed={isDiffOpen}
+              >
+                <GitBranch className="h-4 w-4 flex-shrink-0" />
+                <span className="text-sm">Changes</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsExpanded(false)}
+                className={cn(
+                  "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
+                  "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                )}
+                aria-label="Collapse sidebar"
+              >
+                <ChevronsLeft className="h-3 w-3 flex-shrink-0" />
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
       {/* Session Flow Button - always show when chat is selected */}
       {selectedChatId && (
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleSessionFlowClick}
-              className={cn(
-                "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-                effectiveSessionFlowOpen
-                  ? "bg-foreground/10 text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-              )}
-              aria-label="Session Flow"
-              aria-pressed={effectiveSessionFlowOpen}
-            >
-              <ListTree className="h-4 w-4 flex-shrink-0" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">
-            Session Flow
-          </TooltipContent>
-        </Tooltip>
+        <>
+          {!isExpanded ? (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleSessionFlowClick}
+                  className={cn(
+                    "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
+                    effectiveSessionFlowOpen
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                  )}
+                  aria-label="Session Flow"
+                  aria-pressed={effectiveSessionFlowOpen}
+                >
+                  <ListTree className="h-4 w-4 flex-shrink-0" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                Session Flow
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="flex items-center justify-between gap-2 px-2 w-full">
+              <button
+                type="button"
+                onClick={handleSessionFlowClick}
+                className={cn(
+                  "flex items-center gap-2 rounded-md transition-all duration-150 ease-out h-8 px-2 flex-1",
+                  effectiveSessionFlowOpen
+                    ? "bg-foreground/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                )}
+                aria-label="Session Flow"
+                aria-pressed={effectiveSessionFlowOpen}
+              >
+                <ListTree className="h-4 w-4 flex-shrink-0" />
+                <span className="text-sm">Session Flow</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsExpanded(false)}
+                className={cn(
+                  "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
+                  "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                )}
+                aria-label="Collapse sidebar"
+              >
+                <ChevronsLeft className="h-3 w-3 flex-shrink-0" />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Spacer */}
