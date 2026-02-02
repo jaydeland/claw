@@ -8,6 +8,56 @@ import { getDatabase } from "../../db"
 import { projects } from "../../db/schema"
 import { eq } from "drizzle-orm"
 import { parseRoadmap } from "../../gsd/roadmap-parser"
+import matter from "gray-matter"
+import yaml from "js-yaml"
+
+// Custom YAML parser that's more forgiving with special characters
+function parseYamlSafe(input: string): Record<string, any> {
+  try {
+    // Try standard parsing first
+    return yaml.load(input, { schema: yaml.DEFAULT_SCHEMA }) as Record<string, any>
+  } catch (err) {
+    // If that fails, try line-by-line parsing for simple key: value pairs
+    const result: Record<string, any> = {}
+    const lines = input.split('\n')
+    let currentKey: string | null = null
+    let currentValue = ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+
+      // Check if this is a key: value line
+      const colonIndex = trimmed.indexOf(':')
+      if (colonIndex > 0 && colonIndex < trimmed.length - 1) {
+        // Save previous key-value if exists
+        if (currentKey) {
+          result[currentKey] = currentValue.trim()
+        }
+
+        // Start new key-value
+        currentKey = trimmed.slice(0, colonIndex).trim()
+        currentValue = trimmed.slice(colonIndex + 1).trim()
+      } else if (currentKey && trimmed.startsWith('-')) {
+        // Array item
+        if (!Array.isArray(result[currentKey])) {
+          result[currentKey] = []
+        }
+        (result[currentKey] as string[]).push(trimmed.slice(1).trim())
+      } else if (currentKey) {
+        // Continuation of previous value
+        currentValue += ' ' + trimmed
+      }
+    }
+
+    // Save last key-value
+    if (currentKey) {
+      result[currentKey] = currentValue.trim()
+    }
+
+    return result
+  }
+}
 
 /**
  * Get the path to bundled GSD resources
@@ -29,6 +79,95 @@ async function hasBundledGsd(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+interface GsdCommand {
+  name: string
+  description: string
+  path: string
+  source: "bundled"
+}
+
+/**
+ * Parse command .md frontmatter to extract name and description
+ */
+function parseGsdCommandMd(content: string): { name?: string; description?: string } {
+  try {
+    const { data } = matter(content, {
+      engines: {
+        yaml: { parse: parseYamlSafe }
+      }
+    })
+    return {
+      name: typeof data.name === "string" ? data.name : undefined,
+      description: typeof data.description === "string" ? data.description : undefined,
+    }
+  } catch (err) {
+    console.error("[gsd] Failed to parse frontmatter:", err)
+    return {}
+  }
+}
+
+/**
+ * Recursively scan the bundled GSD commands directory
+ */
+async function scanBundledGsdCommands(): Promise<GsdCommand[]> {
+  const commands: GsdCommand[] = []
+  const gsdPath = getBundledGsdPath()
+  const commandsDir = path.join(gsdPath, "commands")
+
+  try {
+    // Check if commands directory exists
+    try {
+      await fs.access(commandsDir)
+    } catch {
+      return commands
+    }
+
+    // Recursively scan for .md files
+    async function scanDir(dir: string, prefix = ""): Promise<void> {
+      const entries = await fs.readdir(dir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        // Validate entry name for security
+        if (entry.name.includes("..") || entry.name.includes("/") || entry.name.includes("\\")) {
+          continue
+        }
+
+        const fullPath = path.join(dir, entry.name)
+
+        if (entry.isDirectory()) {
+          // Recursively scan nested directories
+          const nestedPrefix = prefix ? `${prefix}:${entry.name}` : entry.name
+          await scanDir(fullPath, nestedPrefix)
+        } else if (entry.isFile() && entry.name.endsWith(".md")) {
+          try {
+            const content = await fs.readFile(fullPath, "utf-8")
+            const parsed = parseGsdCommandMd(content)
+
+            // Build command name from file path if not in frontmatter
+            const baseName = entry.name.replace(/\.md$/, "")
+            const derivedName = prefix ? `${prefix}:${baseName}` : baseName
+
+            commands.push({
+              name: parsed.name || derivedName,
+              description: parsed.description || "",
+              path: fullPath,
+              source: "bundled",
+            })
+          } catch (err) {
+            console.warn(`[gsd] Failed to read ${fullPath}:`, err)
+          }
+        }
+      }
+    }
+
+    await scanDir(commandsDir)
+  } catch (err) {
+    console.error(`[gsd] Failed to scan commands directory:`, err)
+  }
+
+  return commands
 }
 
 /**
@@ -114,6 +253,14 @@ export const gsdRouter = router({
       version: pkg?.version ?? null,
       name: pkg?.name ?? null,
     }
+  }),
+
+  /**
+   * List all bundled GSD commands
+   * These are commands from resources/gsd/commands/ directory
+   */
+  listCommands: publicProcedure.query(async () => {
+    return scanBundledGsdCommands()
   }),
 
   /**

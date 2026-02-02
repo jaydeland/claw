@@ -36,10 +36,16 @@ export function CommandsDropdown({
     }
   )
 
+  // Filter out GSD-related commands (those with gsd: prefix in their name)
+  // These should only appear in the GSD dropdown
+  const nonGsdCommands = useMemo(() => {
+    return commands.filter((cmd) => !cmd.name.startsWith("gsd:"))
+  }, [commands])
+
   // Group commands hierarchically (same as commands-tab-content)
   const hierarchicalGroups = useMemo(() => {
-    return groupWorkflowsHierarchically(commands)
-  }, [commands])
+    return groupWorkflowsHierarchically(nonGsdCommands)
+  }, [nonGsdCommands])
 
   // Toggle group expansion
   const toggleGroup = (key: string) => {
