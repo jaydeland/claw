@@ -2,7 +2,7 @@
 
 import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { GitBranch, ListTree } from "lucide-react"
+import { IconSidePeek } from "../../components/ui/icons"
 import {
   Tooltip,
   TooltipContent,
@@ -127,7 +127,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
               aria-label="Changes"
               aria-pressed={isDiffOpen}
             >
-              <GitBranch className="h-4 w-4 flex-shrink-0" />
+              <IconSidePeek className="h-4 w-4 flex-shrink-0" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="left">
@@ -152,7 +152,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
               aria-label="Session Flow"
               aria-pressed={effectiveSessionFlowOpen}
             >
-              <ListTree className="h-4 w-4 flex-shrink-0" />
+              <IconSidePeek className="h-4 w-4 flex-shrink-0" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="left">
