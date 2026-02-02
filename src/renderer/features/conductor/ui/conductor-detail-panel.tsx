@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { X, Search, Play, Square, RotateCw, Trash2, Copy, Edit2, ChevronDown, ChevronRight, Loader2, CheckCircle2, XCircle, Download, XCircleIcon } from "lucide-react"
+import { X, Search, Play, Square, RotateCw, Trash2, Copy, Edit2, ChevronDown, ChevronRight, Loader2, CheckCircle2, XCircle, Download, XCircleIcon, Rocket } from "lucide-react"
 import { trpc } from "../../../lib/trpc"
 import {
   selectedConductorJobIdAtom,
@@ -15,6 +15,7 @@ import { Input } from "../../../components/ui/input"
 import { cn } from "../../../lib/utils"
 import type { Terminal as XTerm } from "xterm"
 import type { FitAddon } from "@xterm/addon-fit"
+import { GsdJobInfo } from "./components/gsd-job-info"
 import "xterm/css/xterm.css"
 
 export function ConductorDetailPanel() {
@@ -559,6 +560,19 @@ function MetadataTab({ job }: { job: any }) {
           <Field label="Jira Key" value={job.jiraKey || "(not set)"} />
         </div>
       </div>
+
+      {/* GSD Integration */}
+      {job.gsdSource && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold text-purple-500 uppercase flex items-center gap-2">
+            <Rocket className="h-3 w-3" />
+            GSD Linked
+          </h3>
+          <div className="border border-purple-500/20 bg-purple-500/5 rounded-lg p-3">
+            <GsdJobInfo job={job} />
+          </div>
+        </div>
+      )}
 
       {/* Error */}
       {job.errorMessage && (

@@ -238,6 +238,13 @@ export const JobCard = memo(function JobCard({
                 <ExternalLink className="w-3 h-3" />
               </a>
             )}
+
+            {/* GSD badge */}
+            {job.gsdSource && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20">
+                GSD
+              </span>
+            )}
           </div>
 
           {/* Metadata row */}

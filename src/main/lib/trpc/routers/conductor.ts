@@ -1166,6 +1166,250 @@ export const conductorRouter = router({
         // Filter jobs with error messages
         return allJobs.filter((job) => job.errorMessage && job.errorMessage.length > 0)
       }),
+
+    // ============ GSD INTEGRATION ============
+
+    /**
+     * Import GSD phases and plans as Conductor jobs
+     */
+    importFromGsd: publicProcedure
+      .input(
+        z.object({
+          projectIds: z.array(z.string()),
+          options: z
+            .object({
+              importPlansAsTasks: z.boolean().default(true),
+              overwriteExisting: z.boolean().default(false),
+            })
+            .optional()
+            .default({ importPlansAsTasks: true, overwriteExisting: false }),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { parseRoadmap } = await import("../../gsd/roadmap-parser")
+        const { parsePhasePlans } = await import("../../gsd/plan-parser")
+        const { mapGsdToConductor } = await import("../../gsd/status-mapper")
+        const { projects } = await import("../db/schema")
+
+        const db = getDatabase()
+        const imported: Array<{ projectId: string; phaseCount: number; jobCount: number }> = []
+        const errors: Array<{ projectId: string; error: string }> = []
+
+        for (const projectId of input.projectIds) {
+          try {
+            const project = db.select().from(projects).where(eq(projects.id, projectId)).get()
+            if (!project) {
+              errors.push({ projectId, error: "Project not found" })
+              continue
+            }
+
+            // Parse ROADMAP.md
+            const phases = await parseRoadmap(project.path)
+            let jobCount = 0
+
+            for (const phase of phases) {
+              // Check for duplicates if not overwriting
+              if (!input.options.overwriteExisting) {
+                const gsdSourceStr = JSON.stringify({
+                  projectId,
+                  phaseNumber: phase.phaseNumber,
+                  type: "phase",
+                })
+                const existing = db
+                  .select()
+                  .from(conductorJobs)
+                  .where(eq(conductorJobs.gsdSource, gsdSourceStr))
+                  .get()
+
+                if (existing) {
+                  console.log(`Skipping existing phase ${phase.phaseNumber} for project ${projectId}`)
+                  continue
+                }
+              }
+
+              // Create parent job for phase
+              const conductorStatus = mapGsdToConductor(phase.status, false)
+              const phaseJob = db
+                .insert(conductorJobs)
+                .values({
+                  title: `Phase ${phase.phaseNumber}: ${phase.phaseName}`,
+                  intent: phase.goal || phase.description,
+                  type: "feature",
+                  status: conductorStatus,
+                  repoId: projectId,
+                  gsdSource: JSON.stringify({
+                    projectId,
+                    phaseNumber: phase.phaseNumber,
+                    type: "phase",
+                  }),
+                  gsdVerified: phase.status === "complete",
+                })
+                .returning()
+                .get()
+
+              jobCount++
+              emitJobUpdate("job_created", phaseJob)
+
+              // Import plans as child jobs
+              if (input.options.importPlansAsTasks) {
+                try {
+                  const plans = await parsePhasePlans(project.path, phase.phaseNumber)
+                  for (const plan of plans) {
+                    const planJob = db
+                      .insert(conductorJobs)
+                      .values({
+                        title: `Plan ${plan.planNumber}: ${plan.tasks[0]?.title || "Execute phase tasks"}`,
+                        intent: plan.mustHaves.join("; ") || "Execute plan tasks",
+                        type: "chore",
+                        status: "to_do",
+                        parentId: phaseJob.id,
+                        repoId: projectId,
+                        gsdSource: JSON.stringify({
+                          projectId,
+                          phaseNumber: phase.phaseNumber,
+                          planNumber: plan.planNumber,
+                          type: "plan",
+                          filePath: plan.planPath,
+                        }),
+                      })
+                      .returning()
+                      .get()
+
+                    jobCount++
+                    emitJobUpdate("job_created", planJob)
+                  }
+                } catch (err) {
+                  console.error(`Failed to parse plans for phase ${phase.phaseNumber}:`, err)
+                }
+              }
+            }
+
+            imported.push({ projectId, phaseCount: phases.length, jobCount })
+          } catch (err: any) {
+            errors.push({ projectId, error: err.message })
+          }
+        }
+
+        return { imported, errors }
+      }),
+
+    /**
+     * Get GSD command for a job
+     */
+    getGsdCommandForJob: publicProcedure
+      .input(z.object({ jobId: z.string() }))
+      .query(async ({ input }) => {
+        const { projects } = await import("../db/schema")
+
+        const db = getDatabase()
+        const job = db.select().from(conductorJobs).where(eq(conductorJobs.id, input.jobId)).get()
+
+        if (!job?.gsdSource) {
+          return null
+        }
+
+        const gsdSource = JSON.parse(job.gsdSource) as {
+          projectId: string
+          phaseNumber: string
+          planNumber?: string
+          type: "phase" | "plan"
+        }
+
+        const project = db.select().from(projects).where(eq(projects.id, gsdSource.projectId)).get()
+
+        if (!project) {
+          return null
+        }
+
+        // Generate appropriate GSD command based on job status and type
+        let command = ""
+        let description = ""
+
+        if (gsdSource.type === "phase") {
+          switch (job.status) {
+            case "in_progress":
+              command = `/gsd:execute-phase ${gsdSource.phaseNumber}`
+              description = `Execute Phase ${gsdSource.phaseNumber}`
+              break
+            case "review":
+              command = `/gsd:verify-work`
+              description = `Verify Phase ${gsdSource.phaseNumber} completion`
+              break
+            case "done":
+              // Phase marked as done, no command needed
+              break
+          }
+        }
+
+        return {
+          command,
+          description,
+          projectPath: project.path,
+          projectName: project.name,
+          requiresChat: true,
+        }
+      }),
+
+    /**
+     * Trigger GSD command for a job (manual trigger)
+     */
+    triggerGsdCommand: publicProcedure
+      .input(z.object({ jobId: z.string() }))
+      .mutation(async ({ input }) => {
+        const { createGsdCommandMessage } = await import("../../conductor/gsd-chat-integration")
+
+        const db = getDatabase()
+        const job = db.select().from(conductorJobs).where(eq(conductorJobs.id, input.jobId)).get()
+
+        if (!job?.gsdSource) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Job is not linked to GSD",
+          })
+        }
+
+        const gsdSource = JSON.parse(job.gsdSource) as {
+          projectId: string
+          phaseNumber: string
+          type: "phase" | "plan"
+        }
+
+        // Generate command
+        let command = ""
+        if (gsdSource.type === "phase") {
+          switch (job.status) {
+            case "to_do":
+              command = `/gsd:plan-phase ${gsdSource.phaseNumber}`
+              break
+            case "in_progress":
+              command = `/gsd:execute-phase ${gsdSource.phaseNumber}`
+              break
+            case "review":
+              command = `/gsd:verify-work`
+              break
+          }
+        }
+
+        if (!command) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No GSD command available for current job status",
+          })
+        }
+
+        // Create command message in chat
+        const { chatId, subChatId } = await createGsdCommandMessage(gsdSource.projectId, command)
+
+        // Emit event for UI navigation
+        emitJobUpdate("gsd_command_created", {
+          jobId: input.jobId,
+          chatId,
+          subChatId,
+          command,
+        })
+
+        return { success: true, chatId, subChatId, command }
+      }),
   }),
 
   // ============ LOGS OPERATIONS ============

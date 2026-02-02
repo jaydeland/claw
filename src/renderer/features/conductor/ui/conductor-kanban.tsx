@@ -314,6 +314,28 @@ export function ConductorKanban() {
       if (update.type === 'job_deleted' && selectedJobId === update.job.id) {
         setSelectedJobId(null)
       }
+
+      // Handle GSD command creation
+      if (update.type === 'gsd_command_created') {
+        const data = update as any
+        toast.success(
+          <div className="flex items-center gap-2">
+            <span>GSD command created</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                // TODO: Navigate to chat
+                // window.desktopApi.openChat(data.chatId, data.subChatId)
+                console.log('Navigate to chat:', data.chatId, data.subChatId)
+              }}
+            >
+              Open Chat
+            </Button>
+          </div>,
+          { duration: 5000 }
+        )
+      }
     },
     onError: (error) => {
       console.error('[Kanban] Subscription error:', error)

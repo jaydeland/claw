@@ -19,6 +19,8 @@ export interface CreateJobInput {
   jiraKey?: string
   repoId?: string
   branchName?: string
+  gsdSource?: string
+  gsdVerified?: boolean
 }
 
 /**
@@ -35,6 +37,8 @@ export interface UpdateJobInput {
   repoId?: string
   worktreePath?: string
   branchName?: string
+  gsdSource?: string
+  gsdVerified?: boolean
 }
 
 /**

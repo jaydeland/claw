@@ -288,6 +288,26 @@ export const conductorErrorAtom = atom<string | null>(null)
 export const conductorRefreshTriggerAtom = atom<number>(0)
 
 // ============================================
+// GSD INTEGRATION STATE
+// ============================================
+
+/**
+ * Selected workspace (project) IDs for GSD import
+ * Persisted to maintain user's workspace selection across sessions
+ */
+export const conductorSelectedWorkspaceIdsAtom = atomWithStorage<string[]>(
+  "conductor-selected-workspace-ids",
+  [],
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * GSD import dialog visibility
+ */
+export const gsdImportDialogOpenAtom = atom<boolean>(false)
+
+// ============================================
 // HELPER FUNCTIONS
 // ============================================
 

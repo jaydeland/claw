@@ -432,4 +432,83 @@ export const gsdRouter = router({
       // TODO: Save to database or electron-store
       return { success: true, settings: input }
     }),
+
+  // ============================================
+  // Batch GSD Status Procedures
+  // ============================================
+
+  /**
+   * Get GSD status for multiple projects (for workspace selector)
+   */
+  getGsdStatusBatch: publicProcedure
+    .input(z.object({ projectIds: z.array(z.string()) }))
+    .query(async ({ input }) => {
+      const { getDatabase } = await import("../db")
+      const { projects } = await import("../db/schema")
+      const { eq } = await import("drizzle-orm")
+      const { parseRoadmap } = await import("../../gsd/roadmap-parser")
+
+      const db = getDatabase()
+      const results: Record<
+        string,
+        {
+          hasPlanningDir: boolean
+          phaseCount: number
+          inProgressCount: number
+        }
+      > = {}
+
+      for (const projectId of input.projectIds) {
+        try {
+          const project = db
+            .select()
+            .from(projects)
+            .where(eq(projects.id, projectId))
+            .get()
+
+          if (!project) continue
+
+          const planningPath = path.join(project.path, ".planning")
+
+          // Check if .planning directory exists
+          try {
+            await fs.access(planningPath)
+          } catch {
+            results[projectId] = {
+              hasPlanningDir: false,
+              phaseCount: 0,
+              inProgressCount: 0,
+            }
+            continue
+          }
+
+          // Try to parse ROADMAP.md
+          let phaseCount = 0
+          let inProgressCount = 0
+
+          try {
+            const phases = await parseRoadmap(project.path)
+            phaseCount = phases.length
+            inProgressCount = phases.filter((p) => p.status === "in_progress").length
+          } catch (err) {
+            console.error(`Failed to parse ROADMAP.md for project ${projectId}:`, err)
+          }
+
+          results[projectId] = {
+            hasPlanningDir: true,
+            phaseCount,
+            inProgressCount,
+          }
+        } catch (err) {
+          console.error(`Error processing project ${projectId}:`, err)
+          results[projectId] = {
+            hasPlanningDir: false,
+            phaseCount: 0,
+            inProgressCount: 0,
+          }
+        }
+      }
+
+      return results
+    }),
 })

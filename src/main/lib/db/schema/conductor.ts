@@ -21,6 +21,8 @@ export const conductorJobs = sqliteTable("conductor_jobs", {
   repoId: text("repo_id"), // FK to repositories table (if applicable)
   worktreePath: text("worktree_path"), // Git worktree path for isolated work
   branchName: text("branch_name"), // Git branch name for this job
+  gsdSource: text("gsd_source"), // JSON: { projectId, phaseNumber, planNumber?, type: "phase" | "plan", filePath? }
+  gsdVerified: integer("gsd_verified", { mode: "boolean" }).default(false), // Whether GSD phase is verified complete
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),

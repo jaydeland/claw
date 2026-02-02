@@ -35,6 +35,8 @@ import {
   newJobParentIdAtom,
 } from "../atoms"
 import type { ConductorJob } from "../../../../main/lib/db/schema/conductor"
+import { WorkspaceSelector } from "./components/workspace-selector"
+import { GsdImportDialog } from "./components/gsd-import-dialog"
 
 interface ConductorSidebarProps {
   className?: string
@@ -387,6 +389,7 @@ export function ConductorSidebar({ className }: ConductorSidebarProps) {
           )}
         </div>
         <div className="flex items-center gap-1">
+          <WorkspaceSelector />
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -586,6 +589,9 @@ export function ConductorSidebar({ className }: ConductorSidebarProps) {
           </div>
         )}
       </div>
+
+      {/* GSD Import Dialog */}
+      <GsdImportDialog />
     </div>
   )
 }
