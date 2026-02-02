@@ -58,6 +58,7 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
   const previousNodeCountRef = useRef(0)
   const previousExpandedSizeRef = useRef(0)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
+  const isProgrammaticMoveRef = useRef(false)
 
   // Store pending nodes/edges when Live is off - these will be applied when Live turns on
   const pendingNodesRef = useRef<typeof nodes>([])
@@ -130,11 +131,17 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
           // Center on the bottom node (add offset for node height)
           // NODE_HEIGHT is approximately 60-80px, center a bit above bottom
           // Reset zoom to 1.0 for optimal readability of new nodes
+          // Mark as programmatic move to prevent triggering userScrolled
+          isProgrammaticMoveRef.current = true
           reactFlowInstance.setCenter(
             bottomNode.position.x + 100, // Offset for node width (~200px / 2)
             bottomNode.position.y + 40,  // Offset for node height
             { duration: 400, zoom: 1.0 }
           )
+          // Reset flag after animation completes
+          setTimeout(() => {
+            isProgrammaticMoveRef.current = false
+          }, 500)
         }
       }, 100)
     }
@@ -161,11 +168,17 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
 
             if (bottomNode) {
               // Reset zoom to 1.0 for optimal readability when catching up
+              // Mark as programmatic move to prevent triggering userScrolled
+              isProgrammaticMoveRef.current = true
               reactFlowInstance.setCenter(
                 bottomNode.position.x + 100,
                 bottomNode.position.y + 40,
                 { duration: 400, zoom: 1.0 }
               )
+              // Reset flag after animation completes
+              setTimeout(() => {
+                isProgrammaticMoveRef.current = false
+              }, 500)
             }
           }
         }, 100)
@@ -174,9 +187,11 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
     wasLiveRef.current = isLive
   }, [isLive, setNodes, setEdges, setUserScrolled, reactFlowInstance])
 
-  // Detect user scroll/zoom actions
+  // Detect user scroll/zoom actions (ignore programmatic moves from setCenter)
   const handleMove = useCallback(() => {
-    setUserScrolled(true)
+    if (!isProgrammaticMoveRef.current) {
+      setUserScrolled(true)
+    }
   }, [setUserScrolled])
 
   // Reset user scroll flag when they manually fit view

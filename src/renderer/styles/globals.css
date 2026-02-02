@@ -8,26 +8,36 @@
 
 @layer base {
   :root {
+    /* Layered background system for visual depth */
     --background: 0 0% 100%;
+    /* #FFFFFF - main content */
     --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
+    --card: 0 0% 99%;
+    /* #FCFCFC - subtle card lift */
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
+    /* #FFFFFF - floating elements */
     --popover-foreground: 240 10% 3.9%;
     --primary: 228 100% 50%;
     /* #0034FF - same for all themes */
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 4.8% 95.9%;
+    --secondary: 240 5% 96%;
+    /* #F4F4F6 - secondary surfaces */
     --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
+    --muted: 240 5% 94%;
+    /* #EFEFF2 - muted backgrounds */
     --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
+    --accent: 240 5% 96%;
+    /* #F4F4F6 - accent backgrounds */
     --accent-foreground: 240 5.9% 10%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --input-background: 240 4.8% 95.9%;
+    --border: 240 5% 86%;
+    /* #DBDBE0 - more visible borders */
+    --input: 240 5% 86%;
+    /* #DBDBE0 - input borders */
+    --input-background: 240 5% 98%;
+    /* #FAFAFB - input fields */
     --ring: 228 100% 50%;
     /* Same as primary - blue focus ring */
     --selection: 228 100% 50% / 0.25;
@@ -36,33 +46,42 @@
     /* Plan Mode Colors */
     --plan-mode: 33 83% 67%;
     --plan-mode-foreground: 0 0% 8%;
-    /* Timeline/Content background */
-    --tl-background: 0 0% 98%;
+    /* Timeline/Content background - recessed areas */
+    --tl-background: 240 5% 97%;
+    /* #F7F7F9 - sidebar/recessed */
   }
 
   .dark {
-    --background: 240 10% 3.9%;
+    /* Layered background system for visual depth */
+    --background: 0 0% 6%;
+    /* #0F0F0F - main content area */
     --foreground: 240 4.8% 95.9%;
-    --card: 240 10% 3.9%;
+    --card: 0 0% 8%;
+    /* #141414 - elevated cards */
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 9%;
-    /* #171717 */
+    --popover: 0 0% 10%;
+    /* #1A1A1A - floating elements */
     --popover-foreground: 0 0% 98%;
     --primary: 228 100% 50%;
     /* #0034FF - same for all themes */
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%;
+    --secondary: 0 0% 12%;
+    /* #1F1F1F - secondary surfaces */
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 5.9% 10%;
+    --muted: 0 0% 14%;
+    /* #242424 - muted backgrounds */
     --muted-foreground: 240 4.4% 58%;
-    --accent: 240 5.9% 10%;
+    --accent: 0 0% 12%;
+    /* #1F1F1F - accent backgrounds */
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    /* #30302E - matches Claude input color */
-    --input-background: 60 2% 18%;
+    --border: 0 0% 18%;
+    /* #2E2E2E - more visible borders */
+    --input: 0 0% 18%;
+    /* #2E2E2E - input borders */
+    --input-background: 0 0% 10%;
+    /* #1A1A1A - input fields */
     --ring: 228 100% 50%;
     /* Same as primary - blue focus ring */
     --selection: 228 100% 50% / 0.3;
@@ -70,8 +89,9 @@
     /* Plan Mode Colors */
     --plan-mode: 33 83% 67%;
     --plan-mode-foreground: 0 0% 8%;
-    /* Timeline/Content background - matches Claude input color #30302E */
-    --tl-background: 60 2% 18%;
+    /* Timeline/Content background - recessed areas */
+    --tl-background: 0 0% 4%;
+    /* #0A0A0A - sidebar/recessed */
   }
 }
 

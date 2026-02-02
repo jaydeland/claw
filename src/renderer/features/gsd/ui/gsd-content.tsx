@@ -46,11 +46,8 @@ import {
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { PlanningDocEditor } from "./planning-doc-editor"
 import { ChangesPanel } from "../../changes"
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "../../../components/ui/resizable"
+// TODO: Add react-resizable-panels package for proper resizable layout
+// For now, using simple flex layout
 
 type DocType = "planning" | "gsd"
 
@@ -505,38 +502,36 @@ export function GsdContent() {
         </div>
 
         {/* Content area with changes panel */}
-        <ResizablePanelGroup direction="horizontal" className="flex-1">
+        <div className="flex-1 flex overflow-hidden">
           {/* Main content panel */}
-          <ResizablePanel defaultSize={changesPanelOpen ? 60 : 100}>
-            <div className="flex-1 overflow-y-auto p-6 h-full">
-              {activeDocType === "gsd" && selectedGsdDoc && (
-                <GsdDocContent docPath={selectedGsdDoc} />
-              )}
-              {activeDocType === "planning" && selectedPlanningDoc && projectPath && (
-                isEditMode ? (
-                  <PlanningDocEditor
-                    projectPath={projectPath}
-                    docPath={selectedPlanningDoc}
-                    onClose={() => setIsEditMode(false)}
-                  />
-                ) : (
-                  <PlanningDocContent projectPath={projectPath} docPath={selectedPlanningDoc} />
-                )
-              )}
-              {!activeDocType && (
-                <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-                  <FileText className="h-8 w-8 mb-2 opacity-50" />
-                  <p className="text-sm">Select a document to view</p>
-                </div>
-              )}
-            </div>
-          </ResizablePanel>
+          <div className={changesPanelOpen ? "flex-1 overflow-y-auto p-6" : "flex-1 overflow-y-auto p-6"}>
+            {activeDocType === "gsd" && selectedGsdDoc && (
+              <GsdDocContent docPath={selectedGsdDoc} />
+            )}
+            {activeDocType === "planning" && selectedPlanningDoc && projectPath && (
+              isEditMode ? (
+                <PlanningDocEditor
+                  projectPath={projectPath}
+                  docPath={selectedPlanningDoc}
+                  onClose={() => setIsEditMode(false)}
+                />
+              ) : (
+                <PlanningDocContent projectPath={projectPath} docPath={selectedPlanningDoc} />
+              )
+            )}
+            {!activeDocType && (
+              <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+                <FileText className="h-8 w-8 mb-2 opacity-50" />
+                <p className="text-sm">Select a document to view</p>
+              </div>
+            )}
+          </div>
 
           {/* Changes panel */}
           {changesPanelOpen && projectPath && (
             <>
-              <ResizableHandle />
-              <ResizablePanel defaultSize={40} minSize={20} maxSize={60}>
+              <div className="w-px bg-border flex-shrink-0" />
+              <div className="w-96 overflow-y-auto flex-shrink-0">
                 <ChangesPanel
                   worktreePath={projectPath}
                   selectedFilePath={selectedFilePath}
@@ -548,10 +543,10 @@ export function GsdContent() {
                     setSelectedFilePath(null)
                   }}
                 />
-              </ResizablePanel>
+              </div>
             </>
           )}
-        </ResizablePanelGroup>
+        </div>
       </div>
     </div>
   )

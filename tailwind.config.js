@@ -50,6 +50,19 @@ module.exports = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      boxShadow: {
+        // Elevation system for visual depth
+        "elevation-1": "0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1)",
+        "elevation-2": "0 2px 4px rgba(0, 0, 0, 0.05), 0 4px 6px rgba(0, 0, 0, 0.1)",
+        "elevation-3": "0 4px 6px rgba(0, 0, 0, 0.05), 0 10px 15px rgba(0, 0, 0, 0.1)",
+        // Dark mode elevation (stronger shadows needed on dark backgrounds)
+        "elevation-1-dark": "0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4)",
+        "elevation-2-dark": "0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 6px rgba(0, 0, 0, 0.4)",
+        "elevation-3-dark": "0 4px 6px rgba(0, 0, 0, 0.3), 0 10px 15px rgba(0, 0, 0, 0.4)",
+        // Inner shadow for recessed elements
+        "inner-subtle": "inset 0 1px 2px rgba(0, 0, 0, 0.06)",
+        "inner-subtle-dark": "inset 0 1px 2px rgba(0, 0, 0, 0.2)",
+      },
     },
   },
   plugins: [require("@tailwindcss/typography"), require("tailwindcss-animate")],
