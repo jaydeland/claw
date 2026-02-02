@@ -20,7 +20,13 @@ import {
 } from "../../../components/ui/select"
 import { Terminal } from "../../terminal/terminal"
 import { TerminalTabs } from "../../terminal/terminal-tabs"
-import { terminalCwdAtom } from "../../terminal/atoms"
+import {
+  terminalCwdAtom,
+  terminalsAtom,
+  activeTerminalIdAtom,
+  DEVSPACE_TERMINAL_ID,
+} from "../../terminal/atoms"
+import type { TerminalInstance } from "../../terminal/types"
 import {
   devspaceTerminalsAtom,
   devspaceActiveTerminalIdAtom,
@@ -36,19 +42,24 @@ function generateTerminalId(): string {
 
 /**
  * Generate a pane ID from terminal ID
+ * Uses format `devspace:term:{id}` to match standard terminal pattern
  */
 function generatePaneId(terminalId: string): string {
-  return `devspace-${terminalId}`
+  return `devspace:term:${terminalId}`
 }
 
 export function DevSpaceTab() {
   // Service selection
   const [selectedService, setSelectedService] = useState<string>("")
 
-  // Terminal management
+  // Terminal management - DevSpace atoms
   const [terminals, setTerminals] = useAtom(devspaceTerminalsAtom)
   const [activeTerminalId, setActiveTerminalId] = useAtom(devspaceActiveTerminalIdAtom)
   const terminalCwds = useAtomValue(terminalCwdAtom)
+
+  // Terminal management - Main terminal view atoms (for dual registration)
+  const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
+  const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
 
   // tRPC mutation for killing terminal sessions
   const killMutation = trpc.terminal.kill.useMutation()
@@ -59,6 +70,15 @@ export function DevSpaceTab() {
     console.log("[DevSpaceTab] Clearing stale terminals from localStorage")
     setTerminals([])
     setActiveTerminalId(null)
+    // Also clear from main terminal view's devspace context
+    setAllTerminals((prev) => {
+      const { [DEVSPACE_TERMINAL_ID]: _, ...rest } = prev
+      return rest
+    })
+    setAllActiveIds((prev) => {
+      const { [DEVSPACE_TERMINAL_ID]: _, ...rest } = prev
+      return rest
+    })
   }, []) // Only run once on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
 
@@ -89,22 +109,42 @@ export function DevSpaceTab() {
 
   // Terminal management callbacks
   const createTerminal = useCallback((serviceName: string, servicePath: string) => {
-    const currentTerminals = terminalsRef.current
-
     const id = generateTerminalId()
     const paneId = generatePaneId(id)
+    const createdAt = Date.now()
 
-    const newTerminal: DevSpaceTerminalInstance = {
+    // Create DevSpace terminal instance
+    const newDevspaceTerminal: DevSpaceTerminalInstance = {
       id,
       paneId,
       serviceName,
       servicePath,
-      createdAt: Date.now(),
+      createdAt,
     }
 
-    setTerminals((prev) => [...prev, newTerminal])
+    // Create matching TerminalInstance for main terminal view
+    const newTerminalInstance: TerminalInstance = {
+      id,
+      paneId,
+      name: serviceName,
+      createdAt,
+      cwd: servicePath,
+    }
+
+    // Register in DevSpace atoms
+    setTerminals((prev) => [...prev, newDevspaceTerminal])
     setActiveTerminalId(id)
-  }, [setTerminals, setActiveTerminalId])
+
+    // Register in main terminal view atoms (dual registration)
+    setAllTerminals((prev) => ({
+      ...prev,
+      [DEVSPACE_TERMINAL_ID]: [...(prev[DEVSPACE_TERMINAL_ID] || []), newTerminalInstance],
+    }))
+    setAllActiveIds((prev) => ({
+      ...prev,
+      [DEVSPACE_TERMINAL_ID]: id,
+    }))
+  }, [setTerminals, setActiveTerminalId, setAllTerminals, setAllActiveIds])
 
   const selectTerminal = useCallback(
     (id: string) => {
@@ -124,26 +164,44 @@ export function DevSpaceTab() {
       // Kill the session on the backend
       killMutation.mutate({ paneId: terminal.paneId })
 
-      // Remove from state
+      // Remove from DevSpace state
       const newTerminals = currentTerminals.filter((t) => t.id !== id)
       setTerminals(newTerminals)
+
+      // Remove from main terminal view state
+      setAllTerminals((prev) => ({
+        ...prev,
+        [DEVSPACE_TERMINAL_ID]: (prev[DEVSPACE_TERMINAL_ID] || []).filter((t) => t.id !== id),
+      }))
 
       // If we closed the active terminal, switch to another
       if (currentActiveId === id) {
         const newActive = newTerminals[newTerminals.length - 1]?.id || null
         setActiveTerminalId(newActive)
+        setAllActiveIds((prev) => ({
+          ...prev,
+          [DEVSPACE_TERMINAL_ID]: newActive,
+        }))
       }
     },
-    [setTerminals, setActiveTerminalId, killMutation],
+    [setTerminals, setActiveTerminalId, setAllTerminals, setAllActiveIds, killMutation],
   )
 
   const renameTerminal = useCallback(
     (id: string, name: string) => {
+      // Update DevSpace state
       setTerminals((prev) =>
         prev.map((t) => (t.id === id ? { ...t, serviceName: name } : t)),
       )
+      // Update main terminal view state
+      setAllTerminals((prev) => ({
+        ...prev,
+        [DEVSPACE_TERMINAL_ID]: (prev[DEVSPACE_TERMINAL_ID] || []).map((t) =>
+          t.id === id ? { ...t, name } : t
+        ),
+      }))
     },
-    [setTerminals],
+    [setTerminals, setAllTerminals],
   )
 
   const closeOtherTerminals = useCallback(
@@ -157,12 +215,22 @@ export function DevSpaceTab() {
         }
       })
 
-      // Keep only the terminal with the given id
+      // Keep only the terminal with the given id in DevSpace state
       const remainingTerminal = currentTerminals.find((t) => t.id === id)
       setTerminals(remainingTerminal ? [remainingTerminal] : [])
       setActiveTerminalId(id)
+
+      // Keep only the terminal with the given id in main terminal view state
+      setAllTerminals((prev) => ({
+        ...prev,
+        [DEVSPACE_TERMINAL_ID]: (prev[DEVSPACE_TERMINAL_ID] || []).filter((t) => t.id === id),
+      }))
+      setAllActiveIds((prev) => ({
+        ...prev,
+        [DEVSPACE_TERMINAL_ID]: id,
+      }))
     },
-    [setTerminals, setActiveTerminalId, killMutation],
+    [setTerminals, setActiveTerminalId, setAllTerminals, setAllActiveIds, killMutation],
   )
 
   const closeTerminalsToRight = useCallback(
@@ -172,15 +240,24 @@ export function DevSpaceTab() {
       const index = currentTerminals.findIndex((t) => t.id === id)
       if (index === -1) return
 
+      // Get IDs of terminals to the right
+      const idsToRemove = new Set(currentTerminals.slice(index + 1).map((t) => t.id))
+
       // Kill terminals to the right
       currentTerminals.slice(index + 1).forEach((terminal) => {
         killMutation.mutate({ paneId: terminal.paneId })
       })
 
-      // Keep terminals up to and including the given id
+      // Keep terminals up to and including the given id in DevSpace state
       setTerminals(currentTerminals.slice(0, index + 1))
+
+      // Keep terminals up to and including the given id in main terminal view state
+      setAllTerminals((prev) => ({
+        ...prev,
+        [DEVSPACE_TERMINAL_ID]: (prev[DEVSPACE_TERMINAL_ID] || []).filter((t) => !idsToRemove.has(t.id)),
+      }))
     },
-    [setTerminals, killMutation],
+    [setTerminals, setAllTerminals, killMutation],
   )
 
   // Handle starting a devspace service
