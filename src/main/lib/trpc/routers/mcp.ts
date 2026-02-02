@@ -4,7 +4,8 @@ import os from "node:os"
 import { safeStorage } from "electron"
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, mcpCredentials } from "../../db"
+import { createHash } from "node:crypto"
+import { getDatabase, mcpCredentials, mcpToolCache } from "../../db"
 import { eq } from "drizzle-orm"
 import { getConsolidatedConfig } from "../../config/consolidator"
 import type {
@@ -15,6 +16,14 @@ import type {
   ConflictInfo,
 } from "../../config/types"
 import { queryMcpServerTools, type McpTool } from "../../mcp/tool-query"
+import { detectAuthType, type OAuthConfig } from "../../mcp/oauth-detection"
+import {
+  startOAuthFlow,
+  closeOAuthWindow,
+  hasActiveOAuthWindow,
+  type OAuthFlowResult,
+} from "../../mcp/oauth-window"
+import { BrowserWindow } from "electron"
 
 // ============ TYPES ============
 
@@ -109,6 +118,18 @@ function parseJsonSafely<T>(json: string, fallback: T): T {
   } catch {
     return fallback
   }
+}
+
+/**
+ * Create a hash of server config for cache invalidation
+ */
+function hashServerConfig(config: McpServerConfig): string {
+  const configStr = JSON.stringify({
+    command: config.command,
+    args: config.args,
+    env: config.env,
+  })
+  return createHash("md5").update(configStr).digest("hex")
 }
 
 /**
@@ -461,8 +482,68 @@ export const mcpRouter = router({
     }),
 
   /**
+   * Get cached tool counts for MCP servers
+   * Returns tool counts from cache (does not query servers)
+   */
+  getToolCounts: publicProcedure
+    .input(
+      z
+        .object({
+          serverIds: z.array(z.string()).optional(),
+          projectPath: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(
+      async ({
+        input,
+      }): Promise<Record<string, { count: number; stale: boolean } | null>> => {
+        try {
+          const db = getDatabase()
+          const cache = db.select().from(mcpToolCache).all()
+
+          // Get current server configs to check if cache is stale
+          const consolidated = await getConsolidatedConfig(input?.projectPath)
+
+          const result: Record<string, { count: number; stale: boolean } | null> = {}
+
+          // Filter by requested serverIds if provided
+          const serverIds = input?.serverIds || Object.keys(consolidated.mergedServers)
+
+          for (const serverId of serverIds) {
+            const cached = cache.find((c) => c.serverId === serverId)
+            const serverConfig = consolidated.mergedServers[serverId]
+
+            if (!cached) {
+              result[serverId] = null // Not yet cached
+              continue
+            }
+
+            // Check if cache is stale (config changed or older than 24 hours)
+            const configHash = serverConfig ? hashServerConfig(serverConfig) : null
+            const isHashStale = configHash !== cached.configHash
+            const isTimeStale =
+              cached.lastQueried &&
+              Date.now() - new Date(cached.lastQueried).getTime() > 24 * 60 * 60 * 1000
+
+            result[serverId] = {
+              count: cached.toolCount,
+              stale: isHashStale || isTimeStale,
+            }
+          }
+
+          return result
+        } catch (error) {
+          console.error("[mcp] Failed to get tool counts:", error)
+          return {}
+        }
+      }
+    ),
+
+  /**
    * Query tools from an MCP server
    * Connects to the server and retrieves its available tools
+   * Also caches the result for future getToolCounts queries
    */
   getServerTools: publicProcedure
     .input(
@@ -497,6 +578,35 @@ export const mcpRouter = router({
         // Query tools from the server
         const tools = await queryMcpServerTools(serverConfig)
 
+        // Cache the results
+        try {
+          const db = getDatabase()
+          const toolNames = tools.map((t) => t.name)
+          const configHash = hashServerConfig(serverConfig)
+
+          db.insert(mcpToolCache)
+            .values({
+              serverId: input.serverId,
+              toolCount: tools.length,
+              toolNames: JSON.stringify(toolNames),
+              lastQueried: new Date(),
+              configHash,
+            })
+            .onConflictDoUpdate({
+              target: mcpToolCache.serverId,
+              set: {
+                toolCount: tools.length,
+                toolNames: JSON.stringify(toolNames),
+                lastQueried: new Date(),
+                configHash,
+              },
+            })
+            .run()
+        } catch (cacheError) {
+          console.warn("[mcp] Failed to cache tool counts:", cacheError)
+          // Don't fail the request if caching fails
+        }
+
         return { tools }
       } catch (error) {
         console.error("[mcp] Failed to query server tools:", error)
@@ -505,5 +615,86 @@ export const mcpRouter = router({
           error: error instanceof Error ? error.message : String(error),
         }
       }
+    }),
+
+  /**
+   * Get authentication type for an MCP server
+   * Detects whether server uses OAuth or API key authentication
+   */
+  getAuthType: publicProcedure
+    .input(
+      z.object({
+        serverId: z.string(),
+        projectPath: z.string().optional(),
+      })
+    )
+    .query(async ({ input }): Promise<OAuthConfig> => {
+      try {
+        const consolidated = await getConsolidatedConfig(input.projectPath)
+        const serverConfig = consolidated.mergedServers[input.serverId]
+
+        if (!serverConfig) {
+          return { type: "api_key", requiredFields: [] }
+        }
+
+        return detectAuthType(input.serverId, serverConfig)
+      } catch (error) {
+        console.error("[mcp] Failed to detect auth type:", error)
+        return { type: "api_key", requiredFields: [] }
+      }
+    }),
+
+  /**
+   * Start OAuth flow for an MCP server
+   * Opens a window with embedded OAuth page
+   */
+  startOAuth: publicProcedure
+    .input(
+      z.object({
+        serverId: z.string(),
+        authUrl: z.string().url(),
+        callbackPattern: z.string().optional(),
+        title: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }): Promise<OAuthFlowResult> => {
+      try {
+        // Get the focused window as parent
+        const parentWindow = BrowserWindow.getFocusedWindow()
+
+        const result = await startOAuthFlow(parentWindow, {
+          authUrl: input.authUrl,
+          callbackUrlPattern: input.callbackPattern || "localhost.*callback",
+          serverId: input.serverId,
+          title: input.title || "Sign in",
+        })
+
+        return result
+      } catch (error) {
+        console.error("[mcp] OAuth flow error:", error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Cancel an in-progress OAuth flow
+   */
+  cancelOAuth: publicProcedure
+    .input(z.object({ serverId: z.string() }))
+    .mutation(({ input }) => {
+      closeOAuthWindow(input.serverId)
+      return { success: true }
+    }),
+
+  /**
+   * Check if OAuth flow is in progress for a server
+   */
+  hasActiveOAuth: publicProcedure
+    .input(z.object({ serverId: z.string() }))
+    .query(({ input }): boolean => {
+      return hasActiveOAuthWindow(input.serverId)
     }),
 })
