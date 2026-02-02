@@ -154,6 +154,10 @@ export interface ChatInputAreaProps {
   onInputContentChange?: (hasContent: boolean) => void
   // Callback to send message with question answer (Enter sends immediately, not to queue)
   onSubmitWithQuestionAnswer?: () => void
+  // Callback to clear conversation (clears DB, resets useChat, clears Jotai caches)
+  onClearChat?: () => void
+  // Whether clear chat mutation is pending
+  isClearingChat?: boolean
 }
 
 /**
@@ -201,7 +205,9 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.onRemoveFile !== nextProps.onRemoveFile ||
     prevProps.onRemoveTextContext !== nextProps.onRemoveTextContext ||
     prevProps.onInputContentChange !== nextProps.onInputContentChange ||
-    prevProps.onSubmitWithQuestionAnswer !== nextProps.onSubmitWithQuestionAnswer
+    prevProps.onSubmitWithQuestionAnswer !== nextProps.onSubmitWithQuestionAnswer ||
+    prevProps.onClearChat !== nextProps.onClearChat ||
+    prevProps.isClearingChat !== nextProps.isClearingChat
   ) {
     return false
   }
@@ -336,6 +342,8 @@ export const ChatInputArea = memo(function ChatInputArea({
   firstQueueItemId,
   onInputContentChange,
   onSubmitWithQuestionAnswer,
+  onClearChat,
+  isClearingChat = false,
 }: ChatInputAreaProps) {
   // Local state - changes here don't re-render parent
   const [hasContent, setHasContent] = useState(false)
@@ -403,19 +411,11 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Plan mode - global atom
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
 
-  // Clear chat mutation
-  const utils = trpc.useUtils()
-  const clearChatMutation = trpc.chats.clearSubChatMessages.useMutation({
-    onSuccess: () => {
-      // Invalidate queries to refresh UI
-      utils.chats.getSubChat.invalidate({ id: subChatId })
-    },
-  })
-
+  // Handle clear chat - use prop callback if provided
   const handleClearChat = useCallback(() => {
-    if (!subChatId || isStreaming) return
-    clearChatMutation.mutate({ id: subChatId })
-  }, [subChatId, isStreaming, clearChatMutation])
+    if (!subChatId || isStreaming || !onClearChat) return
+    onClearChat()
+  }, [subChatId, isStreaming, onClearChat])
 
   // Refs for draft saving
   const currentSubChatIdRef = useRef<string>(subChatId)
@@ -1080,7 +1080,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                     size="icon"
                     className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                     onClick={handleClearChat}
-                    disabled={isStreaming || messageTokenData.messageCount === 0 || clearChatMutation.isPending}
+                    disabled={isStreaming || messageTokenData.messageCount === 0 || isClearingChat || !onClearChat}
                     title="Clear conversation"
                   >
                     <RotateCcw className="h-4 w-4" />
