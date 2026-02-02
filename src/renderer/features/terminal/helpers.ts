@@ -325,6 +325,11 @@ export function setupFocusListener(
   }
 }
 
+export interface ResizeHandlerOptions {
+  /** Function that returns current wordWrap setting */
+  getWordWrap?: () => boolean
+}
+
 /**
  * Setup resize handlers for the terminal container.
  *
@@ -334,12 +339,27 @@ export function setupResizeHandlers(
   container: HTMLDivElement,
   xterm: XTerm,
   fitAddon: FitAddon,
-  onResize: (cols: number, rows: number) => void
+  onResize: (cols: number, rows: number) => void,
+  options?: ResizeHandlerOptions
 ): () => void {
+  const { getWordWrap } = options ?? {}
+
   const debouncedHandleResize = debounce(() => {
     try {
-      fitAddon.fit()
-      onResize(xterm.cols, xterm.rows)
+      const wordWrap = getWordWrap?.() ?? true
+
+      if (wordWrap) {
+        // Normal behavior: fit terminal to container
+        fitAddon.fit()
+        onResize(xterm.cols, xterm.rows)
+      } else {
+        // No wrap mode: only update rows, keep large column count
+        // Temporarily fit to get proper row count, then resize with large cols
+        fitAddon.fit()
+        const rows = xterm.rows
+        xterm.resize(9999, rows)
+        onResize(9999, rows)
+      }
     } catch {
       // Ignore resize errors
     }

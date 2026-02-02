@@ -34,7 +34,6 @@ import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import { CommandsDropdown } from "../components/commands-dropdown"
 import { GsdDropdown } from "../components/gsd-dropdown"
-import { SkillsDropdown } from "../components/skills-dropdown"
 import {
   AgentsMentionsEditor,
   type AgentsMentionsEditorHandle,
@@ -1056,12 +1055,6 @@ export const ChatInputArea = memo(function ChatInputArea({
                   {/* GSD Dropdown - Shows only GSD commands */}
                   <GsdDropdown
                     onGsdSelect={handleSkillSelect}
-                    disabled={isStreaming}
-                  />
-
-                  {/* Skills Dropdown - Shows only non-GSD skills */}
-                  <SkillsDropdown
-                    onSkillSelect={handleSkillSelect}
                     disabled={isStreaming}
                   />
                 </div>

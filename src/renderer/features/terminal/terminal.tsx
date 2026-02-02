@@ -67,6 +67,10 @@ export function Terminal({
   const paneIdRef = useRef(paneId)
   paneIdRef.current = paneId
 
+  // Ref for wordWrap to use in resize handlers (avoids effect re-runs)
+  const wordWrapRef = useRef(wordWrap)
+  wordWrapRef.current = wordWrap
+
   // Mutations
   const createOrAttachMutation = trpc.terminal.createOrAttach.useMutation()
   const writeMutation = trpc.terminal.write.useMutation()
@@ -319,6 +323,9 @@ export function Terminal({
       (cols, rows) => {
         resizeRef.current({ paneId, cols, rows })
       },
+      {
+        getWordWrap: () => wordWrapRef.current,
+      },
     )
 
     const cleanupPaste = setupPasteHandler(xterm, {
@@ -374,14 +381,21 @@ export function Terminal({
   }, [isDark, fullThemeData])
 
   // Update word wrap when setting changes
+  // xterm.js doesn't have a wordWrap option - we control wrapping by adjusting columns:
+  // - wordWrap=true: fit terminal to container width (normal behavior)
+  // - wordWrap=false: set very large column count to allow horizontal scrolling
   useEffect(() => {
-    if (xtermRef.current) {
-      // xterm.js uses wordWrap option for word wrapping
-      // Note: This requires xterm.js v5.x or later
-      // @ts-expect-error - wordWrap is not in the type definitions but exists in xterm
-      xtermRef.current.options.wordWrap = wordWrap
-      // Re-fit terminal after word wrap change
-      fitAddonRef.current?.fit()
+    if (!xtermRef.current || !fitAddonRef.current) return
+
+    if (wordWrap) {
+      // Wrap mode: fit terminal to container width
+      fitAddonRef.current.fit()
+    } else {
+      // No wrap mode: set a large column count to enable horizontal scrolling
+      // We still need the fit addon to calculate row height correctly
+      const currentRows = xtermRef.current.rows
+      // Use a very large column count (9999) so content doesn't wrap
+      xtermRef.current.resize(9999, currentRows)
     }
   }, [wordWrap])
 
@@ -439,7 +453,7 @@ export function Terminal({
   return (
     <div
       role="application"
-      className="relative h-full w-full overflow-hidden"
+      className={`relative h-full w-full ${wordWrap ? "overflow-hidden" : "overflow-x-auto overflow-y-hidden"}`}
       style={{ backgroundColor: terminalBg }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -451,8 +465,13 @@ export function Terminal({
       />
       <div
         ref={containerRef}
-        className="h-full w-full"
-        style={{ padding: "8px" }}
+        className="h-full"
+        style={{
+          padding: "8px",
+          // When no wrap, allow container to expand horizontally
+          width: wordWrap ? "100%" : "fit-content",
+          minWidth: "100%",
+        }}
       />
     </div>
   )
