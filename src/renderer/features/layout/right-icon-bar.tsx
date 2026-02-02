@@ -2,7 +2,7 @@
 
 import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check } from "lucide-react"
+import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check, FileStack } from "lucide-react"
 import { IconSidePeek, IconCenterPeek, IconFullPage } from "../../components/ui/icons"
 import {
   Tooltip,
@@ -22,6 +22,11 @@ import {
   sessionFlowSidebarOpenAtom,
   sessionFlowSidebarOpenRuntimeAtom,
 } from "../session-flow/atoms"
+import {
+  loadedContextDisplayModeAtom,
+  loadedContextSidebarOpenAtom,
+  loadedContextSidebarOpenRuntimeAtom,
+} from "../loaded-context/atoms"
 import { workflowPanelOpenAtom } from "../workflows/atoms"
 import { rightIconBarExpandedAtom } from "./atoms"
 import { trpc } from "../../lib/trpc"
@@ -128,6 +133,11 @@ export function RightIconBar({ className }: RightIconBarProps) {
   const [isSessionFlowOpen, setIsSessionFlowOpen] = useAtom(sessionFlowSidebarOpenAtom)
   const [sessionFlowRuntimeOpen, setSessionFlowRuntimeOpen] = useAtom(sessionFlowSidebarOpenRuntimeAtom)
 
+  // Loaded context display mode and state
+  const [loadedContextDisplayMode, setLoadedContextDisplayMode] = useAtom(loadedContextDisplayModeAtom)
+  const [isLoadedContextOpen, setIsLoadedContextOpen] = useAtom(loadedContextSidebarOpenAtom)
+  const [loadedContextRuntimeOpen, setLoadedContextRuntimeOpen] = useAtom(loadedContextSidebarOpenRuntimeAtom)
+
   // Workflow panel state - global (for mutual exclusivity with Session Flow)
   const [workflowPanelOpen, setWorkflowPanelOpen] = useAtom(workflowPanelOpenAtom)
 
@@ -135,6 +145,11 @@ export function RightIconBar({ className }: RightIconBarProps) {
   const effectiveSessionFlowOpen = sessionFlowDisplayMode === "side-peek"
     ? isSessionFlowOpen
     : sessionFlowRuntimeOpen
+
+  // Determine which loaded context open state to use based on display mode
+  const effectiveLoadedContextOpen = loadedContextDisplayMode === "side-peek"
+    ? isLoadedContextOpen
+    : loadedContextRuntimeOpen
 
   // Auto-close Changes panel when switching to non-git repos
   useEffect(() => {
@@ -145,9 +160,10 @@ export function RightIconBar({ className }: RightIconBarProps) {
 
   const handleChangesClick = () => {
     if (!selectedChatId) return
-    // Toggle diff sidebar, close session flow if opening diff
+    // Toggle diff sidebar, close other panels if opening diff
     if (!isDiffOpen) {
       setIsSessionFlowOpen(false)
+      setIsLoadedContextOpen(false)
     }
     setIsDiffOpen(!isDiffOpen)
   }
@@ -157,13 +173,14 @@ export function RightIconBar({ className }: RightIconBarProps) {
     const currentlyOpen = effectiveSessionFlowOpen
 
     if (!currentlyOpen) {
-      // Close diff and workflow panel when opening session flow
+      // Close other panels when opening session flow
       if (selectedChatId) {
         setIsDiffOpen(false)
       }
       if (workflowPanelOpen !== null) {
         setWorkflowPanelOpen(null)
       }
+      setIsLoadedContextOpen(false)
     }
 
     // Toggle the appropriate state based on display mode
@@ -171,6 +188,29 @@ export function RightIconBar({ className }: RightIconBarProps) {
       setIsSessionFlowOpen(!isSessionFlowOpen)
     } else {
       setSessionFlowRuntimeOpen(!sessionFlowRuntimeOpen)
+    }
+  }
+
+  const handleLoadedContextClick = () => {
+    // Toggle loaded context based on display mode
+    const currentlyOpen = effectiveLoadedContextOpen
+
+    if (!currentlyOpen) {
+      // Close other panels when opening loaded context
+      if (selectedChatId) {
+        setIsDiffOpen(false)
+      }
+      setIsSessionFlowOpen(false)
+      if (workflowPanelOpen !== null) {
+        setWorkflowPanelOpen(null)
+      }
+    }
+
+    // Toggle the appropriate state based on display mode
+    if (loadedContextDisplayMode === "side-peek") {
+      setIsLoadedContextOpen(!isLoadedContextOpen)
+    } else {
+      setLoadedContextRuntimeOpen(!loadedContextRuntimeOpen)
     }
   }
 
@@ -275,6 +315,41 @@ export function RightIconBar({ className }: RightIconBarProps) {
           </TooltipTrigger>
           <TooltipContent side="left">
             Session Flow
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* Loaded Context Button - always show when chat is selected */}
+      {selectedChatId && (
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleLoadedContextClick}
+              className={cn(
+                "flex items-center rounded-md transition-all duration-150 ease-out h-8",
+                isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
+                effectiveLoadedContextOpen
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+              )}
+              aria-label="Loaded Context"
+              aria-pressed={effectiveLoadedContextOpen}
+            >
+              <FileStack className="h-4 w-4 flex-shrink-0" />
+              {isExpanded && (
+                <>
+                  <span className="text-sm flex-1 text-left">Loaded Context</span>
+                  <LayoutModeSelector
+                    mode={loadedContextDisplayMode}
+                    onModeChange={setLoadedContextDisplayMode}
+                  />
+                </>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            Loaded Context
           </TooltipContent>
         </Tooltip>
       )}

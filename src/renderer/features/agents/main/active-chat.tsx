@@ -107,6 +107,7 @@ import {
 } from "../../session-flow/atoms"
 import { SessionFlowRenderer } from "../../session-flow/ui/session-flow-renderer"
 import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
+import { LoadedContextRenderer } from "../../loaded-context/ui/loaded-context-renderer"
 import { FileContentDialog } from "../ui/file-content-dialog"
 import {
   agentsChangesPanelCollapsedAtom,
@@ -5959,6 +5960,9 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Session Flow - unified renderer supporting side-peek, center-peek, and full-page modes */}
         <SessionFlowRenderer onScrollToMessage={handleScrollToMessage} />
+
+        {/* Loaded Context - unified renderer supporting side-peek, center-peek, and full-page modes */}
+        <LoadedContextRenderer projectPath={worktreePath || originalProjectPath} />
 
         {/* Sub-agent output dialog - rendered here to stay mounted */}
         {/* This must be outside SessionFlowRenderer to prevent unmount issues when sidebar closes */}
