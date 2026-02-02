@@ -11,11 +11,12 @@ import {
   ChevronDown,
   Loader2,
   GitBranch,
-  Play,
   HelpCircle,
   Download,
   Check,
   ListPlus,
+  Play,
+  MessageSquare,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -141,6 +142,30 @@ export function GsdContent() {
       projectId: selectedProjectId,
       name: "Add Phase",
       initialMessageParts: [{ type: "text", text: "/gsd:add-phase" }],
+      useWorktree: true,
+      mode: "agent",
+    })
+  }
+
+  // Handler for "Execute" button - creates chat with /gsd:execute-phase command
+  const handleExecutePhase = () => {
+    if (!selectedProjectId) return
+    createChatMutation.mutate({
+      projectId: selectedProjectId,
+      name: "Execute Phase",
+      initialMessageParts: [{ type: "text", text: "/gsd:execute-phase" }],
+      useWorktree: true,
+      mode: "agent",
+    })
+  }
+
+  // Handler for "Discuss Phase" button - creates chat with /gsd:discuss-phase command
+  const handleDiscussPhase = () => {
+    if (!selectedProjectId) return
+    createChatMutation.mutate({
+      projectId: selectedProjectId,
+      name: "Discuss Phase",
+      initialMessageParts: [{ type: "text", text: "/gsd:discuss-phase" }],
       useWorktree: true,
       mode: "agent",
     })
@@ -275,6 +300,28 @@ export function GsdContent() {
           >
             <ListPlus className="h-3 w-3" />
             Add Phase
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExecutePhase}
+            disabled={!selectedProjectId || createChatMutation.isPending}
+            className="h-6 text-[10px] px-2 gap-1"
+            title="Execute a phase"
+          >
+            <Play className="h-3 w-3" />
+            Execute
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDiscussPhase}
+            disabled={!selectedProjectId || createChatMutation.isPending}
+            className="h-6 text-[10px] px-2 gap-1"
+            title="Discuss a phase"
+          >
+            <MessageSquare className="h-3 w-3" />
+            Discuss
           </Button>
 
           <span className="text-muted-foreground text-xs mx-1">|</span>
