@@ -15,7 +15,12 @@ import {
   activeTerminalIdAtom,
   terminalCwdAtom,
   GLOBAL_TERMINAL_ID,
+  DEVSPACE_TERMINAL_ID,
 } from "./atoms"
+import {
+  devspaceTerminalsAtom,
+  devspaceActiveTerminalIdAtom,
+} from "../clusters/atoms"
 import { selectedAgentChatIdAtom } from "../agents/atoms"
 import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "./types"
@@ -45,6 +50,10 @@ export function TerminalMainView() {
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
   const terminalCwds = useAtomValue(terminalCwdAtom)
+
+  // DevSpace terminals - shown alongside global terminals when no chat is selected
+  const [devspaceTerminals, setDevspaceTerminals] = useAtom(devspaceTerminalsAtom)
+  const [devspaceActiveId, setDevspaceActiveId] = useAtom(devspaceActiveTerminalIdAtom)
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
   const fullThemeData = useAtomValue(fullThemeDataAtom)
@@ -73,8 +82,33 @@ export function TerminalMainView() {
     if (fullThemeData?.colors?.["editor.background"]) return fullThemeData.colors["editor.background"]
     return getDefaultTerminalBg(isDark)
   }, [isDark, fullThemeData])
-  const terminals = useMemo(() => allTerminals[terminalContextId] || [], [allTerminals, terminalContextId])
-  const activeTerminalId = useMemo(() => allActiveIds[terminalContextId] || null, [allActiveIds, terminalContextId])
+  // When viewing global context (no chat selected), include DevSpace terminals
+  const isGlobalContext = terminalContextId === GLOBAL_TERMINAL_ID
+  const devspaceTerminalInstances = useMemo(() =>
+    devspaceTerminals.map((t): TerminalInstance => ({
+      id: t.id,
+      paneId: t.paneId,
+      name: t.serviceName,
+      createdAt: t.createdAt,
+      cwd: t.servicePath,
+    })),
+    [devspaceTerminals]
+  )
+  const terminals = useMemo(() => {
+    const contextTerminals = allTerminals[terminalContextId] || []
+    // When viewing global context, also include DevSpace terminals
+    if (isGlobalContext && devspaceTerminalInstances.length > 0) {
+      return [...contextTerminals, ...devspaceTerminalInstances]
+    }
+    return contextTerminals
+  }, [allTerminals, terminalContextId, isGlobalContext, devspaceTerminalInstances])
+  const activeTerminalId = useMemo(() => {
+    // Check if the active devspace terminal should be shown
+    if (isGlobalContext && devspaceActiveId && devspaceTerminals.some((t) => t.id === devspaceActiveId)) {
+      return devspaceActiveId
+    }
+    return allActiveIds[terminalContextId] || null
+  }, [allActiveIds, terminalContextId, isGlobalContext, devspaceActiveId, devspaceTerminals])
   const activeTerminal = useMemo(() => terminals.find((t) => t.id === activeTerminalId) || null, [terminals, activeTerminalId])
   const killMutation = trpc.terminal.kill.useMutation()
   const terminalsRef = useRef(terminals)
@@ -92,23 +126,68 @@ export function TerminalMainView() {
   }, [terminalContextId, setAllTerminals, setAllActiveIds])
 
   const selectTerminal = useCallback((id: string) => {
-    setAllActiveIds((prev) => ({ ...prev, [terminalContextId]: id }))
-  }, [terminalContextId, setAllActiveIds])
+    // Check if this is a DevSpace terminal
+    const isDevspaceTerminal = devspaceTerminals.some((t) => t.id === id)
+    if (isDevspaceTerminal) {
+      setDevspaceActiveId(id)
+    } else {
+      setAllActiveIds((prev) => ({ ...prev, [terminalContextId]: id }))
+    }
+  }, [terminalContextId, setAllActiveIds, devspaceTerminals, setDevspaceActiveId])
 
   const closeTerminal = useCallback((id: string) => {
     const terminal = terminalsRef.current.find((t) => t.id === id)
     if (!terminal) return
+
+    // Check if this is a DevSpace terminal
+    const isDevspaceTerminal = devspaceTerminals.some((t) => t.id === id)
+
+    // Kill the session on the backend
     killMutation.mutate({ paneId: terminal.paneId })
-    const newTerminals = terminalsRef.current.filter((t) => t.id !== id)
-    setAllTerminals((prev) => ({ ...prev, [terminalContextId]: newTerminals }))
-    if (activeTerminalIdRef.current === id) {
-      setAllActiveIds((prev) => ({ ...prev, [terminalContextId]: newTerminals[newTerminals.length - 1]?.id || null }))
+
+    if (isDevspaceTerminal) {
+      // Remove from DevSpace state
+      const newDevspaceTerminals = devspaceTerminals.filter((t) => t.id !== id)
+      setDevspaceTerminals(newDevspaceTerminals)
+      // Also remove from main terminal view state (DEVSPACE_TERMINAL_ID context)
+      setAllTerminals((prev) => ({
+        ...prev,
+        [DEVSPACE_TERMINAL_ID]: (prev[DEVSPACE_TERMINAL_ID] || []).filter((t) => t.id !== id),
+      }))
+      // Update active terminal if needed
+      if (devspaceActiveId === id) {
+        const newActive = newDevspaceTerminals[newDevspaceTerminals.length - 1]?.id || null
+        setDevspaceActiveId(newActive)
+        setAllActiveIds((prev) => ({
+          ...prev,
+          [DEVSPACE_TERMINAL_ID]: newActive,
+        }))
+      }
+    } else {
+      // Regular terminal - remove from context state
+      const newTerminals = terminalsRef.current.filter((t) => t.id !== id)
+      setAllTerminals((prev) => ({ ...prev, [terminalContextId]: newTerminals }))
+      if (activeTerminalIdRef.current === id) {
+        setAllActiveIds((prev) => ({ ...prev, [terminalContextId]: newTerminals[newTerminals.length - 1]?.id || null }))
+      }
     }
-  }, [terminalContextId, setAllTerminals, setAllActiveIds, killMutation])
+  }, [terminalContextId, setAllTerminals, setAllActiveIds, killMutation, devspaceTerminals, setDevspaceTerminals, devspaceActiveId, setDevspaceActiveId])
 
   const renameTerminal = useCallback((id: string, name: string) => {
-    setAllTerminals((prev) => ({ ...prev, [terminalContextId]: (prev[terminalContextId] || []).map((t) => t.id === id ? { ...t, name } : t) }))
-  }, [terminalContextId, setAllTerminals])
+    // Check if this is a DevSpace terminal
+    const isDevspaceTerminal = devspaceTerminals.some((t) => t.id === id)
+    if (isDevspaceTerminal) {
+      // Update DevSpace state
+      setDevspaceTerminals((prev) => prev.map((t) => t.id === id ? { ...t, serviceName: name } : t))
+      // Update main terminal view state
+      setAllTerminals((prev) => ({
+        ...prev,
+        [DEVSPACE_TERMINAL_ID]: (prev[DEVSPACE_TERMINAL_ID] || []).map((t) => t.id === id ? { ...t, name } : t),
+      }))
+    } else {
+      setAllTerminals((prev) => ({ ...prev, [terminalContextId]: (prev[terminalContextId] || []).map((t) => t.id === id ? { ...t, name } : t) }))
+    }
+  }, [terminalContextId, setAllTerminals, devspaceTerminals, setDevspaceTerminals])
 
   const closeOtherTerminals = useCallback((id: string) => {
     terminalsRef.current.forEach((terminal) => { if (terminal.id !== id) killMutation.mutate({ paneId: terminal.paneId }) })
