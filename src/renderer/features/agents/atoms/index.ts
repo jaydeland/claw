@@ -184,11 +184,31 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-export const isPlanModeAtom = atomWithStorage<boolean>(
-  "agents:isPlanMode",
-  false,
+// Agent mode type - supports agent, plan, and swarm modes
+export type AgentMode = "agent" | "plan" | "swarm"
+
+// Primary mode atom - tri-state for agent, plan, and swarm modes
+export const agentModeAtom = atomWithStorage<AgentMode>(
+  "agents:agentMode",
+  "agent", // default to agent mode
   undefined,
   { getOnInit: true },
+)
+
+// Backward compatibility - derived atom for existing code using isPlanModeAtom
+// Getter: returns true if mode is "plan"
+// Setter: sets mode to "plan" if true, otherwise sets to "agent" (not swarm)
+export const isPlanModeAtom = atom(
+  (get) => get(agentModeAtom) === "plan",
+  (get, set, value: boolean) => {
+    const current = get(agentModeAtom)
+    if (value) {
+      set(agentModeAtom, "plan")
+    } else {
+      // If turning off plan mode, go back to agent (not swarm)
+      set(agentModeAtom, current === "plan" ? "agent" : current)
+    }
+  }
 )
 
 // Model ID to full Claude model string mapping
@@ -401,10 +421,10 @@ export const agentsSubChatUnseenChangesAtom = atom<Set<string>>(
 // Repository filter for archive (null = all repositories)
 export const archiveRepositoryFilterAtom = atom<string | null>(null)
 
-// Track last used mode (plan/agent) per chat
-// Map<chatId, "plan" | "agent">
-export const lastChatModesAtom = atom<Map<string, "plan" | "agent">>(
-  new Map<string, "plan" | "agent">(),
+// Track last used mode (plan/agent/swarm) per chat
+// Map<chatId, AgentMode>
+export const lastChatModesAtom = atom<Map<string, AgentMode>>(
+  new Map<string, AgentMode>(),
 )
 
 // Mobile view mode - chat (default, shows NewChatForm), chats list, preview, diff, or terminal

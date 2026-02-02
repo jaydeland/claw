@@ -1,8 +1,19 @@
 import { useEffect, useRef } from "react"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { clearSubChatCaches } from "../stores/message-store"
+import type { AgentMode } from "../atoms"
 
 interface SubChatModeConfig {
+  subChatId: string
+  mode: AgentMode
+  setMode: (value: AgentMode) => void
+  updateSubChatModeMutation: {
+    mutate: (input: { subChatId: string; mode: AgentMode }) => void
+  }
+}
+
+// Legacy interface for backward compatibility
+interface LegacySubChatModeConfig {
   subChatId: string
   isPlanMode: boolean
   setIsPlanMode: (value: boolean) => void
@@ -14,16 +25,27 @@ interface SubChatModeConfig {
 /**
  * Consolidated hook for sub-chat mode management
  * Combines initialization, sync, and cleanup effects
- * Reduces 3 separate useEffect hooks into 1
+ * Supports both new tri-state mode and legacy boolean mode for backward compatibility
  */
-export function useSubChatMode(config: SubChatModeConfig) {
-  const { subChatId, isPlanMode, setIsPlanMode, updateSubChatModeMutation } = config
+export function useSubChatMode(config: SubChatModeConfig | LegacySubChatModeConfig) {
+  // Detect if using legacy interface
+  const isLegacy = "isPlanMode" in config
+
+  // Normalize to new interface
+  const subChatId = config.subChatId
+  const mode: AgentMode = isLegacy
+    ? (config as LegacySubChatModeConfig).isPlanMode ? "plan" : "agent"
+    : (config as SubChatModeConfig).mode
+  const setMode = isLegacy
+    ? (newMode: AgentMode) => (config as LegacySubChatModeConfig).setIsPlanMode(newMode === "plan")
+    : (config as SubChatModeConfig).setMode
+  const updateSubChatModeMutation = config.updateSubChatModeMutation
 
   // Track last initialized sub-chat to prevent re-initialization
   const lastInitializedRef = useRef<string | null>(null)
 
   // Track last mode to detect actual user changes (not store updates)
-  const lastIsPlanModeRef = useRef<boolean>(isPlanMode)
+  const lastModeRef = useRef<AgentMode>(mode)
 
   // ===== Combined effect: Initialize from store + sync user changes + cleanup =====
   useEffect(() => {
@@ -34,9 +56,9 @@ export function useSubChatMode(config: SubChatModeConfig) {
         .allSubChats.find((sc) => sc.id === subChatId)
 
       if (subChat?.mode) {
-        const newMode = subChat.mode === "plan"
-        lastIsPlanModeRef.current = newMode
-        setIsPlanMode(newMode)
+        const newMode = subChat.mode as AgentMode
+        lastModeRef.current = newMode
+        setMode(newMode)
       }
       lastInitializedRef.current = subChatId
     }
@@ -45,30 +67,31 @@ export function useSubChatMode(config: SubChatModeConfig) {
     return () => {
       clearSubChatCaches(subChatId)
     }
-  }, [subChatId, setIsPlanMode])
+  }, [subChatId, setMode])
 
   // ===== Sync mode changes to store and DB =====
   useEffect(() => {
-    // Skip if isPlanMode didn't actually change
-    if (lastIsPlanModeRef.current === isPlanMode) {
+    // Skip if mode didn't actually change
+    if (lastModeRef.current === mode) {
       return
     }
 
-    const newMode = isPlanMode ? "plan" : "agent"
-    lastIsPlanModeRef.current = isPlanMode
+    lastModeRef.current = mode
 
     if (subChatId) {
       // Update local store immediately (optimistic update)
-      useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
+      useAgentSubChatStore.getState().updateSubChatMode(subChatId, mode)
 
       // Save to database with error handling
       if (!subChatId.startsWith("temp-")) {
-        updateSubChatModeMutation.mutate({ subChatId, mode: newMode })
+        updateSubChatModeMutation.mutate({ subChatId, mode })
       }
     }
-  }, [isPlanMode, subChatId, updateSubChatModeMutation])
+  }, [mode, subChatId, updateSubChatModeMutation])
 
   return {
-    lastIsPlanModeRef,
+    lastModeRef,
+    // Legacy compatibility
+    lastIsPlanModeRef: { current: mode === "plan" },
   }
 }

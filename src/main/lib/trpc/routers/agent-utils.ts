@@ -269,6 +269,59 @@ export async function scanAgentsDirectory(
 // Cache for loaded agents to avoid re-reading from disk
 const agentCache = new Map<string, ParsedAgent | null>()
 
+// Swarm agent names - coordinator orchestrates workers
+export const SWARM_AGENT_NAMES = ["coordinator", "coder", "reviewer", "tester"] as const
+export type SwarmAgentName = (typeof SWARM_AGENT_NAMES)[number]
+
+/**
+ * Get the path to bundled swarm agent definitions
+ * In dev: resources/agents/swarm/
+ * In production: process.resourcesPath/agents/swarm/
+ */
+export function getBundledSwarmAgentsPath(): string {
+  const isDev = process.env.NODE_ENV !== "production"
+  return isDev
+    ? path.join(process.cwd(), "resources", "agents", "swarm")
+    : path.join(process.resourcesPath, "agents", "swarm")
+}
+
+/**
+ * Load all swarm agent definitions from bundled location
+ * Returns a Record keyed by agent name
+ */
+export async function loadSwarmAgents(): Promise<Record<string, ParsedAgent>> {
+  const swarmPath = getBundledSwarmAgentsPath()
+  const agents: Record<string, ParsedAgent> = {}
+
+  console.log("[swarm] Loading agents from:", swarmPath)
+
+  for (const name of SWARM_AGENT_NAMES) {
+    const agentPath = path.join(swarmPath, `${name}.md`)
+    try {
+      const content = await fs.readFile(agentPath, "utf-8")
+      const parsed = parseAgentMd(content, `${name}.md`)
+
+      if (parsed.description && parsed.prompt) {
+        agents[name] = {
+          name: parsed.name || name,
+          description: parsed.description,
+          prompt: parsed.prompt,
+          tools: parsed.tools,
+          disallowedTools: parsed.disallowedTools,
+          model: parsed.model,
+        }
+        console.log(`[swarm] Loaded agent: ${name}`)
+      } else {
+        console.warn(`[swarm] Agent ${name} missing description or prompt`)
+      }
+    } catch (err) {
+      console.error(`[swarm] Failed to load agent ${name}:`, err)
+    }
+  }
+
+  return agents
+}
+
 /**
  * Clear the agent cache (for testing/debugging)
  */
