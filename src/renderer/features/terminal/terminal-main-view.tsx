@@ -14,6 +14,8 @@ import {
   terminalsAtom,
   activeTerminalIdAtom,
   terminalCwdAtom,
+  terminalWordWrapAtom,
+  terminalSearchAddonAtom,
   GLOBAL_TERMINAL_ID,
   DEVSPACE_TERMINAL_ID,
 } from "./atoms"
@@ -50,6 +52,8 @@ export function TerminalMainView() {
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
   const terminalCwds = useAtomValue(terminalCwdAtom)
+  const [wordWrap, setWordWrap] = useAtom(terminalWordWrapAtom)
+  const searchAddons = useAtomValue(terminalSearchAddonAtom)
 
   // DevSpace terminals - shown alongside global terminals when no chat is selected
   const [devspaceTerminals, setDevspaceTerminals] = useAtom(devspaceTerminalsAtom)
@@ -110,6 +114,8 @@ export function TerminalMainView() {
     return allActiveIds[terminalContextId] || null
   }, [allActiveIds, terminalContextId, isGlobalContext, devspaceActiveId, devspaceTerminals])
   const activeTerminal = useMemo(() => terminals.find((t) => t.id === activeTerminalId) || null, [terminals, activeTerminalId])
+  const activeSearchAddon = useMemo(() => activeTerminal ? searchAddons[activeTerminal.paneId] ?? null : null, [activeTerminal, searchAddons])
+  const handleWordWrapToggle = useCallback(() => setWordWrap((prev) => !prev), [setWordWrap])
   const killMutation = trpc.terminal.kill.useMutation()
   const terminalsRef = useRef(terminals)
   terminalsRef.current = terminals
@@ -222,7 +228,7 @@ export function TerminalMainView() {
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       <div className="flex items-center gap-1 px-2 py-1.5 flex-shrink-0 border-b border-border/50" style={{ backgroundColor: terminalBg }}>
-        <TerminalTabs terminals={terminals} activeTerminalId={activeTerminalId} cwds={terminalCwds} initialCwd={cwd} terminalBg={terminalBg} onSelectTerminal={selectTerminal} onCloseTerminal={closeTerminal} onCloseOtherTerminals={closeOtherTerminals} onCloseTerminalsToRight={closeTerminalsToRight} onCreateTerminal={createTerminal} onRenameTerminal={renameTerminal} />
+        <TerminalTabs terminals={terminals} activeTerminalId={activeTerminalId} cwds={terminalCwds} initialCwd={cwd} terminalBg={terminalBg} wordWrap={wordWrap} onWordWrapToggle={handleWordWrapToggle} searchAddon={activeSearchAddon} onSelectTerminal={selectTerminal} onCloseTerminal={closeTerminal} onCloseOtherTerminals={closeOtherTerminals} onCloseTerminalsToRight={closeTerminalsToRight} onRenameTerminal={renameTerminal} />
       </div>
       <div className="flex-1 min-h-0 min-w-0 overflow-hidden" style={{ backgroundColor: terminalBg }}>
         {activeTerminal ? (

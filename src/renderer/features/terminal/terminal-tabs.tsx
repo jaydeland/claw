@@ -6,10 +6,10 @@ import {
   useState,
   forwardRef,
 } from "react"
-import { X } from "lucide-react"
+import { X, WrapText, Search, ChevronUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { PlusIcon, CustomTerminalIcon } from "@/components/ui/icons"
+import { CustomTerminalIcon } from "@/components/ui/icons"
 import {
   Tooltip,
   TooltipContent,
@@ -22,6 +22,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import type { SearchAddon } from "@xterm/addon-search"
 import type { TerminalInstance } from "./types"
 
 /**
@@ -257,11 +258,16 @@ interface TerminalTabsProps {
   initialCwd?: string
   /** Background color for gradients - should match terminal background */
   terminalBg?: string
+  /** Word wrap enabled state */
+  wordWrap?: boolean
+  /** Callback to toggle word wrap */
+  onWordWrapToggle?: () => void
+  /** SearchAddon for the active terminal */
+  searchAddon?: SearchAddon | null
   onSelectTerminal: (id: string) => void
   onCloseTerminal: (id: string) => void
   onCloseOtherTerminals: (id: string) => void
   onCloseTerminalsToRight: (id: string) => void
-  onCreateTerminal: () => void
   onRenameTerminal: (id: string, name: string) => void
 }
 
@@ -271,24 +277,84 @@ export const TerminalTabs = memo(function TerminalTabs({
   cwds,
   initialCwd,
   terminalBg,
+  wordWrap,
+  onWordWrapToggle,
+  searchAddon,
   onSelectTerminal,
   onCloseTerminal,
   onCloseOtherTerminals,
   onCloseTerminalsToRight,
-  onCreateTerminal,
   onRenameTerminal,
 }: TerminalTabsProps) {
   const tabsContainerRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const textRefs = useRef<Map<string, HTMLSpanElement>>(new Map())
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [truncatedTabs, setTruncatedTabs] = useState<Set<string>>(new Set())
   const [showLeftGradient, setShowLeftGradient] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchMatchCount, setSearchMatchCount] = useState<number | null>(null)
   const [showRightGradient, setShowRightGradient] = useState(false)
   const [editingTerminalId, setEditingTerminalId] = useState<string | null>(
     null,
   )
 
   const isOnly = terminals.length === 1
+
+  // Search handlers
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query)
+    if (!searchAddon || !query) {
+      setSearchMatchCount(null)
+      return
+    }
+    // SearchAddon's findNext returns boolean, not count
+    // We call findNext to highlight matches
+    searchAddon.findNext(query)
+  }, [searchAddon])
+
+  const handleSearchNext = useCallback(() => {
+    if (searchAddon && searchQuery) {
+      searchAddon.findNext(searchQuery)
+    }
+  }, [searchAddon, searchQuery])
+
+  const handleSearchPrev = useCallback(() => {
+    if (searchAddon && searchQuery) {
+      searchAddon.findPrevious(searchQuery)
+    }
+  }, [searchAddon, searchQuery])
+
+  const handleSearchToggle = useCallback(() => {
+    setIsSearchOpen((prev) => {
+      const next = !prev
+      if (next) {
+        // Focus input when opening
+        requestAnimationFrame(() => searchInputRef.current?.focus())
+      } else {
+        // Clear search when closing
+        setSearchQuery("")
+        setSearchMatchCount(null)
+        searchAddon?.clearDecorations()
+      }
+      return next
+    })
+  }, [searchAddon])
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      if (e.shiftKey) {
+        handleSearchPrev()
+      } else {
+        handleSearchNext()
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      handleSearchToggle()
+    }
+  }, [handleSearchNext, handleSearchPrev, handleSearchToggle])
 
   const handleStartRename = useCallback((terminalId: string) => {
     setEditingTerminalId(terminalId)
@@ -416,10 +482,10 @@ export const TerminalTabs = memo(function TerminalTabs({
         />
       )}
 
-      {/* Scrollable tabs container - with padding-right for plus button */}
+      {/* Scrollable tabs container */}
       <div
         ref={tabsContainerRef}
-        className="flex items-center px-1 py-1 -my-1 gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-hide pr-12"
+        className="flex items-center px-1 py-1 -my-1 gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-hide pr-2"
         style={{
           // @ts-expect-error - WebKit-specific property for Electron
           WebkitAppRegion: "no-drag",
@@ -469,42 +535,95 @@ export const TerminalTabs = memo(function TerminalTabs({
         })}
       </div>
 
-      {/* Plus button - absolute positioned on right with gradient cover */}
+      {/* Actions bar: search field, word wrap toggle */}
       <div
-        className="absolute right-0 top-0 bottom-0 flex items-center z-20"
+        className="flex items-center gap-1 flex-shrink-0 pl-2"
         style={{
           // @ts-expect-error - WebKit-specific property for Electron
           WebkitAppRegion: "no-drag",
         }}
       >
-        {/* Gradient to cover content peeking from the left */}
-        <div
-          className="w-6 h-full"
-          style={{
-            background: terminalBg
-              ? `linear-gradient(to right, transparent, ${terminalBg})`
-              : undefined,
-          }}
-        />
-        <div
-          className="h-full flex items-center pr-1"
-          style={{ backgroundColor: terminalBg }}
-        >
+        {/* Search input (conditionally rendered) */}
+        {isSearchOpen && (
+          <div className="flex items-center gap-0.5 bg-muted/50 rounded-md px-1.5 py-0.5">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search..."
+              className="w-32 h-5 text-xs bg-transparent border-none outline-none placeholder:text-muted-foreground/50"
+            />
+            <button
+              type="button"
+              onClick={handleSearchPrev}
+              disabled={!searchQuery}
+              className="p-0.5 hover:bg-foreground/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="Previous match"
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={handleSearchNext}
+              disabled={!searchQuery}
+              className="p-0.5 hover:bg-foreground/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="Next match"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={handleSearchToggle}
+              className="p-0.5 hover:bg-foreground/10 rounded"
+              aria-label="Close search"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+
+        {/* Search toggle button */}
+        {!isSearchOpen && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={onCreateTerminal}
+                onClick={handleSearchToggle}
                 className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md"
-                aria-label="New terminal"
+                aria-label="Search terminal"
               >
-                <PlusIcon className="h-3.5 w-3.5" />
+                <Search className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">New terminal</TooltipContent>
+            <TooltipContent side="bottom">Search terminal</TooltipContent>
           </Tooltip>
-        </div>
+        )}
+
+        {/* Word wrap toggle */}
+        {onWordWrapToggle && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onWordWrapToggle}
+                className={cn(
+                  "h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md",
+                  wordWrap && "bg-foreground/10 text-foreground"
+                )}
+                aria-label={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+              >
+                <WrapText className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {wordWrap ? "Disable word wrap" : "Enable word wrap"}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </div>
   )

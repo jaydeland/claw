@@ -6,7 +6,7 @@ import type { SerializeAddon } from "@xterm/addon-serialize"
 import { useTheme } from "next-themes"
 import { useSetAtom, useAtomValue } from "jotai"
 import { trpc } from "@/lib/trpc"
-import { terminalCwdAtom } from "./atoms"
+import { terminalCwdAtom, terminalWordWrapAtom, terminalSearchAddonAtom } from "./atoms"
 import { fullThemeDataAtom } from "@/lib/atoms"
 import {
   createTerminalInstance,
@@ -47,6 +47,10 @@ export function Terminal({
   )
   const [initRetry, setInitRetry] = useState(0)
   const setGlobalCwds = useSetAtom(terminalCwdAtom)
+  const setSearchAddons = useSetAtom(terminalSearchAddonAtom)
+
+  // Word wrap setting (global)
+  const wordWrap = useAtomValue(terminalWordWrapAtom)
 
   // Theme detection
   const { resolvedTheme } = useTheme()
@@ -184,12 +188,14 @@ export function Terminal({
     serializeAddonRef.current = serializeAddon
     isExitedRef.current = false
 
-    // Lazy load search addon
+    // Lazy load search addon and register in global atom
     import("@xterm/addon-search").then(({ SearchAddon }) => {
       if (isUnmounted || !xtermRef.current) return
       const searchAddon = new SearchAddon()
       xtermRef.current.loadAddon(searchAddon)
       searchAddonRef.current = searchAddon
+      // Register in global atom for tab bar access
+      setSearchAddons((prev) => ({ ...prev, [paneId]: searchAddon }))
     })
 
     // Apply serialized state from server
@@ -341,6 +347,12 @@ export function Terminal({
       // Detach instead of kill - keeps session alive for reattach
       detachRef.current({ paneId, serializedState })
 
+      // Remove SearchAddon from global atom
+      setSearchAddons((prev) => {
+        const { [paneId]: _, ...rest } = prev
+        return rest
+      })
+
       console.log("[Terminal:useEffect] Disposing xterm...")
       xterm.dispose()
       xtermRef.current = null
@@ -360,6 +372,18 @@ export function Terminal({
       xtermRef.current.options.theme = newTheme
     }
   }, [isDark, fullThemeData])
+
+  // Update word wrap when setting changes
+  useEffect(() => {
+    if (xtermRef.current) {
+      // xterm.js uses wordWrap option for word wrapping
+      // Note: This requires xterm.js v5.x or later
+      // @ts-expect-error - wordWrap is not in the type definitions but exists in xterm
+      xtermRef.current.options.wordWrap = wordWrap
+      // Re-fit terminal after word wrap change
+      fitAddonRef.current?.fit()
+    }
+  }, [wordWrap])
 
   // Keyboard shortcut for search
   useEffect(() => {
