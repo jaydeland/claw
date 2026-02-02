@@ -109,3 +109,46 @@ export const gsdSettingsAtom = atom<GsdSettings>({
   useBundledGsd: true,
   autoCheckUpdates: true,
 })
+
+// ============================================
+// EDIT MODE
+// ============================================
+
+/**
+ * Whether edit mode is enabled for planning docs
+ */
+export const isGsdEditModeAtom = atom<boolean>(false)
+
+/**
+ * Whether current document has unsaved changes
+ */
+export const gsdEditDirtyAtom = atom<boolean>(false)
+
+/**
+ * Current content being edited (null when not editing)
+ */
+export const gsdEditContentAtom = atom<string | null>(null)
+
+// ============================================
+// CHANGES PANEL
+// ============================================
+
+/**
+ * Whether changes panel is open
+ */
+export const gsdChangesPanelOpenAtom = atom<boolean>(false)
+
+/**
+ * Width of changes panel (persisted)
+ */
+export const gsdChangesPanelWidthAtom = atomWithStorage<number>(
+  "gsd:changesPanelWidth",
+  400,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
+ * Selected file path in changes panel
+ */
+export const gsdSelectedFilePathAtom = atom<string | null>(null)

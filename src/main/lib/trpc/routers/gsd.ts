@@ -419,6 +419,42 @@ export const gsdRouter = router({
     }),
 
   /**
+   * Write a file to project's .planning/ directory
+   */
+  writePlanningDoc: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        filePath: z.string(), // relative to .planning/
+        content: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // Security: prevent path traversal
+      const normalizedPath = path.normalize(input.filePath)
+      if (normalizedPath.includes("..") || path.isAbsolute(normalizedPath)) {
+        throw new Error("Invalid path")
+      }
+
+      try {
+        const fullPath = path.join(input.projectPath, ".planning", normalizedPath)
+
+        // Ensure parent directory exists
+        const dirPath = path.dirname(fullPath)
+        await fs.mkdir(dirPath, { recursive: true })
+
+        // Write file
+        await fs.writeFile(fullPath, input.content, "utf-8")
+
+        return { success: true }
+      } catch (err) {
+        throw new Error(
+          err instanceof Error ? err.message : "Failed to write file"
+        )
+      }
+    }),
+
+  /**
    * Get git branches for a project
    */
   getBranches: publicProcedure

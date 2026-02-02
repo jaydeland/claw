@@ -17,6 +17,8 @@ import {
   ListPlus,
   Play,
   MessageSquare,
+  Edit,
+  GitCommit,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -30,6 +32,9 @@ import {
   selectedGsdCategoryAtom,
   gsdUpdateInfoAtom,
   gsdUpdateInProgressAtom,
+  isGsdEditModeAtom,
+  gsdChangesPanelOpenAtom,
+  gsdSelectedFilePathAtom,
 } from "../atoms"
 import { Button } from "../../../components/ui/button"
 import {
@@ -39,6 +44,13 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
+import { PlanningDocEditor } from "./planning-doc-editor"
+import { ChangesPanel } from "../../changes"
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "../../../components/ui/resizable"
 
 type DocType = "planning" | "gsd"
 
@@ -81,6 +93,9 @@ export function GsdContent() {
   const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocAtom)
   const [updateInfo, setUpdateInfo] = useAtom(gsdUpdateInfoAtom)
   const [updateInProgress, setUpdateInProgress] = useAtom(gsdUpdateInProgressAtom)
+  const [isEditMode, setIsEditMode] = useAtom(isGsdEditModeAtom)
+  const [changesPanelOpen, setChangesPanelOpen] = useAtom(gsdChangesPanelOpenAtom)
+  const [selectedFilePath, setSelectedFilePath] = useAtom(gsdSelectedFilePathAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedGsdCategory = useSetAtom(selectedGsdCategoryAtom)
   const setSelectedSidebarTab = useSetAtom(selectedSidebarTabAtom)
@@ -201,6 +216,14 @@ export function GsdContent() {
 
   // Determine which document type is active
   const activeDocType: DocType | null = selectedGsdDoc ? "gsd" : selectedPlanningDoc ? "planning" : null
+
+  // Close edit mode when switching documents or switching to GSD docs
+  useEffect(() => {
+    if (activeDocType === "gsd" || !selectedPlanningDoc) {
+      setIsEditMode(false)
+      setChangesPanelOpen(false)
+    }
+  }, [selectedPlanningDoc, activeDocType, setIsEditMode, setChangesPanelOpen])
 
   // Check if project has .planning directory (in GsdContent to check for STATE.md)
   const { data: planningHasDocs } = trpc.gsd.hasPlanningDocs.useQuery(
@@ -354,6 +377,42 @@ export function GsdContent() {
 
           <span className="text-muted-foreground text-xs mx-1">|</span>
 
+          {/* Edit mode toggle - only show for planning docs */}
+          {activeDocType === "planning" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={cn(
+                "h-6 text-[10px] px-2 gap-1",
+                isEditMode && "bg-muted"
+              )}
+              title="Toggle edit mode"
+            >
+              <Edit className="h-3 w-3" />
+              Edit
+            </Button>
+          )}
+
+          {/* Changes panel toggle - only show when editing */}
+          {isEditMode && activeDocType === "planning" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setChangesPanelOpen(!changesPanelOpen)}
+              className={cn(
+                "h-6 text-[10px] px-2 gap-1",
+                changesPanelOpen && "bg-muted"
+              )}
+              title="View changes and commit"
+            >
+              <GitCommit className="h-3 w-3" />
+              Changes
+            </Button>
+          )}
+
+          <span className="text-muted-foreground text-xs mx-1">|</span>
+
           {/* Project selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -445,21 +504,54 @@ export function GsdContent() {
           </div>
         </div>
 
-        {/* Content area */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {activeDocType === "gsd" && selectedGsdDoc && (
-            <GsdDocContent docPath={selectedGsdDoc} />
-          )}
-          {activeDocType === "planning" && selectedPlanningDoc && projectPath && (
-            <PlanningDocContent projectPath={projectPath} docPath={selectedPlanningDoc} />
-          )}
-          {!activeDocType && (
-            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-              <FileText className="h-8 w-8 mb-2 opacity-50" />
-              <p className="text-sm">Select a document to view</p>
+        {/* Content area with changes panel */}
+        <ResizablePanelGroup direction="horizontal" className="flex-1">
+          {/* Main content panel */}
+          <ResizablePanel defaultSize={changesPanelOpen ? 60 : 100}>
+            <div className="flex-1 overflow-y-auto p-6 h-full">
+              {activeDocType === "gsd" && selectedGsdDoc && (
+                <GsdDocContent docPath={selectedGsdDoc} />
+              )}
+              {activeDocType === "planning" && selectedPlanningDoc && projectPath && (
+                isEditMode ? (
+                  <PlanningDocEditor
+                    projectPath={projectPath}
+                    docPath={selectedPlanningDoc}
+                    onClose={() => setIsEditMode(false)}
+                  />
+                ) : (
+                  <PlanningDocContent projectPath={projectPath} docPath={selectedPlanningDoc} />
+                )
+              )}
+              {!activeDocType && (
+                <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+                  <FileText className="h-8 w-8 mb-2 opacity-50" />
+                  <p className="text-sm">Select a document to view</p>
+                </div>
+              )}
             </div>
+          </ResizablePanel>
+
+          {/* Changes panel */}
+          {changesPanelOpen && projectPath && (
+            <>
+              <ResizableHandle />
+              <ResizablePanel defaultSize={40} minSize={20} maxSize={60}>
+                <ChangesPanel
+                  worktreePath={projectPath}
+                  selectedFilePath={selectedFilePath}
+                  onFileSelect={(file) => setSelectedFilePath(file.path)}
+                  onCommitSuccess={() => {
+                    // Refetch planning docs list
+                    utils.gsd.listPlanningDocs.invalidate()
+                    // Clear selected file
+                    setSelectedFilePath(null)
+                  }}
+                />
+              </ResizablePanel>
+            </>
           )}
-        </div>
+        </ResizablePanelGroup>
       </div>
     </div>
   )

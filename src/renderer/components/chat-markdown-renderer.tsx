@@ -88,7 +88,7 @@ function CodeBlock({
     : escapeHtml(children)
 
   return (
-    <div className="relative mt-2 mb-4 rounded-[10px] bg-muted/50 overflow-hidden">
+    <div className="relative mt-2 mb-4 rounded-[10px] bg-muted overflow-hidden">
       <button
         onClick={handleCopy}
         tabIndex={-1}
@@ -181,21 +181,21 @@ const sizeStyles: Record<
     h4: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
     h5: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
     h6: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    p: "text-sm text-foreground/80 my-px leading-normal py-[3px]",
-    ul: "list-disc list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    ol: "list-decimal list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    li: "text-sm text-foreground/80 py-[3px]",
+    p: "text-sm text-foreground my-px leading-normal py-[3px]",
+    ul: "list-disc list-inside text-sm text-foreground mb-px marker:text-foreground/60",
+    ol: "list-decimal list-inside text-sm text-foreground mb-px marker:text-foreground/60",
+    li: "text-sm text-foreground py-[3px]",
     inlineCode:
-      "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
+      "bg-muted/80 dark:bg-muted/90 text-foreground font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
     blockquote:
-      "border-l-2 border-foreground/20 pl-3 text-foreground/70 mb-px text-sm",
+      "border-l-2 border-foreground/30 pl-3 text-foreground/85 mb-px text-sm",
     hr: "mt-8 mb-4 border-t border-border",
     table: "w-full text-sm",
     thead: "border-b border-border",
     tbody: "",
     tr: "[&:not(:last-child)]:border-b [&:not(:last-child)]:border-border",
-    th: "text-left text-sm font-medium text-foreground px-3 py-2 bg-muted/50 border-r border-border last:border-r-0",
-    td: "text-sm text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
+    th: "text-left text-sm font-medium text-foreground px-3 py-2 bg-muted border-r border-border last:border-r-0",
+    td: "text-sm text-foreground px-3 py-2 border-r border-border last:border-r-0",
   },
   md: {
     h1: "text-[1.5em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
@@ -204,21 +204,21 @@ const sizeStyles: Record<
     h4: "text-base font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
     h5: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
     h6: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    p: "text-sm text-foreground/80 my-px leading-normal py-[3px]",
-    ul: "list-disc list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    ol: "list-decimal list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    li: "text-sm text-foreground/80 py-[3px]",
+    p: "text-sm text-foreground my-px leading-normal py-[3px]",
+    ul: "list-disc list-inside text-sm text-foreground mb-px marker:text-foreground/60",
+    ol: "list-decimal list-inside text-sm text-foreground mb-px marker:text-foreground/60",
+    li: "text-sm text-foreground py-[3px]",
     inlineCode:
-      "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
+      "bg-muted/80 dark:bg-muted/90 text-foreground font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
     blockquote:
-      "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
+      "border-l-2 border-foreground/30 pl-4 text-foreground/85 mb-px",
     hr: "mt-8 mb-4 border-t border-border",
     table: "w-full text-sm",
     thead: "border-b border-border",
     tbody: "",
     tr: "[&:not(:last-child)]:border-b [&:not(:last-child)]:border-border",
-    th: "text-left text-sm font-medium text-foreground px-3 py-2 bg-muted/50 border-r border-border last:border-r-0",
-    td: "text-sm text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
+    th: "text-left text-sm font-medium text-foreground px-3 py-2 bg-muted border-r border-border last:border-r-0",
+    td: "text-sm text-foreground px-3 py-2 border-r border-border last:border-r-0",
   },
   lg: {
     h1: "text-[1.875em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
@@ -227,21 +227,21 @@ const sizeStyles: Record<
     h4: "text-base font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
     h5: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
     h6: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    p: "text-sm text-foreground/80 my-px leading-normal py-[3px]",
-    ul: "list-disc list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    ol: "list-decimal list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    li: "text-sm text-foreground/80 py-[3px]",
+    p: "text-sm text-foreground my-px leading-normal py-[3px]",
+    ul: "list-disc list-inside text-sm text-foreground mb-px marker:text-foreground/60",
+    ol: "list-decimal list-inside text-sm text-foreground mb-px marker:text-foreground/60",
+    li: "text-sm text-foreground py-[3px]",
     inlineCode:
-      "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
+      "bg-muted/80 dark:bg-muted/90 text-foreground font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
     blockquote:
-      "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
+      "border-l-2 border-foreground/30 pl-4 text-foreground/85 mb-px",
     hr: "mt-8 mb-4 border-t border-border",
     table: "w-full text-sm",
     thead: "border-b border-border",
     tbody: "",
     tr: "[&:not(:last-child)]:border-b [&:not(:last-child)]:border-border",
-    th: "text-left text-sm font-medium text-foreground px-3 py-2 bg-muted/50 border-r border-border last:border-r-0",
-    td: "text-sm text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
+    th: "text-left text-sm font-medium text-foreground px-3 py-2 bg-muted border-r border-border last:border-r-0",
+    td: "text-sm text-foreground px-3 py-2 border-r border-border last:border-r-0",
   },
 }
 
