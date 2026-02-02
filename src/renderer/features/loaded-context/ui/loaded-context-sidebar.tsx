@@ -1,5 +1,5 @@
-import { useCallback } from "react"
-import { useAtom, useSetAtom } from "jotai"
+import { useCallback, useMemo } from "react"
+import { useAtom, useSetAtom, useAtomValue } from "jotai"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,6 +16,19 @@ import {
   loadedContextSidebarOpenRuntimeAtom,
   loadedContextSidebarWidthAtom,
 } from "../atoms"
+import { selectedAgentChatIdAtom } from "../../agents/atoms"
+import { trpc } from "@/lib/trpc"
+import { calculateLoadedContextTokens } from "../types"
+
+/**
+ * Format token count for header display
+ */
+function formatHeaderTokens(tokens: number): string {
+  if (tokens < 1000) {
+    return tokens.toLocaleString()
+  }
+  return `${(tokens / 1000).toFixed(1)}k`
+}
 
 interface LoadedContextSidebarProps {
   projectPath?: string
@@ -25,6 +38,34 @@ export function LoadedContextSidebar({ projectPath }: LoadedContextSidebarProps)
   const [displayMode, setDisplayMode] = useAtom(loadedContextDisplayModeAtom)
   const [isOpen, setIsOpen] = useAtom(loadedContextSidebarOpenAtom)
   const setRuntimeOpen = useSetAtom(loadedContextSidebarOpenRuntimeAtom)
+  const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+
+  // Query the chat to get project info
+  const { data: chatData } = trpc.chats.get.useQuery(
+    { id: selectedChatId! },
+    { enabled: !!selectedChatId }
+  )
+
+  // Query project to get path
+  const { data: projectData } = trpc.projects.get.useQuery(
+    { id: chatData?.projectId || "" },
+    { enabled: !!chatData?.projectId }
+  )
+
+  // Use provided projectPath or get from project data
+  const effectiveProjectPath = projectPath || projectData?.path
+
+  // Fetch loaded context for token calculation
+  const { data: contextData } = trpc.loadedContext.getLoadedContext.useQuery(
+    { projectPath: effectiveProjectPath },
+    { enabled: isOpen }
+  )
+
+  // Calculate total tokens
+  const totalTokens = useMemo(() => {
+    if (!contextData) return 0
+    return calculateLoadedContextTokens(contextData).total
+  }, [contextData])
 
   const closeSidebar = useCallback(() => {
     if (displayMode === "side-peek") {
@@ -76,6 +117,11 @@ export function LoadedContextSidebar({ projectPath }: LoadedContextSidebarProps)
             <TooltipContent side="bottom">Close loaded context</TooltipContent>
           </Tooltip>
           <span className="text-sm font-medium ml-1">Loaded Context</span>
+          {totalTokens > 0 && (
+            <span className="text-xs text-muted-foreground ml-1">
+              ({formatHeaderTokens(totalTokens)} tokens)
+            </span>
+          )}
 
           {/* Spacer */}
           <div className="flex-1" />

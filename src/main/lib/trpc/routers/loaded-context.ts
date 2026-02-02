@@ -42,11 +42,20 @@ interface AgentInfo {
   model?: string
 }
 
+interface CommandInfo {
+  name: string
+  description: string
+  source: "project" | "user" | "custom"
+  path: string
+  argumentHint?: string
+}
+
 interface LoadedContextData {
   claudeMdFiles: ClaudeMdFile[]
   mcpServers: McpServerInfo[]
   skills: SkillInfo[]
   agents: AgentInfo[]
+  commands: CommandInfo[]
 }
 
 // ============ HELPERS ============
@@ -389,6 +398,127 @@ async function getAgents(projectPath?: string): Promise<AgentInfo[]> {
   return agents
 }
 
+/**
+ * Parse command .md frontmatter to extract description
+ */
+function parseCommandMd(content: string): { description?: string; argumentHint?: string } {
+  try {
+    const { data } = matter(content, {
+      engines: {
+        yaml: { parse: parseYamlSafe }
+      }
+    })
+    return {
+      description: typeof data.description === "string" ? data.description : undefined,
+      argumentHint: typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Scan commands directory recursively
+ */
+async function scanCommandsDirectory(
+  dir: string,
+  source: "user" | "project" | "custom",
+  prefix = "",
+): Promise<CommandInfo[]> {
+  const commands: CommandInfo[] = []
+
+  try {
+    await fs.access(dir)
+  } catch {
+    return commands
+  }
+
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+
+    for (const entry of entries) {
+      if (entry.name.includes("..") || entry.name.includes("/") || entry.name.includes("\\")) {
+        continue
+      }
+
+      const entryPath = path.join(dir, entry.name)
+
+      if (entry.isDirectory()) {
+        // Recursively scan nested directories
+        const nestedCommands = await scanCommandsDirectory(
+          entryPath,
+          source,
+          prefix ? `${prefix}:${entry.name}` : entry.name,
+        )
+        commands.push(...nestedCommands)
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        const baseName = entry.name.replace(/\.md$/, "")
+        const commandName = prefix ? `${prefix}:${baseName}` : baseName
+
+        try {
+          const content = await fs.readFile(entryPath, "utf-8")
+          const parsed = parseCommandMd(content)
+
+          commands.push({
+            name: commandName,
+            description: parsed.description || "",
+            source,
+            path: entryPath,
+            argumentHint: parsed.argumentHint,
+          })
+        } catch (err) {
+          console.error(`[loaded-context] Failed to read command ${entryPath}:`, err)
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[loaded-context] Failed to scan commands directory ${dir}:`, err)
+  }
+
+  return commands
+}
+
+/**
+ * Get all commands from user, project, and custom locations
+ */
+async function getCommands(projectPath?: string): Promise<CommandInfo[]> {
+  const locations = getScanLocations("commands", projectPath)
+  const customDirs = getCustomPluginDirectories()
+
+  const scanPromises: Promise<CommandInfo[]>[] = []
+
+  // Project commands
+  if (locations.projectDir) {
+    scanPromises.push(scanCommandsDirectory(locations.projectDir, "project"))
+  }
+
+  // User commands
+  scanPromises.push(scanCommandsDirectory(locations.userDir, "user"))
+
+  // Custom plugin directories
+  for (const customDir of customDirs) {
+    const commandsDir = path.join(customDir.path, "commands")
+    scanPromises.push(scanCommandsDirectory(commandsDir, "custom"))
+  }
+
+  const results = await Promise.all(scanPromises)
+
+  // Deduplicate by name
+  const seenNames = new Set<string>()
+  const commands: CommandInfo[] = []
+
+  for (const commandList of results) {
+    for (const command of commandList) {
+      if (!seenNames.has(command.name)) {
+        seenNames.add(command.name)
+        commands.push(command)
+      }
+    }
+  }
+
+  return commands
+}
+
 // ============ ROUTER ============
 
 export const loadedContextRouter = router({
@@ -406,11 +536,12 @@ export const loadedContextRouter = router({
       const projectPath = input?.projectPath
 
       // Fetch all context in parallel
-      const [claudeMdFiles, mcpServers, skills, agents] = await Promise.all([
+      const [claudeMdFiles, mcpServers, skills, agents, commands] = await Promise.all([
         discoverClaudeMdFiles(projectPath),
         getMcpServers(projectPath),
         getSkills(projectPath),
         getAgents(projectPath),
+        getCommands(projectPath),
       ])
 
       return {
@@ -418,6 +549,7 @@ export const loadedContextRouter = router({
         mcpServers,
         skills,
         agents,
+        commands,
       }
     }),
 

@@ -2,7 +2,7 @@
  * Slash command types for agent chat
  */
 
-export type SlashCommandCategory = "builtin" | "repository"
+export type SlashCommandCategory = "builtin" | "repository" | "gsd"
 
 export interface SlashCommand {
   id: string
@@ -17,6 +17,8 @@ export interface SlashCommand {
   repository?: string
   // For custom commands - hint for expected arguments (e.g. "[file_path]")
   argumentHint?: string
+  // Source of the command (SDK, skill, bundled, etc.)
+  source?: string
 }
 
 export interface SlashCommandOption extends SlashCommand {
@@ -37,3 +39,4 @@ export type BuiltinCommandAction = never
 export type SlashCommandSelection =
   | { category: "builtin"; action: BuiltinCommandAction }
   | { category: "repository"; prompt: string; name: string }
+  | { category: "gsd"; name: string }

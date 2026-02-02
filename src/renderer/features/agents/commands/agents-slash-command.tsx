@@ -15,7 +15,7 @@ import { createPortal } from "react-dom"
 import { useAtomValue } from "jotai"
 import { sessionInfoAtom } from "../../../lib/atoms"
 import { IconSpinner } from "../../../components/ui/icons"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Terminal, Rocket } from "lucide-react"
 import type { SlashCommandOption, SlashTriggerPayload } from "./types"
 import {
   filterBuiltinCommands,
@@ -108,6 +108,60 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   // Use SDK commands or fallback to filesystem commands
   const customCommands = sessionInfo?.slashCommands?.length ? sdkCommands : fallbackCommands
 
+  // Fetch GSD commands: skills with gsd: prefix
+  const { data: skills = [], isLoading: skillsLoading } = trpc.skills.listEnabled.useQuery(undefined, {
+    enabled: isOpen,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
+  })
+
+  // Fetch bundled GSD commands
+  const { data: bundledGsdCommands = [], isLoading: gsdCommandsLoading } = trpc.gsd.listCommands.useQuery(undefined, {
+    enabled: isOpen,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
+  })
+
+  // Transform GSD items to SlashCommandOption
+  const gsdCommands: SlashCommandOption[] = useMemo(() => {
+    const items: SlashCommandOption[] = []
+    const seenNames = new Set<string>()
+
+    // Add skills with gsd: prefix
+    for (const skill of skills) {
+      if (skill.name.startsWith("gsd:")) {
+        if (!seenNames.has(skill.name)) {
+          seenNames.add(skill.name)
+          items.push({
+            id: `gsd:skill:${skill.name}`,
+            name: skill.name,
+            command: `/${skill.name}`,
+            description: skill.description || "",
+            category: "gsd",
+            source: "skill",
+          })
+        }
+      }
+    }
+
+    // Add bundled GSD commands (only if not already present from skills)
+    for (const cmd of bundledGsdCommands) {
+      if (!seenNames.has(cmd.name)) {
+        seenNames.add(cmd.name)
+        items.push({
+          id: `gsd:bundled:${cmd.name}`,
+          name: cmd.name,
+          command: `/${cmd.name}`,
+          description: cmd.description || "",
+          category: "gsd",
+          source: "bundled",
+        })
+      }
+    }
+
+    return items
+  }, [skills, bundledGsdCommands])
+
   // State for loading command content
   const [isLoadingContent, setIsLoadingContent] = useState(false)
 
@@ -119,6 +173,12 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     async (option: SlashCommandOption) => {
       // For builtin commands, call onSelect directly
       if (option.category === "builtin") {
+        onSelect(option)
+        return
+      }
+
+      // For GSD commands, just pass through (handled like SDK commands)
+      if (option.category === "gsd") {
         onSelect(option)
         return
       }
@@ -176,19 +236,31 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       )
     }
 
-    // Filter custom commands by search
-    let customFiltered = customCommands
+    // Filter custom commands by search (excluding GSD commands)
+    let customFiltered = customCommands.filter((cmd) => !cmd.name?.startsWith("gsd:"))
     if (debouncedSearchText) {
       const query = debouncedSearchText.toLowerCase()
-      customFiltered = customCommands.filter(
+      customFiltered = customFiltered.filter(
         (cmd) =>
           cmd.name?.toLowerCase().includes(query) ||
           cmd.command?.toLowerCase().includes(query),
       )
     }
 
-    // Combine all commands
-    const allCommands = [...customFiltered, ...builtinFiltered]
+    // Filter GSD commands by search
+    let gsdFiltered = gsdCommands
+    if (debouncedSearchText) {
+      const query = debouncedSearchText.toLowerCase()
+      gsdFiltered = gsdCommands.filter(
+        (cmd) =>
+          cmd.name?.toLowerCase().includes(query) ||
+          cmd.command?.toLowerCase().includes(query) ||
+          cmd.description?.toLowerCase().includes(query),
+      )
+    }
+
+    // Combine all commands: GSD first (since they have a clear namespace), then custom, then builtin
+    const allCommands = [...gsdFiltered, ...customFiltered, ...builtinFiltered]
 
     // Group hierarchically
     const groups = groupWorkflowsHierarchically(allCommands)
@@ -225,7 +297,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     }
 
     return { hierarchicalGroups: groups, flatOptions: flat }
-  }, [debouncedSearchText, customCommands, isPlanMode, disabledCommands, expandedGroups])
+  }, [debouncedSearchText, customCommands, gsdCommands, isPlanMode, disabledCommands, expandedGroups])
 
   // Toggle group/subgroup expansion
   const toggleGroup = useCallback((key: string) => {
@@ -551,6 +623,8 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
 
             // Command item
             const cmd = item.data as SlashCommandOption
+            // Determine icon based on category
+            const CommandIcon = cmd.category === "gsd" ? Rocket : Terminal
             return (
               <div
                 key={cmd.id}
@@ -572,11 +646,12 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
                     : "text-muted-foreground dark:hover:bg-neutral-800 hover:bg-accent hover:text-foreground",
                 )}
               >
-                <span className="flex items-center gap-1 w-full min-w-0">
+                <span className="flex items-center gap-1.5 w-full min-w-0">
+                  <CommandIcon className="h-3 w-3 shrink-0 opacity-70" />
                   <span className="shrink-0 whitespace-nowrap font-medium">
                     /{item.data.displayName || cmd.name || 'unknown'}
                   </span>
-                  <span className="text-muted-foreground flex-1 min-w-0 ml-2 overflow-hidden text-[10px] truncate">
+                  <span className="text-muted-foreground flex-1 min-w-0 ml-1 overflow-hidden text-[10px] truncate">
                     {cmd.description}
                   </span>
                 </span>
@@ -587,7 +662,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       )}
 
       {/* Loading state for repository commands */}
-      {isLoading && (
+      {(isLoading || skillsLoading || gsdCommandsLoading) && (
         <div className="flex items-center gap-1.5 h-7 px-1.5 mx-1 text-xs text-muted-foreground">
           <IconSpinner className="h-3.5 w-3.5" />
           <span>Loading commands...</span>
@@ -595,7 +670,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       )}
 
       {/* Empty state */}
-      {!isLoading && flatOptions.length === 0 && (
+      {!isLoading && !skillsLoading && !gsdCommandsLoading && flatOptions.length === 0 && (
         <div className="h-7 px-1.5 mx-1 flex items-center text-xs text-muted-foreground">
           {debouncedSearchText
             ? `No commands matching "${debouncedSearchText}"`

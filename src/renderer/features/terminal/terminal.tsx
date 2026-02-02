@@ -138,12 +138,37 @@ export function Terminal({
     enabled: true,
   })
 
+  // Track visibility using IntersectionObserver
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting)
+      },
+      { threshold: 0 }
+    )
+
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
   // Initialize terminal
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
+    // Skip initialization if container is not visible
+    if (!isVisible) {
+      console.log("[Terminal:useEffect] Container not visible, skipping initialization")
+      return
+    }
+
     console.log("[Terminal:useEffect] MOUNT - paneId:", paneId)
+
     const rect = container.getBoundingClientRect()
     console.log("[Terminal:useEffect] Container rect:", rect)
 
@@ -370,7 +395,7 @@ export function Terminal({
     }
     // Note: terminalCwd is accessed via ref to avoid remounting on cwd changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paneId, cwd, workspaceId, tabId, initialCwd, initialCommands, isDark, initRetry])
+  }, [paneId, cwd, workspaceId, tabId, initialCwd, initialCommands, isDark, initRetry, isVisible])
 
   // Update theme when isDark changes or VS Code theme changes (without recreating terminal)
   useEffect(() => {

@@ -141,12 +141,21 @@ export function createTerminalInstance(
 
   // 6. Load GPU-accelerated renderer (deferred using RAF to ensure render service is ready)
   let renderer: { dispose: () => void } = { dispose: () => {} }
+  let rafId1: number | null = null
+  let rafId2: number | null = null
+  let isDisposed = false
   console.log("[Terminal:create] Step 6: Scheduling renderer loading")
 
   // Use double requestAnimationFrame to ensure at least one paint cycle has completed
   // This gives xterm's internal render service time to initialize dimensions
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  rafId1 = requestAnimationFrame(() => {
+    rafId2 = requestAnimationFrame(() => {
+      // Early exit if terminal was disposed during the delay
+      if (isDisposed) {
+        console.log("[Terminal:create] Terminal disposed before renderer load, skipping")
+        return
+      }
+
       console.log("[Terminal:create] Loading renderer (deferred after RAF)")
 
       // Double-check that render service and dimensions exist before loading renderer
@@ -156,7 +165,8 @@ export function createTerminalInstance(
         return
       }
 
-      console.log("[Terminal:create] Render service ready, dimensions:", core._renderService.dimensions)
+      // Use optional chaining for defense in depth
+      console.log("[Terminal:create] Render service ready, dimensions:", core._renderService?.dimensions)
       renderer = loadRenderer(xterm)
     })
   })
@@ -207,6 +217,10 @@ export function createTerminalInstance(
     fitAddon,
     serializeAddon,
     cleanup: () => {
+      isDisposed = true
+      // Cancel pending RAF callbacks to prevent accessing disposed terminal
+      if (rafId1 !== null) cancelAnimationFrame(rafId1)
+      if (rafId2 !== null) cancelAnimationFrame(rafId2)
       cleanupQuerySuppression()
       renderer.dispose()
     },
@@ -406,7 +420,7 @@ function getTerminalCoordsFromEvent(
 
   if (!core?._renderService) return null
 
-  const dimensions = core._renderService.dimensions
+  const dimensions = core._renderService?.dimensions
 
   if (!dimensions?.css?.cell) return null
 

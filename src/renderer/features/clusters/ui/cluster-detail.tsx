@@ -288,14 +288,29 @@ export function ClusterDetail() {
       <ClusterTabs />
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto">
-        {selectedTab === "dashboard" && <DashboardTab />}
-        {selectedTab === "pvcs" && <PvcTab />}
-        {selectedTab === "pods" && <PodsTab />}
-        {selectedTab === "services" && <ServicesTab />}
-        {selectedTab === "deployments" && <DeploymentsTab />}
-        {selectedTab === "logs" && <LogsTab />}
-        {selectedTab === "devspace" && <DevSpaceTab />}
+      <div className="flex-1 overflow-y-auto relative">
+        {/* Render all tabs but hide inactive ones to preserve terminal state */}
+        <div className={selectedTab === "dashboard" ? "" : "hidden"}>
+          <DashboardTab />
+        </div>
+        <div className={selectedTab === "pvcs" ? "" : "hidden"}>
+          <PvcTab />
+        </div>
+        <div className={selectedTab === "pods" ? "" : "hidden"}>
+          <PodsTab />
+        </div>
+        <div className={selectedTab === "services" ? "" : "hidden"}>
+          <ServicesTab />
+        </div>
+        <div className={selectedTab === "deployments" ? "" : "hidden"}>
+          <DeploymentsTab />
+        </div>
+        <div className={selectedTab === "logs" ? "" : "hidden"}>
+          <LogsTab />
+        </div>
+        <div className={selectedTab === "devspace" ? "" : "hidden"}>
+          <DevSpaceTab />
+        </div>
       </div>
 
       {/* Confirmation Dialog for changing default cluster */}

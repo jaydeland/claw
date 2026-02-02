@@ -214,14 +214,22 @@ export function GsdContent() {
     { enabled: !!projectPath && planningHasDocs?.hasContent }
   )
 
-  // Default to STATE.md if it exists in planning docs, otherwise README.md
+  // Default to roadmap.md if it exists, then STATE.md, otherwise README.md
   useEffect(() => {
     if (!selectedPlanningDoc && !selectedGsdDoc && planningDocsData) {
-      // Check if STATE.md exists in planning docs
+      // Check if roadmap.md exists in planning docs (highest priority)
+      const hasRoadmapMd = planningDocsData.files?.some((f) => f.name === "roadmap.md" && !f.isDirectory)
+      if (hasRoadmapMd) {
+        setSelectedPlanningDoc("roadmap.md")
+        return
+      }
+
+      // Check if STATE.md exists in planning docs (second priority)
       const hasStateMd = planningDocsData.files?.some((f) => f.name === "STATE.md" && !f.isDirectory)
       if (hasStateMd) {
         setSelectedPlanningDoc("STATE.md")
       } else {
+        // Fall back to README.md in GSD docs
         setSelectedGsdDoc("README.md")
       }
     }

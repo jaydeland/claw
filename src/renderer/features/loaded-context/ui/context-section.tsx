@@ -2,10 +2,22 @@ import { useState } from "react"
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+/**
+ * Format token count for display in section headers
+ * Shows abbreviated format for larger numbers
+ */
+function formatSectionTokens(tokens: number): string {
+  if (tokens < 1000) {
+    return `${tokens} tokens`
+  }
+  return `${(tokens / 1000).toFixed(1)}k tokens`
+}
+
 interface ContextSectionProps {
   title: string
   icon: LucideIcon
   count?: number
+  tokenCount?: number
   defaultExpanded?: boolean
   children: React.ReactNode
   className?: string
@@ -15,6 +27,7 @@ export function ContextSection({
   title,
   icon: Icon,
   count,
+  tokenCount,
   defaultExpanded = true,
   children,
   className,
@@ -36,6 +49,11 @@ export function ContextSection({
         )}
         <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         <span className="text-sm font-medium flex-1">{title}</span>
+        {tokenCount !== undefined && tokenCount > 0 && (
+          <span className="text-[10px] text-muted-foreground/70 mr-1">
+            {formatSectionTokens(tokenCount)}
+          </span>
+        )}
         {count !== undefined && (
           <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
             {count}

@@ -1,19 +1,22 @@
 "use client"
 
-import { Terminal, ChevronRight } from "lucide-react"
+import { Terminal } from "lucide-react"
 import { trpc } from "../../../lib/trpc"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtomValue } from "jotai"
 import { selectedProjectAtom } from "../atoms"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "../../../components/ui/dropdown-menu"
 import { IconChevronDown, IconSpinner } from "../../../components/ui/icons"
 import { useMemo } from "react"
-import { cn } from "../../../lib/utils"
 import { groupWorkflowsHierarchically } from "../../workflows/lib/parse-workflow-name"
-import { commandsExpansionAtom } from "../../sidebar/atoms/workflow-expansion-atoms"
 
 interface CommandsDropdownProps {
   onCommandSelect: (command: string) => void
@@ -25,7 +28,6 @@ export function CommandsDropdown({
   disabled = false,
 }: CommandsDropdownProps) {
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const [expandedGroups, setExpandedGroups] = useAtom(commandsExpansionAtom)
 
   // Fetch commands using the commands router (same as commands-tab-content)
   const { data: commands = [], isLoading } = trpc.commands.list.useQuery(
@@ -47,19 +49,6 @@ export function CommandsDropdown({
     return groupWorkflowsHierarchically(nonGsdCommands)
   }, [nonGsdCommands])
 
-  // Toggle group expansion
-  const toggleGroup = (key: string) => {
-    setExpandedGroups((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(key)) {
-        newSet.delete(key)
-      } else {
-        newSet.add(key)
-      }
-      return newSet
-    })
-  }
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -68,11 +57,10 @@ export function CommandsDropdown({
           disabled={disabled}
         >
           <Terminal className="h-3.5 w-3.5" />
-          <span>Commands</span>
           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[280px] max-h-[400px] overflow-y-auto">
+      <DropdownMenuContent align="start" className="w-[220px]">
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
             <IconSpinner className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -82,88 +70,59 @@ export function CommandsDropdown({
             No commands found
           </div>
         ) : (
-          <div className="py-1">
-            {hierarchicalGroups.map((group) => {
-              const isExpanded = expandedGroups.has(group.namespace)
-              return (
-                <div key={group.namespace} className="mb-1 last:mb-0">
-                  {/* Namespace header */}
-                  <button
-                    onClick={() => toggleGroup(group.namespace)}
-                    className={cn(
-                      "w-full flex items-center gap-1 px-2 py-1.5 text-xs font-semibold",
-                      "hover:bg-accent/50 transition-colors rounded-sm"
-                    )}
-                  >
-                    <ChevronRight className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-90")} />
-                    <span>{group.namespace}</span>
-                    <span className="text-[10px] opacity-60 ml-auto">({group.totalCount})</span>
-                  </button>
+          <>
+            {hierarchicalGroups.map((group) => (
+              <DropdownMenuSub key={group.namespace}>
+                <DropdownMenuSubTrigger className="flex items-center gap-2">
+                  <span className="flex-1">{group.namespace}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    ({group.totalCount})
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent className="w-[220px] max-h-[400px] overflow-y-auto">
+                    {/* Sub-groups as nested submenus */}
+                    {group.subGroups.map((subGroup) => (
+                      <DropdownMenuSub key={`${group.namespace}:${subGroup.name}`}>
+                        <DropdownMenuSubTrigger className="flex items-center gap-2">
+                          <span className="flex-1">{subGroup.name}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            ({subGroup.items.length})
+                          </span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuPortal>
+                          <DropdownMenuSubContent className="w-[200px] max-h-[300px] overflow-y-auto">
+                            {subGroup.items.map((cmd) => (
+                              <DropdownMenuItem
+                                key={cmd.path}
+                                onClick={() => onCommandSelect(`/${cmd.name}`)}
+                                className="flex items-center gap-2"
+                              >
+                                <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="truncate">{cmd.displayName}</span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuPortal>
+                      </DropdownMenuSub>
+                    ))}
 
-                  {/* Namespace contents */}
-                  {isExpanded && (
-                    <div className="pl-2">
-                      {/* Sub-groups */}
-                      {group.subGroups.map((subGroup) => {
-                        const subGroupKey = `${group.namespace}:${subGroup.name}`
-                        const isSubExpanded = expandedGroups.has(subGroupKey)
-                        return (
-                          <div key={subGroupKey} className="mb-1">
-                            {/* Sub-group header */}
-                            <button
-                              onClick={() => toggleGroup(subGroupKey)}
-                              className={cn(
-                                "w-full flex items-center gap-1 px-2 py-1 text-xs font-medium",
-                                "hover:bg-accent/50 transition-colors rounded-sm"
-                              )}
-                            >
-                              <ChevronRight className={cn("h-3 w-3 transition-transform", isSubExpanded && "rotate-90")} />
-                              <span>{subGroup.name}</span>
-                              <span className="text-[10px] opacity-60 ml-auto">({subGroup.items.length})</span>
-                            </button>
-
-                            {/* Sub-group items */}
-                            {isSubExpanded && (
-                              <div className="pl-2">
-                                {subGroup.items.map((cmd) => (
-                                  <button
-                                    key={cmd.path}
-                                    onClick={() => onCommandSelect(`/${cmd.name}`)}
-                                    className={cn(
-                                      "w-full flex items-center gap-1.5 px-2 py-1.5 text-xs",
-                                      "hover:bg-accent transition-colors rounded-sm text-left"
-                                    )}
-                                  >
-                                    <Terminal className="h-3 w-3 text-muted-foreground shrink-0" />
-                                    <span className="flex-1 truncate">/{cmd.displayName}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-
-                      {/* Flat items in namespace */}
-                      {group.flatItems.map((cmd) => (
-                        <button
-                          key={cmd.path}
-                          onClick={() => onCommandSelect(`/${cmd.name}`)}
-                          className={cn(
-                            "w-full flex items-center gap-1.5 px-2 py-1.5 text-xs",
-                            "hover:bg-accent transition-colors rounded-sm text-left"
-                          )}
-                        >
-                          <Terminal className="h-3 w-3 text-muted-foreground shrink-0" />
-                          <span className="flex-1 truncate">/{cmd.displayName}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+                    {/* Flat items directly in the namespace submenu */}
+                    {group.flatItems.map((cmd) => (
+                      <DropdownMenuItem
+                        key={cmd.path}
+                        onClick={() => onCommandSelect(`/${cmd.name}`)}
+                        className="flex items-center gap-2"
+                      >
+                        <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{cmd.displayName}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+            ))}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

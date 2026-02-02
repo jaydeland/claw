@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import * as fs from "fs/promises"
+import * as fsSync from "fs"
 import * as path from "path"
 import { app } from "electron"
 import simpleGit from "simple-git"
@@ -63,9 +64,25 @@ function parseYamlSafe(input: string): Record<string, any> {
  * Get the path to bundled GSD resources
  */
 export function getBundledGsdPath(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, "gsd")
-    : path.join(app.getAppPath(), "resources", "gsd")
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "gsd")
+  }
+
+  // In dev mode, app.getAppPath() returns the project root
+  // But electron-vite might compile to out/main/, so we need to handle both cases
+  const appPath = app.getAppPath()
+  const primaryPath = path.join(appPath, "resources", "gsd")
+
+  // If primary path exists, use it
+  // Otherwise, try navigating from the compiled output directory
+  try {
+    fsSync.accessSync(primaryPath)
+    return primaryPath
+  } catch {
+    // Fallback: navigate from __dirname (out/main/) to project root
+    const fallbackPath = path.join(__dirname, "..", "..", "resources", "gsd")
+    return fallbackPath
+  }
 }
 
 /**
@@ -120,7 +137,11 @@ async function scanBundledGsdCommands(): Promise<GsdCommand[]> {
     // Check if commands directory exists
     try {
       await fs.access(commandsDir)
-    } catch {
+    } catch (accessErr) {
+      console.warn(`[gsd] Commands directory not found at: ${commandsDir}`)
+      console.warn(`[gsd] getBundledGsdPath() returned: ${gsdPath}`)
+      console.warn(`[gsd] app.getAppPath() returned: ${app.getAppPath()}`)
+      console.warn(`[gsd] app.isPackaged: ${app.isPackaged}`)
       return commands
     }
 
@@ -163,6 +184,13 @@ async function scanBundledGsdCommands(): Promise<GsdCommand[]> {
     }
 
     await scanDir(commandsDir)
+
+    // Log success for debugging
+    if (commands.length > 0) {
+      console.log(`[gsd] Found ${commands.length} bundled GSD commands in ${commandsDir}`)
+    } else {
+      console.warn(`[gsd] No .md files found in ${commandsDir}`)
+    }
   } catch (err) {
     console.error(`[gsd] Failed to scan commands directory:`, err)
   }

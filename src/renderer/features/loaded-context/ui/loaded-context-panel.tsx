@@ -1,11 +1,24 @@
-import { FileText, Server, Zap, Bot, Loader2 } from "lucide-react"
+import { useMemo } from "react"
+import { FileText, Server, Zap, Bot, Loader2, Terminal } from "lucide-react"
 import { trpc } from "@/lib/trpc"
 import { useAtomValue } from "jotai"
 import { selectedAgentChatIdAtom } from "../../agents/atoms"
 import { ContextSection, ContextSectionEmpty } from "./context-section"
 import { ClaudeMdItem, SourceBadge } from "./claude-md-item"
-import type { McpServerInfo, SkillInfo, AgentInfo } from "../types"
+import type { McpServerInfo, SkillInfo, AgentInfo, CommandInfo } from "../types"
+import { calculateLoadedContextTokens } from "../types"
 import { cn } from "@/lib/utils"
+
+/**
+ * Format token count for display
+ * e.g., 1234 -> "1.2k", 12345 -> "12.3k"
+ */
+function formatTokenCount(tokens: number): string {
+  if (tokens < 1000) {
+    return tokens.toLocaleString()
+  }
+  return `${(tokens / 1000).toFixed(1)}k`
+}
 
 interface LoadedContextPanelProps {
   projectPath?: string
@@ -35,6 +48,12 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
     { enabled: !!effectiveProjectPath || true } // Always fetch, will use user context as fallback
   )
 
+  // Calculate token counts (must be before any returns per Rules of Hooks)
+  const tokenCounts = useMemo(() => {
+    if (!data) return null
+    return calculateLoadedContextTokens(data)
+  }, [data])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -62,11 +81,22 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
 
   return (
     <div className="flex flex-col gap-3 p-2">
+      {/* Token Count Header */}
+      {tokenCounts && tokenCounts.total > 0 && (
+        <div className="flex items-center justify-between px-2 py-1.5 bg-muted/30 rounded-md">
+          <span className="text-xs text-muted-foreground">Estimated tokens</span>
+          <span className="text-sm font-medium text-foreground">
+            {formatTokenCount(tokenCounts.total)}
+          </span>
+        </div>
+      )}
+
       {/* CLAUDE.md Files Section */}
       <ContextSection
         title="CLAUDE.md Files"
         icon={FileText}
         count={data.claudeMdFiles.length}
+        tokenCount={tokenCounts?.claudeMd}
         defaultExpanded
       >
         {data.claudeMdFiles.length === 0 ? (
@@ -83,6 +113,7 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
         title="MCP Servers"
         icon={Server}
         count={data.mcpServers.length}
+        tokenCount={tokenCounts?.mcpServers}
         defaultExpanded
       >
         {data.mcpServers.length === 0 ? (
@@ -94,11 +125,29 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
         )}
       </ContextSection>
 
+      {/* Commands Section */}
+      <ContextSection
+        title="Commands"
+        icon={Terminal}
+        count={data.commands.length}
+        tokenCount={tokenCounts?.commands}
+        defaultExpanded
+      >
+        {data.commands.length === 0 ? (
+          <ContextSectionEmpty message="No commands found" />
+        ) : (
+          data.commands.map((command) => (
+            <CommandItem key={command.path} command={command} />
+          ))
+        )}
+      </ContextSection>
+
       {/* Skills Section */}
       <ContextSection
         title="Skills"
         icon={Zap}
         count={data.skills.length}
+        tokenCount={tokenCounts?.skills}
         defaultExpanded
       >
         {data.skills.length === 0 ? (
@@ -115,6 +164,7 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
         title="Agents"
         icon={Bot}
         count={data.agents.length}
+        tokenCount={tokenCounts?.agents}
         defaultExpanded
       >
         {data.agents.length === 0 ? (
@@ -199,6 +249,25 @@ function AgentItem({ agent }: AgentItemProps) {
         </span>
       )}
       <SourceBadge source={agent.source} />
+    </div>
+  )
+}
+
+interface CommandItemProps {
+  command: CommandInfo
+}
+
+function CommandItem({ command }: CommandItemProps) {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/30 transition-colors">
+      <Terminal className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium truncate">/{command.name}</div>
+        {command.description && (
+          <div className="text-[10px] text-muted-foreground truncate">{command.description}</div>
+        )}
+      </div>
+      <SourceBadge source={command.source} />
     </div>
   )
 }
