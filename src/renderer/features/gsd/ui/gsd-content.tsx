@@ -15,6 +15,7 @@ import {
   HelpCircle,
   Download,
   Check,
+  ListPlus,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -79,6 +80,9 @@ export function GsdContent() {
   const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocAtom)
   const [updateInfo, setUpdateInfo] = useAtom(gsdUpdateInfoAtom)
   const [updateInProgress, setUpdateInProgress] = useAtom(gsdUpdateInProgressAtom)
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
+  const setSelectedGsdCategory = useSetAtom(selectedGsdCategoryAtom)
+  const utils = trpc.useUtils()
 
   // Fetch projects to get the selected one
   const { data: projectsData } = trpc.projects.list.useQuery()
@@ -108,6 +112,39 @@ export function GsdContent() {
       setUpdateInProgress(false)
     },
   })
+
+  // Chat creation mutation for GSD commands
+  const createChatMutation = trpc.chats.create.useMutation({
+    onSuccess: (data) => {
+      utils.chats.list.invalidate()
+      setSelectedChatId(data.id)
+      setSelectedGsdCategory(null)
+    },
+  })
+
+  // Handler for "Add Plan" button - creates chat with /gsd:plan-phase command
+  const handleAddPlan = () => {
+    if (!selectedProjectId) return
+    createChatMutation.mutate({
+      projectId: selectedProjectId,
+      name: "Plan Phase",
+      initialMessageParts: [{ type: "text", text: "/gsd:plan-phase" }],
+      useWorktree: true,
+      mode: "agent",
+    })
+  }
+
+  // Handler for "Add Phase" button - creates chat with /gsd:add-phase command
+  const handleAddPhase = () => {
+    if (!selectedProjectId) return
+    createChatMutation.mutate({
+      projectId: selectedProjectId,
+      name: "Add Phase",
+      initialMessageParts: [{ type: "text", text: "/gsd:add-phase" }],
+      useWorktree: true,
+      mode: "agent",
+    })
+  }
 
   // Update updateInfo atom when data changes
   useEffect(() => {
@@ -214,8 +251,34 @@ export function GsdContent() {
           )}
         </div>
 
-        {/* Right side: Project selector, branch */}
+        {/* Right side: Action buttons, Project selector, branch */}
         <div className="flex items-center gap-2">
+          {/* Action buttons */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleAddPlan}
+            disabled={!selectedProjectId || createChatMutation.isPending}
+            className="h-6 text-[10px] px-2 gap-1"
+            title="Create a plan for a phase"
+          >
+            <FileText className="h-3 w-3" />
+            Add Plan
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleAddPhase}
+            disabled={!selectedProjectId || createChatMutation.isPending}
+            className="h-6 text-[10px] px-2 gap-1"
+            title="Add a new phase to the roadmap"
+          >
+            <ListPlus className="h-3 w-3" />
+            Add Phase
+          </Button>
+
+          <span className="text-muted-foreground text-xs mx-1">|</span>
+
           {/* Project selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
