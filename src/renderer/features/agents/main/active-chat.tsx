@@ -224,7 +224,6 @@ import { autoRenameAgentChat } from "../utils/auto-rename"
 import { generateCommitToPrMessage, generateMergeMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
 import { ChatInputArea } from "./chat-input-area"
 import { IsolatedMessagesSection } from "./isolated-messages-section"
-import { AgentContinueButton } from "../ui/agent-continue-button"
 const clearSubChatSelectionAtom = atom(null, () => {})
 const isSubChatMultiSelectModeAtom = atom(false)
 const selectedSubChatIdsAtom = atom(new Set<string>())
@@ -3423,6 +3422,29 @@ const ChatViewInner = memo(function ChatViewInner({
     return false
   }, [messages])
 
+  // Check if session was interrupted (last message has incomplete tools)
+  const hasInterruptedSession = useMemo(() => {
+    if (messages.length === 0) return false
+
+    const lastMessage = messages[messages.length - 1]
+    if (lastMessage.role !== "assistant") return false
+
+    // Check if any part is in an incomplete state
+    const parts = lastMessage.parts || []
+    return parts.some((part: any) => {
+      // A part is incomplete if it's a tool call that doesn't have a complete state
+      if (!part.type?.startsWith("tool-")) return false
+
+      const hasPendingState =
+        part.state &&
+        part.state !== "output-available" &&
+        part.state !== "output-error" &&
+        part.state !== "result"
+
+      return hasPendingState
+    })
+  }, [messages])
+
   // Keep ref in sync for use in initializeScroll (which runs in useLayoutEffect)
   hasUnapprovedPlanRef.current = hasUnapprovedPlan
 
@@ -3674,12 +3696,6 @@ const ChatViewInner = memo(function ChatViewInner({
         </div>
       )}
 
-      {/* Continue button - appears when session is interrupted */}
-      <AgentContinueButton
-        onContinue={handleContinue}
-        isStreaming={isStreaming}
-      />
-
       {/* Input - isolated component to prevent re-renders */}
       <ChatInputArea
         editorRef={editorRef}
@@ -3688,11 +3704,13 @@ const ChatViewInner = memo(function ChatViewInner({
         onForceSend={handleForceSend}
         onStop={handleStop}
         onApprovePlan={handleApprovePlan}
+        onContinue={handleContinue}
         onCompact={handleCompact}
         onCreateNewSubChat={onCreateNewSubChat}
         onShowTasks={handleShowTasks}
         isStreaming={isStreaming}
         hasUnapprovedPlan={hasUnapprovedPlan}
+        hasInterruptedSession={hasInterruptedSession}
         isCompacting={isCompacting}
         images={images}
         files={files}

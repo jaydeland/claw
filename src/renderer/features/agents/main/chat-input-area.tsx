@@ -112,12 +112,14 @@ export interface ChatInputAreaProps {
   onForceSend: () => void // Opt+Enter: stop stream and send immediately, bypassing queue
   onStop: () => Promise<void>
   onApprovePlan: () => void
+  onContinue?: () => void
   onCompact: () => void
   onCreateNewSubChat?: () => void
   onShowTasks?: () => void
   // State from parent
   isStreaming: boolean
   hasUnapprovedPlan: boolean
+  hasInterruptedSession?: boolean
   isCompacting: boolean
   // File uploads
   images: UploadedImage[]
@@ -190,6 +192,8 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.onForceSend !== nextProps.onForceSend ||
     prevProps.onStop !== nextProps.onStop ||
     prevProps.onApprovePlan !== nextProps.onApprovePlan ||
+    prevProps.onContinue !== nextProps.onContinue ||
+    prevProps.hasInterruptedSession !== nextProps.hasInterruptedSession ||
     prevProps.onCompact !== nextProps.onCompact ||
     prevProps.onCreateNewSubChat !== nextProps.onCreateNewSubChat ||
     prevProps.onAddAttachments !== nextProps.onAddAttachments ||
@@ -300,11 +304,13 @@ export const ChatInputArea = memo(function ChatInputArea({
   onForceSend,
   onStop,
   onApprovePlan,
+  onContinue,
   onCompact,
   onCreateNewSubChat,
   onShowTasks,
   isStreaming,
   hasUnapprovedPlan,
+  hasInterruptedSession,
   isCompacting,
   images,
   files,
@@ -1077,10 +1083,29 @@ export const ChatInputArea = memo(function ChatInputArea({
                     <AttachIcon className="h-4 w-4" />
                   </Button>
 
-                  {/* Send/Stop button or Build Plan button */}
+                  {/* Send/Stop button, Continue button, or Build Plan button */}
                   <div className="ml-1">
-                    {/* Show "Build plan" button when plan is ready, input is empty, and in plan mode */}
-                    {isPlanMode &&
+                    {/* Show "Continue" button when session was interrupted and input is empty */}
+                    {hasInterruptedSession &&
+                    !hasContent &&
+                    images.length === 0 &&
+                    files.length === 0 &&
+                    textContexts.length === 0 &&
+                    (diffTextContexts?.length ?? 0) === 0 &&
+                    !isStreaming &&
+                    onContinue ? (
+                      <Button
+                        onClick={onContinue}
+                        size="sm"
+                        className="h-7 gap-1.5 rounded-lg"
+                      >
+                        Continue
+                        <Kbd className="text-primary-foreground/70">
+                          ⌘↵
+                        </Kbd>
+                      </Button>
+                    ) : /* Show "Build plan" button when plan is ready, input is empty, and in plan mode */
+                    isPlanMode &&
                     hasUnapprovedPlan &&
                     !hasContent &&
                     images.length === 0 &&
