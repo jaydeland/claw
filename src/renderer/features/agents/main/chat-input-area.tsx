@@ -3,7 +3,7 @@
 import { memo, useCallback, useRef, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { useAtom, useAtomValue } from "jotai"
-import { ChevronDown, Zap } from "lucide-react"
+import { ChevronDown, RotateCcw, Zap } from "lucide-react"
 
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
@@ -402,6 +402,20 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Plan mode - global atom
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
+
+  // Clear chat mutation
+  const utils = trpc.useUtils()
+  const clearChatMutation = trpc.chats.clearSubChatMessages.useMutation({
+    onSuccess: () => {
+      // Invalidate queries to refresh UI
+      utils.chats.getSubChat.invalidate({ id: subChatId })
+    },
+  })
+
+  const handleClearChat = useCallback(() => {
+    if (!subChatId || isStreaming) return
+    clearChatMutation.mutate({ id: subChatId })
+  }, [subChatId, isStreaming, clearChatMutation])
 
   // Refs for draft saving
   const currentSubChatIdRef = useRef<string>(subChatId)
@@ -1063,6 +1077,18 @@ export const ChatInputArea = memo(function ChatInputArea({
                       e.target.value = ""
                     }}
                   />
+
+                  {/* Clear conversation button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                    onClick={handleClearChat}
+                    disabled={isStreaming || messageTokenData.messageCount === 0 || clearChatMutation.isPending}
+                    title="Clear conversation"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
 
                   {/* Context window indicator - click to compact */}
                   <AgentContextIndicator

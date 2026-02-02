@@ -804,6 +804,26 @@ export const chatsRouter = router({
     }),
 
   /**
+   * Clear all messages in a sub-chat and reset session
+   */
+  clearSubChatMessages: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(subChats)
+        .set({
+          messages: "[]",
+          sessionId: null,
+          streamId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(subChats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
    * Rollback to a specific message by sdkMessageUuid
    * Handles both git state rollback and message truncation
    * Git rollback is done first - if it fails, the whole operation aborts
