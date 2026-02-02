@@ -288,6 +288,28 @@ export const chatsRouter = router({
       console.log("[chats.create] found project:", project)
       if (!project) throw new Error("Project not found")
 
+      // Local mode: Check if local chat already exists (limit: 1 per project)
+      // This check must happen BEFORE creating the chat
+      if (!input.useWorktree) {
+        const existingLocalChat = db
+          .select()
+          .from(chats)
+          .where(
+            and(
+              eq(chats.projectId, input.projectId),
+              isNull(chats.branch), // No branch means local chat
+              isNull(chats.archivedAt) // Only count active chats
+            )
+          )
+          .get()
+
+        if (existingLocalChat) {
+          throw new Error(
+            "A local chat already exists for this project. Only one local chat is allowed per project to avoid conflicts. Please archive or delete the existing local chat, or create a worktree chat instead."
+          )
+        }
+      }
+
       // Create chat (fast path)
       const chat = db
         .insert(chats)
@@ -411,25 +433,6 @@ export const chatsRouter = router({
           worktreeResult = { worktreePath: project.path }
         }
       } else {
-        // Local mode: Check if local chat already exists (limit: 1 per project)
-        const existingLocalChat = db
-          .select()
-          .from(chats)
-          .where(
-            and(
-              eq(chats.projectId, input.projectId),
-              isNull(chats.branch), // No branch means local chat
-              isNull(chats.archivedAt) // Only count active chats
-            )
-          )
-          .get()
-
-        if (existingLocalChat) {
-          throw new Error(
-            "A local chat already exists for this project. Only one local chat is allowed per project to avoid conflicts. Please archive or delete the existing local chat, or create a worktree chat instead."
-          )
-        }
-
         // Local mode: use project path directly, no branch info
         console.log("[chats.create] local mode - using project path directly")
         db.update(chats)

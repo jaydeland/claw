@@ -33,7 +33,8 @@ import { isPlanModeAtom, lastSelectedModelIdAtom } from "../atoms"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import { CommandsDropdown } from "../components/commands-dropdown"
-import { SkillsAndGsdDropdown } from "../components/skills-and-gsd-dropdown"
+import { GsdDropdown } from "../components/gsd-dropdown"
+import { SkillsDropdown } from "../components/skills-dropdown"
 import {
   AgentsMentionsEditor,
   type AgentsMentionsEditorHandle,
@@ -760,13 +761,16 @@ export const ChatInputArea = memo(function ChatInputArea({
                     }}
                   >
                     <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
+                      <button
+                        className="flex items-center gap-1 px-1.5 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                        title={isPlanMode ? "Plan mode" : "Agent mode"}
+                        aria-label={isPlanMode ? "Plan mode" : "Agent mode"}
+                      >
                         {isPlanMode ? (
                           <PlanIcon className="h-3.5 w-3.5 shrink-0" />
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
-                        <span className="truncate">{isPlanMode ? "Plan" : "Agent"}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
@@ -921,10 +925,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                     >
                       <DropdownMenuTrigger asChild>
                         <button
-                          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 border border-border"
+                          className="flex items-center gap-1 px-1.5 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 border border-border"
+                          title={currentOllamaModel || "Select model"}
+                          aria-label={`Ollama model: ${currentOllamaModel || "Select model"}`}
                         >
                           <Zap className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{currentOllamaModel || "Select model"}</span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
@@ -972,23 +977,15 @@ export const ChatInputArea = memo(function ChatInputArea({
                         <button
                           disabled={hasCustomClaudeConfig}
                           className={cn(
-                            "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                            "flex items-center gap-1 px-1.5 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                             hasCustomClaudeConfig
                               ? "opacity-70 cursor-not-allowed"
                               : "hover:text-foreground hover:bg-muted/50",
                           )}
+                          title={hasCustomClaudeConfig ? "Custom Model" : `${selectedModel?.name} 4.5`}
+                          aria-label={hasCustomClaudeConfig ? "Custom Model" : `Claude ${selectedModel?.name} 4.5`}
                         >
                           <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">
-                            {hasCustomClaudeConfig ? (
-                              "Custom Model"
-                            ) : (
-                              <>
-                                {selectedModel?.name}{" "}
-                                <span className="text-muted-foreground">4.5</span>
-                              </>
-                            )}
-                          </span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
@@ -1042,8 +1039,14 @@ export const ChatInputArea = memo(function ChatInputArea({
                     disabled={isStreaming}
                   />
 
-                  {/* Skills & GSD Dropdown */}
-                  <SkillsAndGsdDropdown
+                  {/* GSD Dropdown - Shows only GSD commands */}
+                  <GsdDropdown
+                    onGsdSelect={handleSkillSelect}
+                    disabled={isStreaming}
+                  />
+
+                  {/* Skills Dropdown - Shows only non-GSD skills */}
+                  <SkillsDropdown
                     onSkillSelect={handleSkillSelect}
                     disabled={isStreaming}
                   />

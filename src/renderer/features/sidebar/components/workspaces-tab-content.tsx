@@ -449,14 +449,29 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
                   {/* Nested chats */}
                   {isExpanded && chats.length > 0 && (
-                    <div className="pl-6 space-y-0.5">
-                      {chats.map((chat) => {
+                    <div className="ml-[18px] pl-3 pt-0.5 space-y-0.5 relative">
+                      {/* Connector from workspace header to first item */}
+                      <div className="absolute -left-3 top-0 w-px h-1 bg-muted-foreground/20" />
+                      {chats.map((chat, chatIndex) => {
                         const isPinned = pinnedIds.has(chat.id)
                         const isActive = selectedChatId === chat.id
                         const chatStatus = chatStatuses.get(chat.id) ?? null
+                        const isLastItem = chatIndex === chats.length - 1
 
                         return (
                           <div key={chat.id} className="group relative">
+                            {/* Tree line connectors */}
+                            {/* Vertical line segment */}
+                            <div
+                              className={cn(
+                                "absolute -left-3 w-px bg-muted-foreground/20",
+                                isLastItem
+                                  ? "top-0 h-1/2" // Stop at middle for last item (L-shape)
+                                  : "top-0 bottom-0" // Full height for other items
+                              )}
+                            />
+                            {/* Horizontal branch connector */}
+                            <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
                             <button
                               type="button"
                               onClick={() => handleChatClick(chat, project.id)}
@@ -538,7 +553,10 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
                   {/* Empty state when workspace is expanded but has no chats */}
                   {isExpanded && chats.length === 0 && (
-                    <div className="pl-6 py-2">
+                    <div className="ml-[18px] pl-3 py-2 relative">
+                      {/* Tree line connector to empty state */}
+                      <div className="absolute -left-3 top-0 w-px h-1/2 bg-muted-foreground/20" />
+                      <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
                       <Button
                         variant="ghost"
                         size="sm"

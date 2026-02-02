@@ -45,7 +45,8 @@ import {
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
 import { CommandsDropdown } from "../components/commands-dropdown"
-import { SkillsAndGsdDropdown } from "../components/skills-and-gsd-dropdown"
+import { GsdDropdown } from "../components/gsd-dropdown"
+import { SkillsDropdown } from "../components/skills-dropdown"
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
@@ -1494,8 +1495,14 @@ export function NewChatForm({
                         disabled={createChatMutation.isPending}
                       />
 
-                      {/* Skills & GSD Dropdown */}
-                      <SkillsAndGsdDropdown
+                      {/* GSD Dropdown - Shows only GSD commands */}
+                      <GsdDropdown
+                        onGsdSelect={handleSkillSelect}
+                        disabled={createChatMutation.isPending}
+                      />
+
+                      {/* Skills Dropdown - Shows only non-GSD skills */}
+                      <SkillsDropdown
                         onSkillSelect={handleSkillSelect}
                         disabled={createChatMutation.isPending}
                       />
