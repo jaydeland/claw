@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { selectedProjectAtom, selectedAgentChatIdAtom } from "../../agents/atoms"
+import { selectedProjectAtom, selectedAgentChatIdAtom, selectedSidebarTabAtom } from "../../agents/atoms"
 import {
   selectedGsdProjectIdAtom,
   selectedGsdBranchesAtom,
@@ -83,6 +83,7 @@ export function GsdContent() {
   const [updateInProgress, setUpdateInProgress] = useAtom(gsdUpdateInProgressAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedGsdCategory = useSetAtom(selectedGsdCategoryAtom)
+  const setSelectedSidebarTab = useSetAtom(selectedSidebarTabAtom)
   const utils = trpc.useUtils()
 
   // Fetch projects to get the selected one
@@ -120,6 +121,7 @@ export function GsdContent() {
       utils.chats.list.invalidate()
       setSelectedChatId(data.id)
       setSelectedGsdCategory(null)
+      setSelectedSidebarTab("chats") // Switch view to show the new chat
     },
   })
 
@@ -200,12 +202,18 @@ export function GsdContent() {
   // Determine which document type is active
   const activeDocType: DocType | null = selectedGsdDoc ? "gsd" : selectedPlanningDoc ? "planning" : null
 
-  // Default to README.md if nothing selected
+  // Default to STATE.md if it exists in planning docs, otherwise README.md
   useEffect(() => {
     if (!selectedPlanningDoc && !selectedGsdDoc) {
-      setSelectedGsdDoc("README.md")
+      // Check if STATE.md exists in planning docs
+      const hasStateMd = docsData?.files?.some((f) => f.name === "STATE.md" && !f.isDirectory)
+      if (hasStateMd) {
+        setSelectedPlanningDoc("STATE.md")
+      } else {
+        setSelectedGsdDoc("README.md")
+      }
     }
-  }, [selectedPlanningDoc, selectedGsdDoc, setSelectedGsdDoc])
+  }, [selectedPlanningDoc, selectedGsdDoc, docsData, setSelectedGsdDoc, setSelectedPlanningDoc])
 
   // Handle selecting a GSD doc (clears planning doc)
   const handleSelectGsdDoc = (path: string) => {
