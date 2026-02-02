@@ -56,6 +56,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog"
+import { clearSubChatCaches } from "../stores/message-store"
 
 interface DiffStats {
   fileCount: number
@@ -221,6 +222,28 @@ export function SubChatSelector({
     }
     return set
   }, [pendingPlanApprovalsData])
+
+  // Clear session mutation - clears all messages in the current sub-chat
+  const utils = trpc.useUtils()
+  const clearSessionMutation = trpc.chats.clearSubChatMessages.useMutation({
+    onSuccess: (_, variables) => {
+      // Clear local message store caches for immediate UI update
+      clearSubChatCaches(variables.id)
+      // Invalidate queries to sync with backend
+      utils.chats.getSubChat.invalidate({ id: variables.id })
+      toast.success("Conversation cleared")
+    },
+    onError: (error) => {
+      console.error("[SubChatSelector] Clear session error:", error)
+      toast.error("Failed to clear conversation")
+    },
+  })
+
+  // Handler for clearing the current session
+  const handleClearSession = useCallback(() => {
+    if (!activeSubChatId) return
+    clearSessionMutation.mutate({ id: activeSubChatId })
+  }, [activeSubChatId, clearSessionMutation])
 
   const tabsContainerRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
@@ -857,29 +880,30 @@ export function SubChatSelector({
             onSelect={handleSelectFromHistory}
           />
 
-          {/* Clear session button */}
+          {/* Clear conversation button */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => {
-                  // Check if there are messages in the current sub-chat
-                  // For now, always show confirmation if we have an active sub-chat
+                  // Show confirmation dialog if we have an active sub-chat
                   if (activeSubChatId) {
                     setShowClearConfirm(true)
-                  } else {
-                    onCreateNew()
                   }
                 }}
                 className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center"
-                disabled={!activeSubChatId}
+                disabled={!activeSubChatId || clearSessionMutation.isPending}
               >
-                <RotateCcw className="h-4 w-4" />
+                {clearSessionMutation.isPending ? (
+                  <IconSpinner className="h-4 w-4" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Clear session
+              Clear conversation
             </TooltipContent>
           </Tooltip>
         </div>
@@ -931,9 +955,9 @@ export function SubChatSelector({
       <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear chat session?</AlertDialogTitle>
+            <AlertDialogTitle>Clear conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will create a new chat session. Your current conversation will be saved and you can return to it anytime from the history.
+              This will clear all messages in this chat and start fresh. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -941,10 +965,10 @@ export function SubChatSelector({
             <AlertDialogAction
               onClick={() => {
                 setShowClearConfirm(false)
-                onCreateNew()
+                handleClearSession()
               }}
             >
-              Clear session
+              Clear conversation
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -202,19 +202,6 @@ export function GsdContent() {
   // Determine which document type is active
   const activeDocType: DocType | null = selectedGsdDoc ? "gsd" : selectedPlanningDoc ? "planning" : null
 
-  // Default to STATE.md if it exists in planning docs, otherwise README.md
-  useEffect(() => {
-    if (!selectedPlanningDoc && !selectedGsdDoc) {
-      // Check if STATE.md exists in planning docs
-      const hasStateMd = docsData?.files?.some((f) => f.name === "STATE.md" && !f.isDirectory)
-      if (hasStateMd) {
-        setSelectedPlanningDoc("STATE.md")
-      } else {
-        setSelectedGsdDoc("README.md")
-      }
-    }
-  }, [selectedPlanningDoc, selectedGsdDoc, docsData, setSelectedGsdDoc, setSelectedPlanningDoc])
-
   // Handle selecting a GSD doc (clears planning doc)
   const handleSelectGsdDoc = (path: string) => {
     setSelectedPlanningDoc(null)
@@ -620,6 +607,19 @@ function PlanningFileTree({
     if (!docsData?.files) return []
     return buildFileTree(docsData.files)
   }, [docsData])
+
+  // Default to STATE.md if it exists in planning docs, otherwise README.md
+  useEffect(() => {
+    if (!selectedPlanningDoc && !selectedGsdDoc) {
+      // Check if STATE.md exists in planning docs
+      const hasStateMd = docsData?.files?.some((f) => f.name === "STATE.md" && !f.isDirectory)
+      if (hasStateMd) {
+        setSelectedPlanningDoc("STATE.md")
+      } else {
+        setSelectedGsdDoc("README.md")
+      }
+    }
+  }, [selectedPlanningDoc, selectedGsdDoc, docsData, setSelectedGsdDoc, setSelectedPlanningDoc])
 
   const toggleFolder = (path: string) => {
     setExpandedFolders((prev) => ({
