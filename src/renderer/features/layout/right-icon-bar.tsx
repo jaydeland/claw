@@ -2,15 +2,21 @@
 
 import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronsRight, ChevronsLeft, GitBranch, ListTree } from "lucide-react"
-import { IconSidePeek } from "../../components/ui/icons"
+import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check } from "lucide-react"
+import { IconSidePeek, IconCenterPeek, IconFullPage } from "../../components/ui/icons"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "../../components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu"
 import { cn } from "../../lib/utils"
-import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily } from "../agents/atoms"
+import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily, diffViewDisplayModeAtom, type DiffViewDisplayMode } from "../agents/atoms"
 import {
   sessionFlowDisplayModeAtom,
   sessionFlowSidebarOpenAtom,
@@ -19,6 +25,65 @@ import {
 import { workflowPanelOpenAtom } from "../workflows/atoms"
 import { rightIconBarExpandedAtom } from "./atoms"
 import { trpc } from "../../lib/trpc"
+
+type DisplayMode = "side-peek" | "center-peek" | "full-page"
+
+const LAYOUT_MODES = [
+  {
+    value: "side-peek" as const,
+    label: "Sidebar",
+    Icon: IconSidePeek,
+  },
+  {
+    value: "center-peek" as const,
+    label: "Dialog",
+    Icon: IconCenterPeek,
+  },
+  {
+    value: "full-page" as const,
+    label: "Fullscreen",
+    Icon: IconFullPage,
+  },
+]
+
+interface LayoutModeSelectorProps {
+  mode: DisplayMode
+  onModeChange: (mode: DisplayMode) => void
+}
+
+function LayoutModeSelector({ mode, onModeChange }: LayoutModeSelectorProps) {
+  const currentMode = LAYOUT_MODES.find((m) => m.value === mode) ?? LAYOUT_MODES[0]
+  const CurrentIcon = currentMode.Icon
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className="h-6 w-6 p-0 flex-shrink-0 flex items-center justify-center rounded hover:bg-foreground/10"
+        >
+          <CurrentIcon className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[140px]">
+        {LAYOUT_MODES.map(({ value, label, Icon }) => (
+          <DropdownMenuItem
+            key={value}
+            onClick={() => onModeChange(value)}
+            className="flex items-center gap-2"
+          >
+            <Icon className="h-4 w-4 text-muted-foreground" />
+            <span className="flex-1">{label}</span>
+            {mode === value && (
+              <Check className="h-4 w-4 text-muted-foreground ml-auto" />
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 interface RightIconBarProps {
   className?: string
@@ -55,8 +120,11 @@ export function RightIconBar({ className }: RightIconBarProps) {
   )
   const [isDiffOpen, setIsDiffOpen] = useAtom(diffSidebarAtom)
 
+  // Diff display mode
+  const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
+
   // Session flow display mode and state
-  const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
+  const [sessionFlowDisplayMode, setSessionFlowDisplayMode] = useAtom(sessionFlowDisplayModeAtom)
   const [isSessionFlowOpen, setIsSessionFlowOpen] = useAtom(sessionFlowSidebarOpenAtom)
   const [sessionFlowRuntimeOpen, setSessionFlowRuntimeOpen] = useAtom(sessionFlowSidebarOpenRuntimeAtom)
 
@@ -162,7 +230,10 @@ export function RightIconBar({ className }: RightIconBarProps) {
               {isExpanded && (
                 <>
                   <span className="text-sm flex-1 text-left">Changes</span>
-                  <IconSidePeek className="h-4 w-4 flex-shrink-0 opacity-50" />
+                  <LayoutModeSelector
+                    mode={diffDisplayMode}
+                    onModeChange={(mode) => setDiffDisplayMode(mode as DiffViewDisplayMode)}
+                  />
                 </>
               )}
             </button>
@@ -194,7 +265,10 @@ export function RightIconBar({ className }: RightIconBarProps) {
               {isExpanded && (
                 <>
                   <span className="text-sm flex-1 text-left">Session Flow</span>
-                  <IconSidePeek className="h-4 w-4 flex-shrink-0 opacity-50" />
+                  <LayoutModeSelector
+                    mode={sessionFlowDisplayMode}
+                    onModeChange={setSessionFlowDisplayMode}
+                  />
                 </>
               )}
             </button>
