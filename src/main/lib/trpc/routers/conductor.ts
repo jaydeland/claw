@@ -113,8 +113,13 @@ import {
   type ConductorJob,
   type ConductorCheckpoint,
   type ConductorLog,
+  projects,
 } from "../../db"
 import { EventEmitter } from "events"
+import { parseRoadmap } from "../../gsd/roadmap-parser"
+import { parsePhasePlans } from "../../gsd/plan-parser"
+import { mapGsdToConductor } from "../../gsd/status-mapper"
+import { createGsdCommandMessage } from "../../conductor/gsd-chat-integration"
 
 // ============ EVENT EMITTER FOR REAL-TIME UPDATES ============
 // Uses Node's EventEmitter for decoupled real-time notifications
@@ -1186,11 +1191,6 @@ export const conductorRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        const { parseRoadmap } = await import("../../gsd/roadmap-parser")
-        const { parsePhasePlans } = await import("../../gsd/plan-parser")
-        const { mapGsdToConductor } = await import("../../gsd/status-mapper")
-        const { projects } = await import("../db/schema")
-
         const db = getDatabase()
         const imported: Array<{ projectId: string; phaseCount: number; jobCount: number }> = []
         const errors: Array<{ projectId: string; error: string }> = []
@@ -1299,8 +1299,6 @@ export const conductorRouter = router({
     getGsdCommandForJob: publicProcedure
       .input(z.object({ jobId: z.string() }))
       .query(async ({ input }) => {
-        const { projects } = await import("../db/schema")
-
         const db = getDatabase()
         const job = db.select().from(conductorJobs).where(eq(conductorJobs.id, input.jobId)).get()
 
@@ -1356,8 +1354,6 @@ export const conductorRouter = router({
     triggerGsdCommand: publicProcedure
       .input(z.object({ jobId: z.string() }))
       .mutation(async ({ input }) => {
-        const { createGsdCommandMessage } = await import("../../conductor/gsd-chat-integration")
-
         const db = getDatabase()
         const job = db.select().from(conductorJobs).where(eq(conductorJobs.id, input.jobId)).get()
 

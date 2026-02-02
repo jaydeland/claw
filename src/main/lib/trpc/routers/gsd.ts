@@ -4,6 +4,10 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { app } from "electron"
 import simpleGit from "simple-git"
+import { getDatabase } from "../db"
+import { projects } from "../db/schema"
+import { eq } from "drizzle-orm"
+import { parseRoadmap } from "../../gsd/roadmap-parser"
 
 /**
  * Get the path to bundled GSD resources
@@ -443,11 +447,6 @@ export const gsdRouter = router({
   getGsdStatusBatch: publicProcedure
     .input(z.object({ projectIds: z.array(z.string()) }))
     .query(async ({ input }) => {
-      const { getDatabase } = await import("../db")
-      const { projects } = await import("../db/schema")
-      const { eq } = await import("drizzle-orm")
-      const { parseRoadmap } = await import("../../gsd/roadmap-parser")
-
       const db = getDatabase()
       const results: Record<
         string,
