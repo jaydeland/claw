@@ -22,6 +22,7 @@ import {
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { initBackgroundSession, closeBackgroundSession } from "./lib/claude/background-session"
 import { taskWatcher, taskEvents, startCleanupScheduler, stopCleanupScheduler, notifyTaskCompleted } from "./lib/background-tasks"
+import { terminalManager } from "./lib/terminal/manager"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -761,6 +762,7 @@ if (gotTheLock) {
     taskWatcher.stop()
     stopCleanupScheduler()
     await cleanupGitWatchers()
+    await terminalManager.cleanup()
     await closeBackgroundSession()
     await shutdownAnalytics()
     await closeDatabase()

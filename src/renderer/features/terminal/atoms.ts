@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
+import type { SearchAddon } from "@xterm/addon-search"
 import type { TerminalInstance } from "./types"
 
 // Special ID for global terminals (not tied to any specific chat)
@@ -98,3 +99,24 @@ export interface CreateTerminalRequest {
 }
 
 export const createTerminalRequestAtom = atom<CreateTerminalRequest | null>(null)
+
+// ============================================================================
+// Terminal Settings
+// ============================================================================
+
+/**
+ * Terminal word wrap setting (global, applies to all terminals).
+ * When enabled, long lines wrap instead of requiring horizontal scroll.
+ */
+export const terminalWordWrapAtom = atomWithStorage<boolean>(
+  "terminal-word-wrap",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Maps paneId to SearchAddon instance (runtime only, not persisted).
+ * Used to share SearchAddon references between Terminal and TerminalTabs components.
+ */
+export const terminalSearchAddonAtom = atom<Record<string, SearchAddon | null>>({})
