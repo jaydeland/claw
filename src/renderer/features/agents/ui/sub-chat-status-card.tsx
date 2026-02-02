@@ -184,6 +184,8 @@ const SectionButton = memo(function SectionButton({
   return (
     <button
       onClick={onClick}
+      title={label}
+      aria-label={`${label}${countDetail ? ` (${countDetail})` : ''}`}
       className={cn(
         "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors",
         isActive
@@ -192,7 +194,6 @@ const SectionButton = memo(function SectionButton({
       )}
     >
       <Icon className="w-3.5 h-3.5" />
-      <span>{label}</span>
       {countDetail && (
         <span className="text-[10px] opacity-70">
           ({countDetail})
