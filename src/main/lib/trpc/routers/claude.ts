@@ -27,6 +27,7 @@ import { createRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from "../../ollama"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
+import { getSwarmManager } from "../swarm/swarm-manager"
 import { getMergedMcpConfig } from "../../config/consolidator"
 import { taskEvents, taskWatcher } from "../../background-tasks"
 import { getBundledGsdPath } from "./gsd"
@@ -520,7 +521,7 @@ export const claudeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "agent", "swarm"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
         customConfig: z
@@ -697,11 +698,30 @@ export const claudeRouter = router({
             const { cleanedPrompt, agentMentions, skillMentions } = parseMentions(input.prompt)
 
             // Build agents option for SDK (proper registration via options.agents)
-            const agentsOption = await buildAgentsOption(agentMentions, input.cwd)
+            // In swarm mode, load swarm agents instead of @mentioned agents
+            let agentsOption: Record<string, any> = {}
+            let finalPrompt = cleanedPrompt
 
-            // Log if agents were mentioned
-            if (agentMentions.length > 0) {
-              console.log(`[claude] Registering agents via SDK:`, Object.keys(agentsOption))
+            if (input.mode === "swarm") {
+              // Swarm mode: Load all swarm agents (coordinator, coder, reviewer, tester)
+              try {
+                const swarmManager = await getSwarmManager()
+                agentsOption = swarmManager.getAgentsForSDK()
+                // Use coordinator's enhanced prompt with worker context
+                finalPrompt = swarmManager.getCoordinatorPrompt(cleanedPrompt)
+                console.log(`[claude] Swarm mode: Loaded agents:`, Object.keys(agentsOption))
+              } catch (err) {
+                console.error("[claude] Failed to initialize swarm:", err)
+                throw new Error(`Failed to initialize swarm mode: ${err instanceof Error ? err.message : String(err)}`)
+              }
+            } else {
+              // Regular agent/plan mode: Load @mentioned agents
+              agentsOption = await buildAgentsOption(agentMentions, input.cwd)
+
+              // Log if agents were mentioned
+              if (agentMentions.length > 0) {
+                console.log(`[claude] Registering agents via SDK:`, Object.keys(agentsOption))
+              }
             }
 
             // Log if skills were mentioned
@@ -709,21 +729,24 @@ export const claudeRouter = router({
               console.log(`[claude] Skills mentioned:`, skillMentions)
             }
 
-            // Build final prompt with skill instructions if needed
-            let finalPrompt = cleanedPrompt
-
-            // Handle empty prompt when only mentions are present
-            if (!finalPrompt.trim()) {
-              if (agentMentions.length > 0 && skillMentions.length > 0) {
-                finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) and invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
-              } else if (agentMentions.length > 0) {
-                finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) for this task.`
+            // Build final prompt with skill instructions if needed (for non-swarm modes)
+            if (input.mode !== "swarm") {
+              // Handle empty prompt when only mentions are present
+              if (!finalPrompt.trim()) {
+                if (agentMentions.length > 0 && skillMentions.length > 0) {
+                  finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) and invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
+                } else if (agentMentions.length > 0) {
+                  finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) for this task.`
+                } else if (skillMentions.length > 0) {
+                  finalPrompt = `Invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
+                }
               } else if (skillMentions.length > 0) {
-                finalPrompt = `Invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
+                // Append skill instruction to existing prompt
+                finalPrompt = `${finalPrompt}\n\nUse the "${skillMentions.join('", "')}" skill(s) for this task.`
               }
             } else if (skillMentions.length > 0) {
-              // Append skill instruction to existing prompt
-              finalPrompt = `${finalPrompt}\n\nUse the "${skillMentions.join('", "')}" skill(s) for this task.`
+              // Swarm mode with skills: append skill instruction
+              finalPrompt = `${finalPrompt}\n\nAlso use the "${skillMentions.join('", "')}" skill(s) for this task.`
             }
 
             // Build prompt: if there are images, create an AsyncIterable<SDKUserMessage>

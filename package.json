@@ -171,6 +171,11 @@
         "from": "resources/gsd",
         "to": "gsd",
         "filter": ["**/*"]
+      },
+      {
+        "from": "resources/agents/swarm",
+        "to": "agents/swarm",
+        "filter": ["**/*"]
       }
     ],
     "asar": true,
