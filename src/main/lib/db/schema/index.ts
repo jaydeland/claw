@@ -246,6 +246,18 @@ export const devspaceSettings = sqliteTable("devspace_settings", {
   ),
 })
 
+// ============ MCP TOOL CACHE ============
+// Caches tool counts and names for MCP servers to avoid querying on every load
+export const mcpToolCache = sqliteTable("mcp_tool_cache", {
+  serverId: text("server_id").primaryKey(), // Server name from mcp.json
+  toolCount: integer("tool_count").notNull(),
+  toolNames: text("tool_names").notNull().default("[]"), // JSON array of tool names
+  lastQueried: integer("last_queried", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  configHash: text("config_hash"), // Hash of server config to invalidate on change
+})
+
 // ============ DEVSPACE STARTED PROCESSES ============
 // Tracks processes started by this application
 export const devspaceStartedProcesses = sqliteTable("devspace_started_processes", {
@@ -288,3 +300,5 @@ export type DevspaceSettings = typeof devspaceSettings.$inferSelect
 export type NewDevspaceSettings = typeof devspaceSettings.$inferInsert
 export type DevspaceStartedProcess = typeof devspaceStartedProcesses.$inferSelect
 export type NewDevspaceStartedProcess = typeof devspaceStartedProcesses.$inferInsert
+export type McpToolCache = typeof mcpToolCache.$inferSelect
+export type NewMcpToolCache = typeof mcpToolCache.$inferInsert

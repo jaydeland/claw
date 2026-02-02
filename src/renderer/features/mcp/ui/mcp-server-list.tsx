@@ -1,8 +1,8 @@
 "use client"
 
 import React from "react"
-import { useAtom, useAtomValue } from "jotai"
-import { Search, Check, AlertTriangle, Minus, Loader2 } from "lucide-react"
+import { useAtom } from "jotai"
+import { Search, Check, AlertTriangle, Minus, Loader2, Wrench } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { selectedMcpServerAtom, mcpServerSearchAtom } from "../atoms"
@@ -35,6 +35,16 @@ export function McpServerList() {
   const [search, setSearch] = useAtom(mcpServerSearchAtom)
 
   const { data, isLoading, error } = trpc.mcp.listServers.useQuery()
+
+  // Query cached tool counts for all servers
+  const serverIds = React.useMemo(
+    () => data?.servers?.map((s) => s.id) || [],
+    [data?.servers]
+  )
+  const { data: toolCounts } = trpc.mcp.getToolCounts.useQuery(
+    { serverIds },
+    { enabled: serverIds.length > 0 }
+  )
 
   const filteredServers = React.useMemo(() => {
     if (!data?.servers) return []
@@ -90,38 +100,55 @@ export function McpServerList() {
           </div>
         ) : (
           <div className="py-1">
-            {filteredServers.map((server) => (
-              <button
-                key={server.id}
-                type="button"
-                onClick={() => setSelectedServer(server.id)}
-                className={cn(
-                  "w-full px-3 py-2 text-left transition-colors",
-                  "hover:bg-muted/50",
-                  selectedServer === server.id && "bg-accent"
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "flex-1 text-sm font-medium truncate",
-                      !server.enabled && "text-muted-foreground"
-                    )}
-                  >
-                    {server.name}
-                  </span>
-                  {!server.enabled && (
-                    <span className="text-xs text-muted-foreground">(disabled)</span>
+            {filteredServers.map((server) => {
+              const toolCount = toolCounts?.[server.id]
+              return (
+                <button
+                  key={server.id}
+                  type="button"
+                  onClick={() => setSelectedServer(server.id)}
+                  className={cn(
+                    "w-full px-3 py-2 text-left transition-colors",
+                    "hover:bg-muted/50",
+                    selectedServer === server.id && "bg-accent"
                   )}
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  {getStatusIcon(server.authStatus)}
-                  <span className="text-xs text-muted-foreground">
-                    {getStatusText(server.authStatus)}
-                  </span>
-                </div>
-              </button>
-            ))}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "flex-1 text-sm font-medium truncate",
+                        !server.enabled && "text-muted-foreground"
+                      )}
+                    >
+                      {server.name}
+                    </span>
+                    {/* Tool count badge */}
+                    {server.enabled && toolCount && (
+                      <span
+                        className={cn(
+                          "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full",
+                          toolCount.stale
+                            ? "bg-muted text-muted-foreground"
+                            : "bg-primary/10 text-primary"
+                        )}
+                      >
+                        <Wrench className="h-3 w-3" />
+                        {toolCount.count}
+                      </span>
+                    )}
+                    {!server.enabled && (
+                      <span className="text-xs text-muted-foreground">(disabled)</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {getStatusIcon(server.authStatus)}
+                    <span className="text-xs text-muted-foreground">
+                      {getStatusText(server.authStatus)}
+                    </span>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

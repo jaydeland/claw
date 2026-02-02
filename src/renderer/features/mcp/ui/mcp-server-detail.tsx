@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   Check,
   AlertTriangle,
@@ -15,6 +15,7 @@ import {
   Wrench,
   ChevronDown,
   ChevronRight,
+  X,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -22,10 +23,13 @@ import {
   selectedMcpServerAtom,
   mcpAuthModalOpenAtom,
   mcpAuthModalServerIdAtom,
+  selectedMcpToolAtom,
 } from "../atoms"
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
+import { JsonSchemaViewer } from "./json-schema-viewer"
 import type { McpAuthStatus } from "../types"
+import type { McpTool } from "../../../../main/lib/mcp/tool-query"
 
 function getStatusBadge(status: McpAuthStatus) {
   switch (status) {
@@ -216,10 +220,77 @@ export function McpServerDetail() {
 }
 
 /**
+ * Tool schema panel - shows detailed schema for selected tool
+ */
+function ToolSchemaPanel({
+  tool,
+  onClose,
+}: {
+  tool: McpTool
+  onClose: () => void
+}) {
+  const paramCount = tool.inputSchema?.properties
+    ? Object.keys(tool.inputSchema.properties).length
+    : 0
+
+  return (
+    <div className="mt-4 border border-border rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="bg-muted/50 px-4 py-2 flex items-center justify-between border-b">
+        <div className="flex items-center gap-2">
+          <Wrench className="h-4 w-4 text-primary" />
+          <code className="text-sm font-semibold">{tool.name}</code>
+          {paramCount > 0 && (
+            <span className="text-xs text-muted-foreground">
+              ({paramCount} {paramCount === 1 ? "param" : "params"})
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-muted rounded"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-4 space-y-4">
+        {/* Description */}
+        {tool.description && (
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {tool.description}
+          </p>
+        )}
+
+        {/* Parameters */}
+        {tool.inputSchema?.properties &&
+        Object.keys(tool.inputSchema.properties).length > 0 ? (
+          <div className="space-y-2">
+            <h4 className="text-xs font-medium uppercase text-muted-foreground tracking-wide">
+              Parameters
+            </h4>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <JsonSchemaViewer schema={tool.inputSchema} />
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">
+            This tool accepts no parameters.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Tools section that queries and displays MCP server tools
  */
 function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolean }) {
   const [isExpanded, setIsExpanded] = React.useState(true)
+  const [selectedTool, setSelectedTool] = useAtom(selectedMcpToolAtom)
 
   // Query tools (only when server is enabled)
   const { data: toolsData, isLoading, error } = trpc.mcp.getServerTools.useQuery(
@@ -230,6 +301,29 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
       staleTime: 30000, // Cache for 30 seconds
     }
   )
+
+  // Get currently selected tool (if any from this server)
+  const currentToolKey = selectedTool?.startsWith(`${serverId}:`)
+    ? selectedTool.split(":").slice(1).join(":") // Handle tool names with colons
+    : null
+  const tools = toolsData?.tools || []
+  const toolDetail = tools.find((t) => t.name === currentToolKey)
+
+  // Clear tool selection when server changes
+  React.useEffect(() => {
+    if (selectedTool && !selectedTool.startsWith(`${serverId}:`)) {
+      // Don't clear - it's for a different server
+    }
+  }, [serverId, selectedTool])
+
+  const handleToolSelect = (toolName: string) => {
+    const toolKey = `${serverId}:${toolName}`
+    if (selectedTool === toolKey) {
+      setSelectedTool(null) // Toggle off if already selected
+    } else {
+      setSelectedTool(toolKey)
+    }
+  }
 
   if (!enabled) {
     return (
@@ -306,8 +400,6 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
     )
   }
 
-  const tools = toolsData?.tools || []
-
   return (
     <div className="space-y-2">
       <button
@@ -325,26 +417,57 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
       </button>
 
       {isExpanded && (
-        <div className="bg-muted/50 rounded-lg divide-y divide-border max-h-[300px] overflow-y-auto">
-          {tools.length === 0 ? (
-            <div className="p-3">
-              <p className="text-xs text-muted-foreground">
-                This server does not provide any tools.
-              </p>
-            </div>
-          ) : (
-            tools.map((tool) => (
-              <div key={tool.name} className="p-3">
-                <code className="text-xs font-medium">{tool.name}</code>
-                {tool.description && (
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {tool.description}
-                  </p>
-                )}
+        <>
+          <div className="bg-muted/50 rounded-lg divide-y divide-border max-h-[300px] overflow-y-auto">
+            {tools.length === 0 ? (
+              <div className="p-3">
+                <p className="text-xs text-muted-foreground">
+                  This server does not provide any tools.
+                </p>
               </div>
-            ))
+            ) : (
+              tools.map((tool) => {
+                const paramCount = tool.inputSchema?.properties
+                  ? Object.keys(tool.inputSchema.properties).length
+                  : 0
+                const isSelected = currentToolKey === tool.name
+
+                return (
+                  <button
+                    key={tool.name}
+                    onClick={() => handleToolSelect(tool.name)}
+                    className={cn(
+                      "w-full p-3 text-left transition-colors hover:bg-muted/80",
+                      isSelected && "bg-accent"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <code className="text-xs font-medium">{tool.name}</code>
+                      {paramCount > 0 && (
+                        <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {paramCount} {paramCount === 1 ? "param" : "params"}
+                        </span>
+                      )}
+                    </div>
+                    {tool.description && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {tool.description}
+                      </p>
+                    )}
+                  </button>
+                )
+              })
+            )}
+          </div>
+
+          {/* Schema panel for selected tool */}
+          {toolDetail && (
+            <ToolSchemaPanel
+              tool={toolDetail}
+              onClose={() => setSelectedTool(null)}
+            />
           )}
-        </div>
+        </>
       )}
     </div>
   )

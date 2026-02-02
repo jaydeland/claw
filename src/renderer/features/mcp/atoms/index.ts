@@ -43,3 +43,13 @@ export const mcpAuthModalServerIdAtom = atom<string | null>(null)
  * Search query for filtering MCP servers
  */
 export const mcpServerSearchAtom = atom<string>("")
+
+// ============================================
+// MCP TOOL SELECTION STATE
+// ============================================
+
+/**
+ * Currently selected MCP tool for schema viewing
+ * Format: "serverId:toolName" or null
+ */
+export const selectedMcpToolAtom = atom<string | null>(null)
