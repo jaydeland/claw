@@ -10,7 +10,7 @@ import {
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
 import { keepPreviousData } from "@tanstack/react-query"
-import { X, Plus, AlignJustify, Play } from "lucide-react"
+import { X, Plus, AlignJustify, Play, RotateCcw } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -46,6 +46,16 @@ import { toast } from "sonner"
 import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { SubChatContextMenu } from "./sub-chat-context-menu"
 import { formatTimeAgo } from "../utils/format-time-ago"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog"
 
 interface DiffStats {
   fileCount: number
@@ -220,6 +230,7 @@ export function SubChatSelector({
   const rightGradientRef = useRef<HTMLDivElement>(null)
   const truncatedTabsRef = useRef<Set<string>>(new Set())
   const searchHistoryPopoverRef = useRef<SearchHistoryPopoverRef>(null)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   // Map open IDs to metadata and sort: pinned first, then preserve user's tab order
   const openSubChats = useMemo(() => {
@@ -845,6 +856,32 @@ export function SubChatSelector({
             allSubChatsLength={allSubChats.length}
             onSelect={handleSelectFromHistory}
           />
+
+          {/* Clear session button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  // Check if there are messages in the current sub-chat
+                  // For now, always show confirmation if we have an active sub-chat
+                  if (activeSubChatId) {
+                    setShowClearConfirm(true)
+                  } else {
+                    onCreateNew()
+                  }
+                }}
+                className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center"
+                disabled={!activeSubChatId}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Clear session
+            </TooltipContent>
+          </Tooltip>
         </div>
       )}
 
@@ -889,6 +926,29 @@ export function SubChatSelector({
           </Button>
         </div>
       )}
+
+      {/* Clear session confirmation dialog */}
+      <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear chat session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will create a new chat session. Your current conversation will be saved and you can return to it anytime from the history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowClearConfirm(false)
+                onCreateNew()
+              }}
+            >
+              Clear session
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   )

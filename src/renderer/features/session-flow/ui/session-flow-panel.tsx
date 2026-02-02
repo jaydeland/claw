@@ -22,13 +22,7 @@ import {
 import { sessionFlowNodeTypes } from "../components/session-flow-nodes"
 import { transformMessagesToFlow } from "../lib/message-transformer"
 import { sessionFlowUserScrolledAtom, sessionFlowExpandedNodesAtom, sessionFlowLiveAtom } from "../atoms"
-import { Play, Pause } from "lucide-react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  TooltipProvider,
-} from "@/components/ui/tooltip"
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 interface SessionFlowPanelProps {
   onScrollToMessage: (messageId: string, partIndex?: number) => void
@@ -190,11 +184,6 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
     setUserScrolled(false)
   }, [setUserScrolled])
 
-  // Toggle Live mode
-  const toggleLive = useCallback(() => {
-    setIsLive(prev => !prev)
-  }, [setIsLive])
-
   return (
     <div className="h-full w-full bg-background">
       <ReactFlow
@@ -230,35 +219,6 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
           position="bottom-left"
           onFitView={handleFitView}
         />
-
-        {/* Live toggle control - positioned next to Controls */}
-        <div className="absolute bottom-2 left-[140px] z-10">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={toggleLive}
-                className={`
-                  flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium
-                  border shadow-sm transition-colors
-                  ${isLive
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
-                    : 'bg-muted/80 border-border text-muted-foreground hover:bg-muted'
-                  }
-                `}
-              >
-                {isLive ? (
-                  <Play className="h-3 w-3 fill-current" />
-                ) : (
-                  <Pause className="h-3 w-3" />
-                )}
-                <span>Live</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs">
-              {isLive ? 'Auto-following new nodes' : 'Paused - click to resume'}
-            </TooltipContent>
-          </Tooltip>
-        </div>
       </ReactFlow>
     </div>
   )

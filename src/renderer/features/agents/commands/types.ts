@@ -31,11 +31,7 @@ export interface SlashTriggerPayload {
 }
 
 // Builtin command action handlers
-export type BuiltinCommandAction =
-  | { type: "clear" }
-  | { type: "plan" }
-  | { type: "agent" }
-  | { type: "tasks" }
+export type BuiltinCommandAction = never
 
 // Result of selecting a slash command
 export type SlashCommandSelection =

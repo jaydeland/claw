@@ -45,7 +45,7 @@ import {
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
 import { CommandsDropdown } from "../components/commands-dropdown"
-import { AgentsDropdown } from "../components/agents-dropdown"
+import { SkillsAndGsdDropdown } from "../components/skills-and-gsd-dropdown"
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
@@ -912,9 +912,9 @@ export function NewChatForm({
     }, 0)
   }, [])
 
-  // Handle agent selection from Agents dropdown
-  const handleAgentSelect = useCallback((agentId: string) => {
-    const command = `/${agentId} `
+  // Handle skill selection from Skills & GSD dropdown
+  const handleSkillSelect = useCallback((skillName: string) => {
+    const command = `/${skillName} `
     const currentValue = editorRef.current?.getValue() || ""
     const newValue = currentValue.trim()
       ? `${command}${currentValue}`
@@ -922,7 +922,7 @@ export function NewChatForm({
     editorRef.current?.setValue(newValue)
     editorRef.current?.focus()
 
-    // Position cursor right after the agent command and space
+    // Position cursor right after the skill command and space
     setTimeout(() => {
       editorRef.current?.setCursorPosition(command.length)
     }, 0)
@@ -1026,36 +1026,6 @@ export function NewChatForm({
       editorRef.current?.clearSlashCommand()
       setShowSlashDropdown(false)
 
-      // Handle builtin commands
-      if (command.category === "builtin") {
-        switch (command.name) {
-          case "clear":
-            editorRef.current?.clear()
-            break
-          case "plan":
-            if (!isPlanMode) {
-              setIsPlanMode(true)
-            }
-            break
-          case "agent":
-            if (isPlanMode) {
-              setIsPlanMode(false)
-            }
-            break
-          // Prompt-based commands - use background session with modal
-          case "review":
-          case "pr-comments":
-          case "release-notes":
-          case "security-review":
-          case "worktree-setup": {
-            // These commands are now handled natively by the SDK
-            // No action needed here - SDK will process them
-            break
-          }
-        }
-        return
-      }
-
       // Handle custom commands
       if (command.argumentHint) {
         // Command expects arguments - insert command and let user add args
@@ -1066,7 +1036,7 @@ export function NewChatForm({
         setTimeout(() => handleSend(), 0)
       }
     },
-    [isPlanMode, setIsPlanMode, handleSend],
+    [handleSend],
   )
 
   // Paste handler for images and plain text
@@ -1524,9 +1494,9 @@ export function NewChatForm({
                         disabled={createChatMutation.isPending}
                       />
 
-                      {/* Agents Dropdown */}
-                      <AgentsDropdown
-                        onAgentSelect={handleAgentSelect}
+                      {/* Skills & GSD Dropdown */}
+                      <SkillsAndGsdDropdown
+                        onSkillSelect={handleSkillSelect}
                         disabled={createChatMutation.isPending}
                       />
                     </div>
@@ -1794,7 +1764,6 @@ export function NewChatForm({
                   position={slashPosition}
                   projectPath={validatedProject?.path}
                   isPlanMode={isPlanMode}
-                  disabledCommands={["clear"]}
                 />
               </div>
             </div>

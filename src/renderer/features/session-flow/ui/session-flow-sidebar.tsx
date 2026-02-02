@@ -8,7 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Download } from "lucide-react"
+import { Download, Play, Pause } from "lucide-react"
 import { DialogIcons, DialogIconSizes } from "@/lib/dialog-icons"
 import { SessionFlowPanel } from "./session-flow-panel"
 import { SessionFlowViewModeSwitcher } from "./session-flow-view-mode-switcher"
@@ -25,6 +25,7 @@ import {
   sessionFlowSidebarWidthAtom,
   sessionFlowDialogOpenAtom,
   sessionFlowFullScreenAtom,
+  sessionFlowLiveAtom,
 } from "../atoms"
 import {
   DropdownMenu,
@@ -45,6 +46,7 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
   const setRuntimeOpen = useSetAtom(sessionFlowSidebarOpenRuntimeAtom)
   const [dialogOpen, setDialogOpen] = useAtom(sessionFlowDialogOpenAtom)
   const [fullScreen, setFullScreen] = useAtom(sessionFlowFullScreenAtom)
+  const [isLive, setIsLive] = useAtom(sessionFlowLiveAtom)
 
   // Get all messages for export
   const messageIds = useAtomValue(messageIdsAtom)
@@ -100,6 +102,11 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
     URL.revokeObjectURL(url)
   }, [messages])
 
+  // Toggle Live mode
+  const toggleLive = useCallback(() => {
+    setIsLive(prev => !prev)
+  }, [setIsLive])
+
   return (
     <ResizableSidebar
       isOpen={isOpen}
@@ -132,6 +139,35 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
             <TooltipContent side="bottom">Close session flow</TooltipContent>
           </Tooltip>
           <span className="text-sm font-medium ml-1">Session Flow</span>
+
+          {/* Live Toggle Button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleLive}
+                className={`
+                  h-6 px-2 ml-2 text-xs font-medium rounded-md
+                  transition-colors duration-150 ease-out
+                  ${isLive
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                    : 'bg-muted/80 text-muted-foreground hover:bg-muted'
+                  }
+                `}
+              >
+                {isLive ? (
+                  <Play className="h-3 w-3 fill-current mr-1" />
+                ) : (
+                  <Pause className="h-3 w-3 mr-1" />
+                )}
+                <span>Live</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {isLive ? 'Auto-following new nodes' : 'Paused - click to resume'}
+            </TooltipContent>
+          </Tooltip>
 
           {/* Export and View Options */}
           <div className="flex-1" />

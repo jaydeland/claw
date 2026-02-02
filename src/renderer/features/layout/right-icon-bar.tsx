@@ -2,15 +2,21 @@
 
 import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronsRight, ChevronsLeft } from "lucide-react"
-import { IconSidePeek } from "../../components/ui/icons"
+import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check } from "lucide-react"
+import { IconSidePeek, IconCenterPeek, IconFullPage } from "../../components/ui/icons"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "../../components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu"
 import { cn } from "../../lib/utils"
-import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily } from "../agents/atoms"
+import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily, diffViewDisplayModeAtom, type DiffViewDisplayMode } from "../agents/atoms"
 import {
   sessionFlowDisplayModeAtom,
   sessionFlowSidebarOpenAtom,
@@ -19,6 +25,65 @@ import {
 import { workflowPanelOpenAtom } from "../workflows/atoms"
 import { rightIconBarExpandedAtom } from "./atoms"
 import { trpc } from "../../lib/trpc"
+
+type DisplayMode = "side-peek" | "center-peek" | "full-page"
+
+const LAYOUT_MODES = [
+  {
+    value: "side-peek" as const,
+    label: "Sidebar",
+    Icon: IconSidePeek,
+  },
+  {
+    value: "center-peek" as const,
+    label: "Dialog",
+    Icon: IconCenterPeek,
+  },
+  {
+    value: "full-page" as const,
+    label: "Fullscreen",
+    Icon: IconFullPage,
+  },
+]
+
+interface LayoutModeSelectorProps {
+  mode: DisplayMode
+  onModeChange: (mode: DisplayMode) => void
+}
+
+function LayoutModeSelector({ mode, onModeChange }: LayoutModeSelectorProps) {
+  const currentMode = LAYOUT_MODES.find((m) => m.value === mode) ?? LAYOUT_MODES[0]
+  const CurrentIcon = currentMode.Icon
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className="h-6 w-6 p-0 flex-shrink-0 flex items-center justify-center rounded hover:bg-foreground/10"
+        >
+          <CurrentIcon className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[140px]">
+        {LAYOUT_MODES.map(({ value, label, Icon }) => (
+          <DropdownMenuItem
+            key={value}
+            onClick={() => onModeChange(value)}
+            className="flex items-center gap-2"
+          >
+            <Icon className="h-4 w-4 text-muted-foreground" />
+            <span className="flex-1">{label}</span>
+            {mode === value && (
+              <Check className="h-4 w-4 text-muted-foreground ml-auto" />
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 interface RightIconBarProps {
   className?: string
@@ -55,8 +120,11 @@ export function RightIconBar({ className }: RightIconBarProps) {
   )
   const [isDiffOpen, setIsDiffOpen] = useAtom(diffSidebarAtom)
 
+  // Diff display mode
+  const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
+
   // Session flow display mode and state
-  const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
+  const [sessionFlowDisplayMode, setSessionFlowDisplayMode] = useAtom(sessionFlowDisplayModeAtom)
   const [isSessionFlowOpen, setIsSessionFlowOpen] = useAtom(sessionFlowSidebarOpenAtom)
   const [sessionFlowRuntimeOpen, setSessionFlowRuntimeOpen] = useAtom(sessionFlowSidebarOpenRuntimeAtom)
 
@@ -114,146 +182,101 @@ export function RightIconBar({ className }: RightIconBarProps) {
         className,
       )}
     >
-      {/* Expand button - only show when collapsed */}
-      {!isExpanded && (
+      {/* Expand/Collapse button - always at top */}
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className={cn(
+              "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8",
+              isExpanded ? "w-full hover:bg-foreground/5" : "w-8",
+              "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+            )}
+            aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {isExpanded ? (
+              <ChevronsLeft className="h-4 w-4 flex-shrink-0" />
+            ) : (
+              <ChevronsRight className="h-4 w-4 flex-shrink-0" />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">
+          {isExpanded ? "Collapse" : "Expand"}
+        </TooltipContent>
+      </Tooltip>
+
+      {/* Changes/Diff Button - show if git repo */}
+      {isGitRepo && (
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={() => setIsExpanded(true)}
+              onClick={handleChangesClick}
+              disabled={!selectedChatId}
               className={cn(
-                "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-                "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                "flex items-center rounded-md transition-all duration-150 ease-out h-8",
+                isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
+                isDiffOpen && selectedChatId
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                !selectedChatId && "opacity-50 cursor-not-allowed",
               )}
-              aria-label="Expand sidebar"
+              aria-label="Changes"
+              aria-pressed={isDiffOpen}
             >
-              <ChevronsRight className="h-4 w-4 flex-shrink-0" />
+              <GitBranch className="h-4 w-4 flex-shrink-0" />
+              {isExpanded && (
+                <>
+                  <span className="text-sm flex-1 text-left">Changes</span>
+                  <LayoutModeSelector
+                    mode={diffDisplayMode}
+                    onModeChange={(mode) => setDiffDisplayMode(mode as DiffViewDisplayMode)}
+                  />
+                </>
+              )}
             </button>
           </TooltipTrigger>
           <TooltipContent side="left">
-            Expand
+            {selectedChatId ? "Changes" : "Select a workspace to view changes"}
           </TooltipContent>
         </Tooltip>
       )}
 
-      {/* Changes/Diff Button - show if git repo */}
-      {isGitRepo && (
-        <>
-          {!isExpanded ? (
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleChangesClick}
-                  disabled={!selectedChatId}
-                  className={cn(
-                    "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-                    isDiffOpen && selectedChatId
-                      ? "bg-foreground/10 text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-                    !selectedChatId && "opacity-50 cursor-not-allowed",
-                  )}
-                  aria-label="Changes"
-                  aria-pressed={isDiffOpen}
-                >
-                  <IconSidePeek className="h-4 w-4 flex-shrink-0" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="left">
-                {selectedChatId ? "Changes" : "Select a workspace to view changes"}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <div className="flex items-center justify-between gap-2 px-2 w-full">
-              <button
-                type="button"
-                onClick={handleChangesClick}
-                disabled={!selectedChatId}
-                className={cn(
-                  "flex items-center gap-2 rounded-md transition-all duration-150 ease-out h-8 px-2 flex-1",
-                  isDiffOpen && selectedChatId
-                    ? "bg-foreground/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-                  !selectedChatId && "opacity-50 cursor-not-allowed",
-                )}
-                aria-label="Changes"
-                aria-pressed={isDiffOpen}
-              >
-                <IconSidePeek className="h-4 w-4 flex-shrink-0" />
-                <span className="text-sm">Changes</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsExpanded(false)}
-                className={cn(
-                  "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-                  "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-                )}
-                aria-label="Collapse sidebar"
-              >
-                <ChevronsLeft className="h-4 w-4 flex-shrink-0" />
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
       {/* Session Flow Button - always show when chat is selected */}
       {selectedChatId && (
-        <>
-          {!isExpanded ? (
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleSessionFlowClick}
-                  className={cn(
-                    "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-                    effectiveSessionFlowOpen
-                      ? "bg-foreground/10 text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-                  )}
-                  aria-label="Session Flow"
-                  aria-pressed={effectiveSessionFlowOpen}
-                >
-                  <IconSidePeek className="h-4 w-4 flex-shrink-0" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="left">
-                Session Flow
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <div className="flex items-center justify-between gap-2 px-2 w-full">
-              <button
-                type="button"
-                onClick={handleSessionFlowClick}
-                className={cn(
-                  "flex items-center gap-2 rounded-md transition-all duration-150 ease-out h-8 px-2 flex-1",
-                  effectiveSessionFlowOpen
-                    ? "bg-foreground/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-                )}
-                aria-label="Session Flow"
-                aria-pressed={effectiveSessionFlowOpen}
-              >
-                <IconSidePeek className="h-4 w-4 flex-shrink-0" />
-                <span className="text-sm">Session Flow</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsExpanded(false)}
-                className={cn(
-                  "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-                  "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-                )}
-                aria-label="Collapse sidebar"
-              >
-                <ChevronsLeft className="h-4 w-4 flex-shrink-0" />
-              </button>
-            </div>
-          )}
-        </>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleSessionFlowClick}
+              className={cn(
+                "flex items-center rounded-md transition-all duration-150 ease-out h-8",
+                isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
+                effectiveSessionFlowOpen
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+              )}
+              aria-label="Session Flow"
+              aria-pressed={effectiveSessionFlowOpen}
+            >
+              <ListTree className="h-4 w-4 flex-shrink-0" />
+              {isExpanded && (
+                <>
+                  <span className="text-sm flex-1 text-left">Session Flow</span>
+                  <LayoutModeSelector
+                    mode={sessionFlowDisplayMode}
+                    onModeChange={setSessionFlowDisplayMode}
+                  />
+                </>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            Session Flow
+          </TooltipContent>
+        </Tooltip>
       )}
 
       {/* Spacer */}
