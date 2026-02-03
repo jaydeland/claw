@@ -24,6 +24,7 @@ import {
   type OAuthFlowResult,
 } from "../../mcp/oauth-window"
 import { BrowserWindow } from "electron"
+import { getCachedMcpTools } from "./claude"
 
 // ============ TYPES ============
 
@@ -696,5 +697,135 @@ export const mcpRouter = router({
     .input(z.object({ serverId: z.string() }))
     .query(({ input }): boolean => {
       return hasActiveOAuthWindow(input.serverId)
+    }),
+
+  /**
+   * Get MCP tools from Claude session cache
+   * This is more reliable than querying servers directly because:
+   * 1. Tools are already loaded by the Claude SDK
+   * 2. No separate process spawning needed
+   * 3. Shows exactly what Claude has access to
+   * 4. Handles auth/env issues gracefully
+   *
+   * Returns null if no cached data (user hasn't started a chat yet)
+   */
+  getSessionTools: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        serverId: z.string().optional(), // If provided, filter to specific server
+      })
+    )
+    .query(({ input }): {
+      tools: McpTool[]
+      serverName?: string
+      fromCache: boolean
+      error?: string
+    } => {
+      try {
+        const cached = getCachedMcpTools(input.projectPath)
+
+        if (!cached) {
+          return {
+            tools: [],
+            fromCache: false,
+            error: "No cached tools available. Start a chat to load MCP tools.",
+          }
+        }
+
+        // If serverId provided, filter to that server's tools
+        if (input.serverId) {
+          const server = cached.servers.find((s) => s.name === input.serverId)
+          if (!server) {
+            return {
+              tools: [],
+              fromCache: true,
+              error: `Server "${input.serverId}" not found in cache`,
+            }
+          }
+
+          return {
+            tools: server.tools,
+            serverName: server.name,
+            fromCache: true,
+          }
+        }
+
+        // Return all tools from all servers
+        const allTools: McpTool[] = []
+        for (const server of cached.servers) {
+          for (const tool of server.tools) {
+            allTools.push({
+              ...tool,
+              // Prefix tool name with server name for clarity
+              name: tool.name,
+            })
+          }
+        }
+
+        return {
+          tools: allTools,
+          fromCache: true,
+        }
+      } catch (error) {
+        console.error("[mcp] Failed to get session tools:", error)
+        return {
+          tools: [],
+          fromCache: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Get all MCP servers with their tools from Claude session cache
+   * Returns the full server+tools structure for the MCP UI
+   */
+  getSessionServers: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+      })
+    )
+    .query(({ input }): {
+      servers: Array<{
+        name: string
+        status: string
+        toolCount: number
+        tools: McpTool[]
+      }>
+      fromCache: boolean
+      cachedAt?: number
+      error?: string
+    } => {
+      try {
+        const cached = getCachedMcpTools(input.projectPath)
+
+        if (!cached) {
+          return {
+            servers: [],
+            fromCache: false,
+            error: "No cached data available. Start a chat to load MCP servers and tools.",
+          }
+        }
+
+        return {
+          servers: cached.servers.map((s) => ({
+            name: s.name,
+            status: s.status,
+            toolCount: s.tools.length,
+            tools: s.tools,
+          })),
+          fromCache: true,
+          cachedAt: cached.cachedAt,
+        }
+      } catch (error) {
+        console.error("[mcp] Failed to get session servers:", error)
+        return {
+          servers: [],
+          fromCache: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
     }),
 })

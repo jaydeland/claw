@@ -157,6 +157,49 @@ const symlinksCreated = new Set<string>()
 // Maps project path -> server name -> status
 const mcpServerStatusCache = new Map<string, Map<string, string>>()
 
+// Cache for MCP tools from Claude session init message
+// Maps project path -> { servers: [{name, status, tools}], allTools: [...], cachedAt }
+interface McpServerWithTools {
+  name: string
+  status: string
+  tools: Array<{
+    name: string
+    description?: string
+    inputSchema?: {
+      type: string
+      properties?: Record<string, unknown>
+      required?: string[]
+      [key: string]: unknown
+    }
+  }>
+}
+
+interface McpToolsCacheEntry {
+  servers: McpServerWithTools[]
+  allTools: string[] // All tool names for quick lookup
+  cachedAt: number
+}
+
+const mcpToolsCache = new Map<string, McpToolsCacheEntry>()
+const MCP_TOOLS_TTL = 10 * 60 * 1000 // 10 minutes (tools change less frequently than status)
+
+/**
+ * Get cached MCP tools for a project path
+ * Returns null if cache is empty or expired
+ */
+export function getCachedMcpTools(projectPath: string): McpToolsCacheEntry | null {
+  const cached = mcpToolsCache.get(projectPath)
+  if (!cached) return null
+
+  // Check if expired
+  if (Date.now() - cached.cachedAt > MCP_TOOLS_TTL) {
+    mcpToolsCache.delete(projectPath)
+    return null
+  }
+
+  return cached
+}
+
 // Disk cache types and configuration for MCP server statuses
 interface CachedMcpStatus {
   status: string
@@ -320,6 +363,7 @@ export function clearClaudeCaches() {
   cachedClaudeQuery = null
   symlinksCreated.clear()
   mcpServerStatusCache.clear()
+  mcpToolsCache.clear()
   diskCacheLastLoadTime = 0
 
   // Clear disk cache
@@ -412,19 +456,52 @@ export async function warmupMcpCache(): Promise<void> {
           }
         })
 
-        // Wait for init message with MCP server statuses
+        // Wait for init message with MCP server statuses and tools
         let gotInit = false
         for await (const msg of warmupQuery) {
           const msgAny = msg as any
           if (msgAny.type === "system" && msgAny.subtype === "init" && msgAny.mcp_servers) {
-            // Cache the statuses
+            // Cache the statuses and tools
             const statusMap = new Map<string, string>()
+            const serversWithTools: McpServerWithTools[] = []
+            const allToolNames: string[] = []
+
             for (const server of msgAny.mcp_servers) {
               if (server.name && server.status) {
                 statusMap.set(server.name, server.status)
+
+                // Extract tools for this server
+                const serverTools = server.tools || []
+                serversWithTools.push({
+                  name: server.name,
+                  status: server.status,
+                  tools: serverTools.map((t: any) => ({
+                    name: t.name,
+                    description: t.description,
+                    inputSchema: t.inputSchema,
+                  })),
+                })
+
+                // Collect all tool names
+                for (const tool of serverTools) {
+                  if (tool.name) {
+                    allToolNames.push(`mcp__${server.name}__${tool.name}`)
+                  }
+                }
               }
             }
+
             mcpServerStatusCache.set(project.path, statusMap)
+
+            // Cache tools
+            if (serversWithTools.length > 0) {
+              mcpToolsCache.set(project.path, {
+                servers: serversWithTools,
+                allTools: allToolNames,
+                cachedAt: Date.now(),
+              })
+            }
+
             gotInit = true
             break // We only need the init message
           }
@@ -1524,20 +1601,53 @@ ${prompt}
                     permissionMode: msgAny.permissionMode,
                   }, null, 2))
 
-                  // Cache MCP server statuses for next request
+                  // Cache MCP server statuses and tools for next request
                   if (msgAny.subtype === "init" && msgAny.mcp_servers) {
                     const lookupPath = input.projectPath || input.cwd
                     const statusMap = new Map<string, string>()
 
+                    // Build tools cache from mcp_servers data
+                    const serversWithTools: McpServerWithTools[] = []
+                    const allToolNames: string[] = []
+
                     for (const server of msgAny.mcp_servers) {
                       if (server.name && server.status) {
                         statusMap.set(server.name, server.status)
+
+                        // Extract tools for this server (SDK includes tools per server)
+                        const serverTools = server.tools || []
+                        serversWithTools.push({
+                          name: server.name,
+                          status: server.status,
+                          tools: serverTools.map((t: any) => ({
+                            name: t.name,
+                            description: t.description,
+                            inputSchema: t.inputSchema,
+                          })),
+                        })
+
+                        // Collect all tool names for quick lookup
+                        for (const tool of serverTools) {
+                          if (tool.name) {
+                            allToolNames.push(`mcp__${server.name}__${tool.name}`)
+                          }
+                        }
                       }
                     }
 
                     mcpServerStatusCache.set(lookupPath, statusMap)
-                    // Persist to disk immediately (write-through)
+                    // Persist status to disk immediately (write-through)
                     saveMcpStatusToDisk()
+
+                    // Cache tools (in-memory only, not persisted to disk)
+                    if (serversWithTools.length > 0) {
+                      mcpToolsCache.set(lookupPath, {
+                        servers: serversWithTools,
+                        allTools: allToolNames,
+                        cachedAt: Date.now(),
+                      })
+                      console.log(`[MCP Tools Cache] Cached ${allToolNames.length} tools from ${serversWithTools.length} servers for ${lookupPath}`)
+                    }
                   }
                 }
 

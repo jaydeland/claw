@@ -25,6 +25,7 @@ import {
   mcpAuthModalServerIdAtom,
   selectedMcpToolAtom,
 } from "../atoms"
+import { selectedProjectAtom } from "../../agents/atoms"
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
 import { JsonSchemaViewer } from "./json-schema-viewer"
@@ -287,20 +288,45 @@ function ToolSchemaPanel({
 
 /**
  * Tools section that queries and displays MCP server tools
+ * Uses session-cached tools first (from Claude SDK init), falls back to spawning process
  */
 function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolean }) {
   const [isExpanded, setIsExpanded] = React.useState(true)
   const [selectedTool, setSelectedTool] = useAtom(selectedMcpToolAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
 
-  // Query tools (only when server is enabled)
-  const { data: toolsData, isLoading, error } = trpc.mcp.getServerTools.useQuery(
+  // Try session-cached tools first (from Claude SDK init message)
+  const {
+    data: sessionToolsData,
+    isLoading: sessionLoading,
+  } = trpc.mcp.getSessionTools.useQuery(
+    { projectPath: selectedProject?.path || "", serverId },
+    {
+      enabled: enabled && !!selectedProject?.path,
+      staleTime: 60000, // Cache for 1 minute (session tools are stable)
+    }
+  )
+
+  // Fall back to direct query if session cache is empty
+  const shouldFallback = !sessionLoading && !sessionToolsData?.fromCache
+  const {
+    data: directToolsData,
+    isLoading: directLoading,
+    error: directError,
+  } = trpc.mcp.getServerTools.useQuery(
     { serverId },
     {
-      enabled: enabled,
+      enabled: enabled && shouldFallback,
       retry: false, // Don't retry on error (server might be misconfigured)
       staleTime: 30000, // Cache for 30 seconds
     }
   )
+
+  // Use session tools if available, otherwise use direct query
+  const isLoading = sessionLoading || (shouldFallback && directLoading)
+  const toolsData = sessionToolsData?.fromCache ? sessionToolsData : directToolsData
+  const error = shouldFallback ? directError : null
+  const fromCache = sessionToolsData?.fromCache || false
 
   // Get currently selected tool (if any from this server)
   const currentToolKey = selectedTool?.startsWith(`${serverId}:`)
@@ -350,13 +376,15 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
         </div>
         <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">Querying tools...</p>
+          <p className="text-xs text-muted-foreground">
+            {shouldFallback ? "Querying server..." : "Loading from session..."}
+          </p>
         </div>
       </div>
     )
   }
 
-  // Handle tRPC query error
+  // Handle tRPC query error (only show for direct queries)
   if (error) {
     return (
       <div className="space-y-2">
@@ -377,8 +405,8 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
     )
   }
 
-  // Handle error returned in the response
-  if (toolsData?.error) {
+  // Handle error returned in the response (from direct query)
+  if (toolsData?.error && !fromCache) {
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm font-medium">
@@ -414,6 +442,11 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
         <Wrench className="h-4 w-4" />
         <span>Available Tools</span>
         <span className="text-xs text-muted-foreground font-normal">({tools.length})</span>
+        {fromCache && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-green-500/10 text-green-600" title="Loaded from Claude session cache">
+            cached
+          </span>
+        )}
       </button>
 
       {isExpanded && (
