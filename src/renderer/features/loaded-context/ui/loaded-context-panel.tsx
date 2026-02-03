@@ -300,9 +300,9 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
 
         {/* Indented dropdowns under Start Tokens */}
         <div className="flex flex-col gap-2 pl-3">
-          {/* CLAUDE.md Files Section */}
+          {/* CLAUDE.md Section */}
           <ContextSection
-            title="CLAUDE.md Files"
+            title="CLAUDE.md"
             icon={FileText}
             count={data.claudeMdFiles.length}
             tokenCount={tokenCounts?.claudeMd}

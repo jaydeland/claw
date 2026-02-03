@@ -16,6 +16,7 @@ import type {
   ConsolidatedConfig,
   McpServerConfig,
 } from "./types"
+import { expandConfigEnvVars } from "../mcp/tool-query"
 
 /**
  * Get custom MCP config paths from database
@@ -238,12 +239,18 @@ export async function getConsolidatedConfig(
   // Merge servers from all sources
   const { mergedServers, serverSources } = mergeMcpServers(validConfigs)
 
+  // Expand environment variables in merged servers for both SDK and UI display
+  const expandedServers: Record<string, McpServerConfig> = {}
+  for (const [name, config] of Object.entries(mergedServers)) {
+    expandedServers[name] = expandConfigEnvVars(config)
+  }
+
   // Detect conflicts
   const conflicts = detectConflicts(validConfigs)
 
   return {
     sources: parsedConfigs,
-    mergedServers,
+    mergedServers: expandedServers,
     serverSources,
     conflicts,
   }
@@ -254,7 +261,7 @@ export async function getConsolidatedConfig(
  * This is what gets passed to Claude for MCP server initialization
  *
  * @param projectPath Optional path to project root
- * @returns McpConfigFile with merged servers
+ * @returns McpConfigFile with merged servers (env vars already expanded)
  */
 export async function getMergedMcpConfig(projectPath?: string): Promise<McpConfigFile> {
   const consolidated = await getConsolidatedConfig(projectPath)

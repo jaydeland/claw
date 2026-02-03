@@ -6,7 +6,7 @@ import type { McpServerConfig } from "../config/types"
  * Expand environment variables in a string
  * Supports ${VAR}, ${VAR:-default}, and $VAR syntax
  */
-function expandEnvVars(str: string, env: Record<string, string | undefined> = process.env): string {
+export function expandEnvVars(str: string, env: Record<string, string | undefined> = process.env): string {
   // Handle ${VAR:-default} syntax first
   let result = str.replace(/\$\{([^}:]+):-([^}]*)\}/g, (_, varName, defaultValue) => {
     return env[varName] ?? defaultValue
@@ -29,7 +29,7 @@ function expandEnvVars(str: string, env: Record<string, string | undefined> = pr
  * Expand environment variables in MCP server config
  * Expands variables in command, args, and env values
  */
-function expandConfigEnvVars(config: McpServerConfig): McpServerConfig {
+export function expandConfigEnvVars(config: McpServerConfig): McpServerConfig {
   const mergedEnv = { ...process.env, ...config.env }
 
   return {
