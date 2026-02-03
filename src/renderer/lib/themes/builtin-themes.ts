@@ -73,12 +73,12 @@ const CLAW_DARK: VSCodeFullTheme = {
 }
 
 /**
- * 21st Light - Default light theme matching the app's original design
+ * Claw Light - Default light theme matching the app's original design
  * Uses the brand blue (#0034FF) as primary/accent color
  */
-const TWENTYFIRST_LIGHT: VSCodeFullTheme = {
-  id: "21st-light",
-  name: "21st Light",
+const CLAW_LIGHT: VSCodeFullTheme = {
+  id: "claw-light",
+  name: "Claw Light",
   type: "light",
   source: "builtin",
   colors: {
@@ -665,7 +665,7 @@ const COBALT2: VSCodeFullTheme = {
 export const BUILTIN_THEMES: VSCodeFullTheme[] = [
   // 21st Default themes (first)
   CLAW_DARK,
-  TWENTYFIRST_LIGHT,
+  CLAW_LIGHT,
   // Cursor themes
   CURSOR_DARK,
   CURSOR_LIGHT,
