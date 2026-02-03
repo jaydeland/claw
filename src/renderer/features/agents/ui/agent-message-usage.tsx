@@ -7,6 +7,7 @@ import {
   HoverCardTrigger,
 } from "../../../components/ui/hover-card"
 import { cn } from "../../../lib/utils"
+import { formatTokenCount, formatDuration } from "../../../lib/format-tokens"
 
 export interface AgentMessageMetadata {
   sessionId?: string
@@ -23,26 +24,6 @@ interface AgentMessageUsageProps {
   metadata?: AgentMessageMetadata
   isStreaming?: boolean
   isMobile?: boolean
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000) {
-    return `${(tokens / 1000).toFixed(1)}k`
-  }
-  return tokens.toString()
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) {
-    return `${ms}ms`
-  }
-  const seconds = ms / 1000
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}s`
-  }
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = Math.round(seconds % 60)
-  return `${minutes}m ${remainingSeconds}s`
 }
 
 export const AgentMessageUsage = memo(function AgentMessageUsage({
@@ -77,7 +58,7 @@ export const AgentMessageUsage = memo(function AgentMessageUsage({
             "transition-[background-color,transform] duration-150 ease-out",
           )}
         >
-          <span className="font-mono">{formatTokens(displayTokens)}</span>
+          <span className="font-mono">{formatTokenCount(displayTokens)}</span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent
