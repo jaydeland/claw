@@ -22,6 +22,7 @@ import {
   pendingUserQuestionsAtom,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import { setPendingMessageMetadataAtom } from "../stores/message-store"
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -248,6 +249,16 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   plugins: chunk.plugins,
                   skills: chunk.skills,
                   slashCommands: chunk.slashCommands,
+                })
+              }
+
+              // Handle message-metadata - store token info for Session Context display
+              // This metadata arrives before we know the AI SDK's message ID, so we store it
+              // as "pending" and associate it with the message during sync
+              if (chunk.type === "message-metadata" && chunk.messageMetadata) {
+                appStore.set(setPendingMessageMetadataAtom, {
+                  subChatId: this.config.subChatId,
+                  metadata: chunk.messageMetadata,
                 })
               }
 

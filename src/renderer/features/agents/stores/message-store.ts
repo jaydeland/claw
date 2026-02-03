@@ -105,6 +105,21 @@ export const setMessageMetadataAtom = atom(
   }
 )
 
+// Pending metadata - stores metadata from message-metadata chunks before we know the message ID
+// Keyed by subChatId, will be associated with the streaming assistant message when sync happens
+export const pendingMessageMetadataAtom = atom<Map<string, StoredMessageMetadata>>(new Map())
+
+// Write atom to set pending metadata (called from IPCChatTransport when message-metadata chunk arrives)
+export const setPendingMessageMetadataAtom = atom(
+  null,
+  (get, set, payload: { subChatId: string; metadata: StoredMessageMetadata }) => {
+    const currentMap = get(pendingMessageMetadataAtom)
+    const newMap = new Map(currentMap)
+    newMap.set(payload.subChatId, payload.metadata)
+    set(pendingMessageMetadataAtom, newMap)
+  }
+)
+
 // Last message ID - derived (uses stable messageIdsAtom)
 export const lastMessageIdAtom = atom((get) => {
   const ids = get(messageIdsAtom)
@@ -702,6 +717,26 @@ export const syncMessagesWithStatusAtom = atom(
       set(streamingMessageIdAtom, lastId)
     } else {
       set(streamingMessageIdAtom, null)
+
+      // Associate pending metadata with the last assistant message when streaming ends
+      // This handles token metadata from message-metadata chunks that arrived before we had the message ID
+      const pendingMetadata = get(pendingMessageMetadataAtom)
+      const pendingMeta = pendingMetadata.get(currentSubChatId)
+      if (pendingMeta) {
+        // Find the last assistant message to associate metadata with
+        const lastAssistantId = [...newIds].reverse().find(id => {
+          const msg = get(messageAtomFamily(id))
+          return msg?.role === "assistant"
+        })
+        if (lastAssistantId) {
+          const metadataKey = `${currentSubChatId}:${lastAssistantId}`
+          set(messageMetadataAtomFamily(metadataKey), pendingMeta)
+          // Clear the pending metadata
+          const newPending = new Map(pendingMetadata)
+          newPending.delete(currentSubChatId)
+          set(pendingMessageMetadataAtom, newPending)
+        }
+      }
     }
   }
 )
