@@ -668,6 +668,14 @@ export const syncMessagesWithStatusAtom = atom(
       }
       set(messageAtomFamily(msg.id), clonedMsg)
 
+      // Extract and store metadata before AI SDK strips it during normalization
+      // The AI SDK normalizes messages and removes custom fields like metadata
+      // This ensures metadata persists for Session Context token display
+      if (msg.role === "assistant" && msg.metadata) {
+        const metadataKey = `${currentSubChatId}:${msg.id}`
+        set(messageMetadataAtomFamily(metadataKey), msg.metadata as StoredMessageMetadata)
+      }
+
       // Update change tracking
       hasMessageChanged(currentSubChatId, msg.id, msg)
     }

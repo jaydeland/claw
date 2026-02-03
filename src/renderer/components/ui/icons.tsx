@@ -5232,38 +5232,42 @@ export function AgentIcon(props: IconProps) {
   )
 }
 
-// Swarm icon - multiple agent icons grouped together
+// Swarm icon - 4 mini robot heads in a 2x2 grid
 export function SwarmIcon(props: IconProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       {...props}
     >
-      {/* Back left agent - smaller, offset */}
-      <path
-        d="M6.5 8L8.1 9.59C9.08 10.56 10.6 10.56 11.58 9.59C12.56 8.62 12.56 7.13 11.58 6.16C10.6 5.19 9.08 5.19 8.1 6.16L6.5 8ZM6.5 8L4.9 6.41C3.92 5.44 2.4 5.44 1.42 6.41C0.44 7.38 0.44 8.87 1.42 9.84C2.4 10.81 3.92 10.81 4.9 9.84L6.5 8Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="square"
-        opacity="0.5"
-      />
-      {/* Back right agent - smaller, offset */}
-      <path
-        d="M17.5 8L19.1 9.59C20.08 10.56 21.6 10.56 22.58 9.59C23.56 8.62 23.56 7.13 22.58 6.16C21.6 5.19 20.08 5.19 19.1 6.16L17.5 8ZM17.5 8L15.9 6.41C14.92 5.44 13.4 5.44 12.42 6.41C11.44 7.38 11.44 8.87 12.42 9.84C13.4 10.81 14.92 10.81 15.9 9.84L17.5 8Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="square"
-        opacity="0.5"
-      />
-      {/* Front center agent - larger, prominent */}
-      <path
-        d="M12 15L14.6 17.58C15.98 18.94 18.2 18.94 19.58 17.58C20.96 16.22 20.96 14.03 19.58 12.67C18.2 11.31 15.98 11.31 14.6 12.67L12 15ZM12 15L9.4 12.67C8.02 11.31 5.8 11.31 4.42 12.67C3.04 14.03 3.04 16.22 4.42 17.58C5.8 18.94 8.02 18.94 9.4 17.58L12 15Z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="square"
-      />
+      {/* Top-left robot */}
+      <rect x="1" y="3" width="8" height="6" rx="1" />
+      <path d="M5 3V1" />
+      <path d="M3.5 5.5v1" />
+      <path d="M6.5 5.5v1" />
+
+      {/* Top-right robot */}
+      <rect x="15" y="3" width="8" height="6" rx="1" />
+      <path d="M19 3V1" />
+      <path d="M17.5 5.5v1" />
+      <path d="M20.5 5.5v1" />
+
+      {/* Bottom-left robot */}
+      <rect x="1" y="15" width="8" height="6" rx="1" />
+      <path d="M5 15v-2" />
+      <path d="M3.5 17.5v1" />
+      <path d="M6.5 17.5v1" />
+
+      {/* Bottom-right robot */}
+      <rect x="15" y="15" width="8" height="6" rx="1" />
+      <path d="M19 15v-2" />
+      <path d="M17.5 17.5v1" />
+      <path d="M20.5 17.5v1" />
     </svg>
   )
 }
