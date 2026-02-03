@@ -3,6 +3,46 @@ import { EventEmitter } from "node:events"
 import type { McpServerConfig } from "../config/types"
 
 /**
+ * Expand environment variables in a string
+ * Supports ${VAR}, ${VAR:-default}, and $VAR syntax
+ */
+function expandEnvVars(str: string, env: Record<string, string | undefined> = process.env): string {
+  // Handle ${VAR:-default} syntax first
+  let result = str.replace(/\$\{([^}:]+):-([^}]*)\}/g, (_, varName, defaultValue) => {
+    return env[varName] ?? defaultValue
+  })
+
+  // Handle ${VAR} syntax
+  result = result.replace(/\$\{([^}]+)\}/g, (_, varName) => {
+    return env[varName] ?? ""
+  })
+
+  // Handle $VAR syntax (word boundary)
+  result = result.replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, varName) => {
+    return env[varName] ?? ""
+  })
+
+  return result
+}
+
+/**
+ * Expand environment variables in MCP server config
+ * Expands variables in command, args, and env values
+ */
+function expandConfigEnvVars(config: McpServerConfig): McpServerConfig {
+  const mergedEnv = { ...process.env, ...config.env }
+
+  return {
+    ...config,
+    command: expandEnvVars(config.command, mergedEnv),
+    args: config.args?.map(arg => expandEnvVars(arg, mergedEnv)),
+    env: config.env ? Object.fromEntries(
+      Object.entries(config.env).map(([key, value]) => [key, expandEnvVars(value, mergedEnv)])
+    ) : undefined,
+  }
+}
+
+/**
  * MCP Tool definition
  */
 export interface McpTool {
@@ -313,11 +353,14 @@ class McpClient extends EventEmitter {
  */
 export async function queryMcpServerTools(config: McpServerConfig): Promise<McpTool[]> {
   const client = new McpClient()
-  const commandDisplay = `${config.command} ${(config.args || []).join(" ")}`.trim()
+
+  // Expand environment variables in command, args, and env values
+  const expandedConfig = expandConfigEnvVars(config)
+  const commandDisplay = `${expandedConfig.command} ${(expandedConfig.args || []).join(" ")}`.trim()
 
   try {
     console.log(`[mcp-tools] Connecting to server: ${commandDisplay}`)
-    await client.connect(config)
+    await client.connect(expandedConfig)
 
     console.log("[mcp-tools] Connection established, listing tools...")
     const tools = await client.listTools()
