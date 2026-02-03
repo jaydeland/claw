@@ -20,92 +20,73 @@ const TERMINAL_FONT_FAMILY = [
 ].join(", ")
 
 /**
- * Dark terminal theme synchronized with the app's design system.
- * Colors are based on Tailwind's zinc palette and CSS variables.
- * 
- * Dark theme values:
- * - --background: hsl(240, 10%, 3.9%) = #0a0a0a
- * - --foreground: hsl(240, 4.8%, 95.9%) = #f4f4f5
- * - --tl-background: hsl(0, 0%, 7%) = #121212
- * - --muted-foreground: hsl(240, 4.4%, 58%) = #8c8c94
- * - --primary: #0034FF
+ * Dark terminal theme synchronized with Claw Dark theme.
+ * Vibrant colors with high contrast for better visibility.
  */
 export const TERMINAL_THEME_DARK: ITheme = {
-  // Background matches --tl-background (timeline/content area)
-  background: "#121212",
-  foreground: "#f4f4f5",
-  
-  // Cursor matches foreground for clean look
-  cursor: "#f4f4f5",
-  cursorAccent: "#121212",
-  
-  // Selection - subtle highlight
-  selectionBackground: "#3f3f46",
+  background: "#0a0a0a",
+  foreground: "#f8fafc",
+
+  cursor: "#f8fafc",
+  cursorAccent: "#0a0a0a",
+
+  selectionBackground: "#3b82f655",
   selectionForeground: "#ffffff",
-  
-  // ANSI colors (zinc palette + Tailwind colors)
-  black: "#18181b",          // zinc-900
-  red: "#ef4444",            // red-500
-  green: "#22c55e",          // green-500
-  yellow: "#eab308",         // yellow-500
-  blue: "#0034FF",           // --primary (brand blue)
-  magenta: "#a855f7",        // purple-500
-  cyan: "#06b6d4",           // cyan-500
-  white: "#f4f4f5",          // zinc-100
-  
+
+  // ANSI colors - vibrant and high contrast
+  black: "#1e293b",
+  red: "#f87171",
+  green: "#4ade80",
+  yellow: "#fbbf24",
+  blue: "#60a5fa",
+  magenta: "#c084fc",
+  cyan: "#22d3ee",
+  white: "#f8fafc",
+
   // Bright variants
-  brightBlack: "#71717a",    // zinc-500 (matches --muted-foreground)
-  brightRed: "#f87171",      // red-400
-  brightGreen: "#4ade80",    // green-400
-  brightYellow: "#facc15",   // yellow-400
-  brightBlue: "#3b82f6",     // blue-500
-  brightMagenta: "#c084fc",  // purple-400
-  brightCyan: "#22d3ee",     // cyan-400
-  brightWhite: "#fafafa",    // zinc-50
+  brightBlack: "#64748b",
+  brightRed: "#fca5a5",
+  brightGreen: "#86efac",
+  brightYellow: "#fde047",
+  brightBlue: "#93c5fd",
+  brightMagenta: "#d8b4fe",
+  brightCyan: "#67e8f9",
+  brightWhite: "#ffffff",
 }
 
 /**
- * Light terminal theme synchronized with the app's design system.
- * 
- * Light theme values:
- * - --background: hsl(0, 0%, 100%) = #ffffff
- * - --foreground: hsl(240, 10%, 3.9%) = #0a0a0a
- * - --tl-background: hsl(0, 0%, 98%) = #fafafa
- * - --muted-foreground: hsl(240, 3.8%, 46.1%) = #717179
- * - --primary: #0034FF
+ * Light terminal theme synchronized with Claw Light theme.
+ * Vibrant colors with high contrast for better visibility.
  */
 export const TERMINAL_THEME_LIGHT: ITheme = {
-  // Background matches --tl-background (timeline/content area)
-  background: "#fafafa",
-  foreground: "#0a0a0a",
-  
-  // Cursor matches foreground for clean look
-  cursor: "#0a0a0a",
-  cursorAccent: "#fafafa",
-  
-  // Selection - subtle highlight
-  selectionBackground: "#d4d4d8",
-  selectionForeground: "#0a0a0a",
-  
-  // ANSI colors (adjusted for light background)
-  black: "#18181b",          // zinc-900
-  red: "#dc2626",            // red-600 (darker for light bg)
-  green: "#16a34a",          // green-600
-  yellow: "#ca8a04",         // yellow-600
-  blue: "#0034FF",           // --primary (brand blue)
-  magenta: "#9333ea",        // purple-600
-  cyan: "#0891b2",           // cyan-600
-  white: "#f4f4f5",          // zinc-100
-  
-  // Bright variants (standard colors work well on light)
-  brightBlack: "#52525b",    // zinc-600
-  brightRed: "#ef4444",      // red-500
-  brightGreen: "#22c55e",    // green-500
-  brightYellow: "#eab308",   // yellow-500
-  brightBlue: "#3b82f6",     // blue-500
-  brightMagenta: "#a855f7",  // purple-500
-  brightCyan: "#06b6d4",     // cyan-500
-  brightWhite: "#fafafa",    // zinc-50
+  background: "#f8fafc",
+  foreground: "#0f172a",
+
+  cursor: "#0f172a",
+  cursorAccent: "#f8fafc",
+
+  selectionBackground: "#2563eb33",
+  selectionForeground: "#0f172a",
+
+  // ANSI colors - vibrant and high contrast
+  black: "#1e293b",
+  red: "#dc2626",
+  green: "#16a34a",
+  yellow: "#ca8a04",
+  blue: "#2563eb",
+  magenta: "#9333ea",
+  cyan: "#0d9488",
+  white: "#f1f5f9",
+
+  // Bright variants
+  brightBlack: "#475569",
+  brightRed: "#ef4444",
+  brightGreen: "#22c55e",
+  brightYellow: "#f59e0b",
+  brightBlue: "#3b82f6",
+  brightMagenta: "#a855f7",
+  brightCyan: "#14b8a6",
+  brightWhite: "#ffffff",
 }
 
 /** @deprecated Use TERMINAL_THEME_DARK instead */
