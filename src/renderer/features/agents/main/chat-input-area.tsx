@@ -3,7 +3,7 @@
 import { memo, useCallback, useRef, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { useAtom, useAtomValue } from "jotai"
-import { ChevronDown, RotateCcw, Zap } from "lucide-react"
+import { ChevronDown, RotateCcw, Zap, Users } from "lucide-react"
 
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
@@ -29,7 +29,7 @@ import {
   PromptInputContextItems,
 } from "../../../components/ui/prompt-input"
 import { cn } from "../../../lib/utils"
-import { isPlanModeAtom, lastSelectedModelIdAtom } from "../atoms"
+import { agentModeAtom, type AgentMode, isPlanModeAtom, lastSelectedModelIdAtom } from "../atoms"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import { CommandsDropdown } from "../components/commands-dropdown"
@@ -371,7 +371,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: AgentMode
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
