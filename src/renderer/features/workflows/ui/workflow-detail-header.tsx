@@ -45,6 +45,14 @@ export function WorkflowDetailHeader() {
 
   const handleRefresh = async () => {
     await utils.workflows.getWorkflowGraph.invalidate()
+
+    // For MCP servers, also invalidate the tool queries
+    if (selectedNode?.type === "mcpServer") {
+      await utils.mcp.getSessionTools.invalidate()
+      await utils.mcp.getServerTools.invalidate()
+      console.log("[workflows] Refreshed MCP server tools")
+    }
+
     console.log("[workflows] Refreshed workflow graph")
   }
 
