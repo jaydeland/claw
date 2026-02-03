@@ -539,22 +539,38 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
         yield* endToolInput()
       }
 
-      // Try snake_case first (BetaUsage), then camelCase, then aggregate from modelUsage
-      let inputTokens = msg.usage?.input_tokens ?? (msg.usage as any)?.inputTokens
-      let outputTokens = msg.usage?.output_tokens ?? (msg.usage as any)?.outputTokens
+      // Try multiple sources for token data:
+      // 1. msg.usage (snake_case from BetaUsage - Anthropic SDK standard)
+      // 2. msg.usage (camelCase fallback)
+      // 3. Aggregate from modelUsage (per-model breakdown)
 
-      // If still no tokens, aggregate from modelUsage (per-model breakdown)
-      if ((!inputTokens || !outputTokens) && msg.modelUsage) {
+      // Get from usage (try snake_case first, then camelCase)
+      let inputTokens: number | undefined = msg.usage?.input_tokens ?? (msg.usage as any)?.inputTokens
+      let outputTokens: number | undefined = msg.usage?.output_tokens ?? (msg.usage as any)?.outputTokens
+
+      // Always try modelUsage if it exists - it often has more accurate data
+      if (msg.modelUsage && Object.keys(msg.modelUsage).length > 0) {
         let totalInput = 0
         let totalOutput = 0
         for (const modelKey of Object.keys(msg.modelUsage)) {
           const modelStats = msg.modelUsage[modelKey]
-          totalInput += modelStats?.inputTokens || 0
-          totalOutput += modelStats?.outputTokens || 0
+          if (modelStats) {
+            totalInput += modelStats.inputTokens ?? 0
+            totalOutput += modelStats.outputTokens ?? 0
+          }
         }
-        inputTokens = inputTokens || totalInput || undefined
-        outputTokens = outputTokens || totalOutput || undefined
+        // Use modelUsage values if they're non-zero, or if usage values are missing/zero
+        if (totalInput > 0 || inputTokens === undefined || inputTokens === 0) {
+          inputTokens = totalInput > 0 ? totalInput : inputTokens
+        }
+        if (totalOutput > 0 || outputTokens === undefined || outputTokens === 0) {
+          outputTokens = totalOutput > 0 ? totalOutput : outputTokens
+        }
       }
+
+      // Ensure we don't return undefined if we have 0 (0 is a valid count)
+      inputTokens = inputTokens ?? 0
+      outputTokens = outputTokens ?? 0
 
       console.log("[transform] Result message usage data:", {
         hasUsage: !!msg.usage,
@@ -569,7 +585,8 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
         sessionId: msg.session_id,
         inputTokens,
         outputTokens,
-        totalTokens: inputTokens && outputTokens ? inputTokens + outputTokens : undefined,
+        // Calculate total - now that we use 0 as default, always compute the sum
+        totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
         totalCostUsd: msg.total_cost_usd,
         durationMs: startTime ? Date.now() - startTime : undefined,
         resultSubtype: msg.subtype || "success",
