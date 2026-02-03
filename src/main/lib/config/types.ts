@@ -4,13 +4,25 @@
 
 /**
  * MCP server configuration from mcp.json
+ * Supports both command-based (stdio) and URL-based (http/sse) servers
  */
 export interface McpServerConfig {
-  command: string
+  /** Command to execute (for stdio servers) */
+  command?: string
+  /** Arguments for the command (for stdio servers) */
   args?: string[]
+  /** Environment variables */
   env?: Record<string, string>
+  /** Whether the server is disabled */
   disabled?: boolean
+  /** Tools to auto-approve */
   autoApprove?: string[]
+  /** Server type: "http", "sse", or undefined for stdio */
+  type?: "http" | "sse"
+  /** URL for HTTP/SSE servers */
+  url?: string
+  /** HTTP headers for HTTP/SSE servers */
+  headers?: Record<string, string>
 }
 
 /**

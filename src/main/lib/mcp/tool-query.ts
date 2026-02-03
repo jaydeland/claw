@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from "node:child_process"
 import { EventEmitter } from "node:events"
 import type { McpServerConfig } from "../config/types"
+import { getShellEnvironment } from "../git/shell-env"
 
 /**
  * Expand environment variables in a string
@@ -27,15 +28,26 @@ export function expandEnvVars(str: string, env: Record<string, string | undefine
 
 /**
  * Expand environment variables in MCP server config
- * Expands variables in command, args, and env values
+ * Expands variables in command, args, url, and env values
+ * Handles both command-based (stdio) and URL-based (http/sse) servers
+ *
+ * @param config The MCP server config to expand
+ * @param baseEnv Optional base environment (defaults to process.env). Use getShellEnvironment() for GUI apps.
  */
-export function expandConfigEnvVars(config: McpServerConfig): McpServerConfig {
-  const mergedEnv = { ...process.env, ...config.env }
+export function expandConfigEnvVars(config: McpServerConfig, baseEnv: Record<string, string | undefined> = process.env): McpServerConfig {
+  const mergedEnv = { ...baseEnv, ...config.env }
 
   return {
     ...config,
-    command: expandEnvVars(config.command, mergedEnv),
+    // Handle command-based servers (stdio)
+    ...(config.command && { command: expandEnvVars(config.command, mergedEnv) }),
     args: config.args?.map(arg => expandEnvVars(arg, mergedEnv)),
+    // Handle URL-based servers (http/sse)
+    ...(config.url && { url: expandEnvVars(config.url, mergedEnv) }),
+    // Expand headers for HTTP servers (e.g., Authorization tokens)
+    headers: config.headers ? Object.fromEntries(
+      Object.entries(config.headers).map(([key, value]) => [key, expandEnvVars(value, mergedEnv)])
+    ) : undefined,
     env: config.env ? Object.fromEntries(
       Object.entries(config.env).map(([key, value]) => [key, expandEnvVars(value, mergedEnv)])
     ) : undefined,
@@ -101,6 +113,15 @@ class McpClient extends EventEmitter {
       timeout: NodeJS.Timeout
     }
   >()
+  private shellEnv: Record<string, string | undefined> = process.env
+
+  /**
+   * Set the shell environment to use for spawning processes
+   * Call this before connect() when running as a GUI app on macOS
+   */
+  setShellEnv(env: Record<string, string | undefined>): void {
+    this.shellEnv = env
+  }
 
   /**
    * Connect to MCP server
@@ -114,9 +135,9 @@ class McpClient extends EventEmitter {
       }, 15000)
 
       try {
-        // Spawn the server process
+        // Spawn the server process with shell environment (includes vars like PATH, VIDYARD_PATH)
         this.process = spawn(config.command, config.args || [], {
-          env: { ...process.env, ...config.env },
+          env: { ...this.shellEnv, ...config.env } as NodeJS.ProcessEnv,
           stdio: ["pipe", "pipe", "pipe"],
         })
 
@@ -354,8 +375,15 @@ class McpClient extends EventEmitter {
 export async function queryMcpServerTools(config: McpServerConfig): Promise<McpTool[]> {
   const client = new McpClient()
 
+  // Get shell environment for env var expansion (handles macOS GUI app PATH issues)
+  // This loads vars like VIDYARD_PATH that aren't in process.env when launched from Finder
+  const shellEnv = await getShellEnvironment()
+
+  // Set shell env on client so spawned processes get full PATH
+  client.setShellEnv(shellEnv)
+
   // Expand environment variables in command, args, and env values
-  const expandedConfig = expandConfigEnvVars(config)
+  const expandedConfig = expandConfigEnvVars(config, shellEnv)
   const commandDisplay = `${expandedConfig.command} ${(expandedConfig.args || []).join(" ")}`.trim()
 
   try {

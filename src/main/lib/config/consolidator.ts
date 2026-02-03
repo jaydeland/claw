@@ -17,6 +17,7 @@ import type {
   McpServerConfig,
 } from "./types"
 import { expandConfigEnvVars } from "../mcp/tool-query"
+import { getShellEnvironment } from "../git/shell-env"
 
 /**
  * Get custom MCP config paths from database
@@ -239,10 +240,14 @@ export async function getConsolidatedConfig(
   // Merge servers from all sources
   const { mergedServers, serverSources } = mergeMcpServers(validConfigs)
 
+  // Get shell environment for env var expansion (handles macOS GUI app PATH issues)
+  // This loads vars like VIDYARD_PATH that aren't in process.env when launched from Finder
+  const shellEnv = await getShellEnvironment()
+
   // Expand environment variables in merged servers for both SDK and UI display
   const expandedServers: Record<string, McpServerConfig> = {}
   for (const [name, config] of Object.entries(mergedServers)) {
-    expandedServers[name] = expandConfigEnvVars(config)
+    expandedServers[name] = expandConfigEnvVars(config, shellEnv)
   }
 
   // Detect conflicts
