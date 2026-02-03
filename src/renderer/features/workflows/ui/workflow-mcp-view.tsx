@@ -2,6 +2,7 @@
 
 import { useAtomValue } from "jotai"
 import { selectedWorkflowNodeAtom } from "../atoms"
+import { selectedProjectAtom } from "../../agents/atoms"
 import { trpc } from "../../../lib/trpc"
 import { Loader2, CheckCircle, XCircle, AlertTriangle, Plug } from "lucide-react"
 import { cn } from "../../../lib/utils"
@@ -10,27 +11,61 @@ import type { McpServer } from "../../../../../main/lib/trpc/routers/mcp"
 /**
  * Available Tools Section Component
  * Queries and displays tools from an MCP server
+ * Uses session-cached tools first, falls back to spawning process
  */
 function AvailableToolsSection({ mcpServer }: { mcpServer: McpServer }) {
-  // Fetch tools for this MCP server (only if enabled)
-  const { data: toolsData, isLoading: toolsLoading, error: toolsError } = trpc.mcp.getServerTools.useQuery(
-    { serverId: mcpServer.id },
+  const selectedProject = useAtomValue(selectedProjectAtom)
+
+  // Try session-cached tools first (from Claude SDK init message)
+  const {
+    data: sessionToolsData,
+    isLoading: sessionLoading,
+  } = trpc.mcp.getSessionTools.useQuery(
+    { projectPath: selectedProject?.path || "", serverId: mcpServer.id },
     {
-      enabled: mcpServer.enabled,
-      // Don't retry on error (server might be slow or misconfigured)
+      enabled: mcpServer.enabled && !!selectedProject?.path,
+      staleTime: 60000, // Cache for 1 minute
+    }
+  )
+
+  // Fall back to direct query if session cache is empty
+  const shouldFallback = !sessionLoading && !sessionToolsData?.fromCache
+  const {
+    data: directToolsData,
+    isLoading: directLoading,
+    error: directError,
+  } = trpc.mcp.getServerTools.useQuery(
+    { serverId: mcpServer.id, projectPath: selectedProject?.path },
+    {
+      enabled: mcpServer.enabled && shouldFallback,
       retry: false,
     }
   )
 
+  // Use session tools if available, otherwise use direct query
+  const toolsLoading = sessionLoading || (shouldFallback && directLoading)
+  const toolsData = sessionToolsData?.fromCache ? sessionToolsData : directToolsData
+  const toolsError = shouldFallback ? directError : null
+  const fromCache = sessionToolsData?.fromCache || false
+
   return (
     <div className="space-y-3">
-      <h3 className="text-lg font-semibold">Available Tools</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-lg font-semibold">Available Tools</h3>
+        {fromCache && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-green-500/10 text-green-600" title="Loaded from Claude session cache">
+            cached
+          </span>
+        )}
+      </div>
 
       {/* Loading State */}
       {toolsLoading && (
         <div className="bg-muted/50 rounded-md p-4 flex items-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Connecting to server and querying tools...</p>
+          <p className="text-sm text-muted-foreground">
+            {shouldFallback ? "Connecting to server..." : "Loading from session..."}
+          </p>
         </div>
       )}
 
@@ -206,7 +241,7 @@ export function WorkflowMcpView() {
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Command</label>
             <div className="bg-muted/50 rounded-md p-3">
-              <code className="text-sm font-mono">{mcpServer.config.command}</code>
+              <code className="text-sm font-mono select-text cursor-text">{mcpServer.config.command}</code>
             </div>
           </div>
 
@@ -216,7 +251,7 @@ export function WorkflowMcpView() {
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Arguments</label>
               <div className="bg-muted/50 rounded-md p-3 space-y-1">
                 {mcpServer.config.args.map((arg, index) => (
-                  <div key={index} className="text-sm font-mono">
+                  <div key={index} className="text-sm font-mono select-text cursor-text">
                     {arg}
                   </div>
                 ))}
@@ -299,7 +334,7 @@ export function WorkflowMcpView() {
                 <div className="font-medium capitalize">{mcpServer.source.type}</div>
 
                 <div className="text-muted-foreground">Config Path:</div>
-                <div className="font-mono text-xs break-all">{mcpServer.source.path}</div>
+                <div className="font-mono text-xs break-all select-text cursor-text">{mcpServer.source.path}</div>
               </div>
             </div>
           </div>

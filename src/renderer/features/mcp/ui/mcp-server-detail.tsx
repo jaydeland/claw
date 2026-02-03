@@ -314,7 +314,7 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
     isLoading: directLoading,
     error: directError,
   } = trpc.mcp.getServerTools.useQuery(
-    { serverId },
+    { serverId, projectPath: selectedProject?.path },
     {
       enabled: enabled && shouldFallback,
       retry: false, // Don't retry on error (server might be misconfigured)
