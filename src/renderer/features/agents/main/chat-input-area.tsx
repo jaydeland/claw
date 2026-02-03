@@ -788,7 +788,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                   >
                     <DropdownMenuTrigger asChild>
                       <button
-                        className="flex items-center gap-1 px-1.5 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                        className="flex items-center gap-1 px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                         title={agentMode === "plan" ? "Plan mode" : agentMode === "swarm" ? "Swarm mode" : "Agent mode"}
                         aria-label={agentMode === "plan" ? "Plan mode" : agentMode === "swarm" ? "Swarm mode" : "Agent mode"}
                       >
@@ -799,6 +799,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
+                        <span>{agentMode === "plan" ? "Plan" : agentMode === "swarm" ? "Swarm" : "Agent"}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
@@ -1010,11 +1011,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                     >
                       <DropdownMenuTrigger asChild>
                         <button
-                          className="flex items-center gap-1 px-1.5 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 border border-border"
+                          className="flex items-center gap-1 px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 border border-border"
                           title={currentOllamaModel || "Select model"}
                           aria-label={`Ollama model: ${currentOllamaModel || "Select model"}`}
                         >
-                          <Zap className="h-4 w-4 shrink-0" />
+                          <span>{currentOllamaModel || "Model"}</span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
@@ -1062,7 +1063,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                         <button
                           disabled={hasCustomClaudeConfig}
                           className={cn(
-                            "flex items-center gap-1 px-1.5 py-1 text-sm text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                            "flex items-center gap-1 px-1.5 py-1 text-xs text-muted-foreground transition-colors rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                             hasCustomClaudeConfig
                               ? "opacity-70 cursor-not-allowed"
                               : "hover:text-foreground hover:bg-muted/50",
@@ -1070,7 +1071,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                           title={hasCustomClaudeConfig ? "Custom Model" : `${selectedModel?.name} 4.5`}
                           aria-label={hasCustomClaudeConfig ? "Custom Model" : `Claude ${selectedModel?.name} 4.5`}
                         >
-                          <ClaudeCodeIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span>{hasCustomClaudeConfig ? "Custom" : selectedModel?.name || "Model"}</span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>

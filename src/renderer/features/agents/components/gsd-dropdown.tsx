@@ -83,10 +83,11 @@ export function GsdDropdown({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1 px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={disabled}
         >
-          <Rocket className="h-3.5 w-3.5" />
+          <span>GSD</span>
+          <span className="text-[10px] opacity-70">({gsdItems.length})</span>
           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </DropdownMenuTrigger>

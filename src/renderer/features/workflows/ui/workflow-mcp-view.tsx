@@ -156,9 +156,12 @@ function AvailableToolsSection({ mcpServer }: { mcpServer: McpServer }) {
  */
 export function WorkflowMcpView() {
   const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
 
   // Fetch MCP servers list
-  const { data: mcpData, isLoading } = trpc.mcp.listServers.useQuery()
+  const { data: mcpData, isLoading } = trpc.mcp.listServers.useQuery({
+    projectPath: selectedProject?.path,
+  })
 
   // Find the selected MCP server
   const mcpServer = mcpData?.servers.find(s => s.id === selectedNode?.id)

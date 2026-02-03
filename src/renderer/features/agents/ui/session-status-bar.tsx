@@ -1,9 +1,9 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect, useCallback } from "react"
+import { memo, useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useSetAtom, useAtom, useAtomValue } from "jotai"
 import { atomWithStorage } from "jotai/utils"
-import { ChevronDown, Bot, ListTodo, Terminal, FileCode, Loader2, Square, X, ArrowUp, Mail, Circle } from "lucide-react"
+import { ChevronDown, Loader2, Square, X, ArrowUp, Circle } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
@@ -175,20 +175,18 @@ const TaskStatusIcon = memo(function TaskStatusIcon({
   }
 })
 
-// Section button component - modified for new behavior
+// Section button component - text-based labels
 const SectionButton = memo(function SectionButton({
-  icon: Icon,
   label,
   count,
-  countDetail,
+  countDisplay,
   isActive,
   onClick,
   disabled,
 }: {
-  icon: React.ComponentType<{ className?: string }>
   label: string
   count: number
-  countDetail?: string
+  countDisplay?: string // Optional custom display (e.g., "3 +45 -12")
   isActive: boolean
   onClick: () => void
   disabled?: boolean
@@ -196,23 +194,18 @@ const SectionButton = memo(function SectionButton({
   return (
     <button
       onClick={onClick}
-      title={label}
       disabled={disabled}
-      aria-label={`${label}${countDetail ? ` (${countDetail})` : ''}`}
+      aria-label={`${label} (${countDisplay || count})`}
       className={cn(
-        "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors",
+        "flex items-center gap-0.5 px-1.5 py-1 rounded-md text-xs transition-colors",
         disabled && "opacity-50 cursor-not-allowed",
         isActive
           ? "bg-muted text-foreground"
           : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
       )}
     >
-      <Icon className="w-3.5 h-3.5" />
-      {countDetail && (
-        <span className="text-[10px] opacity-70">
-          ({countDetail})
-        </span>
-      )}
+      <span>{label}</span>
+      <span className="text-[10px] opacity-70">({countDisplay || count})</span>
     </button>
   )
 })
@@ -447,21 +440,24 @@ export const SessionStatusBar = memo(function SessionStatusBar({
     return { additions, deletions, fileCount: uncommittedFiles.length }
   }, [uncommittedFiles])
 
-  // Calculate counts for other sections
-  const todosRunning = todosData.todos.filter(t => t.status === "in_progress").length
+  // Calculate counts for sections
   const todosComplete = todosData.todos.filter(t => t.status === "completed").length
-  const todosPending = todosData.todos.filter(t => t.status === "pending").length
   const todosTotal = todosData.todos.length
-
   const agentsRunning = subAgents.filter(a => a.status === "running").length
   const agentsComplete = subAgents.filter(a => a.status !== "running").length
   const agentsTotal = subAgents.length
-
-  const tasksRunning = tasks?.filter(t => t.status === "running").length ?? 0
-  const tasksComplete = tasks?.filter(t => t.status !== "running").length ?? 0
   const tasksTotal = tasks?.length ?? 0
-
   const queueTotal = queue.length
+
+  // Auto-expand queue section when item is added
+  const prevQueueLengthRef = useRef(queueTotal)
+  useEffect(() => {
+    // If queue length increased, auto-expand the queue section
+    if (queueTotal > prevQueueLengthRef.current) {
+      setExpandedSection('queue')
+    }
+    prevQueueLengthRef.current = queueTotal
+  }, [queueTotal, setExpandedSection])
 
   // Section click handler - expands if collapsed, switches if expanded
   const handleSectionClick = useCallback((section: SectionType) => {
@@ -523,18 +519,11 @@ export const SessionStatusBar = memo(function SessionStatusBar({
     return null
   }
 
-  // Build count detail strings
-  const queueDetail = `${queueTotal}`
-  const changesDetail = `${changesTotals.fileCount} files +${changesTotals.additions} -${changesTotals.deletions}`
-  const tasksDetail = `${tasksComplete}/${tasksTotal}`
-  const agentsDetail = `${agentsComplete}/${agentsTotal}`
-  const todosDetail = `${todosComplete}/${todosTotal}`
-
   const isExpanded = expandedSection !== null
 
   return (
     <div
-      className="border border-border bg-muted/30 overflow-hidden flex flex-col rounded-t-xl border-b-0 pb-6"
+      className="w-[95%] mx-auto border border-border bg-muted/30 overflow-hidden flex flex-col rounded-t-xl border-b-0 pb-6"
     >
       {/* Processing status text - always shown when streaming */}
       <AnimatePresence>
@@ -573,42 +562,35 @@ export const SessionStatusBar = memo(function SessionStatusBar({
 
           {/* Section tabs */}
           <SectionButton
-            icon={Mail}
             label="Queue"
             count={queueTotal}
-            countDetail={queueDetail}
             isActive={expandedSection === 'queue'}
             onClick={() => handleSectionClick('queue')}
           />
           <SectionButton
-            icon={FileCode}
             label="Changes"
             count={uncommittedFiles.length}
-            countDetail={changesDetail}
+            countDisplay={`${changesTotals.fileCount} +${changesTotals.additions} -${changesTotals.deletions}`}
             isActive={expandedSection === 'changes'}
             onClick={() => handleSectionClick('changes')}
           />
           <SectionButton
-            icon={CheckIcon}
             label="Tasks"
             count={tasksTotal}
-            countDetail={tasksDetail}
             isActive={expandedSection === 'tasks'}
             onClick={() => handleSectionClick('tasks')}
           />
           <SectionButton
-            icon={Bot}
             label="Agents"
             count={agentsTotal}
-            countDetail={agentsDetail}
+            countDisplay={`${agentsRunning}/${agentsComplete}`}
             isActive={expandedSection === 'agents'}
             onClick={() => handleSectionClick('agents')}
           />
           <SectionButton
-            icon={ListTodo}
-            label="Todos"
+            label="ToDo"
             count={todosTotal}
-            countDetail={todosDetail}
+            countDisplay={`${todosComplete}/${todosTotal}`}
             isActive={expandedSection === 'todos'}
             onClick={() => handleSectionClick('todos')}
           />

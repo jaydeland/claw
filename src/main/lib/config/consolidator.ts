@@ -53,7 +53,7 @@ function getCustomMcpConfigsFromDb(): ConfigSource[] {
       .where(eq(configSources.type, "mcp"))
       .orderBy(configSources.priority)
       .all()
-      .filter((s) => s.enabled)
+      .filter((s) => s.enabled && s.path) // Filter out entries with null/undefined paths
 
     return customSources.map((source) => ({
       type: "custom" as const,
@@ -121,6 +121,12 @@ export async function parseMcpConfigFile(
   const metadata: McpConfigMetadata = {
     source,
     serverNames: [],
+  }
+
+  // Safety check for undefined path
+  if (!configPath) {
+    metadata.parseError = "Config path is undefined"
+    return metadata
   }
 
   // Check if file exists
