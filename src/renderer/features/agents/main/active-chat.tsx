@@ -4831,7 +4831,8 @@ Make sure to preserve all functionality from both branches when resolving confli
           : sc.updated_at?.toISOString()
       return {
         id: sc.id,
-        name: sc.name || "New Chat",
+        // Use sub-chat's own name, fall back to parent chat's name, then "New Chat"
+        name: sc.name || agentChat?.name || "New Chat",
         // Prefer DB timestamp, fall back to local timestamp, then current time
         created_at:
           createdAt ?? existingLocal?.created_at ?? new Date().toISOString(),
@@ -4854,7 +4855,8 @@ Make sure to preserve all functionality from both branches when resolving confli
       if (!dbSubChatIds.has(id)) {
         allSubChats.push({
           id,
-          name: "New Chat",
+          // Use parent chat's name for placeholder, then "New Chat"
+          name: agentChat?.name || "New Chat",
           created_at: new Date().toISOString(),
         })
       }
