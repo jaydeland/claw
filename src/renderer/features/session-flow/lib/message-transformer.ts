@@ -16,15 +16,16 @@ const Y_SPACING = 80 // Vertical spacing between main nodes - increased for bett
 const Y_BRANCH_SPACING = 50 // Vertical spacing for branch nodes - increased
 const Y_DETAIL_SPACING = 45 // Vertical spacing for detail nodes
 
-// Tools that should branch to the right (opt-in list)
-// Show: agents, bash (including background tasks), thinking, questions, and web research
-const BRANCHING_TOOLS = new Set([
-  "Task",              // Agent spawns (sub-agents)
-  "Bash",              // Shell commands (regular + background tasks)
-  "Thinking",          // Internal reasoning
-  "AskUserQuestion",   // Questions to user
-  "WebSearch",         // Web searches
-  "WebFetch",          // Web page fetches
+// Tools that get their own node (not consolidated with others)
+// These are significant enough to always show individually
+const INDIVIDUAL_TOOLS = new Set([
+  "Task",              // Agent spawns (sub-agents) - always individual
+  "AskUserQuestion",   // Questions to user - always individual
+])
+
+// Tools to completely hide from the flow chart (internal/noise)
+const HIDDEN_TOOLS = new Set([
+  "TodoWrite",         // Internal task tracking - shown in todos panel instead
 ])
 
 interface TransformOptions {
@@ -66,7 +67,7 @@ function hasToolBranches(parts: MessagePart[] | undefined): boolean {
     // New format: type is "tool-{toolName}" (e.g., "tool-Bash", "tool-Read")
     if (p.type?.startsWith("tool-")) {
       const toolName = p.type.replace("tool-", "")
-      return BRANCHING_TOOLS.has(toolName)
+      return !HIDDEN_TOOLS.has(toolName)
     }
     return false
   })
@@ -178,233 +179,235 @@ export function transformMessagesToFlow(
       let branchY = currentMainY
       let branchIndex = 0
 
-      // Track bash and thinking invocations for consolidation
-      let bashCount = 0
-      let bashFirstPartIndex = -1
-      let bashState: "call" | "result" | "error" = "call"
-      let thinkingCount = 0
-      let thinkingFirstPartIndex = -1
-      let thinkingState: "call" | "result" | "error" = "call"
-
-      // Track background tasks separately
+      // Track background tasks separately (Bash with run_in_background: true)
       const backgroundTasks: Array<{
         partIndex: number
         part: MessagePart
         status: "running" | "completed" | "failed" | "unknown"
       }> = []
 
-      // First pass: collect and count tools
+      // Track individual tools (Task, AskUserQuestion)
+      const individualTools: Array<{
+        partIndex: number
+        part: MessagePart
+        toolName: string
+      }> = []
+
+      // Track consolidated tools by name
+      // Map<toolName, { parts: MessagePart[], partIndices: number[], state: "call" | "result" | "error" }>
+      const consolidatedTools = new Map<string, {
+        parts: MessagePart[]
+        partIndices: number[]
+        state: "call" | "result" | "error"
+      }>()
+
+      // First pass: categorize all tools
       for (let partIndex = 0; partIndex < parts.length; partIndex++) {
         const part = parts[partIndex]
 
         if (part.type?.startsWith("tool-")) {
           const toolName = part.type.replace("tool-", "")
 
-          if (toolName === "Thinking") {
-            if (thinkingCount === 0) {
-              thinkingFirstPartIndex = partIndex
-            }
-            thinkingCount++
-            const state = getToolState(part)
-            if (state === "error") thinkingState = "error"
-            else if (state === "result" && thinkingState !== "error") thinkingState = "result"
-          } else if (toolName === "Bash") {
-            // Check if this is a background task
-            if (part.input?.run_in_background === true) {
-              // Determine background task status
-              let status: "running" | "completed" | "failed" | "unknown" = "running"
-              if (part.output !== undefined || part.result !== undefined) {
-                const output = part.output || part.result
-                if (part.error || part.errorText || output?.error) {
-                  status = "failed"
-                } else if (output?.exitCode !== undefined) {
-                  status = output.exitCode === 0 ? "completed" : "failed"
-                } else {
-                  status = "unknown"
-                }
+          // Skip hidden tools
+          if (HIDDEN_TOOLS.has(toolName)) continue
+
+          // Handle Bash with run_in_background separately
+          if (toolName === "Bash" && part.input?.run_in_background === true) {
+            let status: "running" | "completed" | "failed" | "unknown" = "running"
+            if (part.output !== undefined || part.result !== undefined) {
+              const output = part.output || part.result
+              if (part.error || part.errorText || output?.error) {
+                status = "failed"
+              } else if (output?.exitCode !== undefined) {
+                status = output.exitCode === 0 ? "completed" : "failed"
+              } else {
+                status = "unknown"
               }
-              backgroundTasks.push({ partIndex, part, status })
-            } else {
-              // Regular Bash command
-              if (bashCount === 0) {
-                bashFirstPartIndex = partIndex
-              }
-              bashCount++
-              const state = getToolState(part)
-              // Update state priority: error > result > call
-              if (state === "error") bashState = "error"
-              else if (state === "result" && bashState !== "error") bashState = "result"
             }
+            backgroundTasks.push({ partIndex, part, status })
+            continue
           }
+
+          // Individual tools get their own nodes
+          if (INDIVIDUAL_TOOLS.has(toolName)) {
+            individualTools.push({ partIndex, part, toolName })
+            continue
+          }
+
+          // All other tools get consolidated by name
+          if (!consolidatedTools.has(toolName)) {
+            consolidatedTools.set(toolName, { parts: [], partIndices: [], state: "call" })
+          }
+          const group = consolidatedTools.get(toolName)!
+          group.parts.push(part)
+          group.partIndices.push(partIndex)
+
+          // Update state priority: error > result > call
+          const state = getToolState(part)
+          if (state === "error") group.state = "error"
+          else if (state === "result" && group.state !== "error") group.state = "result"
         }
       }
 
-      // Second pass: create nodes for non-consolidated tools
-      for (let partIndex = 0; partIndex < parts.length; partIndex++) {
-        const part = parts[partIndex]
+      // Second pass: create nodes for individual tools
+      for (const { partIndex, part, toolName } of individualTools) {
+        const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
+        const state = getToolState(part)
 
-        if (part.type?.startsWith("tool-")) {
-          const toolName = part.type.replace("tool-", "")
+        // Task agent spawn
+        if (toolName === "Task") {
+          nodes.push({
+            id: toolNodeId,
+            type: "agentSpawn",
+            position: { x: X_BRANCH, y: branchY },
+            data: {
+              agentId: part.toolCallId || "",
+              description: truncateText(part.input?.description || part.input?.prompt, 20),
+              status: state === "error" ? "error" : state === "result" ? "completed" : "running",
+              onClick: () => options.onNodeClick(message.id, partIndex),
+            } as AgentSpawnNodeData,
+          })
+        } else {
+          // Other individual tools (AskUserQuestion)
+          nodes.push({
+            id: toolNodeId,
+            type: "toolCall",
+            position: { x: X_BRANCH, y: branchY },
+            data: {
+              toolCallId: part.toolCallId || "",
+              toolName,
+              state,
+              onClick: () => options.onNodeClick(message.id, partIndex),
+            } as ToolCallNodeData,
+          })
+        }
 
-          if (!BRANCHING_TOOLS.has(toolName)) continue
+        // Connect tool to response node
+        edges.push({
+          id: `${responseNodeId}-${toolNodeId}`,
+          source: responseNodeId,
+          sourceHandle: "tools",
+          target: toolNodeId,
+          animated: state === "call",
+          style: {
+            stroke: state === "error" ? "#ef4444" : "#ec4899",
+            strokeWidth: 1.5,
+          },
+        })
 
-          // Skip Thinking and Bash - handled after loop
-          if (toolName === "Thinking" || toolName === "Bash") continue
+        branchY += Y_BRANCH_SPACING
+        branchIndex++
+      }
 
-          const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
-          const state = getToolState(part)
+      // Third pass: create consolidated nodes for grouped tools
+      for (const [toolName, group] of consolidatedTools) {
+        const toolNodeId = `tool-${message.id}-${toolName.toLowerCase()}`
+        const isExpanded = options.expandedNodes?.has(toolNodeId) || false
+        const count = group.parts.length
+        const firstPartIndex = group.partIndices[0]
 
-          // Check if this is a Task agent spawn
-          if (toolName === "Task") {
+        nodes.push({
+          id: toolNodeId,
+          type: "toolCall",
+          position: { x: X_BRANCH, y: branchY },
+          data: {
+            toolCallId: toolName.toLowerCase(),
+            toolName,
+            state: group.state,
+            count,
+            isExpanded,
+            // For single invocation: navigate directly. For multiple: no onClick (handled by onToggleExpansion)
+            onClick: count === 1
+              ? () => options.onNodeClick(message.id, firstPartIndex)
+              : undefined,
+            // For multiple invocations: provide expansion toggle
+            onToggleExpansion: count > 1 && options.onToggleExpansion
+              ? () => options.onToggleExpansion?.(toolNodeId)
+              : undefined,
+          } as ToolCallNodeData,
+        })
+
+        // Connect to response node
+        edges.push({
+          id: `${responseNodeId}-${toolNodeId}`,
+          source: responseNodeId,
+          sourceHandle: "tools",
+          target: toolNodeId,
+          animated: group.state === "call",
+          style: {
+            stroke: group.state === "error" ? "#ef4444" : "#ec4899",
+            strokeWidth: 1.5,
+          },
+        })
+
+        // Create detail nodes if expanded
+        if (isExpanded && count > 1) {
+          let detailY = branchY
+
+          for (let i = 0; i < group.parts.length; i++) {
+            const part = group.parts[i]
+            const partIndex = group.partIndices[i]
+            const detailNodeId = `detail-${message.id}-${toolName.toLowerCase()}-${partIndex}`
+            const state = getToolState(part)
+
+            // Extract input/output for detail display
+            const input = part.input
+            const output = part.output || part.result
+            const error = part.error || part.errorText
+
+            // Get a preview based on tool type
+            let commandPreview: string | undefined
+            if (toolName === "Bash" && input?.command) {
+              commandPreview = truncateText(input.command, 30)
+            } else if (toolName === "Thinking" && input?.text) {
+              commandPreview = truncateText(input.text, 30)
+            } else if (toolName === "Read" && input?.file_path) {
+              commandPreview = truncateText(input.file_path, 30)
+            } else if (toolName === "Edit" && input?.file_path) {
+              commandPreview = truncateText(input.file_path, 30)
+            } else if (toolName === "Write" && input?.file_path) {
+              commandPreview = truncateText(input.file_path, 30)
+            } else if (toolName === "Glob" && input?.pattern) {
+              commandPreview = truncateText(input.pattern, 30)
+            } else if (toolName === "Grep" && input?.pattern) {
+              commandPreview = truncateText(input.pattern, 30)
+            } else if ((toolName === "WebSearch" || toolName === "WebFetch") && input?.url) {
+              commandPreview = truncateText(input.url, 30)
+            } else if (input) {
+              // Generic preview: show first string value from input
+              const firstValue = Object.values(input).find(v => typeof v === "string")
+              if (firstValue) commandPreview = truncateText(firstValue as string, 30)
+            }
+
             nodes.push({
-              id: toolNodeId,
-              type: "agentSpawn",
-              position: { x: X_BRANCH, y: branchY },
-              data: {
-                agentId: part.toolCallId || "",
-                description: truncateText(part.input?.description || part.input?.prompt, 20),
-                status: state === "error" ? "error" : state === "result" ? "completed" : "running",
-                onClick: () => options.onNodeClick(message.id, partIndex),
-              } as AgentSpawnNodeData,
-            })
-          } else {
-            // Other tools (AskUserQuestion, WebSearch, WebFetch)
-            nodes.push({
-              id: toolNodeId,
+              id: detailNodeId,
               type: "toolCall",
-              position: { x: X_BRANCH, y: branchY },
+              position: { x: X_DETAIL, y: detailY },
               data: {
-                toolCallId: part.toolCallId || "",
+                toolCallId: part.toolCallId || `${toolName.toLowerCase()}-${partIndex}`,
                 toolName,
                 state,
+                commandPreview,
+                input,
+                output,
+                error,
                 onClick: () => options.onNodeClick(message.id, partIndex),
               } as ToolCallNodeData,
             })
-          }
 
-          // Connect tool to response node (horizontal branch)
-          edges.push({
-            id: `${responseNodeId}-${toolNodeId}`,
-            source: responseNodeId,
-            sourceHandle: "tools",
-            target: toolNodeId,
-            animated: state === "call",
-            style: {
-              stroke: state === "error" ? "#ef4444" : "#ec4899",
-              strokeWidth: 1.5,
-            },
-          })
+            // Connect detail node to consolidated node
+            edges.push({
+              id: `${toolNodeId}-${detailNodeId}`,
+              source: toolNodeId,
+              sourceHandle: "details",
+              target: detailNodeId,
+              style: {
+                stroke: state === "error" ? "#ef4444" : "#10b981",
+                strokeWidth: 1,
+              },
+            })
 
-          branchY += Y_BRANCH_SPACING
-          branchIndex++
-        }
-      }
-
-      // Add consolidated Bash node if there were any
-      if (bashCount > 0 && bashFirstPartIndex >= 0) {
-        const toolNodeId = `tool-${message.id}-bash`
-        const isExpanded = options.expandedNodes?.has(toolNodeId) || false
-
-        console.log("[message-transformer] Creating Bash node:", {
-          toolNodeId,
-          bashCount,
-          isExpanded,
-          hasOnToggleExpansion: !!options.onToggleExpansion,
-        })
-
-        nodes.push({
-          id: toolNodeId,
-          type: "toolCall",
-          position: { x: X_BRANCH, y: branchY },
-          data: {
-            toolCallId: "bash",
-            toolName: "Bash",
-            state: bashState,
-            count: bashCount,
-            isExpanded,
-            // For single invocation: navigate directly. For multiple: no onClick (handled by onToggleExpansion)
-            onClick: bashCount === 1
-              ? () => options.onNodeClick(message.id, bashFirstPartIndex)
-              : undefined,
-            // For multiple invocations: provide expansion toggle
-            onToggleExpansion: bashCount > 1 && options.onToggleExpansion
-              ? () => {
-                  console.log("[message-transformer] onToggleExpansion called for:", toolNodeId)
-                  options.onToggleExpansion?.(toolNodeId)
-                }
-              : undefined,
-          } as ToolCallNodeData,
-        })
-
-        // Connect bash node to response node
-        edges.push({
-          id: `${responseNodeId}-${toolNodeId}`,
-          source: responseNodeId,
-          sourceHandle: "tools",
-          target: toolNodeId,
-          animated: bashState === "call",
-          style: {
-            stroke: bashState === "error" ? "#ef4444" : "#ec4899",
-            strokeWidth: 1.5,
-          },
-        })
-
-        // Create detail nodes if expanded
-        if (isExpanded && bashCount > 1) {
-          console.log("[message-transformer] Creating detail nodes for Bash:", {
-            toolNodeId,
-            bashCount,
-            partsLength: parts.length,
-          })
-
-          let detailY = branchY
-          let detailIndex = 0
-
-          for (let partIndex = 0; partIndex < parts.length; partIndex++) {
-            const part = parts[partIndex]
-            if (part.type === "tool-Bash") {
-              const detailNodeId = `detail-${message.id}-bash-${partIndex}`
-              const state = getToolState(part)
-
-              // Extract input/output for detail display
-              const input = part.input
-              const output = part.output || part.result
-              const error = part.error || part.errorText
-
-              // Extract command preview from input
-              const commandPreview = input?.command ? truncateText(input.command, 30) : undefined
-
-              nodes.push({
-                id: detailNodeId,
-                type: "toolCall",
-                position: { x: X_DETAIL, y: detailY },
-                data: {
-                  toolCallId: part.toolCallId || `bash-${partIndex}`,
-                  toolName: "Bash",
-                  state,
-                  commandPreview,
-                  input,
-                  output,
-                  error,
-                  onClick: () => options.onNodeClick(message.id, partIndex),
-                } as ToolCallNodeData,
-              })
-
-              // Connect detail node to consolidated node
-              edges.push({
-                id: `${toolNodeId}-${detailNodeId}`,
-                source: toolNodeId,
-                sourceHandle: "details",
-                target: detailNodeId,
-                style: {
-                  stroke: state === "error" ? "#ef4444" : "#10b981",
-                  strokeWidth: 1,
-                },
-              })
-
-              detailY += Y_DETAIL_SPACING
-              detailIndex++
-            }
+            detailY += Y_DETAIL_SPACING
           }
         }
 
@@ -412,119 +415,7 @@ export function transformMessagesToFlow(
         branchIndex++
       }
 
-      // Add consolidated Thinking node if there were any
-      if (thinkingCount > 0 && thinkingFirstPartIndex >= 0) {
-        const toolNodeId = `tool-${message.id}-thinking`
-        const isExpanded = options.expandedNodes?.has(toolNodeId) || false
-
-        console.log("[message-transformer] Creating Thinking node:", {
-          toolNodeId,
-          thinkingCount,
-          isExpanded,
-          hasOnToggleExpansion: !!options.onToggleExpansion,
-        })
-
-        nodes.push({
-          id: toolNodeId,
-          type: "toolCall",
-          position: { x: X_BRANCH, y: branchY },
-          data: {
-            toolCallId: "thinking",
-            toolName: "Thinking",
-            state: thinkingState,
-            count: thinkingCount,
-            isExpanded,
-            // For single invocation: navigate directly. For multiple: no onClick (handled by onToggleExpansion)
-            onClick: thinkingCount === 1
-              ? () => options.onNodeClick(message.id, thinkingFirstPartIndex)
-              : undefined,
-            // For multiple invocations: provide expansion toggle
-            onToggleExpansion: thinkingCount > 1 && options.onToggleExpansion
-              ? () => {
-                  console.log("[message-transformer] onToggleExpansion called for:", toolNodeId)
-                  options.onToggleExpansion?.(toolNodeId)
-                }
-              : undefined,
-          } as ToolCallNodeData,
-        })
-
-        // Connect thinking node to response node
-        edges.push({
-          id: `${responseNodeId}-${toolNodeId}`,
-          source: responseNodeId,
-          sourceHandle: "tools",
-          target: toolNodeId,
-          animated: thinkingState === "call",
-          style: {
-            stroke: thinkingState === "error" ? "#ef4444" : "#ec4899",
-            strokeWidth: 1.5,
-          },
-        })
-
-        // Create detail nodes if expanded
-        if (isExpanded && thinkingCount > 1) {
-          console.log("[message-transformer] Creating detail nodes for Thinking:", {
-            toolNodeId,
-            thinkingCount,
-            partsLength: parts.length,
-          })
-
-          let detailY = branchY
-          let detailIndex = 0
-
-          for (let partIndex = 0; partIndex < parts.length; partIndex++) {
-            const part = parts[partIndex]
-            if (part.type === "tool-Thinking") {
-              const detailNodeId = `detail-${message.id}-thinking-${partIndex}`
-              const state = getToolState(part)
-
-              // Extract input/output for detail display
-              const input = part.input
-              const output = part.output || part.result
-              const error = part.error || part.errorText
-
-              // Extract text preview from input
-              const thinkingText = input?.text ? truncateText(input.text, 40) : undefined
-
-              nodes.push({
-                id: detailNodeId,
-                type: "toolCall",
-                position: { x: X_DETAIL, y: detailY },
-                data: {
-                  toolCallId: part.toolCallId || `thinking-${partIndex}`,
-                  toolName: "Thinking",
-                  state,
-                  commandPreview: thinkingText,
-                  input,
-                  output,
-                  error,
-                  onClick: () => options.onNodeClick(message.id, partIndex),
-                } as ToolCallNodeData,
-              })
-
-              // Connect detail node to consolidated node
-              edges.push({
-                id: `${toolNodeId}-${detailNodeId}`,
-                source: toolNodeId,
-                sourceHandle: "details",
-                target: detailNodeId,
-                style: {
-                  stroke: state === "error" ? "#ef4444" : "#10b981",
-                  strokeWidth: 1,
-                },
-              })
-
-              detailY += Y_DETAIL_SPACING
-              detailIndex++
-            }
-          }
-        }
-
-        branchY += Y_BRANCH_SPACING
-        branchIndex++
-      }
-
-      // Add background task nodes
+      // Fourth pass: add background task nodes
       for (const bgTask of backgroundTasks) {
         const toolNodeId = `bg-task-${message.id}-${bgTask.part.toolCallId || bgTask.partIndex}`
         const command = bgTask.part.input?.command || ""
