@@ -1,7 +1,10 @@
 import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from "./types"
-import { writeFileSync } from "fs"
+import { appendFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
+
+// Debug log file - use fixed path for easy access
+const DEBUG_LOG_FILE = "/tmp/claw-transform-debug.log"
 
 export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUsingOllama?: boolean }) {
   const emitSdkMessageUuid = options?.emitSdkMessageUuid === true
@@ -84,6 +87,17 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
       yield {
         type: "message-metadata",
         messageMetadata: { sdkMessageUuid: msg.uuid }
+      }
+    }
+
+    // DEBUG: Log ALL result messages to file for analysis (append to persistent log)
+    if (msg.type === "result") {
+      try {
+        const logEntry = `\n=== RESULT MESSAGE ${new Date().toISOString()} ===\n${JSON.stringify(msg, null, 2)}\n`
+        appendFileSync(DEBUG_LOG_FILE, logEntry)
+        console.log("[transform] DEBUG: Logged result message to", DEBUG_LOG_FILE)
+      } catch (e) {
+        console.error("[transform] Failed to write debug log:", e)
       }
     }
 

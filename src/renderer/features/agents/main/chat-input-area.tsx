@@ -144,6 +144,7 @@ export interface ChatInputAreaProps {
   teamId?: string
   repository?: string
   sandboxId?: string
+  /** Working directory for the Claude agent (may be a worktree path) */
   projectPath?: string
   changedFiles: SubChatFileChange[]
   // Mobile
@@ -1248,6 +1249,13 @@ export const ChatInputArea = memo(function ChatInputArea({
             </PromptInput>
           </div>
         </div>
+
+        {/* Working directory display */}
+        {projectPath && (
+          <div className="mt-1 px-1 text-[10px] text-muted-foreground/50 truncate" title={projectPath}>
+            {projectPath}
+          </div>
+        )}
       </div>
 
       {/* File mention dropdown */}
