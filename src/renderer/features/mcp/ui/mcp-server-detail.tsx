@@ -126,8 +126,8 @@ export function McpServerDetail() {
       <div className="space-y-3">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold">{server.name}</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">{server.id}</p>
+            <h2 className="text-lg font-semibold select-text cursor-text">{server.name}</h2>
+            <p className="text-sm text-muted-foreground mt-0.5 select-text cursor-text">{server.id}</p>
           </div>
           {getStatusBadge(server.authStatus)}
         </div>
@@ -159,7 +159,7 @@ export function McpServerDetail() {
           Command
         </div>
         <div className="bg-muted/50 rounded-lg p-3">
-          <code className="text-xs break-all">
+          <code className="text-xs break-all select-text cursor-text">
             {server.config.command}
             {server.config.args?.map((arg, i) => (
               <span key={i}> {arg}</span>
@@ -181,14 +181,14 @@ export function McpServerDetail() {
               return (
                 <div key={key} className="p-3">
                   <div className="flex items-center gap-2">
-                    <code className="text-xs font-medium">{key}</code>
+                    <code className="text-xs font-medium select-text cursor-text">{key}</code>
                     {isCredential && (
                       <span className="text-xs text-yellow-600 bg-yellow-500/10 px-1.5 py-0.5 rounded">
                         credential
                       </span>
                     )}
                   </div>
-                  <code className="text-xs text-muted-foreground mt-1 block break-all">
+                  <code className="text-xs text-muted-foreground mt-1 block break-all select-text cursor-text">
                     {isCredential ? "••••••••" : value || "(empty)"}
                   </code>
                 </div>
@@ -240,7 +240,7 @@ function ToolSchemaPanel({
       <div className="bg-muted/50 px-4 py-2 flex items-center justify-between border-b">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-primary" />
-          <code className="text-sm font-semibold">{tool.name}</code>
+          <code className="text-sm font-semibold select-text cursor-text">{tool.name}</code>
           {paramCount > 0 && (
             <span className="text-xs text-muted-foreground">
               ({paramCount} {paramCount === 1 ? "param" : "params"})
@@ -260,7 +260,7 @@ function ToolSchemaPanel({
       <div className="p-4 space-y-4">
         {/* Description */}
         {tool.description && (
-          <p className="text-sm text-muted-foreground leading-relaxed">
+          <p className="text-sm text-muted-foreground leading-relaxed select-text cursor-text">
             {tool.description}
           </p>
         )}
@@ -466,16 +466,16 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
                 const isSelected = currentToolKey === tool.name
 
                 return (
-                  <button
+                  <div
                     key={tool.name}
                     onClick={() => handleToolSelect(tool.name)}
                     className={cn(
-                      "w-full p-3 text-left transition-colors hover:bg-muted/80",
+                      "w-full p-3 text-left transition-colors hover:bg-muted/80 cursor-pointer",
                       isSelected && "bg-accent"
                     )}
                   >
                     <div className="flex items-center justify-between">
-                      <code className="text-xs font-medium">{tool.name}</code>
+                      <code className="text-xs font-medium select-text cursor-text">{tool.name}</code>
                       {paramCount > 0 && (
                         <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                           {paramCount} {paramCount === 1 ? "param" : "params"}
@@ -483,11 +483,11 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
                       )}
                     </div>
                     {tool.description && (
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 select-text cursor-text">
                         {tool.description}
                       </p>
                     )}
-                  </button>
+                  </div>
                 )
               })
             )}
