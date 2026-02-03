@@ -2078,8 +2078,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // Plan mode state (read from global atom)
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
-
-  // Agent mode and model (for queue items)
+  // Full agent mode (agent, plan, or swarm) for queue items
   const agentMode = useAtomValue(agentModeAtom)
   const selectedModelId = useAtomValue(lastSelectedModelIdAtom)
 
@@ -2395,7 +2394,7 @@ const ChatViewInner = memo(function ChatViewInner({
     // Clear state and selection
     setQuickCommentState(null)
     window.getSelection()?.removeAllRanges()
-  }, [addToQueue, subChatId])
+  }, [addToQueue, subChatId, agentMode])
 
   // Handler for quick comment cancel
   const handleQuickCommentCancel = useCallback(() => {
@@ -3019,6 +3018,8 @@ const ChatViewInner = memo(function ChatViewInner({
   messagesLengthRef.current = messages.length
   const isPlanModeRef = useRef(isPlanMode)
   isPlanModeRef.current = isPlanMode
+  const agentModeRef = useRef(agentMode)
+  agentModeRef.current = agentMode
   const imagesRef = useRef(images)
   imagesRef.current = images
   const filesRef = useRef(files)

@@ -93,11 +93,11 @@ export function QueueProcessor() {
           parts.push({ type: "text", text: item.message })
         }
 
-        // Get mode from sub-chat store for analytics
+        // Get mode - prefer item.mode (captured at queue time), fall back to sub-chat metadata
         const subChatMeta = useAgentSubChatStore
           .getState()
           .allSubChats.find((sc) => sc.id === subChatId)
-        const mode = subChatMeta?.mode || "agent"
+        const mode = item.mode || subChatMeta?.mode || "agent"
 
         // Track message sent
         trackMessageSent({

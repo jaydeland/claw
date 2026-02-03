@@ -111,7 +111,7 @@ type IPCChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string // Original project path for MCP config lookup (when using worktrees)
-  mode: "plan" | "agent"
+  mode: "plan" | "agent" | "swarm"
   model?: string
 }
 

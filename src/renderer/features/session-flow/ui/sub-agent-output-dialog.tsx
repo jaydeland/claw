@@ -12,11 +12,12 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Copy, Download, CheckIcon, AlertCircle, WrapText, Bot, Clock, FileCode } from "lucide-react"
+import { Copy, Download, CheckIcon, AlertCircle, WrapText, Bot, Clock, FileCode, Wrench, Search, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   selectedSubAgentAtom,
   subAgentOutputDialogOpenAtom,
+  type SessionNestedTool,
 } from "../atoms"
 import { CodeBlock } from "../../agents/ui/code-block"
 
@@ -75,6 +76,57 @@ function formatContent(rawContent: string): string {
   } catch {
     // Not JSON, return as-is
     return rawContent
+  }
+}
+
+// Group nested tools by tool name for consolidated display
+interface GroupedTool {
+  toolName: string
+  count: number
+  hasError: boolean
+  hasPending: boolean
+}
+
+function groupNestedTools(tools: SessionNestedTool[]): GroupedTool[] {
+  const groups = new Map<string, GroupedTool>()
+
+  for (const tool of tools) {
+    const existing = groups.get(tool.toolName)
+    if (existing) {
+      existing.count++
+      if (tool.status === "error") existing.hasError = true
+      if (tool.status === "pending") existing.hasPending = true
+    } else {
+      groups.set(tool.toolName, {
+        toolName: tool.toolName,
+        count: 1,
+        hasError: tool.status === "error",
+        hasPending: tool.status === "pending",
+      })
+    }
+  }
+
+  // Sort by count descending, then by name
+  return Array.from(groups.values()).sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count
+    return a.toolName.localeCompare(b.toolName)
+  })
+}
+
+// Tool icon helper for nested tools
+function getToolIcon(toolName: string, iconClass = "w-2.5 h-2.5") {
+  switch (toolName.toLowerCase()) {
+    case "read":
+    case "grep":
+    case "glob":
+      return <FileCode className={iconClass} />
+    case "bash":
+      return <Wrench className={iconClass} />
+    case "webfetch":
+    case "websearch":
+      return <Search className={iconClass} />
+    default:
+      return <Wrench className={iconClass} />
   }
 }
 
@@ -182,8 +234,40 @@ export const SubAgentOutputDialog = memo(function SubAgentOutputDialog({
               </div>
             </DialogHeader>
 
+            {/* Requests - top level when present */}
+            {selectedAgent.nestedTools && selectedAgent.nestedTools.length > 0 && (
+              <div className="border rounded-md p-3 text-xs bg-muted/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wrench className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  <strong className="text-foreground">Requests:</strong>
+                  <span className="text-muted-foreground">{selectedAgent.nestedTools.length} total</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {groupNestedTools(selectedAgent.nestedTools).map((group) => (
+                    <Badge
+                      key={group.toolName}
+                      variant="outline"
+                      className={cn(
+                        "h-5 px-1.5 text-[10px] gap-1",
+                        group.hasError && "border-red-500/50 text-red-600 dark:text-red-400",
+                        group.hasPending && !group.hasError && "border-foreground/50 animate-pulse"
+                      )}
+                    >
+                      {getToolIcon(group.toolName)}
+                      <span>{group.toolName}</span>
+                      {group.count > 1 && (
+                        <span className="tabular-nums text-muted-foreground">({group.count})</span>
+                      )}
+                      {!group.hasError && !group.hasPending && <CheckIcon className="w-2.5 h-2.5 text-green-600 dark:text-green-500" />}
+                      {group.hasError && <AlertCircle className="w-2.5 h-2.5" />}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Agent Details */}
-            <div className="border rounded-md p-3 space-y-2 text-xs bg-muted/20">
+            <div className="border rounded-md p-3 text-xs bg-muted/20">
               <div className="flex items-center gap-2">
                 <FileCode className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 <strong className="text-foreground">Agent Type:</strong>

@@ -4,7 +4,7 @@ import { memo, useCallback } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { cn } from "@/lib/utils"
 import { CheckIcon, IconSpinner } from "@/components/ui/icons"
-import { X, ExternalLink } from "lucide-react"
+import { X, ExternalLink, Crown, Code2, Eye, TestTube2, Hexagon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,7 +13,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
-  Brain,
   FileCode,
   Search,
   Wrench,
@@ -25,16 +24,37 @@ import {
   sessionFlowSubAgentsAtom,
   selectedSubAgentAtom,
   subAgentOutputDialogOpenAtom,
+  isSwarmModeActiveAtom,
+  swarmStatsAtom,
   type SessionSubAgent,
+  type SessionNestedTool,
 } from "../atoms"
 
 interface SessionSubAgentsListProps {
   onScrollToMessage: (messageId: string, partIndex?: number) => void
 }
 
-// Get icon for agent type
-function getAgentIcon(type: string) {
+// Get icon for agent type - with distinct swarm worker icons
+function getAgentIcon(type: string, isSwarmWorker?: boolean) {
   const iconClass = "w-3.5 h-3.5"
+
+  // Swarm workers get distinct icons
+  if (isSwarmWorker) {
+    switch (type) {
+      case "coordinator":
+        return <Crown className={cn(iconClass, "text-amber-500")} />
+      case "coder":
+        return <Code2 className={cn(iconClass, "text-blue-500")} />
+      case "reviewer":
+        return <Eye className={cn(iconClass, "text-purple-500")} />
+      case "tester":
+        return <TestTube2 className={cn(iconClass, "text-green-500")} />
+      default:
+        return <Hexagon className={cn(iconClass, "text-orange-500")} />
+    }
+  }
+
+  // Regular agent icons
   switch (type) {
     case "coder":
     case "code-writer":
@@ -52,6 +72,22 @@ function getAgentIcon(type: string) {
       return <Sparkles className={iconClass} />
     default:
       return <Bot className={iconClass} />
+  }
+}
+
+// Get swarm worker label
+function getSwarmWorkerLabel(type: string): string {
+  switch (type) {
+    case "coordinator":
+      return "Coordinator"
+    case "coder":
+      return "Coder"
+    case "reviewer":
+      return "Reviewer"
+    case "tester":
+      return "Tester"
+    default:
+      return "Worker"
   }
 }
 
@@ -107,6 +143,58 @@ function formatDuration(ms?: number): string {
   return `${minutes}m ${remainingSeconds}s`
 }
 
+// Tool icon helper for nested tools
+function getToolIcon(toolName: string, iconClass = "w-2.5 h-2.5") {
+  // Map common tool names to icons
+  switch (toolName.toLowerCase()) {
+    case "read":
+    case "grep":
+    case "glob":
+      return <FileCode className={iconClass} />
+    case "bash":
+      return <Wrench className={iconClass} />
+    case "webfetch":
+    case "websearch":
+      return <Search className={iconClass} />
+    default:
+      return <Wrench className={iconClass} />
+  }
+}
+
+// Group nested tools by tool name for consolidated display
+interface GroupedTool {
+  toolName: string
+  count: number
+  hasError: boolean
+  hasPending: boolean
+}
+
+function groupNestedTools(tools: SessionNestedTool[]): GroupedTool[] {
+  const groups = new Map<string, GroupedTool>()
+
+  for (const tool of tools) {
+    const existing = groups.get(tool.toolName)
+    if (existing) {
+      existing.count++
+      if (tool.status === "error") existing.hasError = true
+      if (tool.status === "pending") existing.hasPending = true
+    } else {
+      groups.set(tool.toolName, {
+        toolName: tool.toolName,
+        count: 1,
+        hasError: tool.status === "error",
+        hasPending: tool.status === "pending",
+      })
+    }
+  }
+
+  // Sort by count descending, then by name
+  return Array.from(groups.values()).sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count
+    return a.toolName.localeCompare(b.toolName)
+  })
+}
+
 // Individual sub-agent item component
 const SubAgentItem = memo(function SubAgentItem({
   agent,
@@ -121,59 +209,137 @@ const SubAgentItem = memo(function SubAgentItem({
 }) {
   const hasOutput = !!agent.output || !!agent.error
   const duration = formatDuration(agent.duration)
+  const nestedToolsCount = agent.nestedTools?.length || 0
+
+  // Calculate indentation for hierarchy (16px per depth level)
+  const depthIndent = (agent.depth || 0) * 16
 
   return (
     <div
       className={cn(
-        "w-full flex items-center gap-2 px-2.5 py-1.5",
+        "w-full flex flex-col",
         "hover:bg-muted/50 transition-colors",
-        !isLast && "border-b border-border/30"
+        !isLast && "border-b border-border/30",
+        // Subtle left border for swarm workers
+        agent.isSwarmWorker && "border-l-2",
+        agent.isSwarmWorker && agent.type === "coordinator" && "border-l-amber-500/50",
+        agent.isSwarmWorker && agent.type === "coder" && "border-l-blue-500/50",
+        agent.isSwarmWorker && agent.type === "reviewer" && "border-l-purple-500/50",
+        agent.isSwarmWorker && agent.type === "tester" && "border-l-green-500/50"
       )}
     >
-      <button
-        onClick={onClick}
-        disabled={!hasOutput && agent.status !== "running"}
-        className={cn(
-          "flex-1 flex items-center gap-2 min-w-0 text-left",
-          hasOutput || agent.status === "running" ? "cursor-pointer" : "cursor-default opacity-60"
-        )}
+      <div
+        className="flex items-center gap-2 px-2.5 py-1.5"
+        style={{ paddingLeft: `${10 + depthIndent}px` }}
       >
-        <div className="flex-shrink-0 text-muted-foreground">
-          {getAgentIcon(agent.type)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium truncate">{agent.description}</div>
-          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-            <span className="capitalize">{agent.type.replace(/-/g, " ")}</span>
-            {duration && (
-              <>
-                <span>-</span>
-                <span className="tabular-nums">{duration}</span>
-              </>
-            )}
+        {/* Hierarchy connector line for nested agents */}
+        {(agent.depth || 0) > 0 && (
+          <div className="flex-shrink-0 w-2 h-full flex items-center">
+            <div className="w-1.5 h-[1px] bg-border/50" />
+          </div>
+        )}
+
+        <button
+          onClick={onClick}
+          disabled={!hasOutput && agent.status !== "running"}
+          className={cn(
+            "flex-1 flex items-center gap-2 min-w-0 text-left",
+            hasOutput || agent.status === "running" ? "cursor-pointer" : "cursor-default opacity-60"
+          )}
+        >
+          <div className="flex-shrink-0">
+            {getAgentIcon(agent.type, agent.isSwarmWorker)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium truncate">{agent.description}</span>
+              {/* Swarm worker badge */}
+              {agent.isSwarmWorker && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "h-4 px-1 text-[9px] flex-shrink-0",
+                    agent.type === "coordinator" && "border-amber-500/50 text-amber-600 dark:text-amber-400",
+                    agent.type === "coder" && "border-blue-500/50 text-blue-600 dark:text-blue-400",
+                    agent.type === "reviewer" && "border-purple-500/50 text-purple-600 dark:text-purple-400",
+                    agent.type === "tester" && "border-green-500/50 text-green-600 dark:text-green-400"
+                  )}
+                >
+                  {getSwarmWorkerLabel(agent.type)}
+                </Badge>
+              )}
+            </div>
+            <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+              {!agent.isSwarmWorker && (
+                <span className="capitalize">{agent.type.replace(/-/g, " ")}</span>
+              )}
+              {agent.isSwarmWorker && (
+                <span className="text-muted-foreground/70">Swarm</span>
+              )}
+              {duration && (
+                <>
+                  <span>·</span>
+                  <span className="tabular-nums">{duration}</span>
+                </>
+              )}
+              {nestedToolsCount > 0 && (
+                <>
+                  <span>·</span>
+                  <span className="tabular-nums">{nestedToolsCount} request{nestedToolsCount !== 1 ? "s" : ""}</span>
+                </>
+              )}
+            </div>
+          </div>
+          <SubAgentStatusIcon status={agent.status} />
+        </button>
+
+        {/* Dialog button */}
+        {hasOutput && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5 flex-shrink-0 hover:bg-muted"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenDialog()
+                }}
+              >
+                <ExternalLink className="h-3 w-3 text-muted-foreground" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">View output</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+
+      {/* Nested tools summary - grouped by tool type */}
+      {nestedToolsCount > 0 && (
+        <div
+          className="px-2.5 pb-1.5"
+          style={{ paddingLeft: `${32 + depthIndent}px` }}
+        >
+          <div className="flex flex-wrap gap-1">
+            {groupNestedTools(agent.nestedTools!).map((group) => (
+              <Badge
+                key={group.toolName}
+                variant="outline"
+                className={cn(
+                  "h-4 px-1 text-[9px] gap-0.5",
+                  group.hasError && "border-red-500/50 text-red-600 dark:text-red-400",
+                  group.hasPending && !group.hasError && "border-foreground/50"
+                )}
+              >
+                {getToolIcon(group.toolName)}
+                <span>{group.toolName}</span>
+                {group.count > 1 && (
+                  <span className="ml-0.5 tabular-nums text-muted-foreground">({group.count})</span>
+                )}
+              </Badge>
+            ))}
           </div>
         </div>
-        <SubAgentStatusIcon status={agent.status} />
-      </button>
-
-      {/* Dialog button */}
-      {hasOutput && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-5 w-5 flex-shrink-0 hover:bg-muted"
-              onClick={(e) => {
-                e.stopPropagation()
-                onOpenDialog()
-              }}
-            >
-              <ExternalLink className="h-3 w-3 text-muted-foreground" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="left">View output</TooltipContent>
-        </Tooltip>
       )}
     </div>
   )
@@ -185,6 +351,8 @@ export const SessionSubAgentsList = memo(function SessionSubAgentsList({
   const subAgents = useAtomValue(sessionFlowSubAgentsAtom)
   const setSelectedAgent = useSetAtom(selectedSubAgentAtom)
   const setDialogOpen = useSetAtom(subAgentOutputDialogOpenAtom)
+  const isSwarmMode = useAtomValue(isSwarmModeActiveAtom)
+  const swarmStats = useAtomValue(swarmStatsAtom)
 
   const handleAgentClick = useCallback(
     (agent: SessionSubAgent) => {
@@ -238,6 +406,52 @@ export const SessionSubAgentsList = memo(function SessionSubAgentsList({
         <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
           {completedCount}/{totalCount}
         </Badge>
+
+        {/* Swarm mode indicator */}
+        {isSwarmMode && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className="h-4 px-1.5 text-[10px] gap-1 border-amber-500/50 text-amber-600 dark:text-amber-400 ml-auto"
+              >
+                <Hexagon className="w-2.5 h-2.5" />
+                Swarm
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              <div className="space-y-1">
+                <div className="font-medium">Swarm Mode Active</div>
+                <div className="text-muted-foreground">
+                  {swarmStats.coordinatorCount > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Crown className="w-3 h-3 text-amber-500" />
+                      {swarmStats.coordinatorCount} Coordinator{swarmStats.coordinatorCount !== 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {swarmStats.coderCount > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Code2 className="w-3 h-3 text-blue-500" />
+                      {swarmStats.coderCount} Coder{swarmStats.coderCount !== 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {swarmStats.reviewerCount > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Eye className="w-3 h-3 text-purple-500" />
+                      {swarmStats.reviewerCount} Reviewer{swarmStats.reviewerCount !== 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {swarmStats.testerCount > 0 && (
+                    <div className="flex items-center gap-1">
+                      <TestTube2 className="w-3 h-3 text-green-500" />
+                      {swarmStats.testerCount} Tester{swarmStats.testerCount !== 1 ? "s" : ""}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* Sub agents list */}

@@ -18,10 +18,20 @@ export {
   sessionFlowBackgroundTasksAtom,
   selectedBackgroundTaskAtom,
   backgroundTaskOutputDialogOpenAtom,
+  // Swarm-related exports
+  sessionModeAtom,
+  isSwarmModeActiveAtom,
+  swarmStatsAtom,
+  isSwarmWorker,
+  SWARM_WORKER_TYPES,
   type SessionTodoItem,
   type ExtractedTodos,
   type SessionSubAgent,
+  type SessionNestedTool,
   type SessionBackgroundTask,
+  type SessionMode,
+  type SwarmStats,
+  type SwarmWorkerType,
 } from "./atoms"
 
 // Components

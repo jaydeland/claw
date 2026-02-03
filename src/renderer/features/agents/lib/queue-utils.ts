@@ -4,6 +4,7 @@
  */
 
 import type { UploadedImage, UploadedFile } from "../hooks/use-agents-file-upload"
+import type { AgentMode } from "../atoms"
 
 export interface QueuedImage {
   id: string
@@ -62,6 +63,7 @@ export type AgentQueueItem = {
   files?: QueuedFile[]
   textContexts?: QueuedTextContext[]
   diffTextContexts?: QueuedDiffTextContext[]
+  mode?: AgentMode // Mode captured at queue time (agent, plan, or swarm)
   timestamp: Date
   status: "pending" | "processing"
   // Mode and model captured at queue time
@@ -90,10 +92,10 @@ export function createQueueItem(
     files: files && files.length > 0 ? files : undefined,
     textContexts: textContexts && textContexts.length > 0 ? textContexts : undefined,
     diffTextContexts: diffTextContexts && diffTextContexts.length > 0 ? diffTextContexts : undefined,
-    timestamp: new Date(),
-    status: "pending",
     mode,
     modelId,
+    timestamp: new Date(),
+    status: "pending",
   }
 }
 
