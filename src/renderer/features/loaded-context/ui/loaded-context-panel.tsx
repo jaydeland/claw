@@ -8,6 +8,7 @@ import { ClaudeMdItem, SourceBadge } from "./claude-md-item"
 import type { McpServerInfo, SkillInfo, AgentInfo, CommandInfo } from "../types"
 import { calculateLoadedContextTokens } from "../types"
 import { cn } from "@/lib/utils"
+import { formatTokenCount, formatDuration } from "@/lib/format-tokens"
 import {
   messageIdsAtom,
   messageAtomFamily,
@@ -16,17 +17,6 @@ import {
   messageMetadataAtomFamily,
   currentSubChatIdAtom,
 } from "../../agents/stores/message-store"
-
-/**
- * Format token count for display
- * e.g., 1234 -> "1.2k", 12345 -> "12.3k"
- */
-function formatTokenCount(tokens: number): string {
-  if (tokens < 1000) {
-    return tokens.toLocaleString()
-  }
-  return `${(tokens / 1000).toFixed(1)}k`
-}
 
 // ============ Running Tokens Section ============
 
@@ -39,22 +29,6 @@ interface RequestTokenData {
   totalTokens: number
   preview: string
   durationMs?: number
-}
-
-/**
- * Format duration in milliseconds to human-readable format
- */
-function formatDuration(ms: number): string {
-  if (ms < 1000) {
-    return `${ms}ms`
-  }
-  const seconds = ms / 1000
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}s`
-  }
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = Math.round(seconds % 60)
-  return `${minutes}m ${remainingSeconds}s`
 }
 
 /**
@@ -220,7 +194,7 @@ function RunningTokensSection() {
     <div className="flex flex-col gap-2">
       {/* Subtotal Header */}
       <div className="flex items-center justify-between px-2 py-1.5 bg-muted/30 rounded-md">
-        <span className="text-xs text-muted-foreground">Estimated Running Tokens</span>
+        <span className="text-xs text-muted-foreground">API Usage</span>
         <span className="text-sm font-medium text-foreground">
           {formatTokenCount(tokenData.totalTokens)}
         </span>
@@ -302,14 +276,14 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
 
   return (
     <div className="flex flex-col gap-3 p-2">
-      {/* Start Tokens Section - grouped startup context */}
+      {/* Initial Context Section - grouped startup context */}
       <div className="flex flex-col gap-2">
-        {/* Estimated Start Tokens Header */}
+        {/* Initial Context Header */}
         {tokenCounts && tokenCounts.total > 0 && (
           <div className="flex items-center justify-between px-2 py-1.5 bg-muted/30 rounded-md">
-            <span className="text-xs text-muted-foreground">Estimated Start Tokens</span>
+            <span className="text-xs text-muted-foreground">Initial Context</span>
             <span className="text-sm font-medium text-foreground">
-              {formatTokenCount(tokenCounts.total)}
+              ~{formatTokenCount(tokenCounts.total)}
             </span>
           </div>
         )}

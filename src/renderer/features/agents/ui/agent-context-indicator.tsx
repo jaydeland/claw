@@ -7,6 +7,7 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
+import { formatTokenCount } from "../../../lib/format-tokens"
 
 // Claude model context windows
 const CONTEXT_WINDOWS = {
@@ -17,11 +18,11 @@ const CONTEXT_WINDOWS = {
 
 type ModelId = keyof typeof CONTEXT_WINDOWS
 
-// Pre-computed token data to avoid re-computing on every render
+// Pre-computed token data - matches TokenData from message-store.ts
 export interface MessageTokenData {
-  totalInputTokens: number
-  totalOutputTokens: number
-  totalCostUsd: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
   messageCount: number
 }
 
@@ -32,16 +33,6 @@ interface AgentContextIndicatorProps {
   onCompact?: () => void
   isCompacting?: boolean
   disabled?: boolean
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) {
-    return `${(tokens / 1_000_000).toFixed(1)}M`
-  }
-  if (tokens >= 1000) {
-    return `${(tokens / 1000).toFixed(1)}K`
-  }
-  return tokens.toString()
 }
 
 // Circular progress component
@@ -101,7 +92,7 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
   isCompacting,
   disabled,
 }: AgentContextIndicatorProps) {
-  const totalTokens = tokenData.totalInputTokens + tokenData.totalOutputTokens
+  const totalTokens = tokenData.totalTokens
   const contextWindow = CONTEXT_WINDOWS[modelId]
   const percentUsed = Math.min(100, (totalTokens / contextWindow) * 100)
   const isEmpty = totalTokens === 0
@@ -134,7 +125,7 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
         <p className="text-xs">
           {isEmpty ? (
             <span className="text-muted-foreground">
-              Context: 0 / {formatTokens(contextWindow)}
+              Context: 0 / {formatTokenCount(contextWindow)}
             </span>
           ) : (
             <>
@@ -143,8 +134,8 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
               </span>
               <span className="text-muted-foreground mx-1">·</span>
               <span className="text-muted-foreground">
-                {formatTokens(totalTokens)} /{" "}
-                {formatTokens(contextWindow)} context
+                {formatTokenCount(totalTokens)} /{" "}
+                {formatTokenCount(contextWindow)} context
               </span>
             </>
           )}
