@@ -25,7 +25,9 @@
     "release": "rm -rf release && bun run claude:download && bun run gsd:fetch && bun run build && bun run package:mac && bun run dist:manifest && bun run dist:cask && ./scripts/upload-release-wrangler.sh",
     "release:homebrew": "./scripts/update-homebrew-cask.sh",
     "sync:public": "./scripts/sync-to-public.sh",
-    "icon:generate": "node scripts/generate-icon.mjs",
+    "icon:generate": "node scripts/generate-icon.mjs && node scripts/generate-windows-icon.mjs",
+    "icon:generate:mac": "node scripts/generate-icon.mjs",
+    "icon:generate:win": "node scripts/generate-windows-icon.mjs",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
@@ -136,6 +138,7 @@
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^3.0.0",
     "postcss": "^8.5.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.4.5",
     "vite": "^6.3.4"

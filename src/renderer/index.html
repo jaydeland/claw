@@ -77,19 +77,22 @@
     <!-- Loading indicator - separate from root so :empty works -->
     <div class="loading-container">
       <svg class="loading-logo" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-        <!-- Robotic claw body/head -->
-        <path d="M 150 100 L 150 80 L 180 80 L 180 60 L 220 60 L 220 80 L 250 80 L 250 100 L 270 100 L 270 160 L 130 160 L 130 100 Z" fill="none" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/>
-        <!-- Eyes/bolts -->
-        <circle cx="170" cy="120" r="12"/>
-        <circle cx="230" cy="120" r="12"/>
-        <!-- Left arm - outer -->
-        <path d="M 130 140 L 90 180 L 90 240 L 50 280 L 50 350 L 90 390 L 130 350" fill="none" stroke-width="20" stroke-linejoin="miter" stroke-linecap="round"/>
-        <!-- Left arm - inner -->
-        <path d="M 150 160 L 120 200 L 120 260 L 90 300 L 90 350" fill="none" stroke-width="20" stroke-linejoin="miter" stroke-linecap="round"/>
-        <!-- Right arm - outer -->
-        <path d="M 270 140 L 310 180 L 310 240 L 350 280 L 350 350 L 310 390 L 270 350" fill="none" stroke-width="20" stroke-linejoin="miter" stroke-linecap="round"/>
-        <!-- Right arm - inner -->
-        <path d="M 250 160 L 280 200 L 280 260 L 310 300 L 310 350" fill="none" stroke-width="20" stroke-linejoin="miter" stroke-linecap="round"/>
+        <!-- Head/body top section -->
+        <rect x="160" y="60" width="30" height="20" rx="5" fill="none" stroke-width="18"/>
+        <rect x="210" y="60" width="30" height="20" rx="5" fill="none" stroke-width="18"/>
+        <!-- Main head box -->
+        <rect x="140" y="80" width="120" height="80" rx="8" fill="none" stroke-width="18"/>
+        <!-- Eyes -->
+        <circle cx="175" cy="120" r="10"/>
+        <circle cx="225" cy="120" r="10"/>
+        <!-- Left arm outer -->
+        <path d="M 120 140 L 80 180 L 80 230 L 40 280 L 40 340 L 70 370 L 110 330" fill="none" stroke-width="18" stroke-linejoin="round"/>
+        <!-- Left arm inner -->
+        <path d="M 160 160 L 130 200 L 130 250 L 100 290" fill="none" stroke-width="18" stroke-linejoin="round"/>
+        <!-- Right arm outer -->
+        <path d="M 280 140 L 320 180 L 320 230 L 360 280 L 360 340 L 330 370 L 290 330" fill="none" stroke-width="18" stroke-linejoin="round"/>
+        <!-- Right arm inner -->
+        <path d="M 240 160 L 270 200 L 270 250 L 300 290" fill="none" stroke-width="18" stroke-linejoin="round"/>
       </svg>
     </div>
     <script>
