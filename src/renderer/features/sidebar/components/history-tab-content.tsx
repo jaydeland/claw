@@ -21,6 +21,8 @@ import {
   GitHubLogo,
 } from "../../../components/ui/icons"
 import { cn } from "../../../lib/utils"
+import { AssistantMessageItem } from "../../agents/main/assistant-message-item"
+import { AgentUserMessageBubble } from "../../agents/ui/agent-user-message-bubble"
 
 // Format relative time - moved outside component to avoid recreation
 const formatTime = (dateInput: Date | string) => {
@@ -462,34 +464,41 @@ export function HistoryTabContent({ className }: HistoryTabContentProps) {
                           No messages in this sub-chat
                         </div>
                       ) : (
-                        <div className="space-y-3">
-                          {messages.map((msg: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className={cn(
-                                "rounded-lg p-3 text-sm",
-                                msg.role === "user"
-                                  ? "bg-primary/10 text-foreground"
-                                  : "bg-muted text-foreground"
-                              )}
-                            >
-                              <div className="font-medium text-xs uppercase tracking-wide mb-1 text-muted-foreground">
-                                {msg.role}
-                              </div>
-                              {msg.parts?.map((part: any, partIdx: number) => (
-                                <div key={partIdx}>
-                                  {part.type === "text" && part.text && (
-                                    <div className="whitespace-pre-wrap">{part.text}</div>
-                                  )}
-                                  {part.type.startsWith("tool-") && (
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      Tool: {part.type.replace("tool-", "")}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          ))}
+                        <div className="space-y-4">
+                          {messages.map((msg: any, idx: number) => {
+                            if (msg.role === "user") {
+                              // Extract text content from parts
+                              const textContent = msg.parts
+                                ?.filter((p: any) => p.type === "text")
+                                .map((p: any) => p.text)
+                                .join("\n") || ""
+                              // Extract image parts
+                              const imageParts = msg.parts?.filter(
+                                (p: any) => p.type === "data-image"
+                              ) || []
+                              return (
+                                <AgentUserMessageBubble
+                                  key={msg.id || idx}
+                                  messageId={msg.id || `user-${idx}`}
+                                  textContent={textContent}
+                                  imageParts={imageParts}
+                                />
+                              )
+                            } else {
+                              // Assistant message - use full renderer
+                              return (
+                                <AssistantMessageItem
+                                  key={msg.id || idx}
+                                  message={msg}
+                                  isLastMessage={false}
+                                  isStreaming={false}
+                                  status="ready"
+                                  subChatId={subChat.id}
+                                  isMobile={false}
+                                />
+                              )
+                            }
+                          })}
                         </div>
                       )}
                     </div>
