@@ -50,16 +50,25 @@
         pointer-events: none;
       }
       .loading-logo {
-        width: 24px;
-        height: 24px;
-        animation: pulse 1.5s ease-in-out infinite;
+        width: 48px;
+        height: 48px;
+        animation: claw-grip 2s ease-in-out infinite;
       }
-      .loading-logo path {
+      .loading-logo path,
+      .loading-logo circle,
+      .loading-logo rect {
         fill: var(--loading-logo);
+        stroke: var(--loading-logo);
       }
-      @keyframes pulse {
-        0%, 100% { opacity: 0.3; }
-        50% { opacity: 0.6; }
+      @keyframes claw-grip {
+        0%, 100% {
+          transform: scale(1);
+          opacity: 0.4;
+        }
+        50% {
+          transform: scale(0.95);
+          opacity: 0.8;
+        }
       }
     </style>
   </head>
@@ -67,8 +76,20 @@
     <div id="root"></div>
     <!-- Loading indicator - separate from root so :empty works -->
     <div class="loading-container">
-      <svg class="loading-logo" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path fill-rule="evenodd" clip-rule="evenodd" d="M358.333 0C381.345 0 400 18.6548 400 41.6667V295.833C400 298.135 398.134 300 395.833 300H270.833C268.532 300 266.667 301.865 266.667 304.167V395.833C266.667 398.134 264.801 400 262.5 400H41.6667C18.6548 400 0 381.345 0 358.333V304.72C0 301.793 1.54269 299.081 4.05273 297.575L153.76 207.747C157.159 205.708 156.02 200.679 152.376 200.065L151.628 200H4.16667C1.86548 200 6.71103e-08 198.135 0 195.833V104.167C1.07376e-06 101.865 1.86548 100 4.16667 100H162.5C164.801 100 166.667 98.1345 166.667 95.8333V4.16667C166.667 1.86548 168.532 1.00666e-07 170.833 0H358.333ZM170.833 100C168.532 100 166.667 101.865 166.667 104.167V295.833C166.667 298.135 168.532 300 170.833 300H262.5C264.801 300 266.667 298.135 266.667 295.833V104.167C266.667 101.865 264.801 100 262.5 100H170.833Z" fill="#71717a"/>
+      <svg class="loading-logo" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+        <!-- Robotic claw body/head -->
+        <path d="M 150 100 L 150 80 L 180 80 L 180 60 L 220 60 L 220 80 L 250 80 L 250 100 L 270 100 L 270 160 L 130 160 L 130 100 Z" fill="none" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/>
+        <!-- Eyes/bolts -->
+        <circle cx="170" cy="120" r="12"/>
+        <circle cx="230" cy="120" r="12"/>
+        <!-- Left arm - outer -->
+        <path d="M 130 140 L 90 180 L 90 240 L 50 280 L 50 350 L 90 390 L 130 350" fill="none" stroke-width="20" stroke-linejoin="miter" stroke-linecap="round"/>
+        <!-- Left arm - inner -->
+        <path d="M 150 160 L 120 200 L 120 260 L 90 300 L 90 350" fill="none" stroke-width="20" stroke-linejoin="miter" stroke-linecap="round"/>
+        <!-- Right arm - outer -->
+        <path d="M 270 140 L 310 180 L 310 240 L 350 280 L 350 350 L 310 390 L 270 350" fill="none" stroke-width="20" stroke-linejoin="miter" stroke-linecap="round"/>
+        <!-- Right arm - inner -->
+        <path d="M 250 160 L 280 200 L 280 260 L 310 300 L 310 350" fill="none" stroke-width="20" stroke-linejoin="miter" stroke-linecap="round"/>
       </svg>
     </div>
     <script>
