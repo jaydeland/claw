@@ -1,5 +1,5 @@
-import { useMemo } from "react"
-import { FileText, Server, Zap, Bot, Loader2, Terminal } from "lucide-react"
+import { useMemo, useState, memo } from "react"
+import { FileText, Server, Zap, Bot, Loader2, Terminal, Activity, ChevronDown, ChevronRight } from "lucide-react"
 import { trpc } from "@/lib/trpc"
 import { useAtomValue } from "jotai"
 import { selectedAgentChatIdAtom } from "../../agents/atoms"
@@ -8,6 +8,12 @@ import { ClaudeMdItem, SourceBadge } from "./claude-md-item"
 import type { McpServerInfo, SkillInfo, AgentInfo, CommandInfo } from "../types"
 import { calculateLoadedContextTokens } from "../types"
 import { cn } from "@/lib/utils"
+import {
+  messageIdsAtom,
+  messageAtomFamily,
+  messageTokenDataAtom,
+  userMessageIdsAtom,
+} from "../../agents/stores/message-store"
 
 /**
  * Format token count for display
@@ -18,6 +24,226 @@ function formatTokenCount(tokens: number): string {
     return tokens.toLocaleString()
   }
   return `${(tokens / 1000).toFixed(1)}k`
+}
+
+// ============ Running Tokens Section ============
+
+interface RequestTokenData {
+  requestNumber: number
+  userMessageId: string
+  assistantMessageId: string
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  preview: string
+  durationMs?: number
+}
+
+/**
+ * Format duration in milliseconds to human-readable format
+ */
+function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${ms}ms`
+  }
+  const seconds = ms / 1000
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s`
+  }
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = Math.round(seconds % 60)
+  return `${minutes}m ${remainingSeconds}s`
+}
+
+/**
+ * Single request token item - expandable row showing input/output for one request
+ */
+const RequestTokenItem = memo(function RequestTokenItem({
+  data,
+}: {
+  data: RequestTokenData
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  return (
+    <div className="border border-border/30 rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-2 w-full px-2 py-1.5 text-left hover:bg-muted/30 transition-colors"
+      >
+        {isExpanded ? (
+          <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+        ) : (
+          <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+        )}
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 bg-muted text-muted-foreground">
+          Request #{data.requestNumber}
+        </span>
+        <span className="text-xs truncate flex-1 text-foreground">
+          {data.preview}
+        </span>
+        <span className="text-[10px] font-mono text-muted-foreground">
+          {formatTokenCount(data.totalTokens)}
+        </span>
+      </button>
+
+      {isExpanded && (
+        <div className="px-3 py-2 bg-muted/10 border-t border-border/30 space-y-1">
+          <div className="flex justify-between text-[10px]">
+            <span className="text-muted-foreground">Input Tokens:</span>
+            <span className="font-mono">{data.inputTokens.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-[10px]">
+            <span className="text-muted-foreground">Output Tokens:</span>
+            <span className="font-mono">{data.outputTokens.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-[10px] pt-1 border-t border-border/30">
+            <span className="text-muted-foreground font-medium">Total:</span>
+            <span className="font-mono font-medium">{data.totalTokens.toLocaleString()}</span>
+          </div>
+          {data.durationMs && data.durationMs > 0 && (
+            <div className="flex justify-between text-[10px]">
+              <span className="text-muted-foreground">Duration:</span>
+              <span className="font-mono">{formatDuration(data.durationMs)}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+})
+
+/**
+ * Wrapper to fetch message data and render RequestTokenItem
+ */
+const RequestTokenItemWithData = memo(function RequestTokenItemWithData({
+  requestNumber,
+  userMessageId,
+  assistantMessageId,
+}: {
+  requestNumber: number
+  userMessageId: string
+  assistantMessageId: string
+}) {
+  const userMessage = useAtomValue(messageAtomFamily(userMessageId))
+  const assistantMessage = useAtomValue(messageAtomFamily(assistantMessageId))
+
+  const data = useMemo((): RequestTokenData => {
+    const metadata = assistantMessage?.metadata as {
+      inputTokens?: number
+      outputTokens?: number
+      durationMs?: number
+    } | undefined
+
+    // Get preview from user message
+    let preview = ""
+    if (userMessage?.parts) {
+      const textPart = userMessage.parts.find((p: any) => p.type === "text")
+      const text = textPart?.text || ""
+      preview = text.length > 60 ? text.slice(0, 60) + "..." : text
+    }
+
+    const inputTokens = metadata?.inputTokens || 0
+    const outputTokens = metadata?.outputTokens || 0
+
+    return {
+      requestNumber,
+      userMessageId,
+      assistantMessageId,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      preview: preview || "Request",
+      durationMs: metadata?.durationMs,
+    }
+  }, [userMessage, assistantMessage, requestNumber, userMessageId, assistantMessageId])
+
+  return <RequestTokenItem data={data} />
+})
+
+/**
+ * Running Tokens Section - shows token usage per request in the session
+ * Displays a subtotal header and expandable items for each request (user message + response)
+ */
+function RunningTokensSection() {
+  const messageIds = useAtomValue(messageIdsAtom)
+  const userMessageIds = useAtomValue(userMessageIdsAtom)
+  const tokenData = useAtomValue(messageTokenDataAtom)
+
+  // Build list of requests (user message + assistant response pairs)
+  const requestList = useMemo(() => {
+    const result: { requestNumber: number; userMessageId: string; assistantMessageId: string }[] = []
+    const userIdSet = new Set(userMessageIds)
+    let requestNumber = 1
+
+    for (let i = 0; i < messageIds.length; i++) {
+      const id = messageIds[i]!
+
+      if (userIdSet.has(id)) {
+        const userMessageId = id
+        let assistantMessageId = ""
+
+        // Look for the assistant response
+        for (let j = i + 1; j < messageIds.length; j++) {
+          const nextId = messageIds[j]!
+          if (userIdSet.has(nextId)) {
+            break // Next user message, no assistant response
+          }
+          // Found the assistant response
+          assistantMessageId = nextId
+          break
+        }
+
+        result.push({
+          requestNumber,
+          userMessageId,
+          assistantMessageId,
+        })
+
+        requestNumber++
+      }
+    }
+
+    return result
+  }, [messageIds, userMessageIds])
+
+  if (requestList.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/* Subtotal Header */}
+      <div className="flex items-center justify-between px-2 py-1.5 bg-muted/30 rounded-md">
+        <span className="text-xs text-muted-foreground">Estimated Running Tokens</span>
+        <span className="text-sm font-medium text-foreground">
+          {formatTokenCount(tokenData.totalTokens)}
+        </span>
+      </div>
+
+      {/* Indented dropdown under Running Tokens */}
+      <div className="pl-3">
+        <ContextSection
+          title="Token Breakdown"
+          icon={Activity}
+          count={requestList.length}
+          defaultExpanded={false}
+        >
+          <div className="space-y-1">
+            {requestList.map((item) => (
+              <RequestTokenItemWithData
+                key={item.userMessageId}
+                requestNumber={item.requestNumber}
+                userMessageId={item.userMessageId}
+                assistantMessageId={item.assistantMessageId}
+              />
+            ))}
+          </div>
+        </ContextSection>
+      </div>
+    </div>
+  )
 }
 
 interface LoadedContextPanelProps {
@@ -81,95 +307,104 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
 
   return (
     <div className="flex flex-col gap-3 p-2">
-      {/* Token Count Header */}
-      {tokenCounts && tokenCounts.total > 0 && (
-        <div className="flex items-center justify-between px-2 py-1.5 bg-muted/30 rounded-md">
-          <span className="text-xs text-muted-foreground">Estimated Start Tokens</span>
-          <span className="text-sm font-medium text-foreground">
-            {formatTokenCount(tokenCounts.total)}
-          </span>
-        </div>
-      )}
-
-      {/* CLAUDE.md Files Section */}
-      <ContextSection
-        title="CLAUDE.md Files"
-        icon={FileText}
-        count={data.claudeMdFiles.length}
-        tokenCount={tokenCounts?.claudeMd}
-      >
-        {data.claudeMdFiles.length === 0 ? (
-          <ContextSectionEmpty message="No CLAUDE.md files found" />
-        ) : (
-          data.claudeMdFiles.map((file) => (
-            <ClaudeMdItem key={file.path} file={file} />
-          ))
+      {/* Start Tokens Section - grouped startup context */}
+      <div className="flex flex-col gap-2">
+        {/* Estimated Start Tokens Header */}
+        {tokenCounts && tokenCounts.total > 0 && (
+          <div className="flex items-center justify-between px-2 py-1.5 bg-muted/30 rounded-md">
+            <span className="text-xs text-muted-foreground">Estimated Start Tokens</span>
+            <span className="text-sm font-medium text-foreground">
+              {formatTokenCount(tokenCounts.total)}
+            </span>
+          </div>
         )}
-      </ContextSection>
 
-      {/* MCP Servers Section */}
-      <ContextSection
-        title="MCP Servers"
-        icon={Server}
-        count={data.mcpServers.length}
-        tokenCount={tokenCounts?.mcpServers}
-      >
-        {data.mcpServers.length === 0 ? (
-          <ContextSectionEmpty message="No MCP servers configured" />
-        ) : (
-          data.mcpServers.map((server) => (
-            <McpServerItem key={server.name} server={server} />
-          ))
-        )}
-      </ContextSection>
+        {/* Indented dropdowns under Start Tokens */}
+        <div className="flex flex-col gap-2 pl-3">
+          {/* CLAUDE.md Files Section */}
+          <ContextSection
+            title="CLAUDE.md Files"
+            icon={FileText}
+            count={data.claudeMdFiles.length}
+            tokenCount={tokenCounts?.claudeMd}
+          >
+          {data.claudeMdFiles.length === 0 ? (
+            <ContextSectionEmpty message="No CLAUDE.md files found" />
+          ) : (
+            data.claudeMdFiles.map((file) => (
+              <ClaudeMdItem key={file.path} file={file} />
+            ))
+          )}
+        </ContextSection>
 
-      {/* Commands Section */}
-      <ContextSection
-        title="Commands"
-        icon={Terminal}
-        count={data.commands.length}
-        tokenCount={tokenCounts?.commands}
-      >
-        {data.commands.length === 0 ? (
-          <ContextSectionEmpty message="No commands found" />
-        ) : (
-          data.commands.map((command) => (
-            <CommandItem key={command.path} command={command} />
-          ))
-        )}
-      </ContextSection>
+        {/* MCP Servers Section */}
+        <ContextSection
+          title="MCP Servers"
+          icon={Server}
+          count={data.mcpServers.length}
+          tokenCount={tokenCounts?.mcpServers}
+        >
+          {data.mcpServers.length === 0 ? (
+            <ContextSectionEmpty message="No MCP servers configured" />
+          ) : (
+            data.mcpServers.map((server) => (
+              <McpServerItem key={server.name} server={server} />
+            ))
+          )}
+        </ContextSection>
 
-      {/* Skills Section */}
-      <ContextSection
-        title="Skills"
-        icon={Zap}
-        count={data.skills.length}
-        tokenCount={tokenCounts?.skills}
-      >
-        {data.skills.length === 0 ? (
-          <ContextSectionEmpty message="No skills found" />
-        ) : (
-          data.skills.map((skill) => (
-            <SkillItem key={skill.path} skill={skill} />
-          ))
-        )}
-      </ContextSection>
+        {/* Commands Section */}
+        <ContextSection
+          title="Commands"
+          icon={Terminal}
+          count={data.commands.length}
+          tokenCount={tokenCounts?.commands}
+        >
+          {data.commands.length === 0 ? (
+            <ContextSectionEmpty message="No commands found" />
+          ) : (
+            data.commands.map((command) => (
+              <CommandItem key={command.path} command={command} />
+            ))
+          )}
+        </ContextSection>
 
-      {/* Agents Section */}
-      <ContextSection
-        title="Agents"
-        icon={Bot}
-        count={data.agents.length}
-        tokenCount={tokenCounts?.agents}
-      >
-        {data.agents.length === 0 ? (
-          <ContextSectionEmpty message="No agents found" />
-        ) : (
+        {/* Skills Section */}
+        <ContextSection
+          title="Skills"
+          icon={Zap}
+          count={data.skills.length}
+          tokenCount={tokenCounts?.skills}
+        >
+          {data.skills.length === 0 ? (
+            <ContextSectionEmpty message="No skills found" />
+          ) : (
+            data.skills.map((skill) => (
+              <SkillItem key={skill.path} skill={skill} />
+            ))
+          )}
+        </ContextSection>
+
+        {/* Agents Section */}
+        <ContextSection
+          title="Agents"
+          icon={Bot}
+          count={data.agents.length}
+          tokenCount={tokenCounts?.agents}
+        >
+          {data.agents.length === 0 ? (
+            <ContextSectionEmpty message="No agents found" />
+          ) : (
           data.agents.map((agent) => (
             <AgentItem key={agent.path} agent={agent} />
           ))
         )}
-      </ContextSection>
+          </ContextSection>
+        </div>
+      </div>
+
+      {/* Running Tokens Section - shows per-request token usage */}
+      <RunningTokensSection />
     </div>
   )
 }

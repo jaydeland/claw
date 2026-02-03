@@ -3,7 +3,7 @@
 import { memo, useCallback, useRef, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { useAtom, useAtomValue } from "jotai"
-import { ChevronDown, RotateCcw, Zap, Users, Loader2 } from "lucide-react"
+import { ChevronDown, RotateCcw, Zap } from "lucide-react"
 
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
@@ -66,20 +66,6 @@ import {
   selectedOllamaModelAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
-
-// Animated dots component that cycles through ., .., ...
-function AnimatedDots() {
-  const [dotCount, setDotCount] = useState(1)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDotCount((prev) => (prev % 3) + 1)
-    }, 400)
-    return () => clearInterval(interval)
-  }, [])
-
-  return <span className="inline-block w-[1em] text-left">{".".repeat(dotCount)}</span>
-}
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
@@ -677,13 +663,6 @@ export const ChatInputArea = memo(function ChatInputArea({
             className="relative w-full cursor-text"
             onClick={() => editorRef.current?.focus()}
           >
-            {/* Tool status indicator */}
-            {isStreaming && currentToolStatus && (
-              <div className="flex items-center gap-1.5 mb-2 ml-1 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                <span>{currentToolStatus.statusText}<AnimatedDots /></span>
-              </div>
-            )}
             <PromptInput
               className={cn(
                 "border bg-input-background relative z-10 p-2 rounded-xl transition-[border-color,box-shadow] duration-150",

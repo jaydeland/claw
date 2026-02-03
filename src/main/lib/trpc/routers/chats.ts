@@ -318,10 +318,10 @@ export const chatsRouter = router({
         .get()
       console.log("[chats.create] created chat:", chat)
 
-      // For local mode (no worktree), set name to "Local (branch)" format
+      // For local mode (no worktree), append branch to user's provided name (same as worktree)
       if (!input.useWorktree) {
         const currentBranch = await getCurrentBranch(project.path)
-        const localName = `Local (${currentBranch || 'unknown'})`
+        const localName = `${chat.name} (${currentBranch || 'unknown'})`
 
         db.update(chats)
           .set({ name: localName })

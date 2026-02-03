@@ -3,7 +3,7 @@
 import { memo, useState, useMemo, useEffect, useCallback } from "react"
 import { useSetAtom, useAtom, useAtomValue } from "jotai"
 import { atomWithStorage } from "jotai/utils"
-import { ChevronDown, Bot, ListTodo, Terminal, FileCode, Loader2, Square, X, ArrowUp, Mail } from "lucide-react"
+import { ChevronDown, Bot, ListTodo, Terminal, FileCode, Loader2, Square, X, ArrowUp, Mail, Circle } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
@@ -404,6 +404,12 @@ export const SessionStatusBar = memo(function SessionStatusBar({
     },
   )
 
+  // Fetch running DevSpace processes
+  const { data: devspaceProcesses } = trpc.devspace.listOurProcesses.useQuery(
+    undefined,
+    { refetchInterval: 5000 }
+  )
+
   // Filter changedFiles to only include files that are still uncommitted
   const uncommittedFiles = useMemo(() => {
     if (!gitStatus || !worktreePath || isStreaming) {
@@ -566,16 +572,14 @@ export const SessionStatusBar = memo(function SessionStatusBar({
           </button>
 
           {/* Section tabs */}
-          {queueTotal > 0 && (
-            <SectionButton
-              icon={Mail}
-              label="Queue"
-              count={queueTotal}
-              countDetail={queueDetail}
-              isActive={expandedSection === 'queue'}
-              onClick={() => handleSectionClick('queue')}
-            />
-          )}
+          <SectionButton
+            icon={Mail}
+            label="Queue"
+            count={queueTotal}
+            countDetail={queueDetail}
+            isActive={expandedSection === 'queue'}
+            onClick={() => handleSectionClick('queue')}
+          />
           <SectionButton
             icon={FileCode}
             label="Changes"
@@ -823,6 +827,20 @@ export const SessionStatusBar = memo(function SessionStatusBar({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* DevSpace status footer */}
+      {devspaceProcesses && devspaceProcesses.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-1.5 border-t border-border bg-muted/10 text-[10px] text-muted-foreground">
+          <span className="font-medium">DevSpace:</span>
+          {devspaceProcesses.map((proc, idx) => (
+            <span key={proc.pid} className="flex items-center gap-1">
+              <Circle className="w-2 h-2 fill-green-500 text-green-500" />
+              <span>{proc.serviceName || proc.workingDir.split('/').pop()}</span>
+              {idx < devspaceProcesses.length - 1 && <span className="text-muted-foreground/50">,</span>}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 })
