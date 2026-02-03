@@ -3682,7 +3682,7 @@ const ChatViewInner = memo(function ChatViewInner({
             chatContainerObserverRef.current = observer
           }
         }}
-        className="flex-1 overflow-y-auto w-full relative allow-text-selection outline-none bg-card"
+        className="flex-1 overflow-y-auto w-full relative allow-text-selection outline-none bg-background"
         tabIndex={-1}
         data-chat-container
       >

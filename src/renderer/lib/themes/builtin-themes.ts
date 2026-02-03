@@ -9,8 +9,8 @@ import type { VSCodeFullTheme } from "../atoms"
 import { CURSOR_DARK, CURSOR_LIGHT, CURSOR_MIDNIGHT } from "./cursor-themes"
 
 /**
- * Claw Dark - Default dark theme matching the app's original design
- * Uses the brand blue (#0034FF) as primary/accent color
+ * Claw Dark - Default dark theme with vibrant accents and high contrast
+ * Uses colorful accents: blue (#3b82f6), purple (#a855f7), cyan (#06b6d4)
  */
 const CLAW_DARK: VSCodeFullTheme = {
   id: "claw-dark",
@@ -18,63 +18,67 @@ const CLAW_DARK: VSCodeFullTheme = {
   type: "dark",
   source: "builtin",
   colors: {
-    "editor.background": "#0a0a0a", // 240 10% 3.9%
-    "editor.foreground": "#f4f4f5", // 240 4.8% 95.9%
-    "foreground": "#f4f4f5",
-    "sideBar.background": "#121212", // original tl-background (0 0% 7%)
-    "sideBar.foreground": "#f4f4f5",
-    "sideBar.border": "#27272a", // 240 3.7% 15.9%
-    "activityBar.background": "#0a0a0a",
-    "activityBar.foreground": "#f4f4f5",
-    "panel.background": "#121212", // match sidebar
-    "panel.border": "#27272a",
+    "editor.background": "#0a0a0a", // Deep black
+    "editor.foreground": "#f8fafc", // High contrast white
+    "foreground": "#f8fafc",
+    "sideBar.background": "#1e293b", // Distinct slate sidebar
+    "sideBar.foreground": "#f8fafc",
+    "sideBar.border": "#334155", // Slate border for definition
+    "activityBar.background": "#1e293b", // Match sidebar
+    "activityBar.foreground": "#f8fafc",
+    "activityBarBadge.background": "#a855f7", // Purple badge
+    "activityBarBadge.foreground": "#ffffff",
+    "panel.background": "#1e293b", // Match sidebar
+    "panel.border": "#334155",
     "tab.activeBackground": "#0a0a0a",
-    "tab.inactiveBackground": "#18181b", // 240 5.9% 10%
-    "tab.inactiveForeground": "#a1a1aa", // 240 4.4% 58%
+    "tab.inactiveBackground": "#18181b",
+    "tab.inactiveForeground": "#94a3b8", // Lighter inactive text
     "editorGroupHeader.tabsBackground": "#18181b",
-    "dropdown.background": "#171717", // popover
-    "dropdown.foreground": "#fafafa",
-    "input.background": "#121212", // same as sidebar/tl-background
-    "input.border": "#27272a",
-    "input.foreground": "#f4f4f5",
-    "focusBorder": "#0034ff", // primary blue
-    "textLink.foreground": "#0034ff",
-    "textLink.activeForeground": "#3366ff",
-    "list.activeSelectionBackground": "#27272a",
-    "list.hoverBackground": "#18181b",
-    "editor.selectionBackground": "#0034ff44",
-    "editorLineNumber.foreground": "#52525b",
-    "descriptionForeground": "#a1a1aa",
-    "errorForeground": "#ef4444",
-    "button.background": "#0034ff", // primary
+    "dropdown.background": "#1e293b", // Slate dropdown
+    "dropdown.foreground": "#f8fafc",
+    "input.background": "#1e293b",
+    "input.border": "#3b82f6", // Blue border
+    "input.foreground": "#f8fafc",
+    "focusBorder": "#3b82f6", // Blue focus
+    "textLink.foreground": "#60a5fa", // Bright blue links
+    "textLink.activeForeground": "#a78bfa", // Purple active
+    "list.activeSelectionBackground": "#3b82f644",
+    "list.hoverBackground": "#1e293b",
+    "editor.selectionBackground": "#3b82f655",
+    "editorLineNumber.foreground": "#64748b",
+    "descriptionForeground": "#94a3b8",
+    "errorForeground": "#f87171", // Bright red
+    "badge.background": "#a855f7", // Purple badges
+    "badge.foreground": "#ffffff",
+    "button.background": "#3b82f6", // Blue primary button
     "button.foreground": "#ffffff",
-    "button.secondaryBackground": "#27272a",
-    "button.secondaryForeground": "#fafafa",
-    // Terminal colors
+    "button.secondaryBackground": "#475569",
+    "button.secondaryForeground": "#f8fafc",
+    // Terminal colors - vibrant and high contrast
     "terminal.background": "#0a0a0a",
-    "terminal.foreground": "#f4f4f5",
-    "terminal.ansiBlack": "#18181b",
-    "terminal.ansiRed": "#ef4444",
-    "terminal.ansiGreen": "#22c55e",
-    "terminal.ansiYellow": "#eab308",
-    "terminal.ansiBlue": "#3b82f6",
-    "terminal.ansiMagenta": "#a855f7",
-    "terminal.ansiCyan": "#06b6d4",
-    "terminal.ansiWhite": "#f4f4f5",
-    "terminal.ansiBrightBlack": "#71717a",
-    "terminal.ansiBrightRed": "#f87171",
-    "terminal.ansiBrightGreen": "#4ade80",
-    "terminal.ansiBrightYellow": "#facc15",
-    "terminal.ansiBrightBlue": "#60a5fa",
-    "terminal.ansiBrightMagenta": "#c084fc",
-    "terminal.ansiBrightCyan": "#22d3ee",
-    "terminal.ansiBrightWhite": "#fafafa",
+    "terminal.foreground": "#f8fafc",
+    "terminal.ansiBlack": "#1e293b",
+    "terminal.ansiRed": "#f87171", // Bright red
+    "terminal.ansiGreen": "#4ade80", // Bright green
+    "terminal.ansiYellow": "#fbbf24", // Bright yellow
+    "terminal.ansiBlue": "#60a5fa", // Bright blue
+    "terminal.ansiMagenta": "#c084fc", // Bright purple
+    "terminal.ansiCyan": "#22d3ee", // Bright cyan
+    "terminal.ansiWhite": "#f8fafc",
+    "terminal.ansiBrightBlack": "#64748b",
+    "terminal.ansiBrightRed": "#fca5a5",
+    "terminal.ansiBrightGreen": "#86efac",
+    "terminal.ansiBrightYellow": "#fde047",
+    "terminal.ansiBrightBlue": "#93c5fd",
+    "terminal.ansiBrightMagenta": "#d8b4fe",
+    "terminal.ansiBrightCyan": "#67e8f9",
+    "terminal.ansiBrightWhite": "#ffffff",
   },
 }
 
 /**
- * Claw Light - Default light theme matching the app's original design
- * Uses the brand blue (#0034FF) as primary/accent color
+ * Claw Light - Default light theme with vibrant accents and high contrast
+ * Uses colorful accents: blue (#2563eb), purple (#9333ea), teal (#0d9488)
  */
 const CLAW_LIGHT: VSCodeFullTheme = {
   id: "claw-light",
@@ -83,56 +87,60 @@ const CLAW_LIGHT: VSCodeFullTheme = {
   source: "builtin",
   colors: {
     "editor.background": "#ffffff",
-    "editor.foreground": "#0a0a0a", // 240 10% 3.9%
-    "foreground": "#0a0a0a",
-    "sideBar.background": "#FAFAFA", // original tl-background (0 0% 98%)
-    "sideBar.foreground": "#0a0a0a",
-    "sideBar.border": "#e4e4e7", // 240 5.9% 90%
-    "activityBar.background": "#ffffff",
-    "activityBar.foreground": "#0a0a0a",
-    "panel.background": "#FAFAFA", // match sidebar
-    "panel.border": "#e4e4e7",
+    "editor.foreground": "#0f172a", // High contrast dark slate
+    "foreground": "#0f172a",
+    "sideBar.background": "#f1f5f9", // Distinct light slate sidebar
+    "sideBar.foreground": "#0f172a",
+    "sideBar.border": "#cbd5e1", // Visible border
+    "activityBar.background": "#f1f5f9", // Match sidebar
+    "activityBar.foreground": "#0f172a",
+    "activityBarBadge.background": "#9333ea", // Purple badge
+    "activityBarBadge.foreground": "#ffffff",
+    "panel.background": "#f1f5f9", // Match sidebar
+    "panel.border": "#cbd5e1",
     "tab.activeBackground": "#ffffff",
-    "tab.inactiveBackground": "#f4f4f5", // 240 4.8% 95.9%
-    "tab.inactiveForeground": "#71717a", // 240 3.8% 46.1%
-    "editorGroupHeader.tabsBackground": "#f4f4f5",
+    "tab.inactiveBackground": "#f1f5f9",
+    "tab.inactiveForeground": "#64748b",
+    "editorGroupHeader.tabsBackground": "#f1f5f9",
     "dropdown.background": "#ffffff",
-    "dropdown.foreground": "#0a0a0a",
-    "input.background": "#FAFAFA", // same as sidebar/tl-background
-    "input.border": "#e4e4e7",
-    "input.foreground": "#0a0a0a",
-    "focusBorder": "#0034ff", // primary blue
-    "textLink.foreground": "#0034ff",
-    "textLink.activeForeground": "#0028cc",
-    "list.activeSelectionBackground": "#f4f4f5",
-    "list.hoverBackground": "#f4f4f5",
-    "editor.selectionBackground": "#0034ff33",
-    "editorLineNumber.foreground": "#a1a1aa",
-    "descriptionForeground": "#71717a",
-    "errorForeground": "#dc2626",
-    "button.background": "#0034ff", // primary
+    "dropdown.foreground": "#0f172a",
+    "input.background": "#f1f5f9",
+    "input.border": "#2563eb", // Blue border
+    "input.foreground": "#0f172a",
+    "focusBorder": "#2563eb", // Blue focus
+    "textLink.foreground": "#2563eb", // Bright blue links
+    "textLink.activeForeground": "#9333ea", // Purple active
+    "list.activeSelectionBackground": "#2563eb22",
+    "list.hoverBackground": "#f1f5f9",
+    "editor.selectionBackground": "#2563eb33",
+    "editorLineNumber.foreground": "#94a3b8",
+    "descriptionForeground": "#64748b",
+    "errorForeground": "#dc2626", // Bright red
+    "badge.background": "#9333ea", // Purple badges
+    "badge.foreground": "#ffffff",
+    "button.background": "#2563eb", // Blue primary button
     "button.foreground": "#ffffff",
-    "button.secondaryBackground": "#f4f4f5",
-    "button.secondaryForeground": "#18181b",
-    // Terminal colors
-    "terminal.background": "#fafafa",
-    "terminal.foreground": "#0a0a0a",
-    "terminal.ansiBlack": "#18181b",
-    "terminal.ansiRed": "#dc2626",
-    "terminal.ansiGreen": "#16a34a",
-    "terminal.ansiYellow": "#ca8a04",
-    "terminal.ansiBlue": "#2563eb",
-    "terminal.ansiMagenta": "#9333ea",
-    "terminal.ansiCyan": "#0891b2",
-    "terminal.ansiWhite": "#f4f4f5",
-    "terminal.ansiBrightBlack": "#52525b",
+    "button.secondaryBackground": "#cbd5e1",
+    "button.secondaryForeground": "#0f172a",
+    // Terminal colors - vibrant and high contrast
+    "terminal.background": "#f8fafc",
+    "terminal.foreground": "#0f172a",
+    "terminal.ansiBlack": "#1e293b",
+    "terminal.ansiRed": "#dc2626", // Bright red
+    "terminal.ansiGreen": "#16a34a", // Bright green
+    "terminal.ansiYellow": "#ca8a04", // Bright yellow
+    "terminal.ansiBlue": "#2563eb", // Bright blue
+    "terminal.ansiMagenta": "#9333ea", // Bright purple
+    "terminal.ansiCyan": "#0d9488", // Teal
+    "terminal.ansiWhite": "#f1f5f9",
+    "terminal.ansiBrightBlack": "#475569",
     "terminal.ansiBrightRed": "#ef4444",
     "terminal.ansiBrightGreen": "#22c55e",
-    "terminal.ansiBrightYellow": "#eab308",
+    "terminal.ansiBrightYellow": "#f59e0b",
     "terminal.ansiBrightBlue": "#3b82f6",
     "terminal.ansiBrightMagenta": "#a855f7",
-    "terminal.ansiBrightCyan": "#06b6d4",
-    "terminal.ansiBrightWhite": "#fafafa",
+    "terminal.ansiBrightCyan": "#14b8a6",
+    "terminal.ansiBrightWhite": "#ffffff",
   },
 }
 
