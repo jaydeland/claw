@@ -9,12 +9,12 @@ import type { VSCodeFullTheme } from "../atoms"
 import { CURSOR_DARK, CURSOR_LIGHT, CURSOR_MIDNIGHT } from "./cursor-themes"
 
 /**
- * 21st Dark - Default dark theme matching the app's original design
+ * Claw Dark - Default dark theme matching the app's original design
  * Uses the brand blue (#0034FF) as primary/accent color
  */
-const TWENTYFIRST_DARK: VSCodeFullTheme = {
-  id: "21st-dark",
-  name: "21st Dark",
+const CLAW_DARK: VSCodeFullTheme = {
+  id: "claw-dark",
+  name: "Claw Dark",
   type: "dark",
   source: "builtin",
   colors: {
@@ -592,7 +592,7 @@ const CLAUDE_DARK: VSCodeFullTheme = {
  */
 export const BUILTIN_THEMES: VSCodeFullTheme[] = [
   // 21st Default themes (first)
-  TWENTYFIRST_DARK,
+  CLAW_DARK,
   TWENTYFIRST_LIGHT,
   // Cursor themes
   CURSOR_DARK,

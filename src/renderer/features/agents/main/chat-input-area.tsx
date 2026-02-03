@@ -1252,7 +1252,7 @@ export const ChatInputArea = memo(function ChatInputArea({
 
         {/* Working directory display */}
         {projectPath && (
-          <div className="mt-1 px-1 text-[10px] text-muted-foreground/50 truncate" title={projectPath}>
+          <div className="mt-1 px-1 text-xs text-muted-foreground/70 truncate" title={projectPath}>
             {projectPath}
           </div>
         )}
