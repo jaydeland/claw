@@ -113,6 +113,11 @@ export const pendingMessageMetadataAtom = atom<Map<string, StoredMessageMetadata
 export const setPendingMessageMetadataAtom = atom(
   null,
   (get, set, payload: { subChatId: string; metadata: StoredMessageMetadata }) => {
+    console.log("[setPendingMetadata] Setting pending metadata:", {
+      subChatId: payload.subChatId,
+      inputTokens: payload.metadata.inputTokens,
+      outputTokens: payload.metadata.outputTokens,
+    })
     const currentMap = get(pendingMessageMetadataAtom)
     const newMap = new Map(currentMap)
     newMap.set(payload.subChatId, payload.metadata)
@@ -722,14 +727,23 @@ export const syncMessagesWithStatusAtom = atom(
       // This handles token metadata from message-metadata chunks that arrived before we had the message ID
       const pendingMetadata = get(pendingMessageMetadataAtom)
       const pendingMeta = pendingMetadata.get(currentSubChatId)
+      console.log("[syncMessages] Checking pending metadata:", {
+        currentSubChatId,
+        status,
+        hasPendingMeta: !!pendingMeta,
+        pendingMetaKeys: [...pendingMetadata.keys()],
+        newIdsCount: newIds.length,
+      })
       if (pendingMeta) {
         // Find the last assistant message to associate metadata with
         const lastAssistantId = [...newIds].reverse().find(id => {
           const msg = get(messageAtomFamily(id))
           return msg?.role === "assistant"
         })
+        console.log("[syncMessages] Found lastAssistantId:", lastAssistantId, "pendingMeta:", pendingMeta)
         if (lastAssistantId) {
           const metadataKey = `${currentSubChatId}:${lastAssistantId}`
+          console.log("[syncMessages] Storing metadata at key:", metadataKey)
           set(messageMetadataAtomFamily(metadataKey), pendingMeta)
           // Clear the pending metadata
           const newPending = new Map(pendingMetadata)

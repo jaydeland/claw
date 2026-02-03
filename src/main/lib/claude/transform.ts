@@ -1,4 +1,7 @@
 import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from "./types"
+import { writeFileSync } from "fs"
+import { tmpdir } from "os"
+import { join } from "path"
 
 export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUsingOllama?: boolean }) {
   const emitSdkMessageUuid = options?.emitSdkMessageUuid === true
@@ -512,6 +515,18 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
     // ===== RESULT (final) =====
     if (msg.type === "result") {
       console.log("[transform] RESULT message, textStarted:", textStarted, "lastTextId:", lastTextId, "subtype:", msg.subtype)
+      // DEBUG: Write full result message to temp file for analysis
+      const debugFilePath = join(tmpdir(), `claw-sdk-result-${Date.now()}.json`)
+      try {
+        writeFileSync(debugFilePath, JSON.stringify(msg, null, 2))
+        console.log("[transform] DEBUG: Wrote SDK result to", debugFilePath)
+      } catch (e) {
+        console.error("[transform] DEBUG: Failed to write debug file:", e)
+      }
+      // DEBUG: Log ALL fields in the result message to find token data
+      console.log("[transform] RESULT msg keys:", Object.keys(msg))
+      console.log("[transform] RESULT msg.usage:", JSON.stringify(msg.usage, null, 2))
+      console.log("[transform] RESULT msg.modelUsage:", JSON.stringify(msg.modelUsage, null, 2))
 
       // Check for error subtype before processing
       if (msg.subtype === "error_during_execution") {
@@ -524,8 +539,32 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
         yield* endToolInput()
       }
 
-      const inputTokens = msg.usage?.input_tokens
-      const outputTokens = msg.usage?.output_tokens
+      // Try snake_case first (BetaUsage), then camelCase, then aggregate from modelUsage
+      let inputTokens = msg.usage?.input_tokens ?? (msg.usage as any)?.inputTokens
+      let outputTokens = msg.usage?.output_tokens ?? (msg.usage as any)?.outputTokens
+
+      // If still no tokens, aggregate from modelUsage (per-model breakdown)
+      if ((!inputTokens || !outputTokens) && msg.modelUsage) {
+        let totalInput = 0
+        let totalOutput = 0
+        for (const modelKey of Object.keys(msg.modelUsage)) {
+          const modelStats = msg.modelUsage[modelKey]
+          totalInput += modelStats?.inputTokens || 0
+          totalOutput += modelStats?.outputTokens || 0
+        }
+        inputTokens = inputTokens || totalInput || undefined
+        outputTokens = outputTokens || totalOutput || undefined
+      }
+
+      console.log("[transform] Result message usage data:", {
+        hasUsage: !!msg.usage,
+        usage: msg.usage,
+        hasModelUsage: !!msg.modelUsage,
+        modelUsage: msg.modelUsage,
+        inputTokens,
+        outputTokens,
+        totalCostUsd: msg.total_cost_usd,
+      })
       const metadata: MessageMetadata = {
         sessionId: msg.session_id,
         inputTokens,

@@ -151,6 +151,16 @@ const RequestTokenItemWithData = memo(function RequestTokenItemWithData({
     const inputTokens = metadata?.inputTokens || 0
     const outputTokens = metadata?.outputTokens || 0
 
+    console.log("[RequestTokenItemWithData] Reading metadata:", {
+      subChatId,
+      assistantMessageId,
+      metadataKey: `${subChatId}:${assistantMessageId}`,
+      storedMetadata,
+      assistantMessageMetadata: assistantMessage?.metadata,
+      inputTokens,
+      outputTokens,
+    })
+
     return {
       requestNumber,
       userMessageId,
@@ -161,7 +171,7 @@ const RequestTokenItemWithData = memo(function RequestTokenItemWithData({
       preview: preview || "Request",
       durationMs: metadata?.durationMs,
     }
-  }, [userMessage, assistantMessage, storedMetadata, requestNumber, userMessageId, assistantMessageId])
+  }, [userMessage, assistantMessage, storedMetadata, requestNumber, userMessageId, assistantMessageId, subChatId])
 
   return <RequestTokenItem data={data} />
 })

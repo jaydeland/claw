@@ -196,6 +196,11 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               chunkCount++
               lastChunkType = chunk.type
 
+              // DEBUG: Log ALL chunk types to find message-metadata
+              if (chunk.type.includes("meta") || chunk.type.includes("finish") || chunk.type.includes("message")) {
+                console.log(`[SD] CHUNK sub=${subId} type=${chunk.type}`, chunk)
+              }
+
               // Handle AskUserQuestion - show question UI
               if (chunk.type === "ask-user-question") {
                 const currentMap = appStore.get(pendingUserQuestionsAtom)
@@ -256,6 +261,12 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               // This metadata arrives before we know the AI SDK's message ID, so we store it
               // as "pending" and associate it with the message during sync
               if (chunk.type === "message-metadata" && chunk.messageMetadata) {
+                console.log("[IPCTransport] message-metadata chunk received:", {
+                  subChatId: this.config.subChatId,
+                  metadata: chunk.messageMetadata,
+                  inputTokens: chunk.messageMetadata.inputTokens,
+                  outputTokens: chunk.messageMetadata.outputTokens,
+                })
                 appStore.set(setPendingMessageMetadataAtom, {
                   subChatId: this.config.subChatId,
                   metadata: chunk.messageMetadata,
@@ -354,6 +365,19 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               if (chunk.type === "finish") {
                 console.log(`[SD] R:FINISH sub=${subId} n=${chunkCount}`)
+                // Also grab metadata from finish chunk (backup source for tokens)
+                if (chunk.messageMetadata) {
+                  console.log("[IPCTransport] finish chunk has messageMetadata:", {
+                    subChatId: this.config.subChatId,
+                    metadata: chunk.messageMetadata,
+                    inputTokens: chunk.messageMetadata.inputTokens,
+                    outputTokens: chunk.messageMetadata.outputTokens,
+                  })
+                  appStore.set(setPendingMessageMetadataAtom, {
+                    subChatId: this.config.subChatId,
+                    metadata: chunk.messageMetadata,
+                  })
+                }
                 try {
                   controller.close()
                 } catch {
