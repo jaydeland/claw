@@ -240,16 +240,34 @@ export function WorkflowMcpView() {
         <div className="space-y-3">
           <h3 className="text-lg font-semibold">Configuration</h3>
 
-          {/* Command */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Command</label>
-            <div className="bg-muted/50 rounded-md p-3">
-              <code className="text-sm font-mono select-text cursor-text">{mcpServer.config.command}</code>
+          {/* HTTP/SSE Server: Show URL and Type */}
+          {(mcpServer.config.type === "http" || mcpServer.config.type === "sse") ? (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Type</label>
+                <div className="bg-muted/50 rounded-md p-3">
+                  <code className="text-sm font-mono select-text cursor-text uppercase">{mcpServer.config.type}</code>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">URL</label>
+                <div className="bg-muted/50 rounded-md p-3">
+                  <code className="text-sm font-mono select-text cursor-text break-all">{mcpServer.config.url}</code>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Stdio Server: Show Command */
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Command</label>
+              <div className="bg-muted/50 rounded-md p-3">
+                <code className="text-sm font-mono select-text cursor-text">{mcpServer.config.command}</code>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Arguments */}
-          {mcpServer.config.args && mcpServer.config.args.length > 0 && (
+          {/* Arguments (only for stdio servers) */}
+          {!mcpServer.config.type && mcpServer.config.args && mcpServer.config.args.length > 0 && (
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Arguments</label>
               <div className="bg-muted/50 rounded-md p-3 space-y-1">

@@ -457,10 +457,24 @@ export async function warmupMcpCache(): Promise<void> {
         })
 
         // Wait for init message with MCP server statuses and tools
+        const configuredServerNames = Object.keys(project.servers)
+        console.log(`[MCP Warmup] Configured servers for ${project.path}: ${configuredServerNames.join(", ")}`)
+
         let gotInit = false
         for await (const msg of warmupQuery) {
           const msgAny = msg as any
           if (msgAny.type === "system" && msgAny.subtype === "init" && msgAny.mcp_servers) {
+            // Log all servers returned by SDK
+            const returnedServers = msgAny.mcp_servers.map((s: any) => `${s.name}(${s.status}, ${s.tools?.length || 0} tools)`)
+            console.log(`[MCP Warmup] SDK returned ${msgAny.mcp_servers.length} servers: ${returnedServers.join(", ")}`)
+
+            // Check for servers that were configured but not returned
+            const returnedNames = new Set(msgAny.mcp_servers.map((s: any) => s.name))
+            const missingServers = configuredServerNames.filter(name => !returnedNames.has(name))
+            if (missingServers.length > 0) {
+              console.warn(`[MCP Warmup] Servers configured but NOT returned by SDK: ${missingServers.join(", ")}`)
+            }
+
             // Cache the statuses and tools
             const statusMap = new Map<string, string>()
             const serversWithTools: McpServerWithTools[] = []

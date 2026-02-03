@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronRight,
   X,
+  Globe,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -152,21 +153,35 @@ export function McpServerDetail() {
         </div>
       </div>
 
-      {/* Command */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Terminal className="h-4 w-4" />
-          Command
+      {/* Connection Info - HTTP/SSE servers show URL, stdio servers show command */}
+      {(server.config.type === "http" || server.config.type === "sse") ? (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Globe className="h-4 w-4" />
+            {server.config.type.toUpperCase()} Endpoint
+          </div>
+          <div className="bg-muted/50 rounded-lg p-3">
+            <code className="text-xs break-all select-text cursor-text">
+              {server.config.url}
+            </code>
+          </div>
         </div>
-        <div className="bg-muted/50 rounded-lg p-3">
-          <code className="text-xs break-all select-text cursor-text">
-            {server.config.command}
-            {server.config.args?.map((arg, i) => (
-              <span key={i}> {arg}</span>
-            ))}
-          </code>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Terminal className="h-4 w-4" />
+            Command
+          </div>
+          <div className="bg-muted/50 rounded-lg p-3">
+            <code className="text-xs break-all select-text cursor-text">
+              {server.config.command}
+              {server.config.args?.map((arg, i) => (
+                <span key={i}> {arg}</span>
+              ))}
+            </code>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Environment Variables */}
       {Object.keys(envVars).length > 0 && (
