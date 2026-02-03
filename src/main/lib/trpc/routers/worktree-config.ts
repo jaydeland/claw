@@ -14,6 +14,10 @@ const WorktreeConfigSchema = z.object({
   "setup-worktree-windows": z.union([z.array(z.string()), z.string()]).optional(),
   "setup-worktree": z.union([z.array(z.string()), z.string()]).optional(),
   "worktree-location": z.string().optional(),
+  // Terminal startup commands
+  "terminal-startup": z.union([z.array(z.string()), z.string()]).optional(),
+  "terminal-startup-unix": z.union([z.array(z.string()), z.string()]).optional(),
+  "terminal-startup-windows": z.union([z.array(z.string()), z.string()]).optional(),
 })
 
 export const worktreeConfigRouter = router({

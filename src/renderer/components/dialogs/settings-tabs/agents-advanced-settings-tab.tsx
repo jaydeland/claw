@@ -117,6 +117,9 @@ export function AgentsAdvancedSettingsTab() {
   const [viewPluginDirId, setViewPluginDirId] = useState<string | null>(null)
   const [showConsolidatedView, setShowConsolidatedView] = useState(false)
 
+  // Custom environment variables state
+  const [customEnvVars, setCustomEnvVars] = useState<Array<{ key: string; value: string }>>([{ key: "", value: "" }])
+
   // Section collapse state
   const [sectionsCollapsed, setSectionsCollapsed] = useState({
     sources: false,
@@ -124,6 +127,7 @@ export function AgentsAdvancedSettingsTab() {
     pluginDirs: false,
     resolution: false,
     advanced: false,
+    envVars: false,
     terminalCommands: false,
   })
 
@@ -214,6 +218,10 @@ export function AgentsAdvancedSettingsTab() {
       setCustomWorktreeLocation(claudeSettings.customWorktreeLocation || "")
       const cmds = claudeSettings.defaultStartCommands || []
       setDefaultStartCommands(cmds.length > 0 ? [...cmds, ""] : [""])
+      // Convert env vars object to array for editing
+      const envVarsObj = claudeSettings.customEnvVars || {}
+      const envVarsArray = Object.entries(envVarsObj).map(([key, value]) => ({ key, value }))
+      setCustomEnvVars(envVarsArray.length > 0 ? [...envVarsArray, { key: "", value: "" }] : [{ key: "", value: "" }])
     }
   }, [claudeSettings])
 
@@ -269,6 +277,22 @@ export function AgentsAdvancedSettingsTab() {
 
   const addDefaultStartCommand = () => {
     setDefaultStartCommands([...defaultStartCommands, ""])
+  }
+
+  // Helper functions for custom environment variables
+  const updateEnvVar = (index: number, field: 'key' | 'value', newValue: string) => {
+    const newList = [...customEnvVars]
+    newList[index] = { ...newList[index], [field]: newValue }
+    setCustomEnvVars(newList)
+  }
+
+  const removeEnvVar = (index: number) => {
+    if (customEnvVars.length <= 1) return
+    setCustomEnvVars(customEnvVars.filter((_, i) => i !== index))
+  }
+
+  const addEnvVar = () => {
+    setCustomEnvVars([...customEnvVars, { key: "", value: "" }])
   }
 
   return (
@@ -639,6 +663,87 @@ export function AgentsAdvancedSettingsTab() {
         )}
       </div>
 
+      {/* Environment Variables Section */}
+      <div className="space-y-3">
+        <button
+          onClick={() => toggleSection('envVars')}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-2">
+            {sectionsCollapsed.envVars ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            <h3 className="text-sm font-semibold text-foreground">Environment Variables</h3>
+          </div>
+        </button>
+
+        {!sectionsCollapsed.envVars && (
+          <div className="pl-6 space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Define custom environment variables for MCP server commands.
+                Use this to set variables like <code className="font-mono bg-muted px-1 py-0.5 rounded">PROJECT_ROOT</code> that
+                are used in your mcp.json configurations.
+              </p>
+              <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-lg border border-border">
+                <Info className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  These variables are merged with your shell environment when expanding MCP server configs.
+                  Variables defined here take precedence over shell environment variables.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-background rounded-lg border border-border overflow-hidden">
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Variables</Label>
+                  <span className="text-xs text-muted-foreground">
+                    Use <code className="font-mono bg-muted px-1 py-0.5 rounded">${"${VAR}"}</code> in mcp.json
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {customEnvVars.map((envVar, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={envVar.key}
+                        onChange={(e) => updateEnvVar(i, 'key', e.target.value)}
+                        placeholder="VAR_NAME"
+                        className="flex-1 font-mono text-sm max-w-[200px]"
+                      />
+                      <span className="text-muted-foreground">=</span>
+                      <Input
+                        value={envVar.value}
+                        onChange={(e) => updateEnvVar(i, 'value', e.target.value)}
+                        placeholder="/path/to/value"
+                        className="flex-1 font-mono text-sm"
+                      />
+                      {customEnvVars.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeEnvVar(i)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground"
+                  onClick={addEnvVar}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add variable
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Default Terminal Start Commands Section */}
       <div className="space-y-3">
         <button
@@ -717,10 +822,19 @@ export function AgentsAdvancedSettingsTab() {
 
             const filteredCommands = defaultStartCommands.filter((c) => c.trim())
 
+            // Convert env vars array to object, filtering out empty keys
+            const envVarsObject: Record<string, string> = {}
+            for (const { key, value } of customEnvVars) {
+              if (key.trim()) {
+                envVarsObject[key.trim()] = value
+              }
+            }
+
             updateSettings.mutate({
               customConfigDir: customConfigDir || null,
               customWorktreeLocation: customWorktreeLocation || null,
               defaultStartCommands: filteredCommands,
+              customEnvVars: envVarsObject,
             })
           }}
           disabled={updateSettings.isPending || !!worktreeLocationError}

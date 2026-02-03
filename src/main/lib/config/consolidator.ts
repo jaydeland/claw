@@ -7,7 +7,7 @@ import { existsSync, statSync } from "fs"
 import path from "path"
 import * as os from "os"
 import { eq } from "drizzle-orm"
-import { getDatabase, configSources } from "../db"
+import { getDatabase, configSources, claudeCodeSettings } from "../db"
 import type {
   ConfigSource,
   McpConfigFile,
@@ -18,6 +18,28 @@ import type {
 } from "./types"
 import { expandConfigEnvVars } from "../mcp/tool-query"
 import { getShellEnvironment } from "../git/shell-env"
+
+/**
+ * Get custom environment variables from settings
+ */
+function getCustomEnvVars(): Record<string, string> {
+  try {
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    if (settings?.customEnvVars) {
+      return JSON.parse(settings.customEnvVars) as Record<string, string>
+    }
+    return {}
+  } catch (error) {
+    console.error("[config] Failed to get custom env vars from settings:", error)
+    return {}
+  }
+}
 
 /**
  * Get custom MCP config paths from database
@@ -244,10 +266,16 @@ export async function getConsolidatedConfig(
   // This loads vars like VIDYARD_PATH that aren't in process.env when launched from Finder
   const shellEnv = await getShellEnvironment()
 
+  // Get custom env vars from settings (user-defined, take precedence over shell env)
+  const customEnvVars = getCustomEnvVars()
+
+  // Merge environments: shell env as base, custom env vars take precedence
+  const mergedEnv = { ...shellEnv, ...customEnvVars }
+
   // Expand environment variables in merged servers for both SDK and UI display
   const expandedServers: Record<string, McpServerConfig> = {}
   for (const [name, config] of Object.entries(mergedServers)) {
-    expandedServers[name] = expandConfigEnvVars(config, shellEnv)
+    expandedServers[name] = expandConfigEnvVars(config, mergedEnv)
   }
 
   // Detect conflicts

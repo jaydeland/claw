@@ -87,6 +87,12 @@ export function AgentsWorktreesTab() {
   const [windowsCommands, setWindowsCommands] = useState<string[]>([])
   const [showPlatformSpecific, setShowPlatformSpecific] = useState(false)
 
+  // Terminal startup commands state
+  const [terminalCommands, setTerminalCommands] = useState<string[]>([""])
+  const [terminalUnixCommands, setTerminalUnixCommands] = useState<string[]>([])
+  const [terminalWindowsCommands, setTerminalWindowsCommands] = useState<string[]>([])
+  const [showTerminalPlatformSpecific, setShowTerminalPlatformSpecific] = useState(false)
+
   // Auto-select first project
   useEffect(() => {
     if (projects && projects.length > 0 && !selectedProjectId) {
@@ -104,7 +110,7 @@ export function AgentsWorktreesTab() {
       }
 
       if (configData.config) {
-        // Generic commands
+        // Generic setup commands
         const generic = configData.config["setup-worktree"]
         setCommands(
           Array.isArray(generic)
@@ -114,7 +120,7 @@ export function AgentsWorktreesTab() {
               : [""],
         )
 
-        // Platform-specific
+        // Platform-specific setup commands
         const unix = configData.config["setup-worktree-unix"]
         const win = configData.config["setup-worktree-windows"]
 
@@ -129,10 +135,39 @@ export function AgentsWorktreesTab() {
         if (unix || win) {
           setShowPlatformSpecific(true)
         }
+
+        // Terminal startup commands
+        const terminalGeneric = configData.config["terminal-startup"]
+        setTerminalCommands(
+          Array.isArray(terminalGeneric)
+            ? [...terminalGeneric, ""]
+            : terminalGeneric
+              ? [terminalGeneric, ""]
+              : [""],
+        )
+
+        // Platform-specific terminal commands
+        const terminalUnix = configData.config["terminal-startup-unix"]
+        const terminalWin = configData.config["terminal-startup-windows"]
+
+        setTerminalUnixCommands(
+          Array.isArray(terminalUnix) ? terminalUnix : terminalUnix ? [terminalUnix] : [],
+        )
+        setTerminalWindowsCommands(
+          Array.isArray(terminalWin) ? terminalWin : terminalWin ? [terminalWin] : [],
+        )
+
+        // Show terminal platform section if any platform-specific commands exist
+        if (terminalUnix || terminalWin) {
+          setShowTerminalPlatformSpecific(true)
+        }
       } else {
         setCommands([""])
         setUnixCommands([])
         setWindowsCommands([])
+        setTerminalCommands([""])
+        setTerminalUnixCommands([])
+        setTerminalWindowsCommands([])
       }
     }
   }, [configData])
@@ -141,6 +176,8 @@ export function AgentsWorktreesTab() {
     if (!selectedProjectId) return
 
     const config: Record<string, string[]> = {}
+
+    // Setup commands
     const filteredCommands = commands.filter((c) => c.trim())
     const filteredUnix = unixCommands.filter((c) => c.trim())
     const filteredWin = windowsCommands.filter((c) => c.trim())
@@ -153,6 +190,21 @@ export function AgentsWorktreesTab() {
     }
     if (filteredWin.length > 0) {
       config["setup-worktree-windows"] = filteredWin
+    }
+
+    // Terminal startup commands
+    const filteredTerminalCommands = terminalCommands.filter((c) => c.trim())
+    const filteredTerminalUnix = terminalUnixCommands.filter((c) => c.trim())
+    const filteredTerminalWin = terminalWindowsCommands.filter((c) => c.trim())
+
+    if (filteredTerminalCommands.length > 0) {
+      config["terminal-startup"] = filteredTerminalCommands
+    }
+    if (filteredTerminalUnix.length > 0) {
+      config["terminal-startup-unix"] = filteredTerminalUnix
+    }
+    if (filteredTerminalWin.length > 0) {
+      config["terminal-startup-windows"] = filteredTerminalWin
     }
 
     saveMutation.mutate({
@@ -483,16 +535,205 @@ export function AgentsWorktreesTab() {
                 )}
               </div>
 
-              <div className="bg-muted p-3 flex justify-end gap-2 border-t">
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={saveMutation.isPending}
-                >
-                  {saveMutation.isPending ? "Saving..." : "Save"}
-                </Button>
+            </div>
+          </div>
+
+          {/* Terminal Startup Commands */}
+          <div className="space-y-2">
+            <div className="pb-2">
+              <div>
+                <h4 className="text-sm font-medium text-foreground">
+                  Terminal Startup Commands
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Commands run when opening a terminal session in this project
+                </p>
               </div>
             </div>
+
+            <div className="bg-background rounded-lg border border-border overflow-hidden">
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">All Platforms</Label>
+                  <span className="text-xs text-muted-foreground">
+                    runs in persistent shell after prompt is ready
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {terminalCommands.map((cmd, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={cmd}
+                        onChange={(e) =>
+                          updateCommand(i, e.target.value, terminalCommands, setTerminalCommands)
+                        }
+                        placeholder="flox activate, nvm use, source .env"
+                        className="flex-1 font-mono text-sm"
+                      />
+                      {terminalCommands.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeCommand(i, terminalCommands, setTerminalCommands)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground"
+                  onClick={() => addCommand(terminalCommands, setTerminalCommands)}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add command
+                </Button>
+              </div>
+
+              {/* Platform-specific toggle */}
+              <div className="border-t">
+                <button
+                  type="button"
+                  className="w-full p-3 flex items-center justify-between text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  onClick={() => setShowTerminalPlatformSpecific(!showTerminalPlatformSpecific)}
+                >
+                  <span>Platform-specific overrides</span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      showTerminalPlatformSpecific ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {showTerminalPlatformSpecific && (
+                  <div className="p-4 pt-0 space-y-4">
+                    {/* Unix Commands */}
+                    <div className="space-y-2">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        macOS / Linux
+                      </span>
+                      {terminalUnixCommands.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/60 italic">
+                          Falls back to "All Platforms"
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {terminalUnixCommands.map((cmd, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <Input
+                                value={cmd}
+                                onChange={(e) =>
+                                  updateCommand(
+                                    i,
+                                    e.target.value,
+                                    terminalUnixCommands,
+                                    setTerminalUnixCommands,
+                                  )
+                                }
+                                placeholder="source ~/.nvm/nvm.sh && nvm use"
+                                className="flex-1 font-mono text-sm"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() =>
+                                  removeCommand(i, terminalUnixCommands, setTerminalUnixCommands)
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-muted-foreground h-7 text-xs"
+                        onClick={() => addCommand(terminalUnixCommands, setTerminalUnixCommands)}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add
+                      </Button>
+                    </div>
+
+                    {/* Windows Commands */}
+                    <div className="space-y-2">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Windows
+                      </span>
+                      {terminalWindowsCommands.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/60 italic">
+                          Falls back to "All Platforms"
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {terminalWindowsCommands.map((cmd, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <Input
+                                value={cmd}
+                                onChange={(e) =>
+                                  updateCommand(
+                                    i,
+                                    e.target.value,
+                                    terminalWindowsCommands,
+                                    setTerminalWindowsCommands,
+                                  )
+                                }
+                                placeholder="nvm use"
+                                className="flex-1 font-mono text-sm"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() =>
+                                  removeCommand(
+                                    i,
+                                    terminalWindowsCommands,
+                                    setTerminalWindowsCommands,
+                                  )
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-muted-foreground h-7 text-xs"
+                        onClick={() =>
+                          addCommand(terminalWindowsCommands, setTerminalWindowsCommands)
+                        }
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="bg-muted p-3 flex justify-end gap-2 rounded-lg border border-border">
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
 
             {/* AI Result Modal */}
             <AiResultModal
@@ -532,7 +773,6 @@ export function AgentsWorktreesTab() {
               }}
               showCopy={true}
             />
-          </div>
         </>
       )}
     </div>

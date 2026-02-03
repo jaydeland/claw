@@ -41,15 +41,17 @@ export async function getShellEnvironment(): Promise<Record<string, string>> {
 		(process.platform === "darwin" ? "/bin/zsh" : "/bin/bash");
 
 	try {
-		// Use -lc flags (not -ilc):
+		// Use -ilc flags for full environment:
+		// -i: interactive shell (sources .zshrc/.bashrc for custom env vars like VIDYARD_PATH)
 		// -l: login shell (sources .zprofile/.profile for PATH setup)
 		// -c: execute command
-		// Avoids -i (interactive) to skip TTY prompts and reduce latency
-		const { stdout } = await execFileAsync(shell, ["-lc", "env"], {
+		// Set TERM=dumb to suppress prompts from tools that check for interactive terminals
+		const { stdout } = await execFileAsync(shell, ["-ilc", "env"], {
 			timeout: 10_000,
 			env: {
 				...process.env,
 				HOME: os.homedir(),
+				TERM: "dumb", // Suppress prompts from interactive dotfiles
 			},
 		});
 

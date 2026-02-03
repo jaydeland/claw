@@ -1,7 +1,31 @@
 import { spawn, ChildProcess } from "node:child_process"
 import { EventEmitter } from "node:events"
+import { eq } from "drizzle-orm"
 import type { McpServerConfig } from "../config/types"
 import { getShellEnvironment } from "../git/shell-env"
+import { getDatabase, claudeCodeSettings } from "../db"
+
+/**
+ * Get custom environment variables from settings
+ */
+function getCustomEnvVars(): Record<string, string> {
+  try {
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    if (settings?.customEnvVars) {
+      return JSON.parse(settings.customEnvVars) as Record<string, string>
+    }
+    return {}
+  } catch (error) {
+    console.error("[mcp-tools] Failed to get custom env vars from settings:", error)
+    return {}
+  }
+}
 
 /**
  * Expand environment variables in a string
@@ -379,11 +403,17 @@ export async function queryMcpServerTools(config: McpServerConfig): Promise<McpT
   // This loads vars like VIDYARD_PATH that aren't in process.env when launched from Finder
   const shellEnv = await getShellEnvironment()
 
-  // Set shell env on client so spawned processes get full PATH
-  client.setShellEnv(shellEnv)
+  // Get custom env vars from settings (user-defined, take precedence over shell env)
+  const customEnvVars = getCustomEnvVars()
+
+  // Merge environments: shell env as base, custom env vars take precedence
+  const mergedEnv = { ...shellEnv, ...customEnvVars }
+
+  // Set merged env on client so spawned processes get full environment
+  client.setShellEnv(mergedEnv)
 
   // Expand environment variables in command, args, and env values
-  const expandedConfig = expandConfigEnvVars(config, shellEnv)
+  const expandedConfig = expandConfigEnvVars(config, mergedEnv)
   const commandDisplay = `${expandedConfig.command} ${(expandedConfig.args || []).join(" ")}`.trim()
 
   try {

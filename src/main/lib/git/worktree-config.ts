@@ -10,6 +10,10 @@ export interface WorktreeConfig {
   "setup-worktree-windows"?: string[] | string
   "setup-worktree"?: string[] | string
   "worktree-location"?: string // Custom worktree directory location (overrides global setting)
+  // Terminal startup commands - run when opening a terminal session in the worktree
+  "terminal-startup"?: string[] | string
+  "terminal-startup-unix"?: string[] | string
+  "terminal-startup-windows"?: string[] | string
 }
 
 export type WorktreeConfigSource = "custom" | "cursor" | "claw" | null
@@ -160,6 +164,25 @@ export function getSetupCommands(config: WorktreeConfig): string[] | string | nu
 
   // Unix (darwin, linux)
   return config["setup-worktree-unix"] ?? null
+}
+
+/**
+ * Get terminal startup commands for current platform
+ * These commands run when opening a terminal session in the worktree
+ */
+export function getTerminalStartupCommands(config: WorktreeConfig): string[] | string | null {
+  // Generic terminal-startup takes priority (cross-platform)
+  if (config["terminal-startup"]) {
+    return config["terminal-startup"]
+  }
+
+  // Fall back to platform-specific commands
+  if (process.platform === "win32") {
+    return config["terminal-startup-windows"] ?? null
+  }
+
+  // Unix (darwin, linux)
+  return config["terminal-startup-unix"] ?? null
 }
 
 export interface WorktreeSetupResult {
