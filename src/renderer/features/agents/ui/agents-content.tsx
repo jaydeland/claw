@@ -52,6 +52,7 @@ import { selectedGsdCategoryAtom } from "../../gsd/atoms"
 import { GsdContent } from "../../gsd/ui/gsd-content"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
+import { HistoryChatView } from "../../history"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -885,6 +886,11 @@ export function AgentsContent() {
             // Terminal tab - show terminal main view
             <div className="h-full flex flex-col relative overflow-hidden">
               <TerminalMainView />
+            </div>
+          ) : selectedSidebarTab === "history" ? (
+            // History tab - show read-only session flow view
+            <div className="h-full flex flex-col relative overflow-hidden">
+              <HistoryChatView />
             </div>
           ) : (
             // For other tabs, show a placeholder detail view

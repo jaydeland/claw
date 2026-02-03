@@ -727,3 +727,14 @@ export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
   },
   { getOnInit: true },
 )
+
+// ============================================
+// HISTORY TAB
+// ============================================
+
+/**
+ * ID of the chat being viewed in the History tab (read-only mode)
+ * null = no chat selected for viewing
+ * Used by agents-content.tsx to display session flow for archived chats
+ */
+export const viewingHistoryChatIdAtom = atom<string | null>(null)

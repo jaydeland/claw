@@ -4919,11 +4919,11 @@ Make sure to preserve all functionality from both branches when resolving confli
         }
       }
 
-      // Get mode from store metadata (falls back to current isPlanMode)
+      // Get mode from store metadata (falls back to current agentMode atom)
       const subChatMeta = useAgentSubChatStore
         .getState()
         .allSubChats.find((sc) => sc.id === subChatId)
-      const subChatMode = subChatMeta?.mode || (isPlanMode ? "plan" : "agent")
+      const subChatMode = subChatMeta?.mode || appStore.get(agentModeAtom)
 
       // Desktop: use IPCChatTransport for local Claude Code execution
       // Note: Extended thinking setting is read dynamically inside the transport
@@ -5057,7 +5057,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   // Handle creating a new sub-chat
   const handleCreateNewSubChat = useCallback(async () => {
     const store = useAgentSubChatStore.getState()
-    const subChatMode = isPlanMode ? "plan" : "agent"
+    const subChatMode = appStore.get(agentModeAtom)
 
     // Create sub-chat in DB first to get the real ID
     const newSubChat = await trpcClient.chats.createSubChat.mutate({

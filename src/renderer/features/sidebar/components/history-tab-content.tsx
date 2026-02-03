@@ -1,19 +1,19 @@
 "use client"
 
-import React, { useMemo, useRef, useEffect, useState, useCallback, memo } from "react"
+import React, { useMemo, useRef, useEffect, useCallback, memo } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import {
   selectedAgentChatIdAtom,
   selectedProjectAtom,
   selectedDraftIdAtom,
+  viewingHistoryChatIdAtom,
 } from "../../agents/atoms"
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { showWorkspaceIconAtom } from "../../../lib/atoms"
 import { Input } from "../../../components/ui/input"
-import { Button } from "../../../components/ui/button"
 import {
   SearchIcon,
   ArchiveIcon,
@@ -196,9 +196,9 @@ interface HistoryTabContentProps {
 }
 
 export function HistoryTabContent({ className }: HistoryTabContentProps) {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [viewingChatId, setViewingChatId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = React.useState("")
+  const [selectedIndex, setSelectedIndex] = React.useState(0)
+  const [viewingChatId, setViewingChatId] = useAtom(viewingHistoryChatIdAtom)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const chatItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
@@ -216,12 +216,6 @@ export function HistoryTabContent({ className }: HistoryTabContentProps) {
 
   // Fetch all projects for git info
   const { data: projects } = trpc.projects.list.useQuery()
-
-  // Fetch the viewing chat data (with sub-chats)
-  const { data: viewingChatData } = trpc.chats.get.useQuery(
-    { id: viewingChatId! },
-    { enabled: !!viewingChatId }
-  )
 
   // Collect chat IDs for file stats query
   const archivedChatIds = useMemo(() => {
@@ -359,11 +353,8 @@ export function HistoryTabContent({ className }: HistoryTabContentProps) {
 
   return (
     <div className={cn("flex h-full", className)} onKeyDown={handleKeyDown}>
-      {/* Left Panel: Archived Chats List */}
-      <div className={cn(
-        "flex flex-col border-r border-border/50 bg-background flex-shrink-0",
-        viewingChatId ? "w-64" : "flex-1"
-      )}>
+      {/* Archived Chats List - main pane shows session flow when chat is selected */}
+      <div className="flex flex-col bg-background flex-1">
         {/* Search */}
         <div className="p-2 border-b flex-shrink-0">
           <div className="relative flex items-center gap-1.5 h-8 px-2 rounded-md bg-muted/50">
@@ -413,97 +404,6 @@ export function HistoryTabContent({ className }: HistoryTabContentProps) {
           )}
         </div>
       </div>
-
-      {/* Right Panel: Chat Content Viewer */}
-      {viewingChatId && (
-        <div className="flex-1 flex flex-col bg-background overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between p-3 border-b border-border/50">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold truncate">
-                {viewingChatData?.name || "Untitled"}
-              </h3>
-              {viewingChatData?.branch && (
-                <p className="text-xs text-muted-foreground truncate font-mono">
-                  {viewingChatData.branch}
-                </p>
-              )}
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleRestoreChat(viewingChatId)}
-              className="flex-shrink-0 ml-2"
-            >
-              <IconTextUndo className="h-3.5 w-3.5 mr-1.5" />
-              Restore
-            </Button>
-          </div>
-
-          {/* Chat Content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {!viewingChatData ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                Loading chat...
-              </div>
-            ) : viewingChatData.subChats && viewingChatData.subChats.length > 0 ? (
-              <div className="space-y-6">
-                {viewingChatData.subChats.map((subChat) => {
-                  const messages = JSON.parse(subChat.messages || "[]")
-                  return (
-                    <div key={subChat.id} className="space-y-2">
-                      {subChat.name && (
-                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                          {subChat.name}
-                        </div>
-                      )}
-                      {messages.length === 0 ? (
-                        <div className="text-sm text-muted-foreground/70 italic">
-                          No messages in this sub-chat
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {messages.map((msg: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className={cn(
-                                "rounded-lg p-3 text-sm",
-                                msg.role === "user"
-                                  ? "bg-primary/10 text-foreground"
-                                  : "bg-muted text-foreground"
-                              )}
-                            >
-                              <div className="font-medium text-xs uppercase tracking-wide mb-1 text-muted-foreground">
-                                {msg.role}
-                              </div>
-                              {msg.parts?.map((part: any, partIdx: number) => (
-                                <div key={partIdx}>
-                                  {part.type === "text" && part.text && (
-                                    <div className="whitespace-pre-wrap">{part.text}</div>
-                                  )}
-                                  {part.type.startsWith("tool-") && (
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      Tool: {part.type.replace("tool-", "")}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                No messages in this chat
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
