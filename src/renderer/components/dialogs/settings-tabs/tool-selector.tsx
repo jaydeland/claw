@@ -102,7 +102,7 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
                           ? mode === "allowlist"
                             ? "border-green-500/30 bg-green-500/10"
                             : "border-red-500/30 bg-red-500/10"
-                          : "border-transparent bg-background hover:bg-foreground/5"
+                          : "border-transparent bg-background hover:bg-foreground/10"
                       )}
                     >
                       <div

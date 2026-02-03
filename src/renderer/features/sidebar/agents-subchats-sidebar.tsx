@@ -1257,7 +1257,7 @@ export function AgentsSubChatsSidebar({
                                         ? "bg-foreground/5 text-foreground"
                                         : isFocused
                                           ? "bg-foreground/5 text-foreground"
-                                          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                                          : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
                                   )}
                                 >
                                   <div className="flex items-start gap-2.5">
@@ -1530,7 +1530,7 @@ export function AgentsSubChatsSidebar({
                                         ? "bg-foreground/5 text-foreground"
                                         : isFocused
                                           ? "bg-foreground/5 text-foreground"
-                                          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                                          : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
                                   )}
                                 >
                                   <div className="flex items-start gap-2.5">

@@ -179,7 +179,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                 </h2>
                 <button
                   onClick={() => onOpenChange(false)}
-                  className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
+                  className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/10 transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -341,7 +341,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                 <button
                   type="button"
                   onClick={() => onOpenChange(false)}
-                  className="px-4 py-2 text-sm font-medium rounded-md border border-border bg-background text-foreground hover:bg-foreground/5 transition-colors"
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-border bg-background text-foreground hover:bg-foreground/10 transition-colors"
                 >
                   Cancel
                 </button>

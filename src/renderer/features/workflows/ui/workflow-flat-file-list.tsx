@@ -281,7 +281,7 @@ export function WorkflowFlatFileList() {
                         "flex flex-col items-start w-full px-3 py-2 text-left transition-colors",
                         selectedNode?.sourcePath === item.sourcePath
                           ? "bg-accent text-accent-foreground"
-                          : "hover:bg-foreground/5"
+                          : "hover:bg-foreground/10"
                       )}
                     >
                       <div className="flex items-center gap-2 w-full">

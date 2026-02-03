@@ -413,7 +413,7 @@ export function GsdContent() {
           {/* Project selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-foreground/5 text-left">
+              <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-foreground/10 text-left">
                 <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                 <span className="text-xs truncate max-w-[150px]">
                   {selectedProjectObj?.name || "Select project..."}
@@ -468,7 +468,7 @@ export function GsdContent() {
                   "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left text-xs",
                   activeDocType === "gsd" && selectedGsdDoc === "README.md"
                     ? "bg-primary/10 text-primary"
-                    : "hover:bg-foreground/5"
+                    : "hover:bg-foreground/10"
                 )}
               >
                 <BookOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
@@ -480,7 +480,7 @@ export function GsdContent() {
                   "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left text-xs",
                   activeDocType === "gsd" && selectedGsdDoc === "commands/gsd/help.md"
                     ? "bg-primary/10 text-primary"
-                    : "hover:bg-foreground/5"
+                    : "hover:bg-foreground/10"
                 )}
               >
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
@@ -894,7 +894,7 @@ function FileTreeItem({
         <button
           onClick={() => onToggleFolder(node.path)}
           className={cn(
-            "flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-left hover:bg-foreground/5"
+            "flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-left hover:bg-foreground/10"
           )}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
         >
@@ -930,7 +930,7 @@ function FileTreeItem({
       onClick={() => onSelect(node.path)}
       className={cn(
         "flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-left",
-        isSelected ? "bg-primary/10 text-primary" : "hover:bg-foreground/5"
+        isSelected ? "bg-primary/10 text-primary" : "hover:bg-foreground/10"
       )}
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
     >

@@ -94,7 +94,7 @@ export function ClustersTabContent({ className, isMobileFullscreen }: ClustersTa
               <button
                 key={cluster.name}
                 onClick={() => handleClusterClick(cluster.name)}
-                className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
+                className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/10 cursor-pointer w-full text-left"
               >
                 <Server className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
                 <div className="flex-1 min-w-0">

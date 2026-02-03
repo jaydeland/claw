@@ -230,8 +230,8 @@ export function RightIconBar({ className }: RightIconBarProps) {
             onClick={() => setIsExpanded(!isExpanded)}
             className={cn(
               "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8",
-              isExpanded ? "w-full hover:bg-foreground/5" : "w-8",
-              "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+              isExpanded ? "w-full hover:bg-foreground/10" : "w-8",
+              "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
             )}
             aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
           >
@@ -260,7 +260,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                 isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
                 isDiffOpen && selectedChatId
                   ? "bg-foreground/10 text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
                 !selectedChatId && "opacity-50 cursor-not-allowed",
               )}
               aria-label="Changes"
@@ -296,7 +296,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                 isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
                 effectiveSessionFlowOpen
                   ? "bg-foreground/10 text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
               )}
               aria-label="Session Flow"
               aria-pressed={effectiveSessionFlowOpen}
@@ -331,7 +331,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
                 isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
                 effectiveLoadedContextOpen
                   ? "bg-foreground/10 text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
               )}
               aria-label="Loaded Context"
               aria-pressed={effectiveLoadedContextOpen}

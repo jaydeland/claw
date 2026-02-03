@@ -84,7 +84,7 @@ export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTa
       }}
       className={cn(
         "group flex items-start gap-2 px-2 py-1 rounded-md cursor-pointer transition-colors",
-        "hover:bg-foreground/5"
+        "hover:bg-foreground/10"
       )}
     >
       <Terminal className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />

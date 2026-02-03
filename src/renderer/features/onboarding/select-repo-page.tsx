@@ -114,7 +114,7 @@ export function SelectRepoPage() {
         <button
           onClick={handleBack}
           disabled={cloneFromGitHub.isPending}
-          className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors disabled:opacity-50"
+          className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/10 transition-colors disabled:opacity-50"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>

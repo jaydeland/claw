@@ -378,7 +378,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                         "w-full flex items-center gap-1.5 pl-2 pr-7 py-1.5 rounded-md text-left transition-colors",
                         isSelected
                           ? "bg-foreground/10 text-foreground"
-                          : "hover:bg-foreground/5 text-foreground",
+                          : "hover:bg-foreground/10 text-foreground",
                       )}
                     >
                       {isExpanded ? (
@@ -479,7 +479,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                                 "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors",
                                 isActive
                                   ? "bg-primary/10 text-foreground"
-                                  : "hover:bg-foreground/5 text-foreground",
+                                  : "hover:bg-foreground/10 text-foreground",
                               )}
                             >
                               {isPinned && (

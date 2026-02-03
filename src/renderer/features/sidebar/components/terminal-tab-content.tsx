@@ -250,7 +250,7 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
                     "group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors",
                     isActive
                       ? "bg-foreground/10 text-foreground"
-                      : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                      : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
                   )}
                 >
                   <TerminalSquare className="h-3.5 w-3.5 flex-shrink-0" />

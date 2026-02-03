@@ -118,7 +118,7 @@ function JobListItem({
         "w-full text-left px-2 py-2 rounded-md transition-colors",
         isSelected
           ? "bg-primary/10 text-foreground"
-          : "hover:bg-foreground/5 text-foreground"
+          : "hover:bg-foreground/10 text-foreground"
       )}
       style={{ paddingLeft: paddingLeft }}
     >

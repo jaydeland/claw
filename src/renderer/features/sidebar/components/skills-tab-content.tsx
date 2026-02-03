@@ -82,7 +82,7 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
           category: "skills",
         })
       }}
-      className="group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
+      className="group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/10 cursor-pointer w-full text-left"
     >
       <Sparkles className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
       <div className="flex-1 min-w-0">

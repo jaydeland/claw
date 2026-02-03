@@ -80,7 +80,7 @@ const TabItem = memo(function TabItem({
         "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
         isSelected
           ? "bg-foreground/10 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+          : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
       )}
     >
       {/* Status indicator */}
@@ -294,7 +294,7 @@ export function ChatTabBar({ onNewChat, onOpenSettings }: ChatTabBarProps) {
             animate={{ opacity: 1, width: 24 }}
             exit={{ opacity: 0, width: 0 }}
             onClick={scrollLeft}
-            className="flex-shrink-0 h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+            className="flex-shrink-0 h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/10"
           >
             <ChevronDown className="h-4 w-4 -rotate-90" />
           </motion.button>
@@ -340,7 +340,7 @@ export function ChatTabBar({ onNewChat, onOpenSettings }: ChatTabBarProps) {
             "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
             selectedChatId === null
               ? "bg-foreground/10 text-foreground"
-              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+              : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
           )}
         >
           <PlusIcon className="h-4 w-4" />
@@ -356,7 +356,7 @@ export function ChatTabBar({ onNewChat, onOpenSettings }: ChatTabBarProps) {
             animate={{ opacity: 1, width: 24 }}
             exit={{ opacity: 0, width: 0 }}
             onClick={scrollRight}
-            className="flex-shrink-0 h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+            className="flex-shrink-0 h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/10"
           >
             <ChevronDown className="h-4 w-4 rotate-90" />
           </motion.button>

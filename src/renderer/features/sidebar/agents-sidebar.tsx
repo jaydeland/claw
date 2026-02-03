@@ -317,7 +317,7 @@ const DraftItem = React.memo(function DraftItem({
         !isMultiSelectMode && "rounded-md",
         isSelected
           ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+          : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
       )}
     >
       <div className="flex items-start gap-2.5">
@@ -514,7 +514,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
                 : // On mobile, no hover effect to prevent double-tap issue
                   isMobileFullscreen
                   ? "text-muted-foreground"
-                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                  : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
             isChecked &&
               (isMobileFullscreen
                 ? "bg-primary/10"

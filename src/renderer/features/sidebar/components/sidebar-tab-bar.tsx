@@ -113,7 +113,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
             <button
               type="button"
               onClick={() => setIsIconBarExpanded(!isIconBarExpanded)}
-              className="mb-2 flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+              className="mb-2 flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-foreground/10"
               aria-label={isIconBarExpanded ? "Collapse icon bar" : "Expand icon bar"}
             >
               {isIconBarExpanded ? (
@@ -146,7 +146,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
                   isCollapsed && !isIconBarExpanded && "w-8",
                   isActive
                     ? "bg-foreground/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
                 )}
                 aria-label={tab.label}
                 aria-pressed={isActive}

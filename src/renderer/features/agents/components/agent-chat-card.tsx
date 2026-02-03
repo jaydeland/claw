@@ -185,7 +185,7 @@ export function AgentChatCard({
         "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
         isSelected
           ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+          : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
       )}
     >
       <div className="flex items-start gap-2.5">

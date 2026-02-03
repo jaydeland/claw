@@ -161,7 +161,7 @@ function TabButton({ tab, isActive, onClick, isNarrow }: TabButtonProps) {
         !isNarrow && isActive
           ? "bg-foreground/10 text-foreground font-medium hover:bg-foreground/15 hover:text-foreground"
           : !isNarrow
-            ? "text-muted-foreground hover:bg-foreground/5 hover:text-foreground font-medium"
+            ? "text-muted-foreground hover:bg-foreground/10 hover:text-foreground font-medium"
             : "text-foreground font-medium",
       )}
     >
@@ -396,7 +396,7 @@ export function AgentsSettingsDialog({
             {showContent && (
               <button
                 onClick={() => setShowContent(false)}
-                className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
+                className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/10 transition-colors"
               >
                 <DialogIcons.Back className={DialogIconSizes.large} />
               </button>
@@ -410,7 +410,7 @@ export function AgentsSettingsDialog({
             <button
               type="button"
               onClick={onClose}
-              className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
+              className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/10 transition-colors"
             >
               <DialogIcons.Close className={DialogIconSizes.default} />
               <span className="sr-only">Close</span>

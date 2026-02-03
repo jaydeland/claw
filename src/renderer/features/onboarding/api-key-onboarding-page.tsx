@@ -125,7 +125,7 @@ export function ApiKeyOnboardingPage() {
         {/* Back button - fixed in top left corner below traffic lights */}
         <button
           onClick={handleBack}
-          className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
+          className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/10 transition-colors"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -198,7 +198,7 @@ export function ApiKeyOnboardingPage() {
       {/* Back button - fixed in top left corner below traffic lights */}
       <button
         onClick={handleBack}
-        className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
+        className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/10 transition-colors"
       >
         <ChevronLeft className="h-5 w-5" />
       </button>

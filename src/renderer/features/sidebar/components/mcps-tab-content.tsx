@@ -137,7 +137,7 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
                   })
                 }}
                 className={cn(
-                  "group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left",
+                  "group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/10 cursor-pointer w-full text-left",
                   !server.enabled && "opacity-50",
                 )}
               >
