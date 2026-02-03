@@ -3,6 +3,7 @@ import type { PrimitiveAtom } from "jotai"
 import { useAtom } from "jotai"
 
 interface PendingMessagesConfig {
+  isActive: boolean
   isStreaming: boolean
   subChatId: string
   sendMessage: (message: { role: "user"; parts: Array<{ type: "text"; text: string } | { type: "data-image"; data: any }> }) => void
@@ -32,7 +33,7 @@ export function usePendingMessages(
   config: PendingMessagesConfig,
   atoms: PendingMessageAtoms
 ) {
-  const { isStreaming, subChatId, sendMessage, setIsCreatingPr, setIsMergingWithAi } = config
+  const { isActive, isStreaming, subChatId, sendMessage, setIsCreatingPr, setIsMergingWithAi } = config
 
   const [pendingPrMessage, setPendingPrMessage] = useAtom(atoms.pendingPrMessageAtom)
   const [pendingMergeMessage, setPendingMergeMessage] = useAtom(atoms.pendingMergeMessageAtom)
@@ -46,6 +47,10 @@ export function usePendingMessages(
   sendMessageRef.current = sendMessage
 
   useEffect(() => {
+    // CRITICAL: Only process pending messages if this tab is active
+    // Prevents inactive tabs from consuming messages meant for the active tab
+    if (!isActive) return
+
     // Skip if streaming - wait for stream to finish
     if (isStreaming) return
 
@@ -122,6 +127,7 @@ export function usePendingMessages(
       sendMessageRef.current({ role: "user", parts })
     }
   }, [
+    isActive,
     isStreaming,
     subChatId,
     pendingPrMessage,

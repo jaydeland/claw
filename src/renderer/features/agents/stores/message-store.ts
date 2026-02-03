@@ -2,6 +2,7 @@
 
 import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
+import { appStore } from "../../../lib/jotai-store"
 
 // Types
 export interface MessagePart {
@@ -659,30 +660,32 @@ export const syncMessagesWithStatusAtom = atom(
     // 2. msg.parts array is mutated in-place
     // 3. Individual part objects inside parts are mutated in-place
     for (const msg of messages) {
-      if (hasMessageChanged(currentSubChatId, msg.id, msg)) {
-        // Deep clone message with new parts array and new part objects
-        const clonedMsg = {
-          ...msg,
-          parts: msg.parts?.map((part: any) => ({ ...part, input: part.input ? { ...part.input } : undefined })),
-        }
-        set(messageAtomFamily(msg.id), clonedMsg)
+      // ALWAYS set atoms to ensure persistence with keep-alive tabs
+      // Multiple tabs render simultaneously and need their atoms to persist
+      const clonedMsg = {
+        ...msg,
+        parts: msg.parts?.map((part: any) => ({ ...part, input: part.input ? { ...part.input } : undefined })),
       }
+      set(messageAtomFamily(msg.id), clonedMsg)
+
+      // Update change tracking
+      hasMessageChanged(currentSubChatId, msg.id, msg)
     }
 
-    // Cleanup removed message atoms to prevent memory leaks
+    // Cleanup removed message caches (but NOT atoms - keep-alive tabs need them)
     const newIdsSet = new Set(newIds)
     const previousIds = activeMessageIdsByChat.get(currentSubChatId) ?? new Set()
 
     for (const oldId of previousIds) {
       if (!newIdsSet.has(oldId)) {
-        // Message was removed - cleanup its atom and caches
-        messageAtomFamily.remove(oldId)
+        // Message removed from THIS tab - cleanup caches only
+        // Don't remove atom itself as other open tabs may still need it
         previousMessageState.delete(`${currentSubChatId}:${oldId}`)
         assistantIdsCacheByChat.delete(`${currentSubChatId}:${oldId}`)
       }
     }
 
-    // Update active IDs tracking
+    // Update active IDs tracking for this subChat
     activeMessageIdsByChat.set(currentSubChatId, newIdsSet)
 
     // Update streaming message ID
@@ -709,22 +712,26 @@ export const syncMessagesAtom = atom(
 
 // Clear all caches for a specific subChat (call when unmounting/switching)
 export function clearSubChatCaches(subChatId: string) {
-  // Clear message atoms
+  // Clear per-chat caches
   const activeIds = activeMessageIdsByChat.get(subChatId)
   if (activeIds) {
     for (const id of activeIds) {
-      messageAtomFamily.remove(id)
+      // NOTE: Don't remove messageAtomFamily atoms - keep-alive tabs need them to persist
+      // Only clear the per-chat tracking caches
       previousMessageState.delete(`${subChatId}:${id}`)
       assistantIdsCacheByChat.delete(`${subChatId}:${id}`)
     }
     activeMessageIdsByChat.delete(subChatId)
   }
 
-  // Clear other caches
+  // Clear other per-chat caches
   userMessageIdsCacheByChat.delete(subChatId)
   messageGroupsCacheByChat.delete(subChatId)
   lastAssistantCacheByChat.delete(subChatId)
   tokenDataCacheByChat.delete(subChatId)
+
+  // NOTE: Don't clear global atoms (messageIdsAtom, messageRolesAtom, currentSubChatIdAtom)
+  // or messageAtomFamily entries - they are shared/reused by keep-alive tabs
 }
 
 // Clear all caches (call on app reset/logout)

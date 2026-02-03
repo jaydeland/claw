@@ -88,10 +88,15 @@ export const IsolatedMessagesSection = memo(function IsolatedMessagesSection({
   // Subscribe to user message IDs - but only use them if we're the active chat
   const userMsgIds = useAtomValue(userMessageIdsAtom)
 
+  console.log(`[IsolatedMessagesSection] RENDER - currentSubChatId="${currentSubChatId}", subChatId="${subChatId}", isMatch=${currentSubChatId === subChatId}, userMsgIds.length=${userMsgIds.length}`)
+
   if (currentSubChatId !== subChatId) {
     // Data not synced yet - render nothing, we'll re-render when currentSubChatIdAtom updates
+    console.log(`[IsolatedMessagesSection] NOT RENDERING - mismatch: current="${currentSubChatId}" vs prop="${subChatId}"`)
     return null
   }
+
+  console.log(`[IsolatedMessagesSection] RENDERING ${userMsgIds.length} message groups for subChatId="${subChatId}"`)
 
   return (
     <>

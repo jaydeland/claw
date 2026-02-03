@@ -91,7 +91,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
   const isLastGroup = useAtomValue(isLastUserMessageAtomFamily(userMsgId))
   const isStreaming = useAtomValue(isStreamingAtom)
 
-  // Extract user message content
+  // Extract user message content (safe even if userMsg is null)
   const rawTextContent =
     userMsg?.parts
       ?.filter((p: any) => p.type === "text")
@@ -102,13 +102,21 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
     userMsg?.parts?.filter((p: any) => p.type === "data-image") || []
 
   // Extract text mentions (quote/diff) to render separately above sticky block
-  // NOTE: useMemo must be called before any early returns to follow Rules of Hooks
+  // IMPORTANT: This useMemo MUST be called before any early returns (Rules of Hooks)
   const { textMentions, cleanedText: textContent } = useMemo(
     () => extractTextMentions(rawTextContent),
     [rawTextContent]
   )
 
-  if (!userMsg) return null
+  // NOW we can do the early return check - after all hooks have been called
+  const hasMsg = !!userMsg
+  const msgRole = userMsg?.role || 'undefined'
+  console.log(`[IsolatedMessageGroup] userMsgId="${userMsgId}", hasUserMsg=${hasMsg}, role=${msgRole}, assistantIds=${assistantIds.length}`)
+
+  if (!userMsg) {
+    console.error(`[IsolatedMessageGroup] NULL userMsg for "${userMsgId}" - EARLY RETURN`)
+    return null
+  }
 
   // Show cloning when sandbox is being set up
   const shouldShowCloning =

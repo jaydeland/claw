@@ -873,9 +873,12 @@ export const chatsRouter = router({
 
       // 4. Rollback git state first - if this fails, abort the whole operation
       if (chat?.worktreePath) {
-        const res = await applyRollbackStash(chat.worktreePath, input.sdkMessageUuid)
-        if (!res) {
-          return { success: false, error: `Git rollback failed` }
+        const result = await applyRollbackStash(chat.worktreePath, input.sdkMessageUuid)
+        if (!result.success) {
+          return { success: false, error: `Git rollback failed: ${result.error}` }
+        }
+        if (!result.checkpointFound) {
+          console.warn("[rollback] No checkpoint found - proceeding with message truncation only")
         }
       }
 

@@ -2245,6 +2245,14 @@ const ChatViewInner = memo(function ChatViewInner({
     experimental_throttle: 50,  // Throttle updates to reduce re-renders during streaming
   })
 
+  console.log('[ChatViewInner] useChat returned', {
+    subChatId,
+    messagesCount: messages.length,
+    status,
+    chatId: chat?.id,
+    isActive
+  })
+
   // Refs for useChat functions to keep callbacks stable across renders
   const sendMessageRef = useRef(sendMessage)
   sendMessageRef.current = sendMessage
@@ -2400,8 +2408,10 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // CONSOLIDATED: 6 pending message effects -> 1 hook (usePendingMessages)
   // Handles PR, Merge, Review, Conflict, Post-Merge, and Auth retry messages
+  // CRITICAL: Only active tab should process pending messages
   usePendingMessages(
     {
+      isActive,
       isStreaming,
       subChatId,
       sendMessage,
@@ -3525,8 +3535,10 @@ const ChatViewInner = memo(function ChatViewInner({
   // Only the active tab should update these global atoms.
   const syncMessages = useSetAtom(syncMessagesWithStatusAtom)
   useLayoutEffect(() => {
+    console.log('[syncMessages] useLayoutEffect triggered:', `isActive=${isActive}, messagesLength=${messages.length}, status=${status}, subChatId=${subChatId}`)
     // Skip syncing for inactive tabs - they shouldn't update global atoms
     if (!isActive) return
+    console.log('[syncMessages] Syncing messages to Jotai atoms')
     syncMessages({ messages, status, subChatId })
   }, [messages, status, subChatId, syncMessages, isActive])
 
@@ -3593,14 +3605,18 @@ const ChatViewInner = memo(function ChatViewInner({
     <SearchHighlightProvider>
       <div className="flex flex-col flex-1 min-h-0 relative">
         {/* Text selection popover for adding text to context */}
-        <TextSelectionPopover
-          onAddToContext={addTextContext}
-          onQuickComment={handleQuickComment}
-          onFocusInput={handleFocusInput}
-        />
+        {/* CRITICAL: Only render for active tab - portals escape pointerEvents isolation */}
+        {isActive && (
+          <TextSelectionPopover
+            onAddToContext={addTextContext}
+            onQuickComment={handleQuickComment}
+            onFocusInput={handleFocusInput}
+          />
+        )}
 
         {/* Quick comment input */}
-        {quickCommentState && (
+        {/* CRITICAL: Only render for active tab - portals escape pointerEvents isolation */}
+        {isActive && quickCommentState && (
           <QuickCommentInput
             selectedText={quickCommentState.selectedText}
             source={quickCommentState.source}
@@ -4859,20 +4875,31 @@ Make sure to preserve all functionality from both branches when resolving confli
   // Create or get Chat instance for a sub-chat
   const getOrCreateChat = useCallback(
     (subChatId: string): Chat<any> | null => {
+      console.log('[getOrCreateChat] START', { subChatId, hasWorkingDir: !!chatWorkingDir, hasAgentChat: !!agentChat })
+
       // Desktop uses worktreePath, web uses sandboxUrl
       if (!chatWorkingDir || !agentChat) {
+        console.log('[getOrCreateChat] EARLY RETURN - missing requirements')
         return null
       }
 
       // Return existing chat if we have it
       const existing = agentChatStore.get(subChatId)
       if (existing) {
+        console.log('[getOrCreateChat] RETURNING CACHED CHAT', { subChatId })
         return existing
       }
 
       // Find sub-chat data
       const subChat = agentSubChats.find((sc) => sc.id === subChatId)
       const messages = (subChat?.messages as any[]) || []
+
+      console.log('[getOrCreateChat]', {
+        subChatId,
+        hasSubChat: !!subChat,
+        messagesCount: messages.length,
+        firstMessage: messages[0]?.role
+      })
 
       // Extract and store metadata before AI SDK strips it
       // The AI SDK normalizes messages and removes custom fields like metadata
@@ -5731,6 +5758,8 @@ Make sure to preserve all functionality from both branches when resolving confli
                 // Use allSubChats (Zustand) instead of agentSubChats (tRPC) because
                 // new sub-chats are added to Zustand immediately but tRPC query may be stale
                 const belongsToWorkspace = allSubChats.some(sc => sc.id === subChatId)
+
+                console.log(`[tabsToRender.map] subChatId="${subChatId}", isActive=${isActive}, activeSubChatId="${activeSubChatId}", willRender=${!!(chat && belongsToWorkspace)}`)
 
                 if (!chat || !belongsToWorkspace) return null
 
