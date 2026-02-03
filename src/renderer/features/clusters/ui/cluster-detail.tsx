@@ -288,27 +288,28 @@ export function ClusterDetail() {
       <ClusterTabs />
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto relative">
+      <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
         {/* Render all tabs but hide inactive ones to preserve terminal state */}
-        <div className={selectedTab === "dashboard" ? "" : "hidden"}>
+        <div className={selectedTab === "dashboard" ? "flex-1 overflow-y-auto" : "hidden"}>
           <DashboardTab />
         </div>
-        <div className={selectedTab === "pvcs" ? "" : "hidden"}>
+        <div className={selectedTab === "pvcs" ? "flex-1 overflow-y-auto" : "hidden"}>
           <PvcTab />
         </div>
-        <div className={selectedTab === "pods" ? "" : "hidden"}>
+        <div className={selectedTab === "pods" ? "flex-1 overflow-y-auto" : "hidden"}>
           <PodsTab />
         </div>
-        <div className={selectedTab === "services" ? "" : "hidden"}>
+        <div className={selectedTab === "services" ? "flex-1 overflow-y-auto" : "hidden"}>
           <ServicesTab />
         </div>
-        <div className={selectedTab === "deployments" ? "" : "hidden"}>
+        <div className={selectedTab === "deployments" ? "flex-1 overflow-y-auto" : "hidden"}>
           <DeploymentsTab />
         </div>
-        <div className={selectedTab === "logs" ? "" : "hidden"}>
+        <div className={selectedTab === "logs" ? "flex-1 overflow-y-auto" : "hidden"}>
           <LogsTab />
         </div>
-        <div className={selectedTab === "devspace" ? "" : "hidden"}>
+        {/* DevSpace tab needs flex layout to fill terminal space */}
+        <div className={selectedTab === "devspace" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <DevSpaceTab />
         </div>
       </div>

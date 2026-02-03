@@ -38,13 +38,13 @@ interface TabItem {
 const tabs: TabItem[] = [
   { id: "history", label: "History", icon: History },
   { id: "chats", label: "Workspaces", icon: FolderOpen },
+  { id: "clusters", label: "Clusters", icon: Server },
+  { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
   { id: "commands", label: "Commands", icon: Terminal },
   { id: "conductor", label: "Conductor", icon: Network },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
-  { id: "clusters", label: "Clusters", icon: Server },
-  { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
 ]
 

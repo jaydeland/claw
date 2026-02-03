@@ -122,6 +122,7 @@ import {
   compactingSubChatsAtom,
   diffSidebarOpenAtomFamily,
   diffViewDisplayModeAtom,
+  agentModeAtom,
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
   isCreatingPrAtom,
@@ -169,6 +170,7 @@ import {
   useThrottledDiffRefetch,
   useChatScroll,
   useStreamingStatusSync,
+  useCurrentToolStatus,
 } from "../hooks"
 import {
   clearSubChatDraft,
@@ -207,7 +209,7 @@ import {
   type ParsedDiffFile,
 } from "../ui/agent-diff-view"
 import { AgentPreview } from "../ui/agent-preview"
-import { AgentQueueIndicator } from "../ui/agent-queue-indicator"
+import { SessionStatusBar } from "../ui/session-status-bar"
 import { AgentToolCall } from "../ui/agent-tool-call"
 import { AgentToolRegistry } from "../ui/agent-tool-registry"
 import { AgentUserMessageBubble } from "../ui/agent-user-message-bubble"
@@ -2077,6 +2079,10 @@ const ChatViewInner = memo(function ChatViewInner({
   // Plan mode state (read from global atom)
   const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
 
+  // Agent mode and model (for queue items)
+  const agentMode = useAtomValue(agentModeAtom)
+  const selectedModelId = useAtomValue(lastSelectedModelIdAtom)
+
   // Session flow state
   const [sessionFlowSidebarOpen, setSessionFlowSidebarOpen] = useAtom(sessionFlowSidebarOpenAtom)
   const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)
@@ -2269,6 +2275,9 @@ const ChatViewInner = memo(function ChatViewInner({
   const compactingSubChats = useAtomValue(compactingSubChatsAtom)
   const isCompacting = compactingSubChats.has(subChatId)
 
+  // Get current tool status for status indicator
+  const currentToolStatus = useCurrentToolStatus(messages, status)
+
   // Desktop/fullscreen state for window drag region
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
@@ -2371,7 +2380,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     // If streaming, add to queue
     if (isStreamingRef.current) {
-      const item = createQueueItem(generateQueueId(), message)
+      const item = createQueueItem(generateQueueId(), message, undefined, undefined, undefined, undefined, agentMode, selectedModelId)
       addToQueue(subChatId, item)
       toast.success("Reply queued", { description: "Will be sent when current response completes" })
     } else {
@@ -3048,7 +3057,10 @@ const ChatViewInner = memo(function ChatViewInner({
         inputValue.trim(),
         queuedImages.length > 0 ? queuedImages : undefined,
         queuedFiles.length > 0 ? queuedFiles : undefined,
-        queuedTextContexts.length > 0 ? queuedTextContexts : undefined
+        queuedTextContexts.length > 0 ? queuedTextContexts : undefined,
+        undefined, // diffTextContexts
+        agentMode,
+        selectedModelId
       )
       addToQueue(subChatId, item)
 
@@ -3716,22 +3728,11 @@ const ChatViewInner = memo(function ChatViewInner({
         </div>
       )}
 
-      {/* Stacked cards container - queue + status + session */}
+      {/* Unified session status bar - queue + changes + tasks + agents + todos */}
       {!pendingQuestions && (
         <div className="px-2 -mb-6 relative z-10">
           <div className="w-[90%] max-w-4xl mx-auto px-2">
-            {/* Queue indicator card - top card */}
-            {queue.length > 0 && (
-              <AgentQueueIndicator
-                queue={queue}
-                onRemoveItem={handleRemoveFromQueue}
-                onSendNow={handleSendFromQueue}
-                isStreaming={isStreaming}
-                hasStatusCardBelow={changedFilesForSubChat.length > 0}
-              />
-            )}
-            {/* Unified status bar - shows changes, tasks, agents, todos */}
-            <SubChatStatusCard
+            <SessionStatusBar
               chatId={parentChatId}
               subChatId={subChatId}
               isStreaming={isStreaming}
@@ -3739,7 +3740,10 @@ const ChatViewInner = memo(function ChatViewInner({
               changedFiles={changedFilesForSubChat}
               worktreePath={projectPath}
               onStop={handleStop}
-              hasQueueCardAbove={queue.length > 0}
+              queue={queue}
+              onRemoveFromQueue={handleRemoveFromQueue}
+              onSendFromQueue={handleSendFromQueue}
+              currentToolStatus={currentToolStatus}
             />
           </div>
         </div>
@@ -3787,6 +3791,7 @@ const ChatViewInner = memo(function ChatViewInner({
         onClearChat={handleClearChat}
         isClearingChat={clearSubChatMessagesMutation.isPending}
         onSubmitWithQuestionAnswer={submitWithQuestionAnswerCallback}
+        currentToolStatus={currentToolStatus}
       />
 
         {/* Scroll to bottom button - isolated component to avoid re-renders during streaming */}

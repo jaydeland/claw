@@ -84,7 +84,7 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
       {/* Token Count Header */}
       {tokenCounts && tokenCounts.total > 0 && (
         <div className="flex items-center justify-between px-2 py-1.5 bg-muted/30 rounded-md">
-          <span className="text-xs text-muted-foreground">Estimated tokens</span>
+          <span className="text-xs text-muted-foreground">Estimated Start Tokens</span>
           <span className="text-sm font-medium text-foreground">
             {formatTokenCount(tokenCounts.total)}
           </span>
@@ -97,7 +97,6 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
         icon={FileText}
         count={data.claudeMdFiles.length}
         tokenCount={tokenCounts?.claudeMd}
-        defaultExpanded
       >
         {data.claudeMdFiles.length === 0 ? (
           <ContextSectionEmpty message="No CLAUDE.md files found" />
@@ -114,7 +113,6 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
         icon={Server}
         count={data.mcpServers.length}
         tokenCount={tokenCounts?.mcpServers}
-        defaultExpanded
       >
         {data.mcpServers.length === 0 ? (
           <ContextSectionEmpty message="No MCP servers configured" />
@@ -131,7 +129,6 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
         icon={Terminal}
         count={data.commands.length}
         tokenCount={tokenCounts?.commands}
-        defaultExpanded
       >
         {data.commands.length === 0 ? (
           <ContextSectionEmpty message="No commands found" />
@@ -148,7 +145,6 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
         icon={Zap}
         count={data.skills.length}
         tokenCount={tokenCounts?.skills}
-        defaultExpanded
       >
         {data.skills.length === 0 ? (
           <ContextSectionEmpty message="No skills found" />
@@ -165,7 +161,6 @@ export function LoadedContextPanel({ projectPath }: LoadedContextPanelProps) {
         icon={Bot}
         count={data.agents.length}
         tokenCount={tokenCounts?.agents}
-        defaultExpanded
       >
         {data.agents.length === 0 ? (
           <ContextSectionEmpty message="No agents found" />

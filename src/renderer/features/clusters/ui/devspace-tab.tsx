@@ -48,6 +48,10 @@ function generatePaneId(terminalId: string): string {
   return `devspace:term:${terminalId}`
 }
 
+// Module-level flag to track if we've cleared terminals this app session
+// This prevents clearing terminals on every remount (e.g., when navigating between tabs)
+let hasInitializedThisSession = false
+
 export function DevSpaceTab() {
   // Service selection
   const [selectedService, setSelectedService] = useState<string>("")
@@ -64,10 +68,16 @@ export function DevSpaceTab() {
   // tRPC mutation for killing terminal sessions
   const killMutation = trpc.terminal.kill.useMutation()
 
-  // Clear stale terminals on mount to prevent initialization issues
-  // DevSpace terminals should not persist across app restarts since PTY sessions won't survive
+  // Clear stale terminals only on first mount per app session
+  // This prevents destroying terminals when navigating between sidebar tabs
+  // PTY sessions survive component unmount via detach/attach, so we only clear on app restart
   useEffect(() => {
-    console.log("[DevSpaceTab] Clearing stale terminals from localStorage")
+    if (hasInitializedThisSession) {
+      console.log("[DevSpaceTab] Skipping terminal clear - already initialized this session")
+      return
+    }
+    hasInitializedThisSession = true
+    console.log("[DevSpaceTab] First mount this session - clearing stale terminals from localStorage")
     setTerminals([])
     setActiveTerminalId(null)
     // Also clear from main terminal view's devspace context

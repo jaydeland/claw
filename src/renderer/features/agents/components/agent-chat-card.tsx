@@ -68,16 +68,15 @@ function ChatIconWithBadge({
       {/* Badge in bottom-right corner */}
       <div
         className={cn(
-          "absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center",
-          isSelected ? "bg-primary" : "bg-background",
+          "absolute -bottom-1 -right-1 rounded-full flex items-center justify-center transition-all duration-200",
+          isLoading
+            ? "w-4 h-4 bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.5)]"
+            : cn("w-3 h-3", isSelected ? "bg-primary" : "bg-background"),
         )}
       >
         {isLoading ? (
           <IconSpinner
-            className={cn(
-              "w-2.5 h-2.5",
-              isSelected ? "text-primary-foreground" : "text-muted-foreground",
-            )}
+            className="w-2.5 h-2.5 text-primary-foreground"
           />
         ) : hasUnseenChanges ? (
           <div className="w-2 h-2 rounded-full bg-[#307BD0]" />

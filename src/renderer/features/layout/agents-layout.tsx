@@ -222,15 +222,20 @@ export function AgentsLayout() {
               WebkitAppRegion: "drag",
             }}
           >
-            <TrafficLights
-              isHovered={false}
-              isFullscreen={isFullscreen}
-              isDesktop={isDesktop}
-              className="flex-shrink-0"
-            />
+            {/* Left side - traffic lights (hidden in fullscreen, native ones show instead) */}
+            <div className="flex-shrink-0">
+              <TrafficLights
+                isFullscreen={isFullscreen}
+                isDesktop={isDesktop}
+              />
+            </div>
 
-            {/* Settings button */}
+            {/* Spacer to push settings to the right */}
+            <div className="flex-1" />
+
+            {/* Settings button - always visible including fullscreen */}
             <div
+              className="flex-shrink-0"
               style={{
                 // @ts-expect-error - WebKit-specific property
                 WebkitAppRegion: "no-drag",

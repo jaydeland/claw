@@ -236,9 +236,9 @@ export function RightIconBar({ className }: RightIconBarProps) {
             aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
           >
             {isExpanded ? (
-              <ChevronsLeft className="h-4 w-4 flex-shrink-0" />
-            ) : (
               <ChevronsRight className="h-4 w-4 flex-shrink-0" />
+            ) : (
+              <ChevronsLeft className="h-4 w-4 flex-shrink-0" />
             )}
           </button>
         </TooltipTrigger>

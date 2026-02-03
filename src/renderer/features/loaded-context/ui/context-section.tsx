@@ -28,7 +28,7 @@ export function ContextSection({
   icon: Icon,
   count,
   tokenCount,
-  defaultExpanded = true,
+  defaultExpanded = false,
   children,
   className,
 }: ContextSectionProps) {

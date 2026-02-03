@@ -3,7 +3,7 @@
 import { memo, useCallback, useRef, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { useAtom, useAtomValue } from "jotai"
-import { ChevronDown, RotateCcw, Zap, Users } from "lucide-react"
+import { ChevronDown, RotateCcw, Zap, Users, Loader2 } from "lucide-react"
 
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
@@ -20,6 +20,7 @@ import {
   CheckIcon,
   ClaudeCodeIcon,
   PlanIcon,
+  SwarmIcon,
   ThinkingIcon,
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
@@ -29,7 +30,7 @@ import {
   PromptInputContextItems,
 } from "../../../components/ui/prompt-input"
 import { cn } from "../../../lib/utils"
-import { agentModeAtom, type AgentMode, isPlanModeAtom, lastSelectedModelIdAtom } from "../atoms"
+import { agentModeAtom, type AgentMode, lastSelectedModelIdAtom } from "../atoms"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import { CommandsDropdown } from "../components/commands-dropdown"
@@ -46,6 +47,7 @@ import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
 import { AgentDiffTextContextItem } from "../ui/agent-diff-text-context-item"
 import type { SelectedTextContext, DiffTextContext } from "../lib/queue-utils"
+import type { CurrentToolStatus } from "../hooks"
 import type { UploadedImage, UploadedFile } from "../hooks/use-agents-file-upload"
 import { handlePasteEvent } from "../utils/paste-text"
 import {
@@ -64,6 +66,20 @@ import {
   selectedOllamaModelAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
+
+// Animated dots component that cycles through ., .., ...
+function AnimatedDots() {
+  const [dotCount, setDotCount] = useState(1)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDotCount((prev) => (prev % 3) + 1)
+    }, 400)
+    return () => clearInterval(interval)
+  }, [])
+
+  return <span className="inline-block w-[1em] text-left">{".".repeat(dotCount)}</span>
+}
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
@@ -158,6 +174,8 @@ export interface ChatInputAreaProps {
   onClearChat?: () => void
   // Whether clear chat mutation is pending
   isClearingChat?: boolean
+  // Current tool status for status indicator
+  currentToolStatus?: CurrentToolStatus | null
 }
 
 /**
@@ -286,6 +304,11 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     }
   }
 
+  // Compare currentToolStatus - by statusText (the display value)
+  if (prevProps.currentToolStatus?.statusText !== nextProps.currentToolStatus?.statusText) {
+    return false
+  }
+
   return true
 }
 
@@ -344,6 +367,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   onSubmitWithQuestionAnswer,
   onClearChat,
   isClearingChat = false,
+  currentToolStatus,
 }: ChatInputAreaProps) {
   // Local state - changes here don't re-render parent
   const [hasContent, setHasContent] = useState(false)
@@ -408,8 +432,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Note: When offline, we show Ollama models selector instead of Claude models
   // The selectedOllamaModel atom is used to track which Ollama model is selected
 
-  // Plan mode - global atom
-  const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
+  // Agent mode - global atom (agent, plan, or swarm)
+  const [agentMode, setAgentMode] = useAtom(agentModeAtom)
+  const isPlanMode = agentMode === "plan"
 
   // Handle clear chat - use prop callback if provided
   const handleClearChat = useCallback(() => {
@@ -652,11 +677,19 @@ export const ChatInputArea = memo(function ChatInputArea({
             className="relative w-full cursor-text"
             onClick={() => editorRef.current?.focus()}
           >
+            {/* Tool status indicator */}
+            {isStreaming && currentToolStatus && (
+              <div className="flex items-center gap-1.5 mb-2 ml-1 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                <span>{currentToolStatus.statusText}<AnimatedDots /></span>
+              </div>
+            )}
             <PromptInput
               className={cn(
                 "border bg-input-background relative z-10 p-2 rounded-xl transition-[border-color,box-shadow] duration-150",
                 isDragOver && "ring-2 ring-primary/50 border-primary/50",
-                isFocused && !isDragOver && "ring-2 ring-primary/50",
+                isFocused && !isDragOver && !isStreaming && "ring-2 ring-primary/50",
+                isStreaming && "ring-2 ring-primary/40 animate-pulse-ring",
               )}
               maxHeight={200}
               onSubmit={onSend}
@@ -745,7 +778,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onContentChange={handleContentChange}
                   onSubmit={onSubmitWithQuestionAnswer || handleEditorSubmit}
                   onForceSubmit={onForceSend}
-                  onShiftTab={() => setIsPlanMode((prev) => !prev)}
+                  onShiftTab={() => setAgentMode((prev) => prev === "agent" ? "plan" : prev === "plan" ? "swarm" : "agent")}
                   placeholder={isStreaming ? "Add follow up" : "Plan, @ for context, / for commands"}
                   className={cn(
                     "bg-transparent max-h-[200px] overflow-y-auto p-1",
@@ -758,7 +791,7 @@ export const ChatInputArea = memo(function ChatInputArea({
               </div>
               <PromptInputActions className="w-full">
                 <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                  {/* Mode toggle (Agent/Plan) */}
+                  {/* Mode toggle (Agent/Plan/Swarm) */}
                   <DropdownMenu
                     open={modeDropdownOpen}
                     onOpenChange={(open) => {
@@ -776,11 +809,13 @@ export const ChatInputArea = memo(function ChatInputArea({
                     <DropdownMenuTrigger asChild>
                       <button
                         className="flex items-center gap-1 px-1.5 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                        title={isPlanMode ? "Plan mode" : "Agent mode"}
-                        aria-label={isPlanMode ? "Plan mode" : "Agent mode"}
+                        title={agentMode === "plan" ? "Plan mode" : agentMode === "swarm" ? "Swarm mode" : "Agent mode"}
+                        aria-label={agentMode === "plan" ? "Plan mode" : agentMode === "swarm" ? "Swarm mode" : "Agent mode"}
                       >
-                        {isPlanMode ? (
+                        {agentMode === "plan" ? (
                           <PlanIcon className="h-3.5 w-3.5 shrink-0" />
+                        ) : agentMode === "swarm" ? (
+                          <SwarmIcon className="h-3.5 w-3.5 shrink-0" />
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
@@ -801,7 +836,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                             tooltipTimeoutRef.current = null
                           }
                           setModeTooltip(null)
-                          setIsPlanMode(false)
+                          setAgentMode("agent")
                           setModeDropdownOpen(false)
                         }}
                         className="justify-between gap-2"
@@ -844,7 +879,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                           <AgentIcon className="w-4 h-4 text-muted-foreground" />
                           <span>Agent</span>
                         </div>
-                        {!isPlanMode && (
+                        {agentMode === "agent" && (
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                         )}
                       </DropdownMenuItem>
@@ -856,7 +891,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                             tooltipTimeoutRef.current = null
                           }
                           setModeTooltip(null)
-                          setIsPlanMode(true)
+                          setAgentMode("plan")
                           setModeDropdownOpen(false)
                         }}
                         className="justify-between gap-2"
@@ -899,7 +934,62 @@ export const ChatInputArea = memo(function ChatInputArea({
                           <PlanIcon className="w-4 h-4 text-muted-foreground" />
                           <span>Plan</span>
                         </div>
-                        {isPlanMode && (
+                        {agentMode === "plan" && (
+                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          setModeTooltip(null)
+                          setAgentMode("swarm")
+                          setModeDropdownOpen(false)
+                        }}
+                        className="justify-between gap-2"
+                        onMouseEnter={(e) => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          const showTooltip = () => {
+                            setModeTooltip({
+                              visible: true,
+                              position: {
+                                top: rect.top,
+                                left: rect.right + 8,
+                              },
+                              mode: "swarm",
+                            })
+                            hasShownTooltipRef.current = true
+                            tooltipTimeoutRef.current = null
+                          }
+                          if (hasShownTooltipRef.current) {
+                            showTooltip()
+                          } else {
+                            tooltipTimeoutRef.current = setTimeout(
+                              showTooltip,
+                              1000,
+                            )
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (tooltipTimeoutRef.current) {
+                            clearTimeout(tooltipTimeoutRef.current)
+                            tooltipTimeoutRef.current = null
+                          }
+                          setModeTooltip(null)
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <SwarmIcon className="w-4 h-4 text-muted-foreground" />
+                          <span>Swarm</span>
+                        </div>
+                        {agentMode === "swarm" && (
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                         )}
                       </DropdownMenuItem>
@@ -921,7 +1011,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                             <span>
                               {modeTooltip.mode === "agent"
                                 ? "Apply changes directly without a plan"
-                                : "Create a plan before making changes"}
+                                : modeTooltip.mode === "plan"
+                                ? "Create a plan before making changes"
+                                : "Coordinate multiple agents to work together"}
                             </span>
                           </div>
                         </div>,

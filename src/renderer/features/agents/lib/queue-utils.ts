@@ -64,6 +64,9 @@ export type AgentQueueItem = {
   diffTextContexts?: QueuedDiffTextContext[]
   timestamp: Date
   status: "pending" | "processing"
+  // Mode and model captured at queue time
+  mode?: "agent" | "plan" | "swarm"
+  modelId?: string
 }
 
 export function generateQueueId(): string {
@@ -76,7 +79,9 @@ export function createQueueItem(
   images?: QueuedImage[],
   files?: QueuedFile[],
   textContexts?: QueuedTextContext[],
-  diffTextContexts?: QueuedDiffTextContext[]
+  diffTextContexts?: QueuedDiffTextContext[],
+  mode?: "agent" | "plan" | "swarm",
+  modelId?: string
 ): AgentQueueItem {
   return {
     id,
@@ -87,6 +92,8 @@ export function createQueueItem(
     diffTextContexts: diffTextContexts && diffTextContexts.length > 0 ? diffTextContexts : undefined,
     timestamp: new Date(),
     status: "pending",
+    mode,
+    modelId,
   }
 }
 

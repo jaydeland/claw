@@ -9,6 +9,7 @@ import { highlightCode } from "../lib/themes/shiki-theme-loader"
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
 export function stripEmojis(text: string): string {
+  if (!text) return ""
   return text
     .replace(/[\u{1F600}-\u{1F64F}]/gu, "") // Emoticons
     .replace(/[\u{1F300}-\u{1F5FF}]/gu, "") // Misc Symbols and Pictographs
@@ -282,8 +283,8 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
   const codeTheme = useCodeTheme()
   const styles = sizeStyles[size]
 
-  // Process content - strip emojis
-  const processedContent = useMemo(() => stripEmojis(content), [content])
+  // Process content - strip emojis (with fallback for undefined content)
+  const processedContent = useMemo(() => stripEmojis(content ?? ""), [content])
 
   // Memoize components object to prevent re-renders
   // This is critical for Streamdown's block-level memoization to work

@@ -23,7 +23,7 @@ export function ClustersContent() {
       </div>
 
       {/* Detail view - list is already in left sidebar */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <ClusterDetail />
       </div>
     </div>

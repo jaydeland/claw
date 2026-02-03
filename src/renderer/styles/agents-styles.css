@@ -177,6 +177,20 @@ body:has([data-agents-page]) [data-sonner-toast] {
   animation: agents-slide-up 200ms ease-out;
 }
 
+/* Streaming pulse ring animation for chat input */
+@keyframes pulse-ring {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.1);
+  }
+}
+
+[data-agents-page] .animate-pulse-ring {
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
 /* ========================================
    7. iOS PWA TOUCH OPTIMIZATIONS
    ======================================== */

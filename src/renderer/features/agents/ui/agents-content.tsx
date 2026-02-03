@@ -833,30 +833,31 @@ export function AgentsContent() {
   }
 
   // Desktop layout
-  // If Clusters category is selected, show clusters view
-  if (selectedClustersCategory === "clusters") {
-    return <ClustersContent />
-  }
-
-  // If GSD category is selected, show GSD view
-  if (selectedGsdCategory === "gsd") {
-    return <GsdContent />
-  }
-
-  // If MCP category is selected, show MCP servers view
-  if (selectedMcpCategory === "mcp") {
-    return <McpContent />
-  }
-
-  // If workflow category is selected, show workflow browser
-  // This handles commands, agents, skills, and mcps categories
-  if (selectedWorkflowCategory) {
-    return <WorkflowsContent />
-  }
+  // Determine which view should be shown (for keep-alive pattern)
+  const showClustersView = selectedClustersCategory === "clusters" || selectedSidebarTab === "clusters"
+  const showGsdView = selectedGsdCategory === "gsd" || selectedSidebarTab === "gsd"
+  const showMcpView = selectedMcpCategory === "mcp"
+  const showWorkflowsView = !!selectedWorkflowCategory
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView
 
   return (
     <>
-      <div className="flex h-full">
+      {/* ClustersContent - kept mounted to preserve terminal state */}
+      <div className={showClustersView ? "h-full w-full" : "hidden"}>
+        <ClustersContent />
+      </div>
+
+      {/* GSD view */}
+      {showGsdView && <GsdContent />}
+
+      {/* MCP servers view */}
+      {showMcpView && <McpContent />}
+
+      {/* Workflow browser */}
+      {showWorkflowsView && <WorkflowsContent />}
+
+      {/* Main content - chats/terminal/other */}
+      <div className={showMainContent ? "flex h-full" : "hidden"}>
         {/* Main content area */}
         <div
           className="flex-1 min-w-0 overflow-hidden"
@@ -885,12 +886,6 @@ export function AgentsContent() {
             <div className="h-full flex flex-col relative overflow-hidden">
               <TerminalMainView />
             </div>
-          ) : selectedSidebarTab === "clusters" ? (
-            // Clusters tab - show clusters view
-            <ClustersContent />
-          ) : selectedSidebarTab === "gsd" ? (
-            // GSD tab - show GSD view
-            <GsdContent />
           ) : (
             // For other tabs, show a placeholder detail view
             <div className="h-full flex items-center justify-center">

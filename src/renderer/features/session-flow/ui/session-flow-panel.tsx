@@ -128,15 +128,14 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
         const bottomNode = newNodes.find(n => n.position.y === maxY)
 
         if (bottomNode) {
-          // Center on the bottom node (add offset for node height)
-          // NODE_HEIGHT is approximately 60-80px, center a bit above bottom
-          // Reset zoom to 1.0 for optimal readability of new nodes
+          // Scroll to show the bottom of the chart with the newest node visible
+          // Use higher zoom (1.3) for better readability and larger Y offset to push view down
           // Mark as programmatic move to prevent triggering userScrolled
           isProgrammaticMoveRef.current = true
           reactFlowInstance.setCenter(
             bottomNode.position.x + 100, // Offset for node width (~200px / 2)
-            bottomNode.position.y + 40,  // Offset for node height
-            { duration: 400, zoom: 1.0 }
+            bottomNode.position.y + 150, // Larger offset to scroll further down
+            { duration: 400, zoom: 1.3 }
           )
           // Reset flag after animation completes
           setTimeout(() => {
@@ -167,13 +166,13 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
             const bottomNode = newNodes.find(n => n.position.y === maxY)
 
             if (bottomNode) {
-              // Reset zoom to 1.0 for optimal readability when catching up
+              // Scroll to bottom with higher zoom when catching up
               // Mark as programmatic move to prevent triggering userScrolled
               isProgrammaticMoveRef.current = true
               reactFlowInstance.setCenter(
                 bottomNode.position.x + 100,
-                bottomNode.position.y + 40,
-                { duration: 400, zoom: 1.0 }
+                bottomNode.position.y + 150, // Larger offset to scroll further down
+                { duration: 400, zoom: 1.3 }
               )
               // Reset flag after animation completes
               setTimeout(() => {
@@ -199,6 +198,33 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
     setUserScrolled(false)
   }, [setUserScrolled])
 
+  // Initial mount - zoom to bottom of flow (consistent with live behavior)
+  const hasInitializedViewRef = useRef(false)
+  useEffect(() => {
+    if (hasInitializedViewRef.current) return
+    if (nodes.length === 0) return
+
+    hasInitializedViewRef.current = true
+
+    // Small delay to ensure React Flow has rendered
+    setTimeout(() => {
+      const maxY = Math.max(...nodes.map(n => n.position.y))
+      const bottomNode = nodes.find(n => n.position.y === maxY)
+
+      if (bottomNode) {
+        isProgrammaticMoveRef.current = true
+        reactFlowInstance.setCenter(
+          bottomNode.position.x + 100,
+          bottomNode.position.y + 150,
+          { duration: 400, zoom: 1.3 }
+        )
+        setTimeout(() => {
+          isProgrammaticMoveRef.current = false
+        }, 500)
+      }
+    }, 100)
+  }, [nodes, reactFlowInstance])
+
   return (
     <div className="h-full w-full bg-background">
       <ReactFlow
@@ -207,8 +233,6 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={sessionFlowNodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
         minZoom={0.3}
         maxZoom={2}
         defaultEdgeOptions={{
