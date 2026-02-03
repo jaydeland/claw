@@ -22,6 +22,7 @@ import {
   IconChevronDown,
   PlanIcon,
   SearchIcon,
+  SwarmIcon,
 } from "../../../components/ui/icons"
 import {
   Popover,
@@ -31,7 +32,7 @@ import {
 import { cn } from "../../../lib/utils"
 import {
   agentsDebugModeAtom,
-  isPlanModeAtom,
+  agentModeAtom,
   justCreatedIdsAtom,
   lastSelectedAgentIdAtom,
   lastSelectedBranchesAtom,
@@ -227,7 +228,8 @@ export function NewChatForm({
   const [lastSelectedModelId, setLastSelectedModelId] = useAtom(
     lastSelectedModelIdAtom,
   )
-  const [isPlanMode, setIsPlanMode] = useAtom(isPlanModeAtom)
+  const [agentMode, setAgentMode] = useAtom(agentModeAtom)
+  const isPlanMode = agentMode === "plan"
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const debugMode = useAtomValue(agentsDebugModeAtom)
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
@@ -399,7 +401,7 @@ export function NewChatForm({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: "agent" | "plan" | "swarm"
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
@@ -850,7 +852,7 @@ export function NewChatForm({
       baseBranch:
         workMode === "worktree" ? selectedBranch || undefined : undefined,
       useWorktree: workMode === "worktree",
-      mode: isPlanMode ? "plan" : "agent",
+      mode: agentMode,
     })
     // Editor and images are cleared in onSuccess callback
   }, [
@@ -861,7 +863,7 @@ export function NewChatForm({
     selectedBranch,
     workMode,
     images,
-    isPlanMode,
+    agentMode,
     trpcUtils,
   ])
 
@@ -1201,7 +1203,7 @@ export function NewChatForm({
                       onCloseSlashTrigger={handleCloseSlashTrigger}
                       onContentChange={handleContentChange}
                       onSubmit={handleSend}
-                      onShiftTab={() => setIsPlanMode((prev) => !prev)}
+                      onShiftTab={() => setAgentMode((prev) => prev === "agent" ? "plan" : prev === "plan" ? "swarm" : "agent")}
                       placeholder="Plan, @ for context, / for commands"
                       className={cn(
                         "bg-transparent max-h-[240px] overflow-y-auto p-1",
@@ -1231,12 +1233,14 @@ export function NewChatForm({
                         }}
                       >
                         <DropdownMenuTrigger className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                          {isPlanMode ? (
+                          {agentMode === "plan" ? (
                             <PlanIcon className="h-3.5 w-3.5" />
+                          ) : agentMode === "swarm" ? (
+                            <SwarmIcon className="h-3.5 w-3.5" />
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5" />
                           )}
-                          <span>{isPlanMode ? "Plan" : "Accept"}</span>
+                          <span>{agentMode === "plan" ? "Plan" : agentMode === "swarm" ? "Swarm" : "Accept"}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -1253,7 +1257,7 @@ export function NewChatForm({
                                 tooltipTimeoutRef.current = null
                               }
                               setModeTooltip(null)
-                              setIsPlanMode(false)
+                              setAgentMode("agent")
                               setModeDropdownOpen(false)
                             }}
                             className="justify-between gap-2"
@@ -1297,7 +1301,7 @@ export function NewChatForm({
                               <AgentIcon className="w-4 h-4 text-muted-foreground" />
                               <span>Accept</span>
                             </div>
-                            {!isPlanMode && (
+                            {agentMode === "agent" && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                             )}
                           </DropdownMenuItem>
@@ -1309,7 +1313,7 @@ export function NewChatForm({
                                 tooltipTimeoutRef.current = null
                               }
                               setModeTooltip(null)
-                              setIsPlanMode(true)
+                              setAgentMode("plan")
                               setModeDropdownOpen(false)
                             }}
                             className="justify-between gap-2"
@@ -1352,7 +1356,62 @@ export function NewChatForm({
                               <PlanIcon className="w-4 h-4 text-muted-foreground" />
                               <span>Plan</span>
                             </div>
-                            {isPlanMode && (
+                            {agentMode === "plan" && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
+                              if (tooltipTimeoutRef.current) {
+                                clearTimeout(tooltipTimeoutRef.current)
+                                tooltipTimeoutRef.current = null
+                              }
+                              setModeTooltip(null)
+                              setAgentMode("swarm")
+                              setModeDropdownOpen(false)
+                            }}
+                            className="justify-between gap-2"
+                            onMouseEnter={(e) => {
+                              if (tooltipTimeoutRef.current) {
+                                clearTimeout(tooltipTimeoutRef.current)
+                                tooltipTimeoutRef.current = null
+                              }
+                              const rect = e.currentTarget.getBoundingClientRect()
+                              const showTooltip = () => {
+                                setModeTooltip({
+                                  visible: true,
+                                  position: {
+                                    top: rect.top,
+                                    left: rect.right + 8,
+                                  },
+                                  mode: "swarm",
+                                })
+                                hasShownTooltipRef.current = true
+                                tooltipTimeoutRef.current = null
+                              }
+                              if (hasShownTooltipRef.current) {
+                                showTooltip()
+                              } else {
+                                tooltipTimeoutRef.current = setTimeout(
+                                  showTooltip,
+                                  1000,
+                                )
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              if (tooltipTimeoutRef.current) {
+                                clearTimeout(tooltipTimeoutRef.current)
+                                tooltipTimeoutRef.current = null
+                              }
+                              setModeTooltip(null)
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <SwarmIcon className="w-4 h-4 text-muted-foreground" />
+                              <span>Swarm</span>
+                            </div>
+                            {agentMode === "swarm" && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                             )}
                           </DropdownMenuItem>
@@ -1374,6 +1433,8 @@ export function NewChatForm({
                                 <span>
                                   {modeTooltip.mode === "agent"
                                     ? "Apply changes directly without a plan"
+                                    : modeTooltip.mode === "swarm"
+                                    ? "Coordinate multiple agents to work together"
                                     : "Create a plan before making changes"}
                                 </span>
                               </div>

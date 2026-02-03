@@ -1,5 +1,5 @@
 import { useMemo, useState, memo } from "react"
-import { FileText, Server, Zap, Bot, Loader2, Terminal, Activity, ChevronDown, ChevronRight } from "lucide-react"
+import { FileText, Server, Zap, Bot, Loader2, Terminal, ChevronDown, ChevronRight } from "lucide-react"
 import { trpc } from "@/lib/trpc"
 import { useAtomValue } from "jotai"
 import { selectedAgentChatIdAtom } from "../../agents/atoms"
@@ -13,6 +13,8 @@ import {
   messageAtomFamily,
   messageTokenDataAtom,
   userMessageIdsAtom,
+  messageMetadataAtomFamily,
+  currentSubChatIdAtom,
 } from "../../agents/stores/message-store"
 
 /**
@@ -128,14 +130,14 @@ const RequestTokenItemWithData = memo(function RequestTokenItemWithData({
 }) {
   const userMessage = useAtomValue(messageAtomFamily(userMessageId))
   const assistantMessage = useAtomValue(messageAtomFamily(assistantMessageId))
+  const subChatId = useAtomValue(currentSubChatIdAtom)
+
+  // Try stored metadata first (survives AI SDK normalization), fallback to message.metadata
+  const storedMetadata = useAtomValue(
+    messageMetadataAtomFamily(`${subChatId}:${assistantMessageId}`)
+  )
 
   const data = useMemo((): RequestTokenData => {
-    const metadata = assistantMessage?.metadata as {
-      inputTokens?: number
-      outputTokens?: number
-      durationMs?: number
-    } | undefined
-
     // Get preview from user message
     let preview = ""
     if (userMessage?.parts) {
@@ -144,6 +146,8 @@ const RequestTokenItemWithData = memo(function RequestTokenItemWithData({
       preview = text.length > 60 ? text.slice(0, 60) + "..." : text
     }
 
+    // Try stored metadata first, fallback to message.metadata (like messageTokenDataAtom does)
+    const metadata = storedMetadata || (assistantMessage?.metadata as any)
     const inputTokens = metadata?.inputTokens || 0
     const outputTokens = metadata?.outputTokens || 0
 
@@ -157,7 +161,7 @@ const RequestTokenItemWithData = memo(function RequestTokenItemWithData({
       preview: preview || "Request",
       durationMs: metadata?.durationMs,
     }
-  }, [userMessage, assistantMessage, requestNumber, userMessageId, assistantMessageId])
+  }, [userMessage, assistantMessage, storedMetadata, requestNumber, userMessageId, assistantMessageId])
 
   return <RequestTokenItem data={data} />
 })
@@ -222,25 +226,16 @@ function RunningTokensSection() {
         </span>
       </div>
 
-      {/* Indented dropdown under Running Tokens */}
-      <div className="pl-3">
-        <ContextSection
-          title="Token Breakdown"
-          icon={Activity}
-          count={requestList.length}
-          defaultExpanded={false}
-        >
-          <div className="space-y-1">
-            {requestList.map((item) => (
-              <RequestTokenItemWithData
-                key={item.userMessageId}
-                requestNumber={item.requestNumber}
-                userMessageId={item.userMessageId}
-                assistantMessageId={item.assistantMessageId}
-              />
-            ))}
-          </div>
-        </ContextSection>
+      {/* Each request as its own dropdown, indented */}
+      <div className="pl-3 space-y-1">
+        {requestList.map((item) => (
+          <RequestTokenItemWithData
+            key={item.userMessageId}
+            requestNumber={item.requestNumber}
+            userMessageId={item.userMessageId}
+            assistantMessageId={item.assistantMessageId}
+          />
+        ))}
       </div>
     </div>
   )

@@ -84,7 +84,7 @@ export function LoadedContextDialog({ projectPath }: LoadedContextDialogProps) {
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <DialogTitle>Loaded Context</DialogTitle>
+              <DialogTitle>Session Context</DialogTitle>
               {totalTokens > 0 && (
                 <span className="text-xs text-muted-foreground">
                   ({formatHeaderTokens(totalTokens)} tokens)

@@ -109,14 +109,14 @@ export function LoadedContextSidebar({ projectPath }: LoadedContextSidebarProps)
                 size="icon"
                 onClick={closeSidebar}
                 className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                aria-label="Close loaded context"
+                aria-label="Close session context"
               >
                 <DialogIcons.CloseSidebar className={DialogIconSizes.default} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">Close loaded context</TooltipContent>
+            <TooltipContent side="bottom">Close session context</TooltipContent>
           </Tooltip>
-          <span className="text-sm font-medium ml-1">Loaded Context</span>
+          <span className="text-sm font-medium ml-1">Session Context</span>
           {totalTokens > 0 && (
             <span className="text-xs text-muted-foreground ml-1">
               ({formatHeaderTokens(totalTokens)} tokens)

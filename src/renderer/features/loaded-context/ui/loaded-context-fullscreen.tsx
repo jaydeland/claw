@@ -81,7 +81,7 @@ export function LoadedContextFullscreen({ projectPath }: LoadedContextFullscreen
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">Loaded Context</h1>
+          <h1 className="text-lg font-semibold">Session Context</h1>
           {totalTokens > 0 && (
             <span className="text-sm text-muted-foreground">
               ({formatHeaderTokens(totalTokens)} tokens)

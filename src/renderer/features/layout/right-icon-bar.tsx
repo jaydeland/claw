@@ -319,7 +319,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
         </Tooltip>
       )}
 
-      {/* Loaded Context Button - always show when chat is selected */}
+      {/* Session Context Button - always show when chat is selected */}
       {selectedChatId && (
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
@@ -333,13 +333,13 @@ export function RightIconBar({ className }: RightIconBarProps) {
                   ? "bg-foreground/10 text-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
               )}
-              aria-label="Loaded Context"
+              aria-label="Session Context"
               aria-pressed={effectiveLoadedContextOpen}
             >
               <FileStack className="h-4 w-4 flex-shrink-0" />
               {isExpanded && (
                 <>
-                  <span className="text-sm flex-1 text-left">Loaded Context</span>
+                  <span className="text-sm flex-1 text-left">Session Context</span>
                   <LayoutModeSelector
                     mode={loadedContextDisplayMode}
                     onModeChange={setLoadedContextDisplayMode}
@@ -349,7 +349,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
             </button>
           </TooltipTrigger>
           <TooltipContent side="left">
-            Loaded Context
+            Session Context
           </TooltipContent>
         </Tooltip>
       )}
