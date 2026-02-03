@@ -703,12 +703,12 @@ export const claudeRouter = router({
             let finalPrompt = cleanedPrompt
 
             if (input.mode === "swarm") {
-              // Swarm mode: Load all swarm agents (coordinator, coder, reviewer, tester)
+              // Swarm mode: Load all swarm agents (orchestrator, coder, reviewer, tester)
               try {
                 const swarmManager = await getSwarmManager()
                 agentsOption = swarmManager.getAgentsForSDK()
-                // Use coordinator's enhanced prompt with worker context
-                finalPrompt = swarmManager.getCoordinatorPrompt(cleanedPrompt)
+                // Use orchestrator's enhanced prompt with worker context and review workflow
+                finalPrompt = swarmManager.getOrchestratorPrompt(cleanedPrompt)
                 console.log(`[claude] Swarm mode: Loaded agents:`, Object.keys(agentsOption))
               } catch (err) {
                 console.error("[claude] Failed to initialize swarm:", err)

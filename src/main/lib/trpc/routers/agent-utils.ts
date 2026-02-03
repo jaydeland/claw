@@ -269,8 +269,8 @@ export async function scanAgentsDirectory(
 // Cache for loaded agents to avoid re-reading from disk
 const agentCache = new Map<string, ParsedAgent | null>()
 
-// Swarm agent names - coordinator orchestrates workers
-export const SWARM_AGENT_NAMES = ["coordinator", "coder", "reviewer", "tester"] as const
+// Swarm agent names - orchestrator (Opus) leads workers through structured workflow
+export const SWARM_AGENT_NAMES = ["orchestrator", "coder", "reviewer", "tester"] as const
 export type SwarmAgentName = (typeof SWARM_AGENT_NAMES)[number]
 
 /**

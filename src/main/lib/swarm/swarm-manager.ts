@@ -9,10 +9,11 @@ import {
  * SwarmManager - Orchestrates loading and configuration of swarm agents
  *
  * Swarm mode uses a hierarchical topology:
- * - Coordinator (queen) analyzes tasks and delegates to workers
- * - Workers: coder, reviewer, tester
+ * - Orchestrator (team leader/Opus) analyzes tasks and delegates to workers
+ * - Workers: coder (Sonnet), reviewer (Opus), tester (Sonnet)
  *
- * The coordinator uses the Task tool to spawn workers with specific instructions.
+ * Workflow: Orchestrator → Coders → Reviewer (3-5 iterations) → Tester
+ * The orchestrator uses the Task tool to spawn workers with specific instructions.
  */
 export class SwarmManager {
   private agents: Record<string, ParsedAgent> = {}
@@ -20,7 +21,7 @@ export class SwarmManager {
 
   /**
    * Initialize swarm by loading all agent definitions
-   * Must be called before using getAgentsForSDK() or getCoordinatorPrompt()
+   * Must be called before using getAgentsForSDK() or getOrchestratorPrompt()
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
@@ -68,27 +69,27 @@ export class SwarmManager {
   }
 
   /**
-   * Get the coordinator's system prompt with worker context
-   * Provides the coordinator with information about available workers
+   * Get the orchestrator's system prompt with worker context
+   * Provides the orchestrator with information about available workers
    */
-  getCoordinatorPrompt(userTask: string): string {
+  getOrchestratorPrompt(userTask: string): string {
     if (!this.initialized) {
       throw new Error("[swarm] SwarmManager not initialized. Call initialize() first.")
     }
 
-    const coordinatorAgent = this.agents.coordinator
-    if (!coordinatorAgent) {
-      throw new Error("[swarm] Coordinator agent not loaded")
+    const orchestratorAgent = this.agents.orchestrator
+    if (!orchestratorAgent) {
+      throw new Error("[swarm] Orchestrator agent not loaded")
     }
 
-    // Build worker descriptions for coordinator context
+    // Build worker descriptions for orchestrator context
     const workerInfo = Object.entries(this.agents)
-      .filter(([name]) => name !== "coordinator")
+      .filter(([name]) => name !== "orchestrator")
       .map(([name, agent]) => `- @${name}: ${agent.description}`)
       .join("\n")
 
-    // Combine coordinator's base prompt with worker context and user task
-    return `${coordinatorAgent.prompt}
+    // Combine orchestrator's base prompt with worker context and user task
+    return `${orchestratorAgent.prompt}
 
 ## Available Workers
 ${workerInfo}
@@ -96,7 +97,15 @@ ${workerInfo}
 ## User's Task
 ${userTask}
 
-Analyze this task and delegate to appropriate workers using the Task tool. Use @agent-name syntax when referring to workers.`
+Analyze this task, determine coder allocation, and execute the full workflow with mandatory review cycles (3-5 iterations). Use @agent-name syntax when referring to workers.`
+  }
+
+  /**
+   * Backwards compatibility alias for getOrchestratorPrompt
+   * @deprecated Use getOrchestratorPrompt instead
+   */
+  getCoordinatorPrompt(userTask: string): string {
+    return this.getOrchestratorPrompt(userTask)
   }
 
   /**
