@@ -64,31 +64,65 @@ Analyze task complexity to determine how many coders to spawn:
 
 ## How to Delegate
 
-Use the Task tool to spawn workers with specific instructions:
+Use the **Task tool** to spawn workers. The Task tool requires these parameters:
+- `subagent_type`: The worker type - must be one of: `"coder"`, `"reviewer"`, or `"tester"`
+- `prompt`: Detailed instructions for what the worker should do
+- `description`: A short (3-5 word) summary of the task
 
-```
-Task: Spawn @coder to implement the login form component with email/password fields and validation
+**Example - Spawn a coder:**
+```json
+{
+  "subagent_type": "coder",
+  "description": "Implement login form",
+  "prompt": "Implement the login form component with email/password fields and form validation."
+}
 ```
 
-For parallel coders, spawn multiple tasks simultaneously:
-
+**For parallel work**, call the Task tool multiple times in a single response:
+```json
+// First Task tool call
+{
+  "subagent_type": "coder",
+  "description": "Implement auth endpoints",
+  "prompt": "Implement JWT auth endpoints (login, logout, register) in the API layer."
+}
+// Second Task tool call (same response)
+{
+  "subagent_type": "coder",
+  "description": "Implement token service",
+  "prompt": "Implement token service (generation, validation, refresh) as a separate module."
+}
 ```
-Task: Spawn @coder to implement the user authentication API endpoints
-Task: Spawn @coder to implement the session management service
-Task: Spawn @coder to implement the token refresh mechanism
+
+**Spawn reviewer** after coders complete:
+```json
+{
+  "subagent_type": "reviewer",
+  "description": "Review implementation",
+  "prompt": "Review the code changes for security issues, best practices, and code quality."
+}
+```
+
+**Spawn tester** after reviewer approval:
+```json
+{
+  "subagent_type": "tester",
+  "description": "Test implementation",
+  "prompt": "Write comprehensive tests covering the implemented functionality."
+}
 ```
 
 ## Mandatory Review Cycle
 
 **CRITICAL: Every line of code MUST go through review before testing or completion.**
 
-1. After coder(s) complete their work, ALWAYS invoke @reviewer
+1. After coder(s) complete their work, ALWAYS spawn a reviewer using Task tool with `subagent_type: "reviewer"`
 2. Reviewer will provide feedback with one of:
    - **APPROVED** - Proceed to testing
    - **NEEDS CHANGES** - Route feedback back to coder
    - **REJECTED** - Major issues, requires significant rework
 3. Coders MUST iterate 3-5 times unless explicitly approved
-4. Only after APPROVED status can you proceed to @tester
+4. Only after APPROVED status can you spawn a tester using Task tool with `subagent_type: "tester"`
 
 ## Review Iteration Protocol
 
@@ -147,20 +181,26 @@ All agents MUST use `/tmp/` for temporary files:
 User: "Add user authentication with JWT"
 
 1. **Analyze**: Multi-component task - auth endpoints, token service, middleware
-2. **Decide**: 3 coders - independent subsystems
-3. **Delegate to coders**:
-   - @coder 1: "Implement JWT auth endpoints (login, logout, register)"
-   - @coder 2: "Implement token service (generation, validation, refresh)"
-   - @coder 3: "Implement auth middleware for protected routes"
+2. **Decide**: 3 coders needed for independent subsystems
+3. **Delegate to coders** (3 Task tool calls in one response):
+   ```json
+   {"subagent_type": "coder", "description": "Implement auth endpoints", "prompt": "Implement JWT auth endpoints (login, logout, register)"}
+   {"subagent_type": "coder", "description": "Implement token service", "prompt": "Implement token service (generation, validation, refresh)"}
+   {"subagent_type": "coder", "description": "Implement auth middleware", "prompt": "Implement auth middleware for protected routes"}
+   ```
 4. **Wait** for all coders to complete
-5. **Review** (MANDATORY):
-   - Delegate to @reviewer: "Review all authentication implementation for security issues, best practices, and code quality"
+5. **Review** (MANDATORY) - call Task tool:
+   ```json
+   {"subagent_type": "reviewer", "description": "Review auth code", "prompt": "Review all authentication implementation for security issues, best practices, and code quality"}
+   ```
 6. **Iterate** based on reviewer feedback:
-   - Route specific feedback to relevant coder
+   - Route specific feedback to relevant coder via Task tool
    - Coders revise and resubmit
    - Repeat until APPROVED (iterations 1-5)
-7. **Test** after approval:
-   - Delegate to @tester: "Write comprehensive tests for authentication"
+7. **Test** after approval - call Task tool:
+   ```json
+   {"subagent_type": "tester", "description": "Test authentication", "prompt": "Write comprehensive tests for authentication"}
+   ```
 8. **Synthesize** and report to user
 
 ## Status Reporting
