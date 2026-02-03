@@ -588,6 +588,78 @@ const CLAUDE_DARK: VSCodeFullTheme = {
 }
 
 /**
+ * Cobalt2 - Classic blue theme with yellow accents
+ * By Wes Bos - https://github.com/wesbos/cobalt2-vscode
+ */
+const COBALT2: VSCodeFullTheme = {
+  id: "cobalt2",
+  name: "Cobalt2",
+  type: "dark",
+  source: "builtin",
+  colors: {
+    "editor.background": "#193549",
+    "editor.foreground": "#ffffff",
+    "foreground": "#ffffff",
+    "sideBar.background": "#122738",
+    "sideBar.foreground": "#ffffff",
+    "sideBar.border": "#0d3a58",
+    "activityBar.background": "#122738",
+    "activityBar.foreground": "#ffffff",
+    "activityBar.border": "#0d3a58",
+    "activityBarBadge.background": "#ffc600",
+    "activityBarBadge.foreground": "#000000",
+    "panel.background": "#193549",
+    "panel.border": "#0d3a58",
+    "tab.activeBackground": "#193549",
+    "tab.inactiveBackground": "#122738",
+    "tab.inactiveForeground": "#aaaaaa",
+    "editorGroupHeader.tabsBackground": "#122738",
+    "dropdown.background": "#193549",
+    "dropdown.foreground": "#ffffff",
+    "input.background": "#0d3a58",
+    "input.border": "#0088ff",
+    "input.foreground": "#ffffff",
+    "focusBorder": "#0088ff",
+    "textLink.foreground": "#0088ff",
+    "textLink.activeForeground": "#ff9d00",
+    "list.activeSelectionBackground": "#0050a4",
+    "list.hoverBackground": "#1f4662",
+    "editor.selectionBackground": "#0050a4",
+    "editor.lineHighlightBackground": "#1f4662",
+    "editor.findMatchBackground": "#ff720066",
+    "editor.findMatchHighlightBackground": "#cad40f66",
+    "editorLineNumber.foreground": "#627e99",
+    "descriptionForeground": "#aaaaaa",
+    "errorForeground": "#ff5630",
+    "badge.background": "#ffc600",
+    "badge.foreground": "#000000",
+    "button.background": "#0088ff",
+    "button.foreground": "#ffffff",
+    "button.secondaryBackground": "#0d3a58",
+    "button.secondaryForeground": "#ffffff",
+    // Terminal colors - Cobalt inspired
+    "terminal.background": "#122738",
+    "terminal.foreground": "#ffffff",
+    "terminal.ansiBlack": "#000000",
+    "terminal.ansiRed": "#ff0000",
+    "terminal.ansiGreen": "#37dd21",
+    "terminal.ansiYellow": "#fee409",
+    "terminal.ansiBlue": "#1460d2",
+    "terminal.ansiMagenta": "#ff005d",
+    "terminal.ansiCyan": "#00bbbb",
+    "terminal.ansiWhite": "#bbbbbb",
+    "terminal.ansiBrightBlack": "#555555",
+    "terminal.ansiBrightRed": "#f92672",
+    "terminal.ansiBrightGreen": "#a6e22e",
+    "terminal.ansiBrightYellow": "#ffc600",
+    "terminal.ansiBrightBlue": "#58d1eb",
+    "terminal.ansiBrightMagenta": "#9d65ff",
+    "terminal.ansiBrightCyan": "#80fcff",
+    "terminal.ansiBrightWhite": "#ffffff",
+  },
+}
+
+/**
  * All built-in themes
  */
 export const BUILTIN_THEMES: VSCodeFullTheme[] = [
@@ -600,6 +672,7 @@ export const BUILTIN_THEMES: VSCodeFullTheme[] = [
   CURSOR_MIDNIGHT,
   // Dark themes
   CLAUDE_DARK,
+  COBALT2,
   VESPER_DARK,
   VITESSE_DARK,
   MIN_DARK,
