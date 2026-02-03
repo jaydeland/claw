@@ -668,10 +668,79 @@ const COBALT2: VSCodeFullTheme = {
 }
 
 /**
+ * Dracula - Popular dark theme with purple/pink accents
+ * By Zeno Rocha - https://draculatheme.com/
+ */
+const DRACULA: VSCodeFullTheme = {
+  id: "dracula",
+  name: "Dracula",
+  type: "dark",
+  source: "builtin",
+  colors: {
+    "editor.background": "#282a36",
+    "editor.foreground": "#f8f8f2",
+    "foreground": "#f8f8f2",
+    "sideBar.background": "#21222c",
+    "sideBar.foreground": "#f8f8f2",
+    "sideBar.border": "#191a21",
+    "activityBar.background": "#21222c",
+    "activityBar.foreground": "#f8f8f2",
+    "activityBarBadge.background": "#ff79c6",
+    "activityBarBadge.foreground": "#282a36",
+    "panel.background": "#21222c",
+    "panel.border": "#191a21",
+    "tab.activeBackground": "#282a36",
+    "tab.inactiveBackground": "#21222c",
+    "tab.inactiveForeground": "#6272a4",
+    "editorGroupHeader.tabsBackground": "#21222c",
+    "dropdown.background": "#282a36",
+    "dropdown.foreground": "#f8f8f2",
+    "input.background": "#282a36",
+    "input.border": "#6272a4",
+    "input.foreground": "#f8f8f2",
+    "focusBorder": "#bd93f9",
+    "textLink.foreground": "#8be9fd",
+    "textLink.activeForeground": "#ff79c6",
+    "list.activeSelectionBackground": "#44475a",
+    "list.hoverBackground": "#343746",
+    "editor.selectionBackground": "#44475a",
+    "editor.lineHighlightBackground": "#44475a75",
+    "editorLineNumber.foreground": "#6272a4",
+    "descriptionForeground": "#6272a4",
+    "errorForeground": "#ff5555",
+    "badge.background": "#ff79c6",
+    "badge.foreground": "#282a36",
+    "button.background": "#bd93f9",
+    "button.foreground": "#282a36",
+    "button.secondaryBackground": "#44475a",
+    "button.secondaryForeground": "#f8f8f2",
+    // Terminal colors - Dracula palette
+    "terminal.background": "#282a36",
+    "terminal.foreground": "#f8f8f2",
+    "terminal.ansiBlack": "#21222c",
+    "terminal.ansiRed": "#ff5555",
+    "terminal.ansiGreen": "#50fa7b",
+    "terminal.ansiYellow": "#f1fa8c",
+    "terminal.ansiBlue": "#bd93f9",
+    "terminal.ansiMagenta": "#ff79c6",
+    "terminal.ansiCyan": "#8be9fd",
+    "terminal.ansiWhite": "#f8f8f2",
+    "terminal.ansiBrightBlack": "#6272a4",
+    "terminal.ansiBrightRed": "#ff6e6e",
+    "terminal.ansiBrightGreen": "#69ff94",
+    "terminal.ansiBrightYellow": "#ffffa5",
+    "terminal.ansiBrightBlue": "#d6acff",
+    "terminal.ansiBrightMagenta": "#ff92df",
+    "terminal.ansiBrightCyan": "#a4ffff",
+    "terminal.ansiBrightWhite": "#ffffff",
+  },
+}
+
+/**
  * All built-in themes
  */
 export const BUILTIN_THEMES: VSCodeFullTheme[] = [
-  // 21st Default themes (first)
+  // Claw Default themes (first)
   CLAW_DARK,
   CLAW_LIGHT,
   // Cursor themes
@@ -681,6 +750,7 @@ export const BUILTIN_THEMES: VSCodeFullTheme[] = [
   // Dark themes
   CLAUDE_DARK,
   COBALT2,
+  DRACULA,
   VESPER_DARK,
   VITESSE_DARK,
   MIN_DARK,
