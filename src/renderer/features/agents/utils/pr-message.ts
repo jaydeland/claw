@@ -162,29 +162,66 @@ export function generateMergeMessage(context: MergeContext): string {
     steps.push(
       `Ensure you're in the target worktree: cd ${targetWorktreePath}`,
       `Run: git merge ${sourceBranch} --no-edit`,
-      "If merge conflicts occur, list them with: git status",
-      "For each conflict, examine the file and resolve the conflict markers",
-      "After resolving conflicts, stage with: git add <file>",
-      "Complete the merge with: git commit --no-edit",
     )
   } else {
     // Single worktree scenario
     steps.push(
       `Switch to target branch: git checkout ${targetBranch}`,
       `Run: git merge ${sourceBranch} --no-edit`,
-      "If merge conflicts occur, list them with: git status",
-      "For each conflict, examine the file and resolve the conflict markers",
-      "After resolving conflicts, stage with: git add <file>",
-      "Complete the merge with: git commit --no-edit",
-      `Return to source branch: git checkout ${sourceBranch}`,
     )
   }
 
-  steps.push("If any step fails, explain the error to the user and ask for guidance.")
+  // Add conflict handling instructions
+  steps.push("If merge conflicts occur, handle them following these guidelines:")
 
-  steps.forEach((step, index) => {
-    lines.push(`${index + 1}. ${step}`)
-  })
+  lines.push(...steps.map((step, index) => `${index + 1}. ${step}`))
+
+  // Add detailed conflict resolution guidance as a separate section
+  lines.push("")
+  lines.push("## Conflict Resolution Guidelines")
+  lines.push("")
+  lines.push("**CRITICAL: Preserve ALL functionality from BOTH branches.** Never discard code without explicit user approval.")
+  lines.push("")
+  lines.push("### Conflicts You CAN Auto-Resolve:")
+  lines.push("- **Import statements**: Combine imports from both branches (keep all unique imports)")
+  lines.push("- **Whitespace/formatting**: Use the more recent formatting or run formatter after merge")
+  lines.push("- **Adjacent additions**: Both branches added different code in the same area but don't overlap logically")
+  lines.push("- **Version bumps**: Use the higher version number")
+  lines.push("- **Package.json dependencies**: Include dependencies from both branches")
+  lines.push("")
+  lines.push("### Conflicts You MUST Show to User:")
+  lines.push("- **Logic changes**: Both branches modified the same function/method differently")
+  lines.push("- **Conflicting implementations**: Both branches implemented the same feature in different ways")
+  lines.push("- **Deleted vs modified**: One branch deleted code that another branch modified")
+  lines.push("- **Configuration conflicts**: Both branches changed config values to different settings")
+  lines.push("- **Type/interface changes**: Both branches modified the same type definition differently")
+  lines.push("- **Any conflict where you're uncertain**: When in doubt, ALWAYS ask the user")
+  lines.push("")
+  lines.push("### When Showing Conflicts to User:")
+  lines.push("1. List each conflicted file")
+  lines.push("2. For each file, show:")
+  lines.push("   - The specific conflicting section (both versions)")
+  lines.push("   - What each branch was trying to accomplish")
+  lines.push("   - Your recommended resolution and why")
+  lines.push("3. Ask the user to confirm or provide alternative resolution")
+  lines.push("")
+  lines.push("### After Resolving Conflicts:")
+
+  const postConflictSteps = [
+    "Stage resolved files: git add <file>",
+    "Complete the merge: git commit --no-edit",
+  ]
+
+  if (!targetWorktreePath) {
+    postConflictSteps.push(`Return to source branch: git checkout ${sourceBranch}`)
+  }
+
+  postConflictSteps.push("Summarize what was merged and any resolutions made")
+
+  lines.push(...postConflictSteps.map((step, index) => `${index + 1}. ${step}`))
+
+  lines.push("")
+  lines.push("If any step fails or you encounter unexpected errors, explain the error to the user and ask for guidance.")
 
   return lines.join("\n")
 }
