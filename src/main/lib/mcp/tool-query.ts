@@ -454,11 +454,114 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
     let toolsRequested = false
     const pendingRequests = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
 
-    // Set connection timeout
-    connectionTimeout = setTimeout(() => {
-      cleanup()
-      reject(new Error("SSE connection timeout - no endpoint received"))
-    }, 30000)
+    // Set connection timeout - but first try using SSE URL as fallback endpoint
+    connectionTimeout = setTimeout(async () => {
+      // If no endpoint received after 10 seconds, try using the SSE URL directly
+      // Some servers accept POST requests at the same URL (HTTP Streamable transport)
+      if (!messageEndpoint && !initializeSent) {
+        console.log("[mcp-tools] SSE no endpoint received after 10s, trying HTTP Streamable transport...")
+        messageEndpoint = sseUrl
+        initializeSent = true
+
+        // Try with direct JSON response (not through SSE stream)
+        const postHeaders: Record<string, string> = {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        }
+        if (headers["Authorization"]) {
+          postHeaders["Authorization"] = headers["Authorization"]
+        }
+
+        try {
+          console.log("[mcp-tools] Fallback: trying direct HTTP POST to SSE URL...")
+          const initRequest = {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: {
+              protocolVersion: "2024-11-05",
+              capabilities: {
+                roots: { listChanged: false },
+                sampling: {},
+              },
+              clientInfo: {
+                name: "claw",
+                version: "0.1.0",
+              },
+            },
+          }
+
+          const response = await fetch(sseUrl, {
+            method: "POST",
+            headers: postHeaders,
+            body: JSON.stringify(initRequest),
+          })
+
+          if (response.ok) {
+            const contentType = response.headers.get("content-type") || ""
+            console.log(`[mcp-tools] Fallback response: ${response.status} ${contentType}`)
+
+            if (contentType.includes("application/json")) {
+              const initResult = await response.json()
+              console.log(`[mcp-tools] Fallback init response:`, JSON.stringify(initResult).slice(0, 200))
+
+              if (initResult.result?.serverInfo) {
+                // Server supports HTTP transport! Continue with notification and tools/list
+                console.log(`[mcp-tools] Fallback: Server ${initResult.result.serverInfo.name} supports HTTP transport`)
+
+                // Send initialized notification
+                await fetch(sseUrl, {
+                  method: "POST",
+                  headers: postHeaders,
+                  body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "notifications/initialized",
+                    params: {},
+                  }),
+                })
+
+                // Request tools/list
+                const toolsRequest = {
+                  jsonrpc: "2.0",
+                  id: 2,
+                  method: "tools/list",
+                  params: {},
+                }
+
+                const toolsResponse = await fetch(sseUrl, {
+                  method: "POST",
+                  headers: postHeaders,
+                  body: JSON.stringify(toolsRequest),
+                })
+
+                if (toolsResponse.ok) {
+                  const toolsResult = await toolsResponse.json()
+                  tools = toolsResult.result?.tools || []
+                  console.log(`[mcp-tools] Fallback: received ${tools.length} tools via HTTP transport`)
+                  cleanup()
+                  resolve(tools)
+                  return
+                }
+              }
+            }
+          }
+
+          // If we get here, fallback didn't work
+          console.log("[mcp-tools] Fallback HTTP transport didn't work, continuing to wait...")
+        } catch (error) {
+          console.error("[mcp-tools] Fallback HTTP transport failed:", error)
+        }
+
+        // Reset and let the original timeout handle it
+        connectionTimeout = setTimeout(() => {
+          cleanup()
+          reject(new Error("SSE connection timeout - no endpoint received and HTTP fallback failed"))
+        }, 5000) // Give it 5 more seconds
+      } else if (!messageEndpoint) {
+        cleanup()
+        reject(new Error("SSE connection timeout - no endpoint received"))
+      }
+    }, 10000) // 10 second timeout before trying fallback
 
     // Create AbortController for the SSE connection
     const abortController = new AbortController()
@@ -493,6 +596,7 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
 
       const postHeaders: Record<string, string> = {
         "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
       }
       if (headers["Authorization"]) {
         postHeaders["Authorization"] = headers["Authorization"]
@@ -502,14 +606,48 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
       return new Promise((resolveReq, rejectReq) => {
         pendingRequests.set(id, { resolve: resolveReq, reject: rejectReq })
 
-        // Send the request
+        // Send the request and also check if response comes directly
         fetch(messageEndpoint!, {
           method: "POST",
           headers: postHeaders,
           body: JSON.stringify(request),
+        }).then(async response => {
+          // Some servers return the response directly in the POST response
+          // instead of through the SSE stream
+          if (response.ok) {
+            const contentType = response.headers.get("content-type") || ""
+            if (contentType.includes("application/json")) {
+              try {
+                const responseData = await response.json()
+                console.log(`[mcp-tools] SSE POST response (direct): id=${responseData.id}`)
+                if (responseData.id === id && pendingRequests.has(id)) {
+                  pendingRequests.delete(id)
+                  if (responseData.error) {
+                    rejectReq(new Error(`JSON-RPC error: ${responseData.error.message}`))
+                  } else {
+                    resolveReq(responseData.result)
+                  }
+                }
+              } catch (parseError) {
+                console.log(`[mcp-tools] SSE POST response not JSON, waiting for SSE stream`)
+              }
+            } else {
+              // Response might come through SSE stream
+              console.log(`[mcp-tools] SSE POST response content-type: ${contentType}, waiting for SSE stream`)
+            }
+          } else {
+            // Log error but don't reject yet - response might still come through SSE
+            console.log(`[mcp-tools] SSE POST response not ok: ${response.status}`)
+            try {
+              const errorText = await response.text()
+              console.log(`[mcp-tools] SSE POST error body: ${errorText.slice(0, 200)}`)
+            } catch { /* ignore */ }
+          }
         }).catch(err => {
-          pendingRequests.delete(id)
-          rejectReq(err)
+          if (pendingRequests.has(id)) {
+            pendingRequests.delete(id)
+            rejectReq(err)
+          }
         })
 
         // Set a timeout for this request
@@ -567,9 +705,23 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
         }, 30000)
       }
 
-      if (event === "endpoint") {
+      // Handle various event types that might contain the endpoint
+      // MCP SSE spec uses "endpoint", but some servers might use variations
+      if (event === "endpoint" || event === "message_endpoint" || event === "session") {
         // Server sends the message endpoint URL
-        messageEndpoint = data.trim()
+        let endpointUrl = data.trim()
+
+        // Some servers send JSON with the endpoint
+        if (endpointUrl.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(endpointUrl)
+            endpointUrl = parsed.endpoint || parsed.url || parsed.messageEndpoint || endpointUrl
+          } catch {
+            // Not JSON, use as-is
+          }
+        }
+
+        messageEndpoint = endpointUrl
         console.log(`[mcp-tools] SSE received message endpoint: ${messageEndpoint}`)
 
         // If the endpoint is relative, make it absolute
@@ -665,7 +817,53 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
       signal: abortController.signal,
     }).then(async response => {
       console.log("[mcp-tools] SSE response status:", response.status, response.statusText)
-      console.log("[mcp-tools] SSE response headers:", JSON.stringify(Object.fromEntries(response.headers.entries())))
+
+      // Log all response headers for debugging
+      const responseHeaders: Record<string, string> = {}
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value
+      })
+      console.log("[mcp-tools] SSE response headers:", JSON.stringify(responseHeaders))
+
+      // Check if endpoint is provided in response headers (some servers do this)
+      const headerEndpoint = response.headers.get("x-mcp-endpoint") ||
+                             response.headers.get("mcp-endpoint") ||
+                             response.headers.get("x-message-endpoint") ||
+                             response.headers.get("location")
+      if (headerEndpoint && !messageEndpoint) {
+        console.log(`[mcp-tools] SSE found endpoint in response header: ${headerEndpoint}`)
+        // Resolve relative URL
+        if (headerEndpoint.startsWith("/")) {
+          const urlObj = new URL(sseUrl)
+          messageEndpoint = `${urlObj.origin}${headerEndpoint}`
+        } else {
+          messageEndpoint = headerEndpoint
+        }
+
+        // Start MCP handshake immediately since we have the endpoint
+        if (!initializeSent) {
+          initializeSent = true
+          try {
+            console.log("[mcp-tools] SSE (from header) sending initialize request...")
+            await sendRequest("initialize", {
+              protocolVersion: "2024-11-05",
+              capabilities: {
+                roots: { listChanged: false },
+                sampling: {},
+              },
+              clientInfo: {
+                name: "claw",
+                version: "0.1.0",
+              },
+            })
+          } catch (error) {
+            console.error("[mcp-tools] SSE initialize (from header) failed:", error)
+            cleanup()
+            reject(error instanceof Error ? error : new Error(String(error)))
+            return
+          }
+        }
+      }
 
       if (!response.ok) {
         // Try to get error body
@@ -723,6 +921,29 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
             } else if (line === "") {
               // Empty line signals end of event (SSE spec)
               currentEvent = "message"
+            } else if (line.trim() && !messageEndpoint) {
+              // Some servers might send the endpoint without SSE framing
+              // Try to detect if this looks like an endpoint URL or JSON containing one
+              const trimmed = line.trim()
+              console.log(`[mcp-tools] SSE unframed line: "${trimmed.slice(0, 100)}"`)
+
+              // Check if it's a URL
+              if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("/")) {
+                console.log(`[mcp-tools] SSE detected URL in unframed data: ${trimmed}`)
+                await handleSseEvent("endpoint", trimmed)
+              } else if (trimmed.startsWith("{")) {
+                // Try parsing as JSON - might contain endpoint
+                try {
+                  const json = JSON.parse(trimmed)
+                  if (json.endpoint || json.url || json.messageEndpoint) {
+                    const endpointUrl = json.endpoint || json.url || json.messageEndpoint
+                    console.log(`[mcp-tools] SSE found endpoint in JSON: ${endpointUrl}`)
+                    await handleSseEvent("endpoint", endpointUrl)
+                  }
+                } catch {
+                  // Not valid JSON, ignore
+                }
+              }
             }
           }
         }
