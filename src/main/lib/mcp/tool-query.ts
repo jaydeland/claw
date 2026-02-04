@@ -393,14 +393,109 @@ class McpClient extends EventEmitter {
 }
 
 /**
+ * Query tools from an HTTP/SSE MCP server
+ * Uses fetch to communicate via JSON-RPC over HTTP
+ */
+async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Record<string, string | undefined>): Promise<McpTool[]> {
+  // Expand environment variables in the config
+  const expandedConfig = expandConfigEnvVars(config, mergedEnv)
+  const url = expandedConfig.url
+
+  if (!url) {
+    throw new Error("HTTP MCP server config missing URL")
+  }
+
+  console.log(`[mcp-tools] Querying HTTP MCP server: ${url}`)
+
+  // Build headers
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...expandedConfig.headers,
+  }
+
+  let requestId = 0
+
+  // Helper to send JSON-RPC request
+  async function sendRequest(method: string, params?: Record<string, unknown>): Promise<unknown> {
+    const request = {
+      jsonrpc: "2.0",
+      id: ++requestId,
+      method,
+      params,
+    }
+
+    const response = await fetch(url!, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const contentType = response.headers.get("content-type") || ""
+
+    // Handle SSE response
+    if (contentType.includes("text/event-stream")) {
+      const text = await response.text()
+      // Parse SSE events - look for data: lines with JSON
+      const lines = text.split("\n")
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.id === request.id) {
+              if (data.error) {
+                throw new Error(`JSON-RPC error: ${data.error.message}`)
+              }
+              return data.result
+            }
+          } catch {
+            // Continue looking for valid JSON
+          }
+        }
+      }
+      throw new Error("No valid response found in SSE stream")
+    }
+
+    // Handle regular JSON response
+    const data = await response.json()
+    if (data.error) {
+      throw new Error(`JSON-RPC error: ${data.error.message}`)
+    }
+    return data.result
+  }
+
+  // Initialize the server
+  console.log("[mcp-tools] Sending initialize request to HTTP server...")
+  await sendRequest("initialize", {
+    protocolVersion: "2024-11-05",
+    capabilities: {
+      roots: { listChanged: false },
+      sampling: {},
+    },
+    clientInfo: {
+      name: "claw",
+      version: "0.1.0",
+    },
+  })
+
+  // List tools
+  console.log("[mcp-tools] Requesting tools/list from HTTP server...")
+  const result = await sendRequest("tools/list", {}) as { tools?: McpTool[] }
+  const tools = result?.tools || []
+
+  console.log(`[mcp-tools] HTTP server returned ${tools.length} tools`)
+  return tools
+}
+
+/**
  * Query tools from an MCP server
  * Throws an error if server fails to connect or doesn't respond - caller should handle
  */
 export async function queryMcpServerTools(config: McpServerConfig): Promise<McpTool[]> {
-  const client = new McpClient()
-
   // Get shell environment for env var expansion (handles macOS GUI app PATH issues)
-  // This loads vars like VIDYARD_PATH that aren't in process.env when launched from Finder
   const shellEnv = await getShellEnvironment()
 
   // Get custom env vars from settings (user-defined, take precedence over shell env)
@@ -408,6 +503,14 @@ export async function queryMcpServerTools(config: McpServerConfig): Promise<McpT
 
   // Merge environments: shell env as base, custom env vars take precedence
   const mergedEnv = { ...shellEnv, ...customEnvVars }
+
+  // Check if this is an HTTP/SSE server (has URL, no command)
+  if (config.url || config.type === "http" || config.type === "sse") {
+    return queryHttpMcpServerTools(config, mergedEnv)
+  }
+
+  // Otherwise, use stdio client for command-based servers
+  const client = new McpClient()
 
   // Set merged env on client so spawned processes get full environment
   client.setShellEnv(mergedEnv)
