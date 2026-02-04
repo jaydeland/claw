@@ -267,9 +267,8 @@ export function AwsSsoSection({
           // Don't stop on network errors, keep trying
         }
       }, pollInterval)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to authenticate"
-      toast.error(message)
+    } catch (error: any) {
+      toast.error(error.message || "Failed to start SSO authentication")
       setIsAuthenticating(false)
     }
   }
@@ -297,9 +296,8 @@ export function AwsSsoSection({
       })
       toast.success("AWS profile selected")
       await refetchStatus()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to select profile"
-      toast.error(message)
+    } catch (error: any) {
+      toast.error(error.message || "Failed to select AWS profile")
     } finally {
       setIsSelectingProfile(false)
     }
@@ -311,9 +309,8 @@ export function AwsSsoSection({
       await refreshCredentialsMutation.mutateAsync()
       toast.success("Credentials refreshed")
       await refetchStatus()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to refresh credentials"
-      toast.error(message)
+    } catch (error: any) {
+      toast.error(error.message || "Failed to refresh AWS credentials")
     } finally {
       setIsRefreshing(false)
     }
@@ -329,9 +326,8 @@ export function AwsSsoSection({
       setAccounts([])
       setRoles([])
       await refetchStatus()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to logout"
-      toast.error(message)
+    } catch (error: any) {
+      toast.error(error.message || "Failed to logout from AWS SSO")
     } finally {
       setIsLoggingOut(false)
     }
