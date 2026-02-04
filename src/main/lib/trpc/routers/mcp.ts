@@ -187,7 +187,15 @@ function getAuthStatus(
 
   const credentialVarsArray = Array.from(credentialVars)
 
+  // Check for stored OAuth tokens (MCP_ACCESS_TOKEN)
+  // This handles HTTP servers that use OAuth 2.1 flow instead of env var credentials
+  const hasOAuthToken = !!storedCredentials["MCP_ACCESS_TOKEN"]
+
+  // If server has OAuth token but no env var credentials, it's OAuth-authenticated
   if (credentialVarsArray.length === 0) {
+    if (hasOAuthToken) {
+      return { status: "configured", credentialEnvVars: [] }
+    }
     return { status: "no_auth_needed", credentialEnvVars: [] }
   }
 

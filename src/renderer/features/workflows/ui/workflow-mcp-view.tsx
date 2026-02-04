@@ -426,16 +426,16 @@ export function WorkflowMcpView() {
                       onClick={handleStartOAuth}
                       variant="default"
                       className="w-full"
-                      disabled={mcpOAuthMutation.isPending || mcpOAuthMutation.data?.success}
+                      disabled={mcpOAuthMutation.isPending || mcpOAuthMutation.data?.success || mcpServer.authStatus === "configured"}
                     >
                       {mcpOAuthMutation.isPending ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : mcpOAuthMutation.data?.success ? (
+                      ) : (mcpOAuthMutation.data?.success || mcpServer.authStatus === "configured") ? (
                         <CheckCircle className="h-4 w-4 mr-2" />
                       ) : (
                         <Key className="h-4 w-4 mr-2" />
                       )}
-                      {mcpOAuthMutation.isPending ? "Signing in..." : mcpOAuthMutation.data?.success ? "Authenticated" : "Sign in with OAuth"}
+                      {mcpOAuthMutation.isPending ? "Signing in..." : (mcpOAuthMutation.data?.success || mcpServer.authStatus === "configured") ? "Authenticated" : "Sign in with OAuth"}
                     </Button>
                   </>
                 ) : (

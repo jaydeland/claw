@@ -408,7 +408,306 @@ class McpClient extends EventEmitter {
 }
 
 /**
- * Query tools from an HTTP/SSE MCP server
+ * Query tools from an SSE (Server-Sent Events) MCP server
+ * SSE transport works differently from HTTP:
+ * 1. Client opens SSE connection to the server URL
+ * 2. Server sends an "endpoint" event with the URL where requests should be POSTed
+ * 3. Client POSTs JSON-RPC requests to that endpoint
+ * 4. Server sends responses through the SSE stream
+ */
+async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record<string, string | undefined>): Promise<McpTool[]> {
+  const expandedConfig = expandConfigEnvVars(config, mergedEnv)
+  const sseUrl = expandedConfig.url
+
+  if (!sseUrl) {
+    throw new Error("SSE MCP server config missing URL")
+  }
+
+  console.log(`[mcp-tools] Querying SSE MCP server: ${sseUrl}`)
+
+  // Get auth credentials
+  const accessTokenFromConfig = expandedConfig.env?.["MCP_ACCESS_TOKEN"]
+  const accessTokenFromEnv = mergedEnv["MCP_ACCESS_TOKEN"]
+  const accessToken = accessTokenFromConfig || accessTokenFromEnv
+
+  // Build headers for SSE connection and POST requests
+  const headers: Record<string, string> = {
+    "Accept": "text/event-stream",
+  }
+
+  if (expandedConfig.headers) {
+    Object.assign(headers, expandedConfig.headers)
+  }
+
+  if (!headers["Authorization"] && !headers["authorization"] && accessToken) {
+    console.log("[mcp-tools] Injecting MCP_ACCESS_TOKEN into Authorization header for SSE")
+    headers["Authorization"] = `Bearer ${accessToken}`
+  }
+
+  return new Promise<McpTool[]>((resolve, reject) => {
+    let messageEndpoint: string | null = null
+    let requestId = 0
+    let tools: McpTool[] = []
+    let connectionTimeout: NodeJS.Timeout | null = null
+    let initializeSent = false
+    let initializedSent = false
+    let toolsRequested = false
+    const pendingRequests = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
+
+    // Set connection timeout
+    connectionTimeout = setTimeout(() => {
+      cleanup()
+      reject(new Error("SSE connection timeout - no endpoint received"))
+    }, 30000)
+
+    // Create AbortController for the SSE connection
+    const abortController = new AbortController()
+
+    const cleanup = () => {
+      if (connectionTimeout) {
+        clearTimeout(connectionTimeout)
+        connectionTimeout = null
+      }
+      abortController.abort()
+      for (const pending of pendingRequests.values()) {
+        pending.reject(new Error("Connection closed"))
+      }
+      pendingRequests.clear()
+    }
+
+    // Send a JSON-RPC request to the message endpoint
+    const sendRequest = async (method: string, params?: Record<string, unknown>): Promise<unknown> => {
+      if (!messageEndpoint) {
+        throw new Error("No message endpoint available")
+      }
+
+      const id = ++requestId
+      const request = {
+        jsonrpc: "2.0",
+        id,
+        method,
+        params: params || {},
+      }
+
+      console.log(`[mcp-tools] SSE sending request: ${method} (id=${id}) to ${messageEndpoint}`)
+
+      const postHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+      if (headers["Authorization"]) {
+        postHeaders["Authorization"] = headers["Authorization"]
+      }
+
+      // Create a promise for this request
+      return new Promise((resolveReq, rejectReq) => {
+        pendingRequests.set(id, { resolve: resolveReq, reject: rejectReq })
+
+        // Send the request
+        fetch(messageEndpoint!, {
+          method: "POST",
+          headers: postHeaders,
+          body: JSON.stringify(request),
+        }).catch(err => {
+          pendingRequests.delete(id)
+          rejectReq(err)
+        })
+
+        // Set a timeout for this request
+        setTimeout(() => {
+          if (pendingRequests.has(id)) {
+            pendingRequests.delete(id)
+            rejectReq(new Error(`Request timeout for ${method}`))
+          }
+        }, 30000)
+      })
+    }
+
+    // Send a notification (no response expected)
+    const sendNotification = async (method: string, params?: Record<string, unknown>): Promise<void> => {
+      if (!messageEndpoint) {
+        throw new Error("No message endpoint available")
+      }
+
+      const notification = {
+        jsonrpc: "2.0",
+        method,
+        params: params || {},
+      }
+
+      console.log(`[mcp-tools] SSE sending notification: ${method} to ${messageEndpoint}`)
+
+      const postHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+      if (headers["Authorization"]) {
+        postHeaders["Authorization"] = headers["Authorization"]
+      }
+
+      try {
+        await fetch(messageEndpoint, {
+          method: "POST",
+          headers: postHeaders,
+          body: JSON.stringify(notification),
+        })
+      } catch (error) {
+        console.log(`[mcp-tools] SSE notification ${method} failed:`, error)
+      }
+    }
+
+    // Handle incoming SSE events
+    const handleSseEvent = async (event: string, data: string) => {
+      console.log(`[mcp-tools] SSE event: ${event}`)
+
+      if (event === "endpoint") {
+        // Server sends the message endpoint URL
+        messageEndpoint = data.trim()
+        console.log(`[mcp-tools] SSE received message endpoint: ${messageEndpoint}`)
+
+        // If the endpoint is relative, make it absolute
+        if (messageEndpoint.startsWith("/")) {
+          const urlObj = new URL(sseUrl)
+          messageEndpoint = `${urlObj.origin}${messageEndpoint}`
+          console.log(`[mcp-tools] SSE resolved absolute endpoint: ${messageEndpoint}`)
+        }
+
+        // Now that we have the endpoint, start the MCP handshake
+        if (!initializeSent) {
+          initializeSent = true
+          try {
+            console.log("[mcp-tools] SSE sending initialize request...")
+            await sendRequest("initialize", {
+              protocolVersion: "2024-11-05",
+              capabilities: {
+                roots: { listChanged: false },
+                sampling: {},
+              },
+              clientInfo: {
+                name: "claw",
+                version: "0.1.0",
+              },
+            })
+            // initialize response will be handled in the message event
+          } catch (error) {
+            console.error("[mcp-tools] SSE initialize failed:", error)
+            cleanup()
+            reject(error instanceof Error ? error : new Error(String(error)))
+          }
+        }
+      } else if (event === "message") {
+        // Handle JSON-RPC response
+        try {
+          const message = JSON.parse(data)
+          console.log(`[mcp-tools] SSE received message:`, message.id ? `id=${message.id}` : "notification", message.method || "")
+
+          if (message.id !== undefined) {
+            // This is a response to one of our requests
+            const pending = pendingRequests.get(message.id)
+            if (pending) {
+              pendingRequests.delete(message.id)
+              if (message.error) {
+                pending.reject(new Error(`JSON-RPC error: ${message.error.message}`))
+              } else {
+                pending.resolve(message.result)
+
+                // Check if this is the initialize response
+                if (!initializedSent && message.result?.serverInfo) {
+                  initializedSent = true
+                  console.log(`[mcp-tools] SSE server: ${message.result.serverInfo.name} v${message.result.serverInfo.version}`)
+
+                  // Send initialized notification
+                  await sendNotification("notifications/initialized", {})
+
+                  // Small delay then request tools
+                  setTimeout(async () => {
+                    if (!toolsRequested) {
+                      toolsRequested = true
+                      try {
+                        console.log("[mcp-tools] SSE requesting tools/list...")
+                        const result = await sendRequest("tools/list", {}) as { tools?: McpTool[] }
+                        tools = result?.tools || []
+                        console.log(`[mcp-tools] SSE received ${tools.length} tools`)
+                        cleanup()
+                        resolve(tools)
+                      } catch (error) {
+                        cleanup()
+                        reject(error instanceof Error ? error : new Error(String(error)))
+                      }
+                    }
+                  }, 100)
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.log("[mcp-tools] SSE failed to parse message:", error)
+        }
+      }
+    }
+
+    // Start SSE connection using fetch (EventSource doesn't support custom headers)
+    console.log("[mcp-tools] Opening SSE connection...")
+    fetch(sseUrl, {
+      method: "GET",
+      headers,
+      signal: abortController.signal,
+    }).then(async response => {
+      if (!response.ok) {
+        cleanup()
+        reject(new Error(`SSE HTTP ${response.status}: ${response.statusText}`))
+        return
+      }
+
+      if (!response.body) {
+        cleanup()
+        reject(new Error("SSE response has no body"))
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let currentEvent = "message"
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+
+          // Process complete lines
+          const lines = buffer.split("\n")
+          buffer = lines.pop() || "" // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (line.startsWith("event:")) {
+              currentEvent = line.slice(6).trim()
+            } else if (line.startsWith("data:")) {
+              const data = line.slice(5).trim()
+              await handleSseEvent(currentEvent, data)
+              currentEvent = "message" // Reset to default
+            } else if (line === "") {
+              // Empty line signals end of event (SSE spec)
+              currentEvent = "message"
+            }
+          }
+        }
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          console.error("[mcp-tools] SSE read error:", error)
+        }
+      }
+    }).catch(error => {
+      if (error.name !== "AbortError") {
+        cleanup()
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+  })
+}
+
+/**
+ * Query tools from an HTTP MCP server (non-SSE)
  * Uses fetch to communicate via JSON-RPC over HTTP
  *
  * First attempts to query without authentication (many MCP servers allow
@@ -620,8 +919,14 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.log(`[mcp-tools] Unauthenticated query failed: ${errorMessage}`)
 
-    // If we have auth credentials and got a 401/403, try with auth
-    if (hasConfiguredAuth && (errorMessage.includes("401") || errorMessage.includes("403") || errorMessage.includes("Unauthorized"))) {
+    // If we have auth credentials and got an auth-related error, try with auth
+    // Some servers return 400 Bad Request instead of 401/403 when auth is missing
+    const isAuthError = errorMessage.includes("400") ||
+                        errorMessage.includes("401") ||
+                        errorMessage.includes("403") ||
+                        errorMessage.includes("Unauthorized") ||
+                        errorMessage.includes("Bad Request")
+    if (hasConfiguredAuth && isAuthError) {
       console.log("[mcp-tools] Retrying with authentication...")
       const authHeaders = buildHeaders(true)
       const sendRequestWithAuth = createSendRequest(authHeaders)
@@ -648,8 +953,13 @@ export async function queryMcpServerTools(config: McpServerConfig): Promise<McpT
   // Merge environments: shell env as base, custom env vars take precedence
   const mergedEnv = { ...shellEnv, ...customEnvVars }
 
-  // Check if this is an HTTP/SSE server (has URL, no command)
-  if (config.url || config.type === "http" || config.type === "sse") {
+  // Check if this is an SSE server (type explicitly set to "sse")
+  if (config.type === "sse") {
+    return querySseMcpServerTools(config, mergedEnv)
+  }
+
+  // Check if this is an HTTP server (has URL, no command)
+  if (config.url || config.type === "http") {
     return queryHttpMcpServerTools(config, mergedEnv)
   }
 
