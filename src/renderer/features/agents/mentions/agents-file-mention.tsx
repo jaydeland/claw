@@ -118,7 +118,7 @@ const CATEGORY_OPTIONS: FileMentionOption[] = [
   { id: "files", label: "Files & Folders", type: "category", path: "", repository: "" },
   { id: "skills", label: "Skills", type: "category", path: "", repository: "" },
   { id: "agents", label: "Agents", type: "category", path: "", repository: "" },
-  { id: "tools", label: "MCP Tools", type: "category", path: "", repository: "" },
+  { id: "mcps", label: "MCP Servers", type: "category", path: "", repository: "" },
 ]
 
 // Known file extensions with icons
@@ -334,13 +334,13 @@ function formatToolName(toolName: string): string {
 }
 
 // Create SVG icon element in DOM based on file extension or type
-export function createFileIconElement(filename: string, type?: "file" | "folder" | "skill" | "agent" | "category" | "tool"): SVGSVGElement {
+export function createFileIconElement(filename: string, type?: "file" | "folder" | "skill" | "agent" | "category" | "mcp"): SVGSVGElement {
   const IconComponent = type === "skill"
     ? SkillIcon
     : type === "agent"
       ? CustomAgentIcon
-    : type === "tool"
-      ? ToolIcon
+    : type === "mcp"
+      ? ToolIcon // Use MCP icon for MCP servers
     : type === "folder"
       ? FolderOpenIcon
       : (getFileIconByExtension(filename) ?? FilesIcon)
@@ -443,7 +443,7 @@ function CategoryIcon({ className, categoryId }: { className?: string; categoryI
   if (categoryId === "agents") {
     return <CustomAgentIcon className={className} />
   }
-  if (categoryId === "tools") {
+  if (categoryId === "mcps") {
     // Override size to h-3.5 w-3.5 for better visibility
     const sizeClass = className?.replace(/h-3\b/, "h-3.5").replace(/w-3\b/, "w-3.5") || className
     return <OriginalMCPIcon className={sizeClass} />
@@ -452,9 +452,9 @@ function CategoryIcon({ className, categoryId }: { className?: string; categoryI
 }
 
 /**
- * Get icon component for a file, folder, skill, agent, tool, or category option
+ * Get icon component for a file, folder, skill, agent, MCP server, or category option
  */
-export function getOptionIcon(option: { id?: string; label: string; type?: "file" | "folder" | "skill" | "agent" | "category" | "tool" }) {
+export function getOptionIcon(option: { id?: string; label: string; type?: "file" | "folder" | "skill" | "agent" | "category" | "mcp" }) {
   if (option.type === "category") {
     // Return a wrapper component for categories
     return function CategoryIconWrapper({ className }: { className?: string }) {
@@ -467,8 +467,8 @@ export function getOptionIcon(option: { id?: string; label: string; type?: "file
   if (option.type === "agent") {
     return CustomAgentIconWrapper
   }
-  if (option.type === "tool") {
-    return ToolIcon
+  if (option.type === "mcp") {
+    return ToolIcon // Use MCP icon for MCP servers
   }
   if (option.type === "folder") {
     return FolderIcon
@@ -641,11 +641,20 @@ function renderTooltipContent(option: FileMentionOption) {
     )
   }
 
-  if (option.type === "tool") {
-    // Show full tool name (e.g., mcp__figma-local-mcp__get_figjam)
+  if (option.type === "mcp") {
+    // Show MCP server tools count and description
     return (
-      <div className="text-xs text-muted-foreground font-mono">
-        {option.path}
+      <div className="flex flex-col gap-1.5 w-full overflow-hidden">
+        {option.description && (
+          <p className="text-xs text-muted-foreground break-words">
+            {option.description}
+          </p>
+        )}
+        {option.tools && option.tools.length > 0 && (
+          <div className="text-xs text-muted-foreground">
+            {option.tools.length} tool{option.tools.length === 1 ? "" : "s"} available
+          </div>
+        )}
       </div>
     )
   }
@@ -852,63 +861,62 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       }))
   }, [customAgents, debouncedSearchText])
 
-  // Convert MCP tools to mention options (stable, doesn't depend on search)
-  // MCP tools have format like "mcp__servername__toolname"
-  const allToolOptions: FileMentionOption[] = useMemo(() => {
-    if (!sessionInfo?.tools || !sessionInfo?.mcpServers) return []
+  // Convert MCP servers to mention options (stable, doesn't depend on search)
+  const allMcpOptions: FileMentionOption[] = useMemo(() => {
+    if (!sessionInfo?.mcpServers) return []
 
-    // Get connected MCP server names
-    const connectedServers = new Set(
-      sessionInfo.mcpServers
-        .filter(s => s.status === "connected")
-        .map(s => s.name)
-    )
+    // Get connected MCP servers with their tool counts
+    const connectedServers = sessionInfo.mcpServers
+      .filter(s => s.status === "connected")
 
-    // Filter tools that belong to MCP servers (format: mcp__servername__toolname)
-    const mcpTools = sessionInfo.tools.filter(tool => {
-      if (!tool.startsWith("mcp__")) return false
-      const parts = tool.split("__")
-      if (parts.length < 3) return false
-      const serverName = parts[1]
-      return connectedServers.has(serverName)
-    })
+    // Get tools for each server (format: mcp__servername__toolname)
+    const serverTools = new Map<string, string[]>()
+    if (sessionInfo.tools) {
+      sessionInfo.tools.forEach(tool => {
+        if (!tool.startsWith("mcp__")) return
+        const parts = tool.split("__")
+        if (parts.length < 3) return
+        const serverName = parts[1]
+        if (!serverTools.has(serverName)) {
+          serverTools.set(serverName, [])
+        }
+        serverTools.get(serverName)!.push(tool)
+      })
+    }
 
-    return mcpTools.map(tool => {
-      const parts = tool.split("__")
-      const serverName = parts[1]
-      const toolName = parts.slice(2).join("__")
-      const displayName = formatToolName(toolName)
+    return connectedServers.map(server => {
+      const tools = serverTools.get(server.name) || []
       return {
-        id: `${MENTION_PREFIXES.TOOL}${tool}`,
-        label: displayName, // readable name without underscores
-        path: tool, // full tool name for tooltip/mention
+        id: `${MENTION_PREFIXES.MCP}${server.name}`,
+        label: server.name,
+        path: server.name,
         repository: "",
-        truncatedPath: serverName, // show server name as context
-        type: "tool" as const,
-        mcpServer: serverName,
+        truncatedPath: `${tools.length} tool${tools.length === 1 ? "" : "s"}`,
+        type: "mcp" as const,
+        tools: tools,
+        mcpServer: server.name,
       }
     })
   }, [sessionInfo])
 
-  // Filtered tool options based on search
-  const toolOptions: FileMentionOption[] = useMemo(() => {
-    if (!debouncedSearchText) return allToolOptions
+  // Filtered MCP server options based on search
+  const mcpOptions: FileMentionOption[] = useMemo(() => {
+    if (!debouncedSearchText) return allMcpOptions
 
     const searchLower = debouncedSearchText.toLowerCase()
-    return allToolOptions.filter(tool => {
-      // Search by: display name, raw tool name, full path, server name
-      return matchesMultiWordSearch(tool.label, searchLower) ||
-             matchesMultiWordSearch(tool.path, searchLower) ||
-             matchesMultiWordSearch(tool.mcpServer || "", searchLower)
+    return allMcpOptions.filter(server => {
+      // Search by: server name
+      return matchesMultiWordSearch(server.label, searchLower) ||
+             matchesMultiWordSearch(server.mcpServer || "", searchLower)
     })
-  }, [allToolOptions, debouncedSearchText])
+  }, [allMcpOptions, debouncedSearchText])
 
-  // Check if we have skills, agents, or tools
+  // Check if we have skills, agents, or MCP servers
   // Use base data (not search-filtered) for stable category display
   const hasSkills = skills.length > 0
   const hasAgents = customAgents.length > 0
-  const hasTools = allToolOptions.length > 0
-  const hasOnlyFiles = !hasSkills && !hasAgents && !hasTools
+  const hasMcps = allMcpOptions.length > 0
+  const hasOnlyFiles = !hasSkills && !hasAgents && !hasMcps
 
   // Determine if we're in a subpage view (or showing files directly when no skills/agents/tools)
   const isInSubpage = showingFilesList || showingSkillsList || showingAgentsList || showingToolsList || hasOnlyFiles
@@ -919,10 +927,10 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       if (category.id === "files") return true // Always show files
       if (category.id === "skills") return hasSkills
       if (category.id === "agents") return hasAgents
-      if (category.id === "tools") return hasTools
+      if (category.id === "mcps") return hasMcps
       return true
     })
-  }, [hasSkills, hasAgents, hasTools])
+  }, [hasSkills, hasAgents, hasMcps])
 
   // Combined options for keyboard navigation
   // Subpage views show only that category's items
