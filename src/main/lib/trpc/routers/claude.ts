@@ -28,6 +28,7 @@ import { buildAgentsOption } from "./agent-utils"
 import { getSwarmManager } from "../../swarm/swarm-manager"
 import { getMergedMcpConfig } from "../../config/consolidator"
 import { taskEvents, taskWatcher } from "../../background-tasks"
+import { injectAllStoredCredentials } from "../../mcp/credential-injection"
 import { getBundledGsdPath } from "./gsd"
 
 /**
@@ -445,12 +446,15 @@ export async function warmupMcpCache(): Promise<void> {
     for (const project of projectsWithMcp) {
 
       try {
+        // Inject stored OAuth credentials into server configs
+        const serversWithCredentials = await injectAllStoredCredentials(project.servers)
+
         // Create a minimal query to initialize MCP servers
         const warmupQuery = claudeQuery({
           prompt: "ping",
           options: {
             cwd: project.path,
-            mcpServers: project.servers,
+            mcpServers: serversWithCredentials,
             systemPrompt: {
               type: "preset" as const,
               preset: "claude_code" as const,
@@ -1056,24 +1060,15 @@ export const claudeRouter = router({
                 loadMcpStatusFromDisk()
               }
 
-              const cachedStatuses = mcpServerStatusCache.get(lookupPath)
-              const hasCachedInfo = cachedStatuses && cachedStatuses.size > 0
+              // Pass ALL servers to Claude SDK without filtering
+              // Let Claude handle auth issues and show proper errors to users
+              // The SDK will report accurate statuses in the init message
+              console.log(`[MCP] Passing all ${Object.keys(mcpServersForSdk).length} servers to SDK (filtering disabled)`)
+              mcpServersFiltered = mcpServersForSdk
 
-              if (hasCachedInfo) {
-                // We have cached statuses - filter OUT only failed/needs-auth servers
-                mcpServersFiltered = Object.fromEntries(
-                  Object.entries(mcpServersForSdk).filter(([name]) => {
-                    const status = cachedStatuses.get(name)
-                    // Unknown servers (undefined status) are included to allow discovery
-                    if (status === undefined) return true
-                    return status !== "failed" && status !== "needs-auth"
-                  })
-                )
-              } else {
-                // No cache yet - pass ALL servers and let SDK report statuses
-                // This ensures new/uncached servers are discoverable (cache is updated after first query)
-                console.log(`[MCP] No cache for ${lookupPath}, passing all ${Object.keys(mcpServersForSdk).length} servers to SDK`)
-                mcpServersFiltered = mcpServersForSdk
+              // Load cached statuses from disk if needed (for logging/debugging)
+              if (!mcpServerStatusCache.has(lookupPath)) {
+                loadMcpStatusFromDisk()
               }
             }
 
