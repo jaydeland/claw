@@ -3085,13 +3085,6 @@ const ChatViewInner = memo(function ChatViewInner({
       clearSubChatDraft(parentChatId, subChatId)
     }
 
-    // Track message sent
-    trackMessageSent({
-      workspaceId: subChatId,
-      messageLength: text.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
-    })
-
     // Trigger auto-rename on first message in a new sub-chat
     if (messagesLengthRef.current === 0 && !hasTriggeredRenameRef.current) {
       hasTriggeredRenameRef.current = true
@@ -3277,13 +3270,6 @@ const ChatViewInner = memo(function ChatViewInner({
       parts.push({ type: "text", text: mentionPrefix + (item.message || "") })
     }
 
-    // Track message sent
-    trackMessageSent({
-      workspaceId: subChatId,
-      messageLength: item.message.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
-    })
-
     // Update timestamps
     useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
 
@@ -3314,13 +3300,6 @@ const ChatViewInner = memo(function ChatViewInner({
     const parts: any[] = [
       { type: "text", text: "continue" }
     ]
-
-    // Track message sent
-    trackMessageSent({
-      workspaceId: subChatId,
-      messageLength: 8, // "continue"
-      mode: isPlanModeRef.current ? "plan" : "agent",
-    })
 
     // Update timestamps
     useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
@@ -3367,13 +3346,6 @@ const ChatViewInner = memo(function ChatViewInner({
     if (parentChatId) {
       clearSubChatDraft(parentChatId, subChatId)
     }
-
-    // Track message sent
-    trackMessageSent({
-      workspaceId: subChatId,
-      messageLength: text.length,
-      mode: isPlanModeRef.current ? "plan" : "agent",
-    })
 
     // Build message parts
     const parts: any[] = [

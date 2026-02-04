@@ -81,6 +81,12 @@ export function getAwsCredentials(): AwsCredentials | null {
         return null
       }
 
+      // Validate credentials exist before decrypting
+      if (!settings.awsAccessKeyId || !settings.awsSecretAccessKey) {
+        console.warn("[claude-env] AWS credentials not available")
+        return null
+      }
+
       // Return SSO credentials with explicit precedence
       console.log("[claude-env] Using SSO credentials (connection method: sso)")
       return {

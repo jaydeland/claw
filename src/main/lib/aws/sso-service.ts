@@ -23,7 +23,7 @@ function encrypt(value: string): string {
 
 function decrypt(encrypted: string): string {
   if (!encrypted) {
-    throw new Error("Cannot decrypt empty value")
+    return "" // Handle empty/null gracefully
   }
   try {
     if (!safeStorage.isEncryptionAvailable()) {
@@ -32,7 +32,9 @@ function decrypt(encrypted: string): string {
     return safeStorage.decryptString(Buffer.from(encrypted, "base64"))
   } catch (error) {
     console.error("[aws-sso] Decryption failed:", error)
-    throw new Error(`Failed to decrypt credentials: ${error instanceof Error ? error.message : "Unknown decryption error"}`)
+    // Log the error but return empty string to prevent crashes
+    // The caller should validate that credentials are non-empty
+    return ""
   }
 }
 
