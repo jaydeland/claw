@@ -1,7 +1,6 @@
 import { useAtom } from "jotai"
 import { useEffect, useState } from "react"
 import {
-  analyticsOptOutAtom,
   ctrlTabTargetAtom,
   extendedThinkingEnabledAtom,
   soundNotificationsEnabledAtom,
@@ -38,20 +37,8 @@ export function AgentsPreferencesTab() {
     extendedThinkingEnabledAtom,
   )
   const [soundEnabled, setSoundEnabled] = useAtom(soundNotificationsEnabledAtom)
-  const [analyticsOptOut, setAnalyticsOptOut] = useAtom(analyticsOptOutAtom)
   const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
   const isNarrowScreen = useIsNarrowScreen()
-
-  // Sync opt-out status to main process
-  const handleAnalyticsToggle = async (optedOut: boolean) => {
-    setAnalyticsOptOut(optedOut)
-    // Notify main process
-    try {
-      await window.desktopApi?.setAnalyticsOptOut(optedOut)
-    } catch (error) {
-      console.error("Failed to sync analytics opt-out to main process:", error)
-    }
-  }
 
   return (
     <div className="p-6 space-y-6">
@@ -127,36 +114,6 @@ export function AgentsPreferencesTab() {
               <SelectItem value="agents">Agents</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-      </div>
-
-      {/* Privacy Section */}
-      <div className="space-y-2">
-        <div className="pb-2">
-          <h4 className="text-sm font-medium text-foreground">Privacy</h4>
-          <p className="text-xs text-muted-foreground mt-1">
-            Control what data you share with us
-          </p>
-        </div>
-
-        <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <div className="p-4">
-            {/* Share Usage Analytics */}
-            <div className="flex items-start justify-between">
-              <div className="flex flex-col space-y-1">
-                <span className="text-sm font-medium text-foreground">
-                  Share Usage Analytics
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Help us improve Agents by sharing anonymous usage data. We only track feature usage and app performance–never your code, prompts, or messages. No AI training on your data.
-                </span>
-              </div>
-              <Switch
-                checked={!analyticsOptOut}
-                onCheckedChange={(enabled) => handleAnalyticsToggle(!enabled)}
-              />
-            </div>
-          </div>
         </div>
       </div>
     </div>

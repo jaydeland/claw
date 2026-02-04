@@ -44,9 +44,16 @@ function sendToRenderer(channel: string, data?: unknown) {
 
 /**
  * Initialize the auto-updater with event handlers and IPC
+ * NOTE: Auto-updater is disabled - no external update server configured
  */
 export async function initAutoUpdater(getWindow: () => BrowserWindow | null) {
+  // Auto-updater disabled - no external update server configured
+  log.info("[AutoUpdater] Disabled - skipping initialization")
+
+  // Still register IPC handlers to prevent errors when renderer calls them
+  registerIpcHandlers()
   mainWindow = getWindow
+  return
 
   // Initialize config
   initAutoUpdaterConfig()
@@ -176,56 +183,29 @@ function registerIpcHandlers() {
 
 /**
  * Manually trigger an update check
+ * NOTE: Disabled - no external update server configured
  * @param force - Skip the minimum interval check
  */
-export async function checkForUpdates(force = false) {
-  if (!app.isPackaged) {
-    log.info("[AutoUpdater] Skipping update check in dev mode")
-    return Promise.resolve(null)
-  }
-
-  // Respect minimum interval to prevent spam
-  const now = Date.now()
-  if (!force && now - lastCheckTime < MIN_CHECK_INTERVAL) {
-    log.info(
-      `[AutoUpdater] Skipping check - last check was ${Math.round((now - lastCheckTime) / 1000)}s ago`,
-    )
-    return Promise.resolve(null)
-  }
-
-  lastCheckTime = now
-  return autoUpdater.checkForUpdates()
+export async function checkForUpdates(_force = false) {
+  // Auto-updater disabled
+  return Promise.resolve(null)
 }
 
 /**
  * Start downloading the update
+ * NOTE: Disabled - no external update server configured
  */
 export async function downloadUpdate() {
-  if (!app.isPackaged) {
-    log.info("[AutoUpdater] Skipping download in dev mode")
-    return false
-  }
-
-  try {
-    log.info("[AutoUpdater] Starting update download...")
-    await autoUpdater.downloadUpdate()
-    return true
-  } catch (error) {
-    log.error("[AutoUpdater] Download failed:", error)
-    return false
-  }
+  // Auto-updater disabled
+  return false
 }
 
 /**
  * Check for updates when window gains focus
- * This is more natural than checking on an interval
+ * NOTE: Disabled - no external update server configured
  */
-export function setupFocusUpdateCheck(getWindow: () => BrowserWindow | null) {
-  // Listen for window focus events
-  app.on("browser-window-focus", () => {
-    log.info("[AutoUpdater] Window focused - checking for updates")
-    checkForUpdates()
-  })
+export function setupFocusUpdateCheck(_getWindow: () => BrowserWindow | null) {
+  // Auto-updater disabled - no focus check needed
 }
 
 /**

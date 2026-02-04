@@ -1,19 +1,9 @@
 import { eq } from "drizzle-orm"
 import { safeStorage, shell } from "electron"
 import { z } from "zod"
-import { getAuthManager } from "../../../index"
 import { getExistingClaudeToken } from "../../claude-token"
-import { getApiUrl } from "../../config"
 import { claudeCodeCredentials, claudeCodeSettings, getDatabase } from "../../db"
 import { publicProcedure, router } from "../index"
-
-/**
- * Get desktop auth token for server API calls
- */
-async function getDesktopToken(): Promise<string | null> {
-  const authManager = getAuthManager()
-  return authManager.getValidToken()
-}
 
 /**
  * Encrypt token using Electron's safeStorage
@@ -38,9 +28,6 @@ function decryptToken(encrypted: string): string {
 }
 
 function storeOAuthToken(oauthToken: string) {
-  const authManager = getAuthManager()
-  const user = authManager.getUser()
-
   const encryptedToken = encryptToken(oauthToken)
   const db = getDatabase()
 
@@ -53,7 +40,7 @@ function storeOAuthToken(oauthToken: string) {
       id: "default",
       oauthToken: encryptedToken,
       connectedAt: new Date(),
-      userId: user?.id ?? null,
+      userId: null, // 21st.dev auth removed
     })
     .run()
 }
@@ -96,30 +83,11 @@ export const claudeCodeRouter = router({
   }),
 
   /**
-   * Start OAuth flow - calls server to create sandbox
+   * Start OAuth flow - disabled (21st.dev auth removed)
+   * Use importToken or importSystemToken instead
    */
   startAuth: publicProcedure.mutation(async () => {
-    const token = await getDesktopToken()
-    if (!token) {
-      throw new Error("Not authenticated with 21st.dev")
-    }
-
-    // Server creates sandbox (has CodeSandbox SDK)
-    const response = await fetch(`${getApiUrl()}/api/auth/claude-code/start`, {
-      method: "POST",
-      headers: { "x-desktop-token": token },
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Unknown error" }))
-      throw new Error(error.error || `Start auth failed: ${response.status}`)
-    }
-
-    return (await response.json()) as {
-      sandboxId: string
-      sandboxUrl: string
-      sessionId: string
-    }
+    throw new Error("OAuth flow via 21st.dev is disabled. Use 'Import from Claude Code CLI' option instead.")
   }),
 
   /**

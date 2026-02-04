@@ -287,50 +287,39 @@ sqlite3 "$DB_PATH" ".schema"
 
 ## Debugging First Install Issues
 
-When testing auth flows or behavior for new users, you need to simulate a fresh install:
+When testing behavior for new users, you need to simulate a fresh install:
 
 ```bash
-# 1. Clear all app data (auth, database, settings)
+# 1. Clear all app data (database, settings)
 rm -rf ~/Library/Application\ Support/Claw/
 
-# 2. Reset macOS protocol handler registration (if testing deep links)
-/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -kill -r -domain local -domain system -domain user
+# 2. Clear app preferences
+defaults delete com.claw.app.dev  # Dev mode
+defaults delete com.claw.app      # Production
 
-# 3. Clear app preferences
-defaults delete dev.21st.agents.dev  # Dev mode
-defaults delete dev.21st.agents      # Production
-
-# 4. Run in dev mode with clean state
+# 3. Run in dev mode with clean state
 bun run dev
 ```
 
 **Common First-Install Bugs:**
-- **OAuth deep link not working**: macOS Launch Services may not immediately recognize protocol handlers on first app launch. User may need to click "Sign in" again after the first attempt.
 - **Folder dialog not appearing**: Window focus timing issues on first launch. Fixed by ensuring window focus before showing `dialog.showOpenDialog()`.
 
 **Dev vs Production App:**
-- Dev mode uses `twentyfirst-agents-dev://` protocol
 - Dev mode uses separate userData path (`~/Library/Application Support/Agents Dev/`)
 - This prevents conflicts between dev and production installs
 
 ## Releasing a New Version
 
-### Prerequisites for Notarization
-
-- Keychain profile: `21st-notarize`
-- Create with: `xcrun notarytool store-credentials "21st-notarize" --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID`
-
-### Release Commands
+### Build Commands
 
 ```bash
-# Full release (build, sign, submit notarization, upload to CDN)
-bun run release
-
-# Or step by step:
+# Build for development
 bun run build              # Compile TypeScript
-bun run package:mac        # Build & sign macOS app
-bun run dist:manifest      # Generate latest-mac.yml manifests
-./scripts/upload-release-wrangler.sh  # Submit notarization & upload to R2 CDN
+
+# Package for distribution
+bun run package:mac        # Build macOS (DMG + ZIP)
+bun run package:win        # Build Windows (NSIS + portable)
+bun run package:linux      # Build Linux (AppImage + DEB)
 ```
 
 ### Bump Version Before Release
@@ -339,41 +328,11 @@ bun run dist:manifest      # Generate latest-mac.yml manifests
 npm version patch --no-git-tag-version  # 0.0.27 -> 0.0.28
 ```
 
-### After Release Script Completes
+### Notes
 
-1. Wait for notarization (2-5 min): `xcrun notarytool history --keychain-profile "21st-notarize"`
-2. Staple DMGs: `cd release && xcrun stapler staple *.dmg`
-3. Re-upload stapled DMGs to R2 and GitHub (see RELEASE.md for commands)
-4. Update changelog: `gh release edit v0.0.X --notes "..."`
-5. **Upload manifests (triggers auto-updates!)** - see RELEASE.md
-6. **Update Homebrew cask:** `bun run release:homebrew`
-
-### Homebrew Distribution
-
-Users can install via Homebrew:
-```bash
-brew install your-org/claw/claw
-```
-
-The `release:homebrew` script updates the homebrew tap with the new version and SHA256 hashes. Run this after uploading the stapled DMGs to CDN.
-
-### Files Uploaded to CDN
-
-| File | Purpose |
-|------|---------|
-| `latest-mac.yml` | Manifest for arm64 auto-updates |
-| `latest-mac-x64.yml` | Manifest for Intel auto-updates |
-| `Claw-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
-| `Claw-{version}-mac.zip` | Auto-update payload (Intel) |
-| `Claw-{version}-arm64.dmg` | Manual download (arm64) |
-| `Claw-{version}.dmg` | Manual download (Intel) |
-
-### Auto-Update Flow
-
-1. App checks `https://cdn.21st.dev/releases/desktop/latest-mac.yml` on startup and when window regains focus (with 1 min cooldown)
-2. If version in manifest > current version, shows "Update Available" banner
-3. User clicks Download -> downloads ZIP in background
-4. User clicks "Restart Now" -> installs update and restarts
+- **Auto-updater is disabled** - users must manually download new versions
+- External CDN upload scripts have been removed
+- For distribution, manually upload the built packages to your preferred hosting
 
 ## Current Status (WIP)
 

@@ -20,7 +20,6 @@ import {
   selectedAgentChatsCountAtom,
   isDesktopAtom,
   isFullscreenAtom,
-  showOfflineModeFeaturesAtom,
   showWorkspaceIconAtom,
 } from "../../lib/atoms"
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
@@ -108,7 +107,6 @@ import {
   SkillsTabContent,
   McpsTabContent,
 } from "./components"
-import { NetworkStatus } from "../../components/ui/network-status"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
 import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
@@ -989,7 +987,6 @@ const SidebarHeader = memo(function SidebarHeader({
   closeButtonRef,
 }: SidebarHeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
 
   return (
     <div
@@ -1078,11 +1075,6 @@ const SidebarHeader = memo(function SidebarHeader({
                         Claw
                       </div>
                     </div>
-                    {showOfflineFeatures && (
-                      <div className="flex-shrink-0">
-                        <NetworkStatus />
-                      </div>
-                    )}
                     <ChevronDown
                       className={cn(
                         "h-3 text-muted-foreground flex-shrink-0 overflow-hidden",

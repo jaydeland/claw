@@ -1,39 +1,30 @@
 /**
  * API fetch helper for desktop app
  *
- * In the desktop app, relative fetch paths like "/api/..." don't work
- * because the app is loaded from a local file (file://...).
- * This helper provides the correct base URL for API requests.
+ * NOTE: External API calls have been disabled. This file is kept for
+ * potential future use with a self-hosted API.
  */
-
-let cachedBaseUrl: string | null = null
 
 /**
- * Get the API base URL (cached after first call)
- * Always returns https://21st.dev (both in dev and production)
+ * Get the API base URL
+ * Returns null since external API is disabled
  */
-export async function getApiBaseUrl(): Promise<string> {
-  if (cachedBaseUrl) return cachedBaseUrl
-  cachedBaseUrl = await window.desktopApi.getApiBaseUrl()
-  return cachedBaseUrl
+export async function getApiBaseUrl(): Promise<string | null> {
+  return null
 }
 
 /**
- * Fetch wrapper that uses the correct API base URL
- * Use this instead of fetch() for API requests in the desktop app
+ * Fetch wrapper for API requests
+ * Currently disabled - throws an error indicating the API is unavailable
  *
  * @param path - API path (e.g., "/api/tts")
  * @param init - Fetch init options
- * @param options.withCredentials - Include credentials (default: false for CORS compatibility)
+ * @param options.withCredentials - Include credentials
  */
 export async function apiFetch(
-  path: string,
-  init?: RequestInit,
-  options?: { withCredentials?: boolean }
+  _path: string,
+  _init?: RequestInit,
+  _options?: { withCredentials?: boolean }
 ): Promise<Response> {
-  const baseUrl = await getApiBaseUrl()
-  return fetch(`${baseUrl}${path}`, {
-    ...init,
-    ...(options?.withCredentials && { credentials: "include" }),
-  })
+  throw new Error("External API is disabled. This feature requires a self-hosted API endpoint.")
 }
