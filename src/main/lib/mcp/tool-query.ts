@@ -59,7 +59,15 @@ export function expandEnvVars(str: string, env: Record<string, string | undefine
  * @param baseEnv Optional base environment (defaults to process.env). Use getShellEnvironment() for GUI apps.
  */
 export function expandConfigEnvVars(config: McpServerConfig, baseEnv: Record<string, string | undefined> = process.env): McpServerConfig {
-  const mergedEnv = { ...baseEnv, ...config.env }
+  // First, expand config.env values using baseEnv only (not the merged env)
+  // This handles self-referencing vars like VIDYARD_PATH: "${VIDYARD_PATH}"
+  // which need to resolve from the shell environment first
+  const expandedConfigEnv = config.env ? Object.fromEntries(
+    Object.entries(config.env).map(([key, value]) => [key, expandEnvVars(value, baseEnv)])
+  ) : undefined
+
+  // Now merge: baseEnv as foundation, expanded config env takes precedence
+  const mergedEnv = { ...baseEnv, ...expandedConfigEnv }
 
   return {
     ...config,
@@ -72,9 +80,7 @@ export function expandConfigEnvVars(config: McpServerConfig, baseEnv: Record<str
     headers: config.headers ? Object.fromEntries(
       Object.entries(config.headers).map(([key, value]) => [key, expandEnvVars(value, mergedEnv)])
     ) : undefined,
-    env: config.env ? Object.fromEntries(
-      Object.entries(config.env).map(([key, value]) => [key, expandEnvVars(value, mergedEnv)])
-    ) : undefined,
+    env: expandedConfigEnv,
   }
 }
 
