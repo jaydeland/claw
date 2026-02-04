@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
@@ -7,7 +6,6 @@ import {
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
   sessionInfoAtom,
-  selectedOllamaModelAtom,
   type CustomClaudeConfig,
   normalizeCustomClaudeConfig,
 } from "../../../lib/atoms"
@@ -157,10 +155,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     ) as CustomClaudeConfig
     const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
 
-    // Get selected Ollama model for offline mode
-    const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
-    console.log(`[SD] selectedOllamaModel from atom: ${selectedOllamaModel || "(null)"}`)
-
     const currentMode =
       useAgentSubChatStore
         .getState()
@@ -187,7 +181,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             ...(maxThinkingTokens && { maxThinkingTokens }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
-            ...(selectedOllamaModel && { selectedOllamaModel }),
             historyEnabled,
             ...(images.length > 0 && { images }),
           },
@@ -314,23 +307,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle errors - show toast to user FIRST before anything else
               if (chunk.type === "error") {
-                // Track error in Sentry
                 const category = chunk.debugInfo?.category || "UNKNOWN"
-                Sentry.captureException(
-                  new Error(chunk.errorText || "Claude transport error"),
-                  {
-                    tags: {
-                      errorCategory: category,
-                      mode: currentMode,
-                    },
-                    extra: {
-                      debugInfo: chunk.debugInfo,
-                      cwd: this.config.cwd,
-                      chatId: this.config.chatId,
-                      subChatId: this.config.subChatId,
-                    },
-                  },
-                )
 
                 // Show toast based on error category
                 const config = ERROR_TOAST_CONFIG[category]
@@ -387,19 +364,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             },
             onError: (err: Error) => {
               console.log(`[SD] R:ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`)
-              // Track transport errors in Sentry
-              Sentry.captureException(err, {
-                tags: {
-                  errorCategory: "TRANSPORT_ERROR",
-                  mode: currentMode,
-                },
-                extra: {
-                  cwd: this.config.cwd,
-                  chatId: this.config.chatId,
-                  subChatId: this.config.subChatId,
-                },
-              })
-
               controller.error(err)
             },
             onComplete: () => {

@@ -8,6 +8,7 @@
  * - Status tracking for debugging
  */
 
+// @ts-expect-error - vitest types not installed
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { TaskWatcher } from '../watcher'
 

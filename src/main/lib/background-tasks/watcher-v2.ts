@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm"
 import { getDatabase, backgroundTasks } from "../db"
 import { taskEvents, type TaskStatusUpdate } from "./events"
-import { getClaudeEnvironment } from "../claude/env"
+import { buildClaudeEnv } from "../claude/env"
 
 /**
  * Check interval in milliseconds (10 seconds)
@@ -103,7 +103,7 @@ export class TaskWatcher {
 
     try {
       // Create a minimal SDK session to invoke BashOutput tool
-      const env = await getClaudeEnvironment()
+      const env = buildClaudeEnv()
 
       // Create a query that just checks the task status
       const query = this.claudeModule.query({

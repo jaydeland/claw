@@ -1,9 +1,7 @@
 import { router, publicProcedure } from "../index"
 import { getDatabase, projects, chats, subChats } from "../../db"
 import { app, shell } from "electron"
-import { getAuthManager } from "../../../index"
 import { z } from "zod"
-import { clearNetworkCache } from "../../ollama/network-detector"
 import {
   getBackgroundSessionState,
   initBackgroundSession,
@@ -14,17 +12,6 @@ import {
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
-
-// Global flag for simulating offline mode (for testing)
-let simulateOfflineMode = false
-
-/**
- * Check if offline mode is being simulated (for testing)
- * Used by network-detector.ts
- */
-export function isOfflineSimulated(): boolean {
-  return simulateOfflineMode
-}
 
 export const debugRouter = router({
   /**
@@ -90,26 +77,6 @@ export const debugRouter = router({
     console.log("[Debug] Opened userData folder:", userDataPath)
     return { success: true }
   }),
-
-  /**
-   * Get offline simulation status
-   */
-  getOfflineSimulation: publicProcedure.query(() => {
-    return { enabled: simulateOfflineMode }
-  }),
-
-  /**
-   * Set offline simulation status (for testing)
-   */
-  setOfflineSimulation: publicProcedure
-    .input(z.object({ enabled: z.boolean() }))
-    .mutation(({ input }) => {
-      simulateOfflineMode = input.enabled
-      // Clear network cache to force immediate re-check
-      clearNetworkCache()
-      console.log(`[Debug] Offline simulation ${input.enabled ? "enabled" : "disabled"}`)
-      return { success: true, enabled: simulateOfflineMode }
-    }),
 
   /**
    * Get background session state

@@ -1,20 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron"
 import { exposeElectronTRPC } from "trpc-electron/main"
 
-// Only initialize Sentry in production to avoid IPC errors in dev mode
-if (process.env.NODE_ENV === "production") {
-  import("@sentry/electron/renderer").then((Sentry) => {
-    Sentry.init()
-  })
-}
-
 // Expose tRPC IPC bridge for type-safe communication
 exposeElectronTRPC()
-
-// Expose analytics force flag for testing
-if (process.env.FORCE_ANALYTICS === "true") {
-  contextBridge.exposeInMainWorld("__FORCE_ANALYTICS__", true)
-}
 
 // Expose desktop-specific APIs
 contextBridge.exposeInMainWorld("desktopApi", {
@@ -101,9 +89,6 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // DevTools
   toggleDevTools: () => ipcRenderer.invoke("window:toggle-devtools"),
-
-  // Analytics
-  setAnalyticsOptOut: (optedOut: boolean) => ipcRenderer.invoke("analytics:set-opt-out", optedOut),
 
   // Native features
   setBadge: (count: number | null) => ipcRenderer.invoke("app:set-badge", count),
@@ -199,7 +184,6 @@ export interface DesktopApi {
   zoomReset: () => Promise<void>
   getZoom: () => Promise<number>
   toggleDevTools: () => Promise<void>
-  setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
   setBadge: (count: number | null) => Promise<void>
   setBadgeIcon: (imageData: string | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>

@@ -226,7 +226,7 @@ function getActiveSessionIds(): Set<string> {
       activeIds.add(sc.id)
     }
 
-    // Get all Chat IDs (used for Ollama sessions)
+    // Get all Chat IDs
     const allChats = db.select({ id: chats.id }).from(chats).all()
     for (const c of allChats) {
       activeIds.add(c.id)

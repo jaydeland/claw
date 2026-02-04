@@ -8,6 +8,7 @@
  * 4. Task completion and cleanup
  */
 
+// @ts-expect-error - vitest types not installed
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { getDatabase, backgroundTasks } from '../../db'
 import { eq } from 'drizzle-orm'

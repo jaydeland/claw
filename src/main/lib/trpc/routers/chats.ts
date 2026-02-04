@@ -3,13 +3,6 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { getAuthManager } from "../../../index"
-import {
-  trackPRCreated,
-  trackWorkspaceArchived,
-  trackWorkspaceCreated,
-  trackWorkspaceDeleted,
-} from "../../analytics"
 import { chats, getDatabase, projects, subChats } from "../../db"
 import {
   createWorktreeForChat,
@@ -22,7 +15,6 @@ import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
-import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
 import { queryBackgroundSession, isBackgroundSessionReady } from "../../claude/background-session"
 import { publicProcedure, router } from "../index"
@@ -34,149 +26,6 @@ function getFallbackName(userMessage: string): string {
     return trimmed || "New Chat"
   }
   return trimmed.substring(0, 25) + "..."
-}
-
-/**
- * Generate text using local Ollama model
- * Used for chat title generation in offline mode
- * @param userMessage - The user message to generate a title for
- * @param model - Optional model to use (if not provided, uses recommended model)
- */
-async function generateChatNameWithOllama(
-  userMessage: string,
-  model?: string | null
-): Promise<string | null> {
-  try {
-    const ollamaStatus = await checkOllamaStatus()
-    if (!ollamaStatus.available) {
-      return null
-    }
-
-    // Use provided model, or recommended, or first available
-    const modelToUse = model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
-    if (!modelToUse) {
-      console.error("[Ollama] No model available")
-      return null
-    }
-
-    const prompt = `Generate a very short (2-5 words) title for a coding chat that starts with this message. Only output the title, nothing else. No quotes, no explanations.
-
-User message: "${userMessage.slice(0, 500)}"
-
-Title:`
-
-    const response = await fetch("http://localhost:11434/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: modelToUse,
-        prompt,
-        stream: false,
-        options: {
-          temperature: 0.3,
-          num_predict: 50,
-        },
-      }),
-    })
-
-    if (!response.ok) {
-      console.error("[Ollama] Generate chat name failed:", response.status)
-      return null
-    }
-
-    const data = await response.json()
-    const result = data.response?.trim()
-    if (result) {
-      // Clean up the result - remove quotes, trim, limit length
-      const cleaned = result
-        .replace(/^["']|["']$/g, "")
-        .replace(/^title:\s*/i, "")
-        .trim()
-        .slice(0, 50)
-      if (cleaned.length > 0) {
-        return cleaned
-      }
-    }
-    return null
-  } catch (error) {
-    console.error("[Ollama] Generate chat name error:", error)
-    return null
-  }
-}
-
-/**
- * Generate commit message using local Ollama model
- * Used for commit message generation in offline mode
- * @param diff - The diff text
- * @param fileCount - Number of files changed
- * @param additions - Lines added
- * @param deletions - Lines deleted
- * @param model - Optional model to use (if not provided, uses recommended model)
- */
-async function generateCommitMessageWithOllama(
-  diff: string,
-  fileCount: number,
-  additions: number,
-  deletions: number,
-  model?: string | null
-): Promise<string | null> {
-  try {
-    const ollamaStatus = await checkOllamaStatus()
-    if (!ollamaStatus.available) {
-      return null
-    }
-
-    // Use provided model, or recommended, or first available
-    const modelToUse = model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
-    if (!modelToUse) {
-      console.error("[Ollama] No model available")
-      return null
-    }
-
-    const prompt = `Generate a conventional commit message for these changes. Use format: type: short description
-
-Types: feat (new feature), fix (bug fix), docs, style, refactor, test, chore
-
-Changes: ${fileCount} files, +${additions}/-${deletions} lines
-
-Diff (truncated):
-${diff.slice(0, 3000)}
-
-Commit message:`
-
-    const response = await fetch("http://localhost:11434/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: modelToUse,
-        prompt,
-        stream: false,
-        options: {
-          temperature: 0.3,
-          num_predict: 50,
-        },
-      }),
-    })
-
-    if (!response.ok) {
-      console.error("[Ollama] Generate commit message failed:", response.status)
-      return null
-    }
-
-    const data = await response.json()
-    const result = data.response?.trim()
-    if (result) {
-      // Clean up - get just the first line
-      const firstLine = result.split("\n")[0]?.trim()
-      if (firstLine && firstLine.length > 0 && firstLine.length < 100) {
-        return firstLine
-      }
-    }
-    return null
-  } catch (error) {
-    console.error("[Ollama] Generate commit message error:", error)
-    return null
-  }
 }
 
 export const chatsRouter = router({
@@ -450,13 +299,6 @@ export const chatsRouter = router({
         subChats: [subChat],
       }
 
-      // Track workspace created
-      trackWorkspaceCreated({
-        id: chat.id,
-        projectId: input.projectId,
-        useWorktree: input.useWorktree,
-      })
-
       console.log("[chats.create] returning:", response)
       return response
     }),
@@ -538,9 +380,6 @@ export const chatsRouter = router({
         .where(eq(chats.id, input.id))
         .returning()
         .get()
-
-      // Track workspace archived
-      trackWorkspaceArchived(input.id)
 
       // Kill terminal processes in background (don't await)
       terminalManager.killByWorkspaceId(input.id).then((killResult) => {
@@ -666,9 +505,6 @@ export const chatsRouter = router({
           }
         }
       }
-
-      // Track workspace deleted
-      trackWorkspaceDeleted(input.id)
 
       // Invalidate git cache for this worktree
       if (chat?.worktreePath) {
@@ -1108,16 +944,14 @@ export const chatsRouter = router({
     }),
 
   /**
-   * Generate a commit message using AI based on the diff
+   * Generate a commit message based on the diff
    * @param chatId - The chat ID to get worktree path from
    * @param filePaths - Optional list of file paths to generate message for (if not provided, uses all changed files)
-   * @param ollamaModel - Optional Ollama model for offline generation
    */
   generateCommitMessage: publicProcedure
     .input(z.object({
       chatId: z.string(),
       filePaths: z.array(z.string()).optional(),
-      ollamaModel: z.string().nullish(), // Optional model for offline mode
     }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
@@ -1160,78 +994,7 @@ export const chatsRouter = router({
         throw new Error("No changes to commit")
       }
 
-      // Build filtered diff text for API (only selected files)
-      const filteredDiff = files.map(f => f.diffText).join('\n')
-      const additions = files.reduce((sum, f) => sum + f.additions, 0)
-      const deletions = files.reduce((sum, f) => sum + f.deletions, 0)
-
-      // Check internet first - if offline, use Ollama
-      const hasInternet = await checkInternetConnection()
-
-      if (!hasInternet) {
-        console.log("[generateCommitMessage] Offline - trying Ollama...")
-        const ollamaMessage = await generateCommitMessageWithOllama(
-          filteredDiff,
-          files.length,
-          additions,
-          deletions,
-          input.ollamaModel
-        )
-        if (ollamaMessage) {
-          console.log("[generateCommitMessage] Generated via Ollama:", ollamaMessage)
-          return { message: ollamaMessage }
-        }
-        console.log("[generateCommitMessage] Ollama failed, using heuristic fallback")
-        // Fall through to heuristic fallback below
-      } else {
-        // Online - call web API to generate commit message
-        let apiError: string | null = null
-        try {
-          const authManager = getAuthManager()
-          const token = await authManager.getValidToken()
-          // Use localhost in dev, production otherwise
-          const apiUrl = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://21st.dev"
-
-          if (!token) {
-            apiError = "No auth token available"
-          } else {
-            const response = await fetch(
-              `${apiUrl}/api/agents/generate-commit-message`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Desktop-Token": token,
-                },
-                body: JSON.stringify({
-                  diff: filteredDiff.slice(0, 10000), // Limit diff size, use filtered diff
-                  fileCount: files.length,
-                  additions,
-                  deletions,
-                }),
-              },
-            )
-
-            if (response.ok) {
-              const data = await response.json()
-              if (data.message) {
-                return { message: data.message }
-              }
-              apiError = "API returned ok but no message in response"
-            } else {
-              apiError = `API returned ${response.status}`
-            }
-          }
-        } catch (error) {
-          apiError = `API call failed: ${error instanceof Error ? error.message : String(error)}`
-        }
-
-        if (apiError) {
-          console.log("[generateCommitMessage] API error:", apiError)
-        }
-      }
-
-      // Fallback: Generate commit message with conventional commits style
+      // Generate commit message with conventional commits style
       const fileNames = files.map((f) => {
         const path = f.newPath !== "/dev/null" ? f.newPath : f.oldPath
         return path.split("/").pop() || path
@@ -1288,12 +1051,11 @@ export const chatsRouter = router({
 
   /**
    * Generate a name for a sub-chat using AI
-   * Uses background Claude session, falls back to Ollama if unavailable
+   * Uses background Claude session, falls back to heuristic
    */
   generateSubChatName: publicProcedure
     .input(z.object({
       userMessage: z.string(),
-      ollamaModel: z.string().nullish(), // Optional model for offline mode
     }))
     .mutation(async ({ input }) => {
       try {
@@ -1310,20 +1072,13 @@ export const chatsRouter = router({
             return { name }
           }
 
-          console.log("[generateSubChatName] Background session returned empty, trying fallback...")
+          console.log("[generateSubChatName] Background session returned empty, using fallback...")
         } else {
-          console.log("[generateSubChatName] Background session not ready, trying Ollama...")
+          console.log("[generateSubChatName] Background session not ready, using fallback...")
         }
 
-        // Fallback to Ollama if background session unavailable or failed
-        const ollamaName = await generateChatNameWithOllama(input.userMessage, input.ollamaModel)
-        if (ollamaName) {
-          console.log("[generateSubChatName] Generated name via Ollama:", ollamaName)
-          return { name: ollamaName }
-        }
-
-        // Final fallback to truncated message
-        console.log("[generateSubChatName] All AI methods failed, using fallback")
+        // Fallback to truncated message
+        console.log("[generateSubChatName] Using heuristic fallback")
         return { name: getFallbackName(input.userMessage) }
       } catch (error) {
         console.error("[generateSubChatName] Error:", error)
@@ -1333,13 +1088,12 @@ export const chatsRouter = router({
 
   /**
    * Generate a name for a main chat using AI (triggered on first user message)
-   * Uses Ollama when offline, otherwise calls web API
+   * Uses background Claude session, falls back to heuristic
    */
   generateChatName: publicProcedure
     .input(z.object({
       chatId: z.string(),
       userMessage: z.string(),
-      ollamaModel: z.string().nullish(), // Optional model for offline mode
     }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
@@ -1357,55 +1111,29 @@ export const chatsRouter = router({
       }
 
       try {
-        // Check internet first - if offline, use Ollama
-        const hasInternet = await checkInternetConnection()
-
         let generatedName: string | null = null
 
-        if (!hasInternet) {
-          console.log("[generateChatName] Offline - trying Ollama...")
-          generatedName = await generateChatNameWithOllama(input.userMessage, input.ollamaModel)
-          if (!generatedName) {
-            console.log("[generateChatName] Ollama failed, using fallback")
-            generatedName = getFallbackName(input.userMessage)
+        // Try background Claude session
+        if (isBackgroundSessionReady()) {
+          console.log("[generateChatName] Using background Claude session...")
+          const prompt = `Generate a short, descriptive name (2-5 words, no quotes or punctuation) for a chat that starts with this message: "${input.userMessage.slice(0, 200)}"`
+
+          const result = await queryBackgroundSession(prompt, { maxTokens: 50 })
+
+          if (result.success && result.text.trim()) {
+            generatedName = result.text.trim().replace(/^["']|["']$/g, '') // Remove quotes if present
+            console.log("[generateChatName] Generated name via background session:", generatedName)
+          } else {
+            console.log("[generateChatName] Background session returned empty, using fallback...")
           }
         } else {
-          // Online - use web API
-          const authManager = getAuthManager()
-          const token = await authManager.getValidToken()
-          const apiUrl = "https://21st.dev"
+          console.log("[generateChatName] Background session not ready, using fallback...")
+        }
 
-          console.log(
-            "[generateChatName] Online - calling API with token:",
-            token ? "present" : "missing",
-          )
-
-          const response = await fetch(
-            `${apiUrl}/api/agents/chat/generate-name`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(token && { "X-Desktop-Token": token }),
-              },
-              body: JSON.stringify({ userMessage: input.userMessage }),
-            },
-          )
-
-          console.log("[generateChatName] Response status:", response.status)
-
-          if (!response.ok) {
-            const errorText = await response.text()
-            console.error(
-              "[generateChatName] API error:",
-              response.status,
-              errorText,
-            )
-            generatedName = getFallbackName(input.userMessage)
-          } else {
-            const data = await response.json()
-            generatedName = data.name || getFallbackName(input.userMessage)
-          }
+        // Fallback to heuristic
+        if (!generatedName) {
+          generatedName = getFallbackName(input.userMessage)
+          console.log("[generateChatName] Using heuristic fallback:", generatedName)
         }
 
         // For worktree chats, append the branch to the generated name
@@ -1571,12 +1299,6 @@ export const chatsRouter = router({
         .where(eq(chats.id, input.chatId))
         .returning()
         .get()
-
-      // Track PR created
-      trackPRCreated({
-        workspaceId: input.chatId,
-        prNumber: input.prNumber,
-      })
 
       return result
     }),

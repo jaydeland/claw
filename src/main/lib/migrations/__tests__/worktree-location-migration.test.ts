@@ -1,3 +1,4 @@
+// @ts-expect-error - bun:test is a Bun-specific module not recognized by TypeScript
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { mkdtempSync, rmSync } from "fs"
 import { tmpdir } from "os"

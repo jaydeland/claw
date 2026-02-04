@@ -6,9 +6,8 @@ import { join } from "path"
 // Debug log file - use fixed path for easy access
 const DEBUG_LOG_FILE = "/tmp/claw-transform-debug.log"
 
-export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUsingOllama?: boolean }) {
+export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
   const emitSdkMessageUuid = options?.emitSdkMessageUuid === true
-  const isUsingOllama = options?.isUsingOllama === true
   let textId: string | null = null
   let textStarted = false
   let started = false
@@ -102,22 +101,9 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
     }
 
     // Debug: log ALL message types to understand what SDK sends
-    if (isUsingOllama) {
-      console.log("[Ollama Transform] MSG:", msg.type, msg.subtype || "", msg.event?.type || "")
-      if (msg.type === "system") {
-        console.log("[Ollama Transform] SYSTEM message full:", JSON.stringify(msg, null, 2))
-      }
-      if (msg.type === "stream_event") {
-        console.log("[Ollama Transform] STREAM_EVENT:", msg.event?.type, "content_block:", msg.event?.content_block?.type)
-      }
-      if (msg.type === "assistant") {
-        console.log("[Ollama Transform] ASSISTANT message, content blocks:", msg.message?.content?.length || 0)
-      }
-    } else {
-      console.log("[transform] MSG:", msg.type, msg.subtype || "", msg.event?.type || "")
-      if (msg.type === "system") {
-        console.log("[transform] SYSTEM message:", msg.subtype, msg)
-      }
+    console.log("[transform] MSG:", msg.type, msg.subtype || "", msg.event?.type || "")
+    if (msg.type === "system") {
+      console.log("[transform] SYSTEM message:", msg.subtype, msg)
     }
 
     // Track parent_tool_use_id for nested tools
@@ -153,30 +139,18 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
 
       // Text block start
       if (event.type === "content_block_start" && event.content_block?.type === "text") {
-        if (isUsingOllama) {
-          console.log("[Ollama Transform] ✓ TEXT BLOCK START - Model is generating text!")
-        } else {
-          console.log("[transform] TEXT BLOCK START")
-        }
+        console.log("[transform] TEXT BLOCK START")
         yield* endTextBlock()
         yield* endToolInput()
         textId = genId()
         yield { type: "text-start", id: textId }
         textStarted = true
-        if (isUsingOllama) {
-          console.log("[Ollama Transform] textStarted set to TRUE, textId:", textId)
-        } else {
-          console.log("[transform] textStarted set to TRUE, textId:", textId)
-        }
+        console.log("[transform] textStarted set to TRUE, textId:", textId)
       }
 
       // Text delta
       if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-        if (isUsingOllama) {
-          console.log("[Ollama Transform] ✓ TEXT DELTA received, length:", event.delta.text?.length, "preview:", event.delta.text?.slice(0, 50))
-        } else {
-          console.log("[transform] TEXT DELTA, textStarted:", textStarted, "delta:", event.delta.text?.slice(0, 20))
-        }
+        console.log("[transform] TEXT DELTA, textStarted:", textStarted, "delta:", event.delta.text?.slice(0, 20))
         if (!textStarted) {
           yield* endToolInput()
           textId = genId()
@@ -188,18 +162,10 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
 
       // Content block stop
       if (event.type === "content_block_stop") {
-        if (isUsingOllama) {
-          console.log("[Ollama Transform] CONTENT BLOCK STOP, textStarted:", textStarted)
-        } else {
-          console.log("[transform] CONTENT BLOCK STOP, textStarted:", textStarted)
-        }
+        console.log("[transform] CONTENT BLOCK STOP, textStarted:", textStarted)
         if (textStarted) {
           yield* endTextBlock()
-          if (isUsingOllama) {
-            console.log("[Ollama Transform] Text block ended, textStarted now:", textStarted)
-          } else {
-            console.log("[transform] after endTextBlock, textStarted:", textStarted)
-          }
+          console.log("[transform] after endTextBlock, textStarted:", textStarted)
         }
         if (currentToolCallId) {
           yield* endToolInput()
@@ -223,7 +189,7 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean; isUs
         yield {
           type: "tool-input-start",
           toolCallId: currentToolCallId,
-          toolName: currentToolName,
+          toolName: currentToolName ?? "unknown",
         }
       }
 

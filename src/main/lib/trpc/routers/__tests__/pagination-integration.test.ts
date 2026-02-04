@@ -1,6 +1,7 @@
 /**
  * Integration test for pagination with actual database and file operations
  */
+// @ts-expect-error - vitest types not installed
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "fs"
 import path from "path"

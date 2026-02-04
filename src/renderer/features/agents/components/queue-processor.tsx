@@ -6,7 +6,6 @@ import { useMessageQueueStore } from "../stores/message-queue-store"
 import { useStreamingStatusStore } from "../stores/streaming-status-store"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { agentChatStore } from "../stores/agent-chat-store"
-import { trackMessageSent } from "../../../lib/analytics"
 import { appStore } from "../../../lib/jotai-store"
 import { loadingSubChatsAtom, setLoading, clearLoading } from "../atoms"
 import type { AgentQueueItem } from "../lib/queue-utils"
@@ -92,19 +91,6 @@ export function QueueProcessor() {
         if (item.message) {
           parts.push({ type: "text", text: item.message })
         }
-
-        // Get mode - prefer item.mode (captured at queue time), fall back to sub-chat metadata
-        const subChatMeta = useAgentSubChatStore
-          .getState()
-          .allSubChats.find((sc) => sc.id === subChatId)
-        const mode = item.mode || subChatMeta?.mode || "agent"
-
-        // Track message sent
-        trackMessageSent({
-          workspaceId: subChatId,
-          messageLength: item.message.length,
-          mode,
-        })
 
         // Update timestamps
         useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)

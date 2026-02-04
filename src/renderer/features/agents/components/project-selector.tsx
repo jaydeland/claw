@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom } from "jotai"
 import { FolderOpen } from "lucide-react"
-import { showOfflineModeFeaturesAtom } from "../../../lib/atoms"
 import {
   Popover,
   PopoverContent,
@@ -63,12 +62,8 @@ export function ProjectSelector() {
   const [githubDialogOpen, setGithubDialogOpen] = useState(false)
   const [githubUrl, setGithubUrl] = useState("")
 
-  // Check if offline mode is enabled and if we're actually offline
-  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
-  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
-    enabled: showOfflineFeatures,
-  })
-  const isOffline = showOfflineFeatures && ollamaStatus ? !ollamaStatus.internet.online : false
+  // Always online (Ollama offline mode removed)
+  const isOffline = false
 
   // Fetch projects from DB
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()

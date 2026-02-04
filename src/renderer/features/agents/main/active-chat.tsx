@@ -77,13 +77,11 @@ import { flushSync } from "react-dom"
 import { toast } from "sonner"
 import type { FileStatus } from "../../../../shared/changes-types"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
-import { trackMessageSent } from "../../../lib/analytics"
 import { apiFetch } from "../../../lib/api-fetch"
 import {
   customClaudeConfigAtom,
   isDesktopAtom, isFullscreenAtom,
   normalizeCustomClaudeConfig,
-  selectedOllamaModelAtom,
   soundNotificationsEnabledAtom
 } from "../../../lib/atoms"
 import { useFileChangeListener, useGitWatcher } from "../../../lib/hooks/use-file-change-listener"
@@ -3841,7 +3839,6 @@ export function ChatView({
   const isDesktop = useAtomValue(isDesktopAtom)
   const isFullscreen = useAtomValue(isFullscreenAtom)
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const selectedOllamaModel = useAtomValue(selectedOllamaModelAtom)
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
@@ -5524,7 +5521,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         isFirstSubChat: isFirst,
         hasWorktree: !!(agentChat as any)?.branch,
         generateName: async (msg) => {
-          return generateSubChatNameMutation.mutateAsync({ userMessage: msg, ollamaModel: selectedOllamaModel })
+          return generateSubChatNameMutation.mutateAsync({ userMessage: msg })
         },
         renameSubChat: async (input) => {
           await renameSubChatMutation.mutateAsync(input)
@@ -5600,7 +5597,6 @@ Make sure to preserve all functionality from both branches when resolving confli
       renameSubChatMutation,
       renameChatMutation,
       selectedTeamId,
-      selectedOllamaModel,
       utils.agents.getAgentChats,
       utils.agents.getAgentChat,
     ],

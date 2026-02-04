@@ -6,8 +6,6 @@ import { trpc } from "../../../../lib/trpc";
 import { cn } from "../../../../lib/utils";
 import { IconSpinner } from "../../../../components/ui/icons";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAtomValue } from "jotai";
-import { selectedOllamaModelAtom } from "../../../../lib/atoms";
 
 interface CommitInputProps {
 	worktreePath: string;
@@ -37,7 +35,6 @@ export function CommitInput({
 	const [description, setDescription] = useState("");
 	const [isGenerating, setIsGenerating] = useState(false);
 	const queryClient = useQueryClient();
-	const selectedOllamaModel = useAtomValue(selectedOllamaModelAtom);
 
 	// AI commit message generation
 	const generateCommitMutation = trpc.chats.generateCommitMessage.useMutation();
@@ -98,7 +95,6 @@ export function CommitInput({
 					const result = await generateCommitMutation.mutateAsync({
 						chatId,
 						filePaths: selectedFilePaths,
-						ollamaModel: selectedOllamaModel,
 					});
 					console.log("[CommitInput] AI generated message:", result.message);
 					commitMessage = result.message;

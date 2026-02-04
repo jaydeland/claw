@@ -13,7 +13,6 @@ import {
   BillingMethodPage,
   SelectRepoPage,
 } from "./features/onboarding"
-import { identify, initAnalytics, shutdown } from "./lib/analytics"
 import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
@@ -112,28 +111,6 @@ function AppContent() {
 }
 
 export function App() {
-  // Initialize analytics on mount
-  useEffect(() => {
-    initAnalytics()
-
-    // Sync analytics opt-out status to main process
-    const syncOptOutStatus = async () => {
-      try {
-        const optOut =
-          localStorage.getItem("preferences:analytics-opt-out") === "true"
-        await window.desktopApi?.setAnalyticsOptOut(optOut)
-      } catch (error) {
-        console.warn("[Analytics] Failed to sync opt-out status:", error)
-      }
-    }
-    syncOptOutStatus()
-
-    // Cleanup on unmount
-    return () => {
-      shutdown()
-    }
-  }, [])
-
   return (
     <JotaiProvider store={appStore}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

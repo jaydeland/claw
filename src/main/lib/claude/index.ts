@@ -15,8 +15,6 @@ export {
 } from "./env"
 export type { CredentialRefreshResult } from "./env"
 export { TextDeltaBuffer } from "./text-delta-buffer"
-export { checkOfflineFallback } from "./offline-handler"
-export type { OfflineCheckResult, CustomClaudeConfig } from "./offline-handler"
 export {
   initBackgroundSession,
   closeBackgroundSession,
