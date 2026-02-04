@@ -12,6 +12,7 @@ import { AgentBashTool } from "../ui/agent-bash-tool"
 import { AgentEditTool } from "../ui/agent-edit-tool"
 import { AgentExitPlanModeTool } from "../ui/agent-exit-plan-mode-tool"
 import { AgentExploringGroup } from "../ui/agent-exploring-group"
+import { AgentGenericTool } from "../ui/agent-generic-tool"
 import { AgentReadTool } from "../ui/agent-read-tool"
 import {
   AgentMessageUsage,
@@ -438,12 +439,32 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     if (part.type in AgentToolRegistry) {
       const meta = AgentToolRegistry[part.type]
       const { isPending, isError } = getToolStatus(part, status)
+
+      // If the tool has output, use AgentGenericTool to display it
+      if (part.output !== undefined && part.output !== null) {
+        return (
+          <AgentGenericTool
+            key={idx}
+            part={part}
+            messageId={message.id}
+            partIndex={idx}
+            chatStatus={status}
+            icon={meta.icon}
+            title={meta.title(part)}
+            subtitle={meta.subtitle?.(part)}
+            tooltipContent={meta.tooltipContent?.(part)}
+          />
+        )
+      }
+
+      // Otherwise, just show the tool call without output
       return (
         <AgentToolCall
           key={idx}
           icon={meta.icon}
           title={meta.title(part)}
           subtitle={meta.subtitle?.(part)}
+          tooltipContent={meta.tooltipContent?.(part)}
           isPending={isPending}
           isError={isError}
         />
@@ -451,10 +472,34 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     }
 
     if (part.type?.startsWith("tool-")) {
+      // Unknown tool - use generic tool renderer
+      const toolName = part.type.replace("tool-", "")
       return (
-        <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
-          {part.type.replace("tool-", "")}
-        </div>
+        <AgentGenericTool
+          key={idx}
+          part={part}
+          messageId={message.id}
+          partIndex={idx}
+          chatStatus={status}
+          title={toolName}
+        />
+      )
+    }
+
+    // Handle MCP tools (format: mcp__servername__toolname)
+    if (part.type?.startsWith("mcp__")) {
+      // Extract readable tool name from MCP tool path
+      // e.g., "mcp__awslabs_aws-diagram-mcp-server__generate_diagram" -> "generate_diagram"
+      const toolName = part.type.split("__").pop()?.replace(/_/g, " ") || part.type
+      return (
+        <AgentGenericTool
+          key={idx}
+          part={part}
+          messageId={message.id}
+          partIndex={idx}
+          chatStatus={status}
+          title={toolName}
+        />
       )
     }
 
