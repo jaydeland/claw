@@ -664,9 +664,17 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
       headers,
       signal: abortController.signal,
     }).then(async response => {
+      console.log("[mcp-tools] SSE response status:", response.status, response.statusText)
+      console.log("[mcp-tools] SSE response headers:", JSON.stringify(Object.fromEntries(response.headers.entries())))
+
       if (!response.ok) {
+        // Try to get error body
+        let errorBody = ""
+        try {
+          errorBody = await response.text()
+        } catch { /* ignore */ }
         cleanup()
-        reject(new Error(`SSE HTTP ${response.status}: ${response.statusText}`))
+        reject(new Error(`SSE HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody.slice(0, 200)}` : ''}`))
         return
       }
 
@@ -676,12 +684,15 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
         return
       }
 
+      const contentType = response.headers.get("content-type") || ""
+      console.log("[mcp-tools] SSE content-type:", contentType)
+
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ""
       let currentEvent = "message"
 
-      console.log("[mcp-tools] SSE connection established, reading stream...")
+      console.log("[mcp-tools] SSE connection established, starting to read stream...")
       try {
         while (true) {
           const { done, value } = await reader.read()
