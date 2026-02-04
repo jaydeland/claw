@@ -176,10 +176,39 @@ export function WorkflowMcpView() {
     { enabled: !!selectedNode?.id && (mcpServer?.config.type === "http" || mcpServer?.config.type === "sse") }
   )
 
+  const utils = trpc.useUtils()
+
+  // Direct MCP OAuth mutation for discovered OAuth servers
+  const mcpOAuthMutation = trpc.mcp.startMcpOAuth.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        // Invalidate queries to refresh auth status
+        utils.mcp.listServers.invalidate()
+        utils.mcp.getServer.invalidate()
+        utils.mcp.getServerTools.invalidate()
+      }
+      // Note: result.error is handled in the UI via mutation state
+    },
+  })
+
+  // Get the error message from either mutation error or result error
+  const oauthError = mcpOAuthMutation.error?.message ||
+    (mcpOAuthMutation.data && !mcpOAuthMutation.data.success ? mcpOAuthMutation.data.error : null)
+
   const handleConfigureAuth = () => {
     if (selectedNode?.id) {
       setAuthModalServerId(selectedNode.id)
       setAuthModalOpen(true)
+    }
+  }
+
+  // Start OAuth directly for discovered servers (skip modal)
+  const handleStartOAuth = () => {
+    if (selectedNode?.id && oauthDiscovery?.supported) {
+      mcpOAuthMutation.mutate({
+        serverId: selectedNode.id,
+        projectPath: selectedProject?.path || undefined,
+      })
     }
   }
 
@@ -379,13 +408,34 @@ export function WorkflowMcpView() {
                         </p>
                       </div>
                     </div>
+                    {oauthError && (
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-md p-3">
+                        <p className="text-sm text-red-600 dark:text-red-400">
+                          {oauthError}
+                        </p>
+                      </div>
+                    )}
+                    {mcpOAuthMutation.data?.success && (
+                      <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3">
+                        <p className="text-sm text-green-600 dark:text-green-400">
+                          Successfully authenticated! Refreshing...
+                        </p>
+                      </div>
+                    )}
                     <Button
-                      onClick={handleConfigureAuth}
+                      onClick={handleStartOAuth}
                       variant="default"
                       className="w-full"
+                      disabled={mcpOAuthMutation.isPending || mcpOAuthMutation.data?.success}
                     >
-                      <Key className="h-4 w-4 mr-2" />
-                      Sign in with OAuth
+                      {mcpOAuthMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : mcpOAuthMutation.data?.success ? (
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                      ) : (
+                        <Key className="h-4 w-4 mr-2" />
+                      )}
+                      {mcpOAuthMutation.isPending ? "Signing in..." : mcpOAuthMutation.data?.success ? "Authenticated" : "Sign in with OAuth"}
                     </Button>
                   </>
                 ) : (
