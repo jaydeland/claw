@@ -223,11 +223,16 @@ export function AgentsLayout() {
             }}
           >
             {/* Left side - traffic lights (hidden in fullscreen, native ones show instead) */}
-            <div className="flex-shrink-0">
+            <div className="flex items-center gap-3 flex-shrink-0">
               <TrafficLights
                 isFullscreen={isFullscreen}
                 isDesktop={isDesktop}
               />
+
+              {/* App branding: {C}law */}
+              <span className="text-sm font-medium text-foreground tracking-tight">
+                {"{C}law"}
+              </span>
             </div>
 
             {/* Spacer to push settings to the right */}
