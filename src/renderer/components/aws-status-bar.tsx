@@ -178,14 +178,14 @@ export function AwsStatusBar() {
         {awsStatus.accountName || awsStatus.accountId ? (
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground/70">Account:</span>
-            <span className="font-mono font-semibold text-cyan-600 dark:text-cyan-400">
+            <span className="font-mono font-semibold text-foreground">
               {awsStatus.accountName || awsStatus.accountId}
             </span>
           </div>
         ) : (
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground/70">Status:</span>
-            <span className="font-semibold text-red-600 dark:text-red-500">Not authenticated</span>
+            <span className="font-semibold text-destructive">Not authenticated</span>
           </div>
         )}
 
@@ -193,7 +193,7 @@ export function AwsStatusBar() {
         {awsStatus.roleName && (
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground/70">Role:</span>
-            <span className="font-mono font-semibold text-purple-600 dark:text-purple-400">{awsStatus.roleName}</span>
+            <span className="font-mono font-medium text-muted-foreground">{awsStatus.roleName}</span>
           </div>
         )}
 
@@ -202,9 +202,9 @@ export function AwsStatusBar() {
           <div
             className={cn(
               "flex items-center gap-1",
-              !credentialsExpiry.isExpiringSoon && !credentialsExpiry.isExpired && "text-green-600 dark:text-green-400",
-              credentialsExpiry.isExpiringSoon && "text-yellow-600 dark:text-yellow-500",
-              credentialsExpiry.isExpired && "text-red-600 dark:text-red-500"
+              !credentialsExpiry.isExpiringSoon && !credentialsExpiry.isExpired && "text-emerald-600 dark:text-emerald-500",
+              credentialsExpiry.isExpiringSoon && "text-amber-600 dark:text-amber-500",
+              credentialsExpiry.isExpired && "text-destructive"
             )}
           >
             {credentialsExpiry.isExpiringSoon ? (
@@ -241,7 +241,10 @@ export function AwsStatusBar() {
       {/* VPN Status Indicator */}
       {vpnStatus?.enabled && (
         <div
-          className="flex items-center gap-1.5 px-2 py-0.5 rounded mr-2"
+          className={cn(
+            "flex items-center gap-1.5 px-2 py-0.5 rounded mr-2",
+            vpnStatus.connected ? "text-muted-foreground" : "text-destructive"
+          )}
           title={
             vpnStatus.connected
               ? "VPN Connected"
@@ -252,7 +255,7 @@ export function AwsStatusBar() {
           <span
             className={cn(
               "w-1.5 h-1.5 rounded-full",
-              vpnStatus.connected ? "bg-emerald-500" : "bg-red-500"
+              vpnStatus.connected ? "bg-emerald-500" : "bg-destructive"
             )}
           />
           <Shield className="h-3 w-3" />
@@ -264,14 +267,17 @@ export function AwsStatusBar() {
       {clustersEnabled && displayClusterId && (
         <button
           onClick={() => setSelectedClustersCategory("clusters")}
-          className="flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-muted transition-colors mr-2"
+          className={cn(
+            "flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-muted transition-colors mr-2",
+            !clusterStatus?.connected && "text-destructive"
+          )}
           title={`Cluster: ${displayClusterId}\nNamespace: ${effectiveNamespace}\nClick to open clusters panel`}
         >
           {/* Connection status dot */}
           <span
             className={cn(
               "w-1.5 h-1.5 rounded-full",
-              clusterStatus?.connected ? "bg-emerald-500" : "bg-red-500"
+              clusterStatus?.connected ? "bg-emerald-500" : "bg-destructive"
             )}
           />
           <Server className="h-3 w-3" />

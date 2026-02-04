@@ -103,19 +103,17 @@ const SubAgentStatusIcon = memo(function SubAgentStatusIcon({
     case "completed":
       return (
         <div
-          className="w-3 h-3 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0"
-          style={{ border: "0.5px solid hsl(142 76% 36%)" }}
+          className="w-3 h-3 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 border border-emerald-500/50"
         >
-          <CheckIcon className="w-1.5 h-1.5 text-green-600 dark:text-green-500" />
+          <CheckIcon className="w-1.5 h-1.5 text-emerald-600 dark:text-emerald-500" />
         </div>
       )
     case "failed":
       return (
         <div
-          className="w-3 h-3 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0"
-          style={{ border: "0.5px solid hsl(0 84% 60%)" }}
+          className="w-3 h-3 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 border border-destructive/50"
         >
-          <X className="w-1.5 h-1.5 text-red-600 dark:text-red-500" />
+          <X className="w-1.5 h-1.5 text-destructive" />
         </div>
       )
     case "running":
@@ -144,25 +142,23 @@ const TaskStatusIcon = memo(function TaskStatusIcon({
     case "completed":
       return (
         <div
-          className="w-3 h-3 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0"
-          style={{ border: "0.5px solid hsl(142 76% 36%)" }}
+          className="w-3 h-3 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 border border-emerald-500/50"
         >
-          <CheckIcon className="w-1.5 h-1.5 text-green-600 dark:text-green-500" />
+          <CheckIcon className="w-1.5 h-1.5 text-emerald-600 dark:text-emerald-500" />
         </div>
       )
     case "failed":
       return (
         <div
-          className="w-3 h-3 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0"
-          style={{ border: "0.5px solid hsl(0 84% 60%)" }}
+          className="w-3 h-3 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 border border-destructive/50"
         >
-          <X className="w-1.5 h-1.5 text-red-600 dark:text-red-500" />
+          <X className="w-1.5 h-1.5 text-destructive" />
         </div>
       )
     case "running":
       return (
-        <div className="w-3 h-3 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-          <Loader2 className="w-1.5 h-1.5 text-blue-500 animate-spin" />
+        <div className="w-3 h-3 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/50">
+          <Loader2 className="w-1.5 h-1.5 text-primary animate-spin" />
         </div>
       )
     default:
@@ -180,13 +176,15 @@ const SectionButton = memo(function SectionButton({
   label,
   count,
   countDisplay,
+  countNode,
   isActive,
   onClick,
   disabled,
 }: {
   label: string
   count: number
-  countDisplay?: string // Optional custom display (e.g., "3 +45 -12")
+  countDisplay?: string // Optional custom display string (e.g., "3/5")
+  countNode?: React.ReactNode // Optional custom display node with styling (e.g., colored additions/deletions)
   isActive: boolean
   onClick: () => void
   disabled?: boolean
@@ -205,7 +203,9 @@ const SectionButton = memo(function SectionButton({
       )}
     >
       <span>{label}</span>
-      <span className="text-[10px] opacity-70">({countDisplay || count})</span>
+      <span className="text-[10px] opacity-70">
+        ({countNode || countDisplay || count})
+      </span>
     </button>
   )
 })
@@ -571,6 +571,13 @@ export const SessionStatusBar = memo(function SessionStatusBar({
             label="Changes"
             count={uncommittedFiles.length}
             countDisplay={`${changesTotals.fileCount} +${changesTotals.additions} -${changesTotals.deletions}`}
+            countNode={
+              <>
+                {changesTotals.fileCount}{" "}
+                <span className="text-emerald-600 dark:text-emerald-500">+{changesTotals.additions}</span>{" "}
+                <span className="text-destructive">-{changesTotals.deletions}</span>
+              </>
+            }
             isActive={expandedSection === 'changes'}
             onClick={() => handleSectionClick('changes')}
           />
@@ -584,6 +591,13 @@ export const SessionStatusBar = memo(function SessionStatusBar({
             label="Agents"
             count={agentsTotal}
             countDisplay={`${agentsRunning}/${agentsComplete}`}
+            countNode={
+              <>
+                <span className={agentsRunning > 0 ? "text-primary" : ""}>{agentsRunning}</span>
+                <span className="text-muted-foreground/50">/</span>
+                <span className={agentsComplete > 0 ? "text-emerald-600 dark:text-emerald-500" : ""}>{agentsComplete}</span>
+              </>
+            }
             isActive={expandedSection === 'agents'}
             onClick={() => handleSectionClick('agents')}
           />
@@ -591,6 +605,13 @@ export const SessionStatusBar = memo(function SessionStatusBar({
             label="ToDo"
             count={todosTotal}
             countDisplay={`${todosComplete}/${todosTotal}`}
+            countNode={
+              <>
+                <span className={todosComplete > 0 ? "text-emerald-600 dark:text-emerald-500" : ""}>{todosComplete}</span>
+                <span className="text-muted-foreground/50">/</span>
+                <span>{todosTotal}</span>
+              </>
+            }
             isActive={expandedSection === 'todos'}
             onClick={() => handleSectionClick('todos')}
           />
@@ -676,10 +697,10 @@ export const SessionStatusBar = memo(function SessionStatusBar({
                     <span className="truncate flex-1 text-foreground">
                       {file.displayPath}
                     </span>
-                    <span className="flex-shrink-0 text-green-600 dark:text-green-400">
+                    <span className="flex-shrink-0 text-emerald-600 dark:text-emerald-500">
                       +{file.additions}
                     </span>
-                    <span className="flex-shrink-0 text-red-600 dark:text-red-400">
+                    <span className="flex-shrink-0 text-destructive">
                       -{file.deletions}
                     </span>
                   </div>
@@ -707,9 +728,9 @@ export const SessionStatusBar = memo(function SessionStatusBar({
                   </span>
                   <span className={cn(
                     "text-[10px] capitalize px-1.5 py-0.5 rounded",
-                    task.status === "running" && "bg-blue-500/10 text-blue-500",
-                    task.status === "completed" && "bg-green-500/10 text-green-500",
-                    task.status === "failed" && "bg-red-500/10 text-red-500"
+                    task.status === "running" && "bg-primary/10 text-primary",
+                    task.status === "completed" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
+                    task.status === "failed" && "bg-destructive/10 text-destructive"
                   )}>
                     {task.status}
                   </span>
@@ -717,7 +738,7 @@ export const SessionStatusBar = memo(function SessionStatusBar({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-5 w-5 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                      className="h-5 w-5 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={(e) => {
                         e.stopPropagation()
                         killMutation.mutate({ taskId: task.id })
@@ -751,9 +772,9 @@ export const SessionStatusBar = memo(function SessionStatusBar({
                   </span>
                   <span className={cn(
                     "text-[10px] capitalize px-1.5 py-0.5 rounded",
-                    agent.status === "running" && "bg-blue-500/10 text-blue-500",
-                    agent.status === "completed" && "bg-green-500/10 text-green-500",
-                    agent.status === "failed" && "bg-red-500/10 text-red-500"
+                    agent.status === "running" && "bg-primary/10 text-primary",
+                    agent.status === "completed" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
+                    agent.status === "failed" && "bg-destructive/10 text-destructive"
                   )}>
                     {agent.status}
                   </span>
@@ -816,7 +837,7 @@ export const SessionStatusBar = memo(function SessionStatusBar({
           <span className="font-medium">DevSpace:</span>
           {devspaceProcesses.map((proc, idx) => (
             <span key={proc.pid} className="flex items-center gap-1">
-              <Circle className="w-2 h-2 fill-green-500 text-green-500" />
+              <Circle className="w-2 h-2 fill-emerald-500 text-emerald-500" />
               <span>{proc.serviceName || proc.workingDir.split('/').pop()}</span>
               {idx < devspaceProcesses.length - 1 && <span className="text-muted-foreground/50">,</span>}
             </span>
