@@ -217,7 +217,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-0.5 px-1 py-2 border-l border-border/50 bg-background transition-all duration-200 ease-out overflow-hidden",
+        "flex flex-col items-center gap-0.5 px-1 py-2 border-l border-border/50 bg-muted/50 transition-all duration-200 ease-out overflow-hidden",
         isExpanded ? "w-[200px] items-stretch" : "items-center",
         className,
       )}

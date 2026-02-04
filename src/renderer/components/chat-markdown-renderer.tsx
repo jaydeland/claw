@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm"
 import { Copy, Check } from "lucide-react"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
 import { highlightCode } from "../lib/themes/shiki-theme-loader"
-import { MermaidBlock } from "./mermaid-block"
+import { findContentRenderer } from "../lib/content-renderer-registry"
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
 export function stripEmojis(text: string): string {
@@ -249,28 +249,29 @@ const sizeStyles: Record<
 
 // Custom code component that uses our theme system
 function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: typeof sizeStyles.md) {
-  return function CodeComponent({ className, children, ...props }: any) {
+  return function CodeComponent({ className, children }: any) {
     const match = /language-(\w+)/.exec(className || "")
     const language = match ? match[1] : undefined
     const codeContent = String(children)
+    const trimmedContent = codeContent.replace(/\n$/, "")
 
     // Check if this is a code block (has language) or inline code
     // Streamdown wraps code blocks in <pre><code>, inline code is just <code>
     const isCodeBlock = language || (codeContent.includes("\n") && codeContent.length > 100)
 
     if (isCodeBlock) {
-      // Handle mermaid diagrams specially
-      if (language === "mermaid") {
-        return <MermaidBlock code={codeContent.replace(/\n$/, "")} />
+      // Check content renderer registry for special content types
+      // This handles mermaid, base64 images, SVG, etc.
+      const renderer = findContentRenderer(language, trimmedContent)
+      if (renderer) {
+        const Component = renderer.component
+        return <Component code={trimmedContent} className={className} />
       }
 
+      // Default: syntax-highlighted code block
       return (
-        <CodeBlock
-          language={language}
-          themeId={codeTheme}
-          size={size}
-        >
-          {codeContent.replace(/\n$/, "")}
+        <CodeBlock language={language} themeId={codeTheme} size={size}>
+          {trimmedContent}
         </CodeBlock>
       )
     }
