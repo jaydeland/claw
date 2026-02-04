@@ -1,3 +1,4 @@
+// @ts-expect-error - vitest types not installed
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "fs"
 import path from "path"

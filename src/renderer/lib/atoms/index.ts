@@ -193,39 +193,6 @@ export type ModelProfile = {
   id: string
   name: string
   config: CustomClaudeConfig
-  isOffline?: boolean // Mark as offline/Ollama profile
-}
-
-// Selected Ollama model for offline mode
-export const selectedOllamaModelAtom = atomWithStorage<string | null>(
-  "agents:selected-ollama-model",
-  null, // null = use recommended model
-  undefined,
-  { getOnInit: true },
-)
-
-// Helper to get offline profile with selected model
-export const getOfflineProfile = (modelName?: string | null): ModelProfile => ({
-  id: 'offline-ollama',
-  name: 'Offline (Ollama)',
-  isOffline: true,
-  config: {
-    model: modelName || 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
-  },
-})
-
-// Predefined offline profile for Ollama (legacy, uses default model)
-export const OFFLINE_PROFILE: ModelProfile = {
-  id: 'offline-ollama',
-  name: 'Offline (Ollama)',
-  isOffline: true,
-  config: {
-    model: 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
-  },
 }
 
 // Legacy single config (deprecated, kept for backwards compatibility)
@@ -243,7 +210,7 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
 // New: Model profiles storage
 export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
   "agents:model-profiles",
-  [OFFLINE_PROFILE], // Start with offline profile
+  [], // Start empty
   undefined,
   { getOnInit: true },
 )
@@ -255,33 +222,6 @@ export const activeProfileIdAtom = atomWithStorage<string | null>(
   undefined,
   { getOnInit: true },
 )
-
-// Auto-fallback to offline mode when internet is unavailable
-export const autoOfflineModeAtom = atomWithStorage<boolean>(
-  "agents:auto-offline-mode",
-  true, // Enabled by default
-  undefined,
-  { getOnInit: true },
-)
-
-// Simulate offline mode for testing (debug feature)
-export const simulateOfflineAtom = atomWithStorage<boolean>(
-  "agents:simulate-offline",
-  false, // Disabled by default
-  undefined,
-  { getOnInit: true },
-)
-
-// Show offline mode UI (debug feature - enables offline functionality visibility)
-export const showOfflineModeFeaturesAtom = atomWithStorage<boolean>(
-  "agents:show-offline-mode-features",
-  false, // Hidden by default
-  undefined,
-  { getOnInit: true },
-)
-
-// Network status (updated from main process)
-export const networkOnlineAtom = atom<boolean>(true)
 
 export function normalizeCustomClaudeConfig(
   config: CustomClaudeConfig,
@@ -295,21 +235,11 @@ export function normalizeCustomClaudeConfig(
   return { model, token, baseUrl }
 }
 
-// Get active config (considering network status and auto-fallback)
+// Get active config
 export const activeConfigAtom = atom((get) => {
   const activeProfileId = get(activeProfileIdAtom)
   const profiles = get(modelProfilesAtom)
   const legacyConfig = get(customClaudeConfigAtom)
-  const networkOnline = get(networkOnlineAtom)
-  const autoOffline = get(autoOfflineModeAtom)
-
-  // If auto-offline enabled and no internet, use offline profile
-  if (!networkOnline && autoOffline) {
-    const offlineProfile = profiles.find(p => p.isOffline)
-    if (offlineProfile) {
-      return offlineProfile.config
-    }
-  }
 
   // If specific profile is selected, use it
   if (activeProfileId) {
@@ -382,15 +312,6 @@ export const desktopNotificationsEnabledAtom = atomWithStorage<boolean>(
 export const useNativeFrameAtom = atomWithStorage<boolean>(
   "preferences:windows-use-native-frame",
   false, // Default: frameless (dark title bar)
-  undefined,
-  { getOnInit: true },
-)
-
-// Preferences - Analytics Opt-out
-// When true, user has opted out of analytics tracking
-export const analyticsOptOutAtom = atomWithStorage<boolean>(
-  "preferences:analytics-opt-out",
-  false, // Default to opt-in (false means not opted out)
   undefined,
   { getOnInit: true },
 )
@@ -619,7 +540,6 @@ export const billingMethodAtom = atomWithStorage<BillingMethod>(
 )
 
 // Whether user has completed Anthropic OAuth during onboarding
-// This is used to show the onboarding screen after 21st.dev sign-in
 // Reset on logout
 export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:anthropic-completed",

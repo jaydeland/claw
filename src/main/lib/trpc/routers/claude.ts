@@ -12,7 +12,6 @@ import {
   getBundledClaudeBinaryPath,
   logClaudeEnv,
   logRawClaudeMessage,
-  checkOfflineFallback,
   ensureValidAwsCredentials,
   type UIMessageChunk,
 } from "../../claude"
@@ -24,7 +23,6 @@ import {
   subChats,
 } from "../../db"
 import { createRollbackStash } from "../../git/stash"
-import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from "../../ollama"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 import { getSwarmManager } from "../../swarm/swarm-manager"
@@ -742,23 +740,8 @@ export const claudeRouter = router({
                 .run()
             }
 
-            // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
-            const claudeCodeToken = getClaudeCodeToken()
-            const offlineResult = await checkOfflineFallback(input.customConfig, claudeCodeToken)
-
-            if (offlineResult.error) {
-              emitError(new Error(offlineResult.error), 'Offline mode unavailable')
-              safeEmit({ type: 'finish' } as UIMessageChunk)
-              safeComplete()
-              return
-            }
-
-            // Use offline config if available
-            const finalCustomConfig = offlineResult.config || input.customConfig
-            const isUsingOllama = offlineResult.isUsingOllama
-
-            // Offline status is shown in sidebar, no need to emit message here
-            // (emitting text-delta without text-start breaks UI text rendering)
+            // Use custom config if provided (for API key users)
+            const finalCustomConfig = input.customConfig
 
             // 3. Get Claude SDK
             let claudeQuery
@@ -774,7 +757,6 @@ export const claudeRouter = router({
 
             const transform = createTransformer({
               emitSdkMessageUuid: historyEnabled,
-              isUsingOllama,
             })
 
             // 4. Setup accumulation state
@@ -912,11 +894,10 @@ export const claudeRouter = router({
             // Create isolated config directory per subChat to prevent session contamination
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
             // cross-chat contamination when multiple chats use the same project folder
-            // For Ollama: use chatId instead of subChatId so all messages in the same chat share history
             const isolatedConfigDir = path.join(
               app.getPath("userData"),
               "claude-sessions",
-              isUsingOllama ? input.chatId : input.subChatId
+              input.subChatId
             )
 
             // MCP servers to pass to SDK (merged from all config sources)
@@ -930,8 +911,7 @@ export const claudeRouter = router({
               await fs.mkdir(isolatedConfigDir, { recursive: true })
 
               // Only create symlinks if not already created for this config dir
-              const cacheKey = isUsingOllama ? input.chatId : input.subChatId
-              if (!symlinksCreated.has(cacheKey)) {
+              if (!symlinksCreated.has(input.subChatId)) {
                 const homeClaudeDir = path.join(os.homedir(), ".claude")
                 const bundledGsdPath = getBundledGsdPath()
 
@@ -1010,7 +990,7 @@ export const claudeRouter = router({
                   console.error(`[claude] Failed to symlink rules directory:`, symlinkErr)
                 }
 
-                symlinksCreated.add(cacheKey)
+                symlinksCreated.add(input.subChatId)
               }
 
               // Get merged MCP config from all sources (project, custom, user, custom)
@@ -1027,6 +1007,7 @@ export const claudeRouter = router({
             }
 
             // Build final env - only add OAuth token if we have one
+            const claudeCodeToken = getClaudeCodeToken()
             const finalEnv = {
               ...claudeEnv,
               ...(claudeCodeToken && {
@@ -1050,49 +1031,17 @@ export const claudeRouter = router({
                 ...finalCustomConfig,
                 token: `${finalCustomConfig.token.slice(0, 6)}...`,
               }
-              if (isUsingOllama) {
-                console.log(`[Ollama] Using offline mode - Model: ${finalCustomConfig.model}, Base URL: ${finalCustomConfig.baseUrl}`)
-              } else {
-                console.log(`[claude] Custom config: ${JSON.stringify(redactedConfig)}`)
-              }
+              console.log(`[claude] Custom config: ${JSON.stringify(redactedConfig)}`)
             }
 
             const resolvedModel = finalCustomConfig?.model || input.model
-
-            // DEBUG: If using Ollama, test if it's actually responding
-            if (isUsingOllama && finalCustomConfig) {
-              console.log('[Ollama Debug] Testing Ollama connectivity...')
-              try {
-                const testResponse = await fetch(`${finalCustomConfig.baseUrl}/api/tags`, {
-                  signal: AbortSignal.timeout(2000)
-                })
-                if (testResponse.ok) {
-                  const data = await testResponse.json()
-                  const models = data.models?.map((m: any) => m.name) || []
-                  console.log('[Ollama Debug] Ollama is responding. Available models:', models)
-
-                  if (!models.includes(finalCustomConfig.model)) {
-                    console.error(`[Ollama Debug] WARNING: Model "${finalCustomConfig.model}" not found in Ollama!`)
-                    console.error(`[Ollama Debug] Available models:`, models)
-                    console.error(`[Ollama Debug] This will likely cause the stream to hang or fail silently.`)
-                  } else {
-                    console.log(`[Ollama Debug] ✓ Model "${finalCustomConfig.model}" is available`)
-                  }
-                } else {
-                  console.error('[Ollama Debug] Ollama returned error:', testResponse.status)
-                }
-              } catch (err) {
-                console.error('[Ollama Debug] Failed to connect to Ollama:', err)
-              }
-            }
 
             // Filter MCP servers: skip ONLY non-working servers (failed, needs-auth)
             // Pass working/unknown servers in options so Claude can see them
             // OPTIMIZATION: Cache is populated at app startup via warmupMcpCache()
             let mcpServersFiltered: Record<string, any> | undefined
 
-            // Skip MCP servers entirely in offline mode (Ollama) - they slow down initialization by 60+ seconds
-            if (mcpServersForSdk && !isUsingOllama) {
+            if (mcpServersForSdk) {
               const lookupPath = input.projectPath || input.cwd
 
               // Load cached statuses from disk if needed
@@ -1118,150 +1067,22 @@ export const claudeRouter = router({
                 // Skip MCP servers to avoid delays - they'll be available after warmup completes
                 mcpServersFiltered = undefined
               }
-            } else if (isUsingOllama) {
-              console.log('[Ollama] Skipping MCP servers to speed up initialization')
-              mcpServersFiltered = undefined
             }
 
-            // Log SDK configuration for debugging
-            if (isUsingOllama) {
-              console.log('[Ollama Debug] SDK Configuration:', {
-                model: resolvedModel,
-                baseUrl: finalEnv.ANTHROPIC_BASE_URL,
-                cwd: input.cwd,
-                configDir: isolatedConfigDir,
-                hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
-                tokenPreview: finalEnv.ANTHROPIC_AUTH_TOKEN?.slice(0, 10) + '...',
-              })
-              console.log('[Ollama Debug] Session settings:', {
-                resumeSessionId: resumeSessionId || 'none (first message)',
-                mode: resumeSessionId ? 'resume' : 'continue',
-                note: resumeSessionId
-                  ? 'Resuming existing session to maintain chat history'
-                  : 'Starting new session with continue mode'
-              })
-            }
-
-            // For Ollama: embed context AND history directly in prompt
-            // Ollama doesn't have server-side sessions, so we must include full history
-            let finalQueryPrompt: string | AsyncIterable<any> = prompt
-            if (isUsingOllama && typeof prompt === 'string') {
-              // Format conversation history from existingMessages (excluding current message)
-              // IMPORTANT: Include tool calls info so model knows what files were read/edited
-              let historyText = ''
-              if (existingMessages.length > 0) {
-                const historyParts: string[] = []
-                for (const msg of existingMessages) {
-                  if (msg.role === 'user') {
-                    // Extract text from user message parts
-                    const textParts = msg.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text) || []
-                    if (textParts.length > 0) {
-                      historyParts.push(`User: ${textParts.join('\n')}`)
-                    }
-                  } else if (msg.role === 'assistant') {
-                    // Extract text AND tool calls from assistant message parts
-                    const parts = msg.parts || []
-                    const textParts: string[] = []
-                    const toolSummaries: string[] = []
-
-                    for (const p of parts) {
-                      if (p.type === 'text' && p.text) {
-                        textParts.push(p.text)
-                      } else if (p.type === 'tool_use' || p.type === 'tool-use') {
-                        // Include brief tool call info - this is critical for context!
-                        const toolName = p.name || p.tool || 'unknown'
-                        const toolInput = p.input || {}
-                        // Extract key info based on tool type
-                        let toolInfo = `[Used ${toolName}`
-                        if (toolName === 'Read' && (toolInput.file_path || toolInput.file)) {
-                          toolInfo += `: ${toolInput.file_path || toolInput.file}`
-                        } else if (toolName === 'Edit' && toolInput.file_path) {
-                          toolInfo += `: ${toolInput.file_path}`
-                        } else if (toolName === 'Write' && toolInput.file_path) {
-                          toolInfo += `: ${toolInput.file_path}`
-                        } else if (toolName === 'Glob' && toolInput.pattern) {
-                          toolInfo += `: ${toolInput.pattern}`
-                        } else if (toolName === 'Grep' && toolInput.pattern) {
-                          toolInfo += `: "${toolInput.pattern}"`
-                        } else if (toolName === 'Bash' && toolInput.command) {
-                          const cmd = String(toolInput.command).slice(0, 50)
-                          toolInfo += `: ${cmd}${toolInput.command.length > 50 ? '...' : ''}`
-                        }
-                        toolInfo += ']'
-                        toolSummaries.push(toolInfo)
-                      }
-                    }
-
-                    // Combine text and tool summaries
-                    let assistantContent = ''
-                    if (textParts.length > 0) {
-                      assistantContent = textParts.join('\n')
-                    }
-                    if (toolSummaries.length > 0) {
-                      if (assistantContent) {
-                        assistantContent += '\n' + toolSummaries.join(' ')
-                      } else {
-                        assistantContent = toolSummaries.join(' ')
-                      }
-                    }
-                    if (assistantContent) {
-                      historyParts.push(`Assistant: ${assistantContent}`)
-                    }
-                  }
-                }
-                if (historyParts.length > 0) {
-                  // Limit history to last ~10000 chars to avoid context overflow
-                  let history = historyParts.join('\n\n')
-                  if (history.length > 10000) {
-                    history = '...(earlier messages truncated)...\n\n' + history.slice(-10000)
-                  }
-                  historyText = `[CONVERSATION HISTORY]
-${history}
-[/CONVERSATION HISTORY]
-
-`
-                  console.log(`[Ollama] Added ${historyParts.length} messages to history (${history.length} chars)`)
-                }
-              }
-
-              const ollamaContext = `[CONTEXT]
-You are a coding assistant in OFFLINE mode (Ollama model: ${resolvedModel || 'unknown'}).
-Project: ${input.projectPath || input.cwd}
-Working directory: ${input.cwd}
-
-IMPORTANT: When using tools, use these EXACT parameter names:
-- Read: use "file_path" (not "file")
-- Write: use "file_path" and "content"
-- Edit: use "file_path", "old_string", "new_string"
-- Glob: use "pattern" (e.g. "**/*.ts") and optionally "path"
-- Grep: use "pattern" and optionally "path"
-- Bash: use "command"
-
-When asked about the project, use Glob to find files and Read to examine them.
-Be concise and helpful.
-[/CONTEXT]
-
-${historyText}[CURRENT REQUEST]
-${prompt}
-[/CURRENT REQUEST]`
-              finalQueryPrompt = ollamaContext
-              console.log('[Ollama] Context prefix added to prompt')
-            }
-
-            // System prompt config - use preset for both Claude and Ollama
+            // System prompt config
             const systemPromptConfig = {
               type: "preset" as const,
               preset: "claude_code" as const,
             }
 
             const queryOptions = {
-              prompt: finalQueryPrompt,
+              prompt,
               options: {
                 abortController, // Must be inside options!
                 cwd: input.cwd,
                 systemPrompt: systemPromptConfig,
-                // Register mentioned agents with SDK via options.agents (skip for Ollama - not supported)
-                ...(!isUsingOllama && Object.keys(agentsOption).length > 0 && { agents: agentsOption }),
+                // Register mentioned agents with SDK via options.agents
+                ...(Object.keys(agentsOption).length > 0 && { agents: agentsOption }),
                 // Pass filtered MCP servers (only working/unknown ones, skip failed/needs-auth)
                 ...(mcpServersFiltered && Object.keys(mcpServersFiltered).length > 0 && { mcpServers: mcpServersFiltered }),
                 env: finalEnv,
@@ -1273,68 +1094,13 @@ ${prompt}
                   allowDangerouslySkipPermissions: true,
                 }),
                 includePartialMessages: true,
-                // Load skills from project, user, and local plugin directories (skip for Ollama - not supported)
-                ...(!isUsingOllama && { settingSources: ["project" as const, "user" as const, "local" as const] }),
+                // Load skills from project, user, and local plugin directories
+                settingSources: ["project" as const, "user" as const, "local" as const],
                 canUseTool: async (
                   toolName: string,
                   toolInput: Record<string, unknown>,
                   options: { toolUseID: string },
                 ) => {
-                  // Fix common parameter mistakes from Ollama models
-                  // Local models often use slightly wrong parameter names
-                  if (isUsingOllama) {
-                    // Read: "file" -> "file_path"
-                    if (toolName === "Read" && toolInput.file && !toolInput.file_path) {
-                      toolInput.file_path = toolInput.file
-                      delete toolInput.file
-                      console.log('[Ollama] Fixed Read tool: file -> file_path')
-                    }
-                    // Write: "file" -> "file_path", "content" is usually correct
-                    if (toolName === "Write" && toolInput.file && !toolInput.file_path) {
-                      toolInput.file_path = toolInput.file
-                      delete toolInput.file
-                      console.log('[Ollama] Fixed Write tool: file -> file_path')
-                    }
-                    // Edit: "file" -> "file_path"
-                    if (toolName === "Edit" && toolInput.file && !toolInput.file_path) {
-                      toolInput.file_path = toolInput.file
-                      delete toolInput.file
-                      console.log('[Ollama] Fixed Edit tool: file -> file_path')
-                    }
-                    // Glob: "path" might be passed as "directory" or "dir"
-                    if (toolName === "Glob") {
-                      if (toolInput.directory && !toolInput.path) {
-                        toolInput.path = toolInput.directory
-                        delete toolInput.directory
-                        console.log('[Ollama] Fixed Glob tool: directory -> path')
-                      }
-                      if (toolInput.dir && !toolInput.path) {
-                        toolInput.path = toolInput.dir
-                        delete toolInput.dir
-                        console.log('[Ollama] Fixed Glob tool: dir -> path')
-                      }
-                    }
-                    // Grep: "query" -> "pattern", "directory" -> "path"
-                    if (toolName === "Grep") {
-                      if (toolInput.query && !toolInput.pattern) {
-                        toolInput.pattern = toolInput.query
-                        delete toolInput.query
-                        console.log('[Ollama] Fixed Grep tool: query -> pattern')
-                      }
-                      if (toolInput.directory && !toolInput.path) {
-                        toolInput.path = toolInput.directory
-                        delete toolInput.directory
-                        console.log('[Ollama] Fixed Grep tool: directory -> path')
-                      }
-                    }
-                    // Bash: "cmd" -> "command"
-                    if (toolName === "Bash" && toolInput.cmd && !toolInput.command) {
-                      toolInput.command = toolInput.cmd
-                      delete toolInput.cmd
-                      console.log('[Ollama] Fixed Bash tool: cmd -> command')
-                    }
-                  }
-
                   if (input.mode === "plan") {
                     if (toolName === "Edit" || toolName === "Write") {
                       const filePath =
@@ -1395,7 +1161,7 @@ ${prompt}
                         type: "ask-user-question-result",
                         toolUseId: toolUseID,
                         result: errorMessage,
-                      } as UIMessageChunk)
+                      } as unknown as UIMessageChunk)
                       return {
                         behavior: "deny",
                         message: errorMessage,
@@ -1414,7 +1180,7 @@ ${prompt}
                       type: "ask-user-question-result",
                       toolUseId: toolUseID,
                       result: answerResult,
-                    } as UIMessageChunk)
+                    } as unknown as UIMessageChunk)
                     return {
                       behavior: "allow",
                       updatedInput: response.updatedInput,
@@ -1427,20 +1193,15 @@ ${prompt}
                 },
                 stderr: (data: string) => {
                   stderrLines.push(data)
-                  if (isUsingOllama) {
-                    console.error("[Ollama stderr]", data)
-                  } else {
-                    console.error("[claude stderr]", data)
-                  }
+                  console.error("[claude stderr]", data)
                 },
                 // Use bundled binary
                 pathToClaudeCodeExecutable: claudeBinaryPath,
-                // Session handling: For Ollama, use resume with session ID to maintain history
-                // For Claude API, use resume with rollback support
+                // Session handling with rollback support
                 ...(resumeSessionId && {
                   resume: resumeSessionId,
                   // Rollback support - resume at specific message UUID (from DB)
-                  ...(resumeAtUuid && !isUsingOllama
+                  ...(resumeAtUuid
                     ? { resumeSessionAt: resumeAtUuid }
                     : { continue: true }),
                 }),
@@ -1457,7 +1218,7 @@ ${prompt}
             // 5. Run Claude SDK
             let stream
             try {
-              stream = claudeQuery(queryOptions)
+              stream = claudeQuery(queryOptions as any)
             } catch (queryError) {
               console.error(
                 "[CLAUDE] ✗ Failed to create SDK query:",
@@ -1478,20 +1239,9 @@ ${prompt}
             let resultReceived = false // Flag to stop after result message
             const streamIterationStart = Date.now()
 
-            if (isUsingOllama) {
-              console.log(`[Ollama] ===== STARTING STREAM ITERATION =====`)
-              console.log(`[Ollama] Model: ${finalCustomConfig?.model}`)
-              console.log(`[Ollama] Base URL: ${finalCustomConfig?.baseUrl}`)
-              console.log(`[Ollama] Prompt: "${typeof input.prompt === 'string' ? input.prompt.slice(0, 100) : 'N/A'}..."`)
-              console.log(`[Ollama] CWD: ${input.cwd}`)
-            }
-
             try {
               for await (const msg of stream) {
                 if (abortController.signal.aborted || resultReceived) {
-                  if (abortController.signal.aborted) {
-                    if (isUsingOllama) console.log(`[Ollama] Stream aborted by user`)
-                  }
                   if (resultReceived) {
                     console.log(`[SD] M:RESULT_EXIT sub=${subId} messageCount=${messageCount}`)
                   }
@@ -1500,33 +1250,10 @@ ${prompt}
 
                 messageCount++
 
-                // Extra logging for Ollama to diagnose issues
-                if (isUsingOllama) {
-                  const msgAnyPreview = msg as any
-                  console.log(`[Ollama] ===== MESSAGE #${messageCount} =====`)
-                  console.log(`[Ollama] Type: ${msgAnyPreview.type}`)
-                  console.log(`[Ollama] Subtype: ${msgAnyPreview.subtype || 'none'}`)
-                  if (msgAnyPreview.event) {
-                    console.log(`[Ollama] Event: ${msgAnyPreview.event.type}`, {
-                      delta_type: msgAnyPreview.event.delta?.type,
-                      content_block_type: msgAnyPreview.event.content_block?.type
-                    })
-                  }
-                  if (msgAnyPreview.message?.content) {
-                    console.log(`[Ollama] Message content blocks:`, msgAnyPreview.message.content.length)
-                    msgAnyPreview.message.content.forEach((block: any, idx: number) => {
-                      console.log(`[Ollama]   Block ${idx}: type=${block.type}, text_length=${block.text?.length || 0}`)
-                    })
-                  }
-                }
-
                 // Warn if SDK initialization is slow (MCP delay)
                 if (!firstMessageReceived) {
                   firstMessageReceived = true
                   const timeToFirstMessage = Date.now() - streamIterationStart
-                  if (isUsingOllama) {
-                    console.log(`[Ollama] Time to first message: ${timeToFirstMessage}ms`)
-                  }
                   if (timeToFirstMessage > 5000) {
                     console.warn(`[claude] SDK initialization took ${(timeToFirstMessage / 1000).toFixed(1)}s (MCP servers loading?)`)
                   }
@@ -1679,11 +1406,12 @@ ${prompt}
 
                   // Accumulate based on chunk type
                   // Log ALL chunk types for debugging
-                  if (chunk.toolName === "Bash" || chunk.type.includes("background")) {
+                  const chunkAny = chunk as any
+                  if (chunkAny.toolName === "Bash" || chunk.type.includes("background")) {
                     const path = require('path')
                     const { app } = require('electron')
                     const logPath = path.join(app.getPath('userData'), 'claw-debug.log')
-                    require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] Chunk type: ${chunk.type}, toolName: ${chunk.toolName || 'none'}, toolCallId: ${chunk.toolCallId || 'none'}`)
+                    require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] Chunk type: ${chunk.type}, toolName: ${chunkAny.toolName || 'none'}, toolCallId: ${chunkAny.toolCallId || 'none'}`)
                   }
 
                   switch (chunk.type) {
@@ -1719,7 +1447,7 @@ ${prompt}
                       const path = require('path')
                       const { app } = require('electron')
                       const logPath = path.join(app.getPath('userData'), 'claw-debug.log')
-                      require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] Tool output available - toolCallId: ${chunk.toolCallId}, toolName: ${chunk.toolName}`)
+                      require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] Tool output available - toolCallId: ${chunk.toolCallId}, toolName: ${(chunk as any).toolName}`)
 
                       const toolPart = parts.find(
                         (p) =>
@@ -2024,46 +1752,14 @@ ${prompt}
                 }
               }
 
-              // Warn if stream yielded no messages (offline mode issue)
-              const streamDuration = Date.now() - streamIterationStart
-              if (isUsingOllama) {
-                console.log(`[Ollama] ===== STREAM COMPLETED =====`)
-                console.log(`[Ollama] Total messages: ${messageCount}`)
-                console.log(`[Ollama] Duration: ${streamDuration}ms`)
-                console.log(`[Ollama] Chunks emitted: ${chunkCount}`)
-              }
-
+              // Warn if stream yielded no messages
               if (messageCount === 0) {
                 console.error(`[claude] Stream yielded no messages - model not responding`)
-                if (isUsingOllama) {
-                  console.error(`[Ollama] ===== DIAGNOSIS =====`)
-                  console.error(`[Ollama] Problem: Stream completed but NO messages received from SDK`)
-                  console.error(`[Ollama] This usually means:`)
-                  console.error(`[Ollama]   1. Ollama doesn't support Anthropic Messages API format (/v1/messages)`)
-                  console.error(`[Ollama]   2. Model failed to start generating (check Ollama logs: ollama logs)`)
-                  console.error(`[Ollama]   3. Network issue between Claude SDK and Ollama`)
-                  console.error(`[Ollama] ===== NEXT STEPS =====`)
-                  console.error(`[Ollama]   1. Check if model works: curl http://localhost:11434/api/generate -d '{"model":"${finalCustomConfig?.model}","prompt":"test"}'`)
-                  console.error(`[Ollama]   2. Check Ollama version supports Messages API`)
-                  console.error(`[Ollama]   3. Try using a proxy that converts Anthropic API → Ollama format`)
-                }
-              } else if (messageCount === 1 && isUsingOllama) {
-                console.warn(`[Ollama] Only received 1 message (likely just init). No actual content generated.`)
               }
             } catch (streamError) {
               // This catches errors during streaming (like process exit)
               const err = streamError as Error
               const stderrOutput = stderrLines.join("\n")
-
-              if (isUsingOllama) {
-                console.error(`[Ollama] ===== STREAM ERROR =====`)
-                console.error(`[Ollama] Error message: ${err.message}`)
-                console.error(`[Ollama] Error stack:`, err.stack)
-                console.error(`[Ollama] Messages received before error: ${messageCount}`)
-                if (stderrOutput) {
-                  console.error(`[Ollama] Claude binary stderr:`, stderrOutput)
-                }
-              }
 
               // Build detailed error message with category
               let errorContext = "Claude streaming error"
@@ -2101,28 +1797,6 @@ ${prompt}
               ) {
                 errorContext = "Network error - check your connection"
                 errorCategory = "NETWORK_ERROR"
-              }
-
-              // Track error in Sentry (only if app is ready and Sentry is available)
-              if (app.isReady() && app.isPackaged) {
-                try {
-                  const Sentry = await import("@sentry/electron/main")
-                  Sentry.captureException(err, {
-                    tags: {
-                      errorCategory,
-                      mode: input.mode,
-                    },
-                    extra: {
-                      context: errorContext,
-                      cwd: input.cwd,
-                      stderr: stderrOutput || "(no stderr captured)",
-                      chatId: input.chatId,
-                      subChatId: input.subChatId,
-                    },
-                  })
-                } catch {
-                  // Sentry not available or failed to import - ignore
-                }
               }
 
               // Send error with stderr output to frontend (only if not aborted by user)

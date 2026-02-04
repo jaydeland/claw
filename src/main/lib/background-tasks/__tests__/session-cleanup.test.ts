@@ -5,6 +5,7 @@
  * Note: These are integration tests that interact with the filesystem.
  */
 
+// @ts-expect-error - bun:test is a Bun-specific module not recognized by TypeScript
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test"
 import * as fs from "fs"
 import * as path from "path"

@@ -5,7 +5,6 @@ import {
   ipcMain,
   app,
   clipboard,
-  session,
   nativeImage,
   dialog,
 } from "electron"
@@ -14,7 +13,6 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
 import { promises as fsPromises } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
-import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 
 
@@ -117,8 +115,8 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
     },
   )
 
-  // API base URL for fetch requests
-  ipcMain.handle("app:get-api-base-url", () => getBaseUrl())
+  // API base URL for fetch requests (stub - 21st.dev auth removed)
+  ipcMain.handle("app:get-api-base-url", () => null)
 
   // Window controls
   ipcMain.handle("window:minimize", () => getWindow()?.minimize())
@@ -193,12 +191,6 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
     }
   })
 
-  // Analytics
-  ipcMain.handle("analytics:set-opt-out", async (_event, optedOut: boolean) => {
-    const { setOptOut } = await import("../lib/analytics")
-    setOptOut(optedOut)
-  })
-
   // Shell
   ipcMain.handle("shell:open-external", (_event, url: string) =>
     shell.openExternal(url),
@@ -227,67 +219,13 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
     }
   })
 
-  // Auth IPC handlers
-  const validateSender = (event: Electron.IpcMainInvokeEvent): boolean => {
-    const senderUrl = event.sender.getURL()
-    try {
-      const parsed = new URL(senderUrl)
-      if (parsed.protocol === "file:") return true
-      const hostname = parsed.hostname.toLowerCase()
-      const trusted = ["21st.dev", "localhost", "127.0.0.1"]
-      return trusted.some((h) => hostname === h || hostname.endsWith(`.${h}`))
-    } catch {
-      return false
-    }
-  }
-
-  ipcMain.handle("auth:get-user", (event) => {
-    if (!validateSender(event)) return null
-    return getAuthManager().getUser()
-  })
-
-  ipcMain.handle("auth:is-authenticated", (event) => {
-    if (!validateSender(event)) return false
-    return getAuthManager().isAuthenticated()
-  })
-
-  ipcMain.handle("auth:logout", async (event) => {
-    if (!validateSender(event)) return
-    getAuthManager().logout()
-    // Clear cookie from persist:main partition
-    const ses = session.fromPartition("persist:main")
-    try {
-      await ses.cookies.remove(getBaseUrl(), "x-desktop-token")
-      console.log("[Auth] Cookie cleared on logout")
-    } catch (err) {
-      console.error("[Auth] Failed to clear cookie:", err)
-    }
-    // Renderer will handle navigation after logout
-  })
-
-  ipcMain.handle("auth:start-flow", (event) => {
-    if (!validateSender(event)) return
-    getAuthManager().startAuthFlow(getWindow())
-  })
-
-  ipcMain.handle("auth:submit-code", async (event, code: string) => {
-    if (!validateSender(event)) return
-    if (!code || typeof code !== "string") {
-      getWindow()?.webContents.send("auth:error", "Invalid authorization code")
-      return
-    }
-    await handleAuthCode(code)
-  })
-
-  ipcMain.handle("auth:update-user", async (event, updates: { name?: string }) => {
-    if (!validateSender(event)) return null
-    try {
-      return await getAuthManager().updateUser(updates)
-    } catch (error) {
-      console.error("[Auth] Failed to update user:", error)
-      throw error
-    }
-  })
+  // Auth IPC handlers (stubbed - 21st.dev auth removed, app works without login)
+  ipcMain.handle("auth:get-user", () => null)
+  ipcMain.handle("auth:is-authenticated", () => true) // Always authenticated for local use
+  ipcMain.handle("auth:logout", () => {})
+  ipcMain.handle("auth:start-flow", () => {})
+  ipcMain.handle("auth:submit-code", () => {})
+  ipcMain.handle("auth:update-user", () => null)
 
   // Register git watcher IPC handlers
   registerGitWatcherIPC(getWindow)

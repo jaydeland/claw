@@ -165,26 +165,35 @@ class McpClient extends EventEmitter {
       }, 15000)
 
       try {
+        if (!config.command) {
+          reject(new Error("MCP server command is required"))
+          clearTimeout(timeoutHandle)
+          return
+        }
+
         // Spawn the server process with shell environment (includes vars like PATH, VIDYARD_PATH)
-        this.process = spawn(config.command, config.args || [], {
+        this.process = spawn(config.command, config.args ?? [], {
           env: { ...this.shellEnv, ...config.env } as NodeJS.ProcessEnv,
           stdio: ["pipe", "pipe", "pipe"],
         })
 
-        if (!this.process.stdout || !this.process.stdin || !this.process.stderr) {
+        const proc = this.process!
+        if (!proc.stdout || !proc.stdin || !proc.stderr) {
           reject(new Error("Failed to create stdio pipes"))
           clearTimeout(timeoutHandle)
           return
         }
 
+        const { stdout, stderr } = proc
+
         // Handle stdout (JSON-RPC responses)
-        this.process.stdout.on("data", (chunk: Buffer) => {
+        stdout.on("data", (chunk: Buffer) => {
           this.buffer += chunk.toString()
           this.processBuffer()
         })
 
         // Handle stderr (logs)
-        this.process.stderr.on("data", (chunk: Buffer) => {
+        stderr.on("data", (chunk: Buffer) => {
           const msg = chunk.toString().trim()
           if (msg) {
             console.log(`[mcp-client] stderr: ${msg}`)
@@ -192,14 +201,14 @@ class McpClient extends EventEmitter {
         })
 
         // Handle process errors
-        this.process.on("error", (error) => {
+        proc.on("error", (error) => {
           console.error("[mcp-client] Process error:", error)
           reject(error)
           clearTimeout(timeoutHandle)
         })
 
         // Handle process exit
-        this.process.on("exit", (code) => {
+        proc.on("exit", (code) => {
           console.log(`[mcp-client] Process exited with code ${code}`)
         })
 
