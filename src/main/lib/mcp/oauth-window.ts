@@ -199,16 +199,21 @@ export function startOAuthFlow(
       console.error(`[oauth-window] Page load failed: ${errorDescription} (${errorCode})`)
     })
 
-    // Show window when BrowserView starts loading the OAuth page
-    // Note: We use did-start-loading instead of ready-to-show because
-    // the BrowserWindow itself doesn't load any content - only the BrowserView does.
-    // ready-to-show fires based on the BrowserWindow's own webContents, which is empty.
-    view.webContents.once("did-start-loading", () => {
-      oauthWindow.show()
-    })
+    // Show window immediately - don't wait for content to load
+    // This ensures users see something while OAuth page loads
+    console.log(`[oauth-window] Showing window immediately for ${serverId}`)
+    oauthWindow.show()
+    oauthWindow.focus()
+
+    // Also bring to front after a short delay in case focus was stolen
+    setTimeout(() => {
+      if (!oauthWindow.isDestroyed()) {
+        oauthWindow.focus()
+      }
+    }, 100)
 
     // Load the OAuth URL
-    console.log(`[oauth-window] Loading OAuth URL for ${serverId}`)
+    console.log(`[oauth-window] Loading OAuth URL for ${serverId}: ${authUrl}`)
     view.webContents.loadURL(authUrl).catch((err) => {
       console.error(`[oauth-window] Failed to load OAuth URL:`, err)
       cleanup()

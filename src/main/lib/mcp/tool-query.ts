@@ -401,6 +401,9 @@ class McpClient extends EventEmitter {
 /**
  * Query tools from an HTTP/SSE MCP server
  * Uses fetch to communicate via JSON-RPC over HTTP
+ *
+ * First attempts to query without authentication (many MCP servers allow
+ * listing tools without auth). Falls back to authenticated request if needed.
  */
 async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Record<string, string | undefined>): Promise<McpTool[]> {
   // Expand environment variables in the config
@@ -413,96 +416,133 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
 
   console.log(`[mcp-tools] Querying HTTP MCP server: ${url}`)
 
-  // Build headers
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...expandedConfig.headers,
-  }
+  // Check if we have auth credentials
+  const accessToken = mergedEnv["MCP_ACCESS_TOKEN"]
+  const hasConfiguredAuth = expandedConfig.headers?.["Authorization"] ||
+                            expandedConfig.headers?.["authorization"] ||
+                            accessToken
 
-  // Auto-inject MCP_ACCESS_TOKEN into Authorization header if present and no auth header set
-  if (!headers["Authorization"] && !headers["authorization"]) {
-    const accessToken = mergedEnv["MCP_ACCESS_TOKEN"]
-    if (accessToken) {
-      console.log("[mcp-tools] Injecting MCP_ACCESS_TOKEN into Authorization header")
-      headers["Authorization"] = `Bearer ${accessToken}`
-    }
-  }
+  // Helper to create request function with specific headers
+  function createSendRequest(useAuth: boolean) {
+    let requestId = 0
 
-  let requestId = 0
-
-  // Helper to send JSON-RPC request
-  async function sendRequest(method: string, params?: Record<string, unknown>): Promise<unknown> {
-    const request = {
-      jsonrpc: "2.0",
-      id: ++requestId,
-      method,
-      params,
+    // Build headers
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
     }
 
-    const response = await fetch(url!, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(request),
-    })
+    // Only add auth headers if requested and available
+    if (useAuth) {
+      // Add configured headers
+      if (expandedConfig.headers) {
+        Object.assign(headers, expandedConfig.headers)
+      }
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      // Auto-inject MCP_ACCESS_TOKEN if no auth header already set
+      if (!headers["Authorization"] && !headers["authorization"] && accessToken) {
+        console.log("[mcp-tools] Injecting MCP_ACCESS_TOKEN into Authorization header")
+        headers["Authorization"] = `Bearer ${accessToken}`
+      }
     }
 
-    const contentType = response.headers.get("content-type") || ""
+    return async function sendRequest(method: string, params?: Record<string, unknown>): Promise<unknown> {
+      const request = {
+        jsonrpc: "2.0",
+        id: ++requestId,
+        method,
+        params,
+      }
 
-    // Handle SSE response
-    if (contentType.includes("text/event-stream")) {
-      const text = await response.text()
-      // Parse SSE events - look for data: lines with JSON
-      const lines = text.split("\n")
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.id === request.id) {
-              if (data.error) {
-                throw new Error(`JSON-RPC error: ${data.error.message}`)
+      const response = await fetch(url!, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(request),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const contentType = response.headers.get("content-type") || ""
+
+      // Handle SSE response
+      if (contentType.includes("text/event-stream")) {
+        const text = await response.text()
+        // Parse SSE events - look for data: lines with JSON
+        const lines = text.split("\n")
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              if (data.id === request.id) {
+                if (data.error) {
+                  throw new Error(`JSON-RPC error: ${data.error.message}`)
+                }
+                return data.result
               }
-              return data.result
+            } catch {
+              // Continue looking for valid JSON
             }
-          } catch {
-            // Continue looking for valid JSON
           }
         }
+        throw new Error("No valid response found in SSE stream")
       }
-      throw new Error("No valid response found in SSE stream")
-    }
 
-    // Handle regular JSON response
-    const data = await response.json()
-    if (data.error) {
-      throw new Error(`JSON-RPC error: ${data.error.message}`)
+      // Handle regular JSON response
+      const data = await response.json()
+      if (data.error) {
+        throw new Error(`JSON-RPC error: ${data.error.message}`)
+      }
+      return data.result
     }
-    return data.result
   }
 
-  // Initialize the server
-  console.log("[mcp-tools] Sending initialize request to HTTP server...")
-  await sendRequest("initialize", {
-    protocolVersion: "2024-11-05",
-    capabilities: {
-      roots: { listChanged: false },
-      sampling: {},
-    },
-    clientInfo: {
-      name: "claw",
-      version: "0.1.0",
-    },
-  })
+  // Helper to query tools with a specific sendRequest function
+  async function queryWithRequest(sendRequest: (method: string, params?: Record<string, unknown>) => Promise<unknown>): Promise<McpTool[]> {
+    // Initialize the server
+    console.log("[mcp-tools] Sending initialize request to HTTP server...")
+    await sendRequest("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {
+        roots: { listChanged: false },
+        sampling: {},
+      },
+      clientInfo: {
+        name: "claw",
+        version: "0.1.0",
+      },
+    })
 
-  // List tools
-  console.log("[mcp-tools] Requesting tools/list from HTTP server...")
-  const result = await sendRequest("tools/list", {}) as { tools?: McpTool[] }
-  const tools = result?.tools || []
+    // List tools
+    console.log("[mcp-tools] Requesting tools/list from HTTP server...")
+    const result = await sendRequest("tools/list", {}) as { tools?: McpTool[] }
+    const tools = result?.tools || []
 
-  console.log(`[mcp-tools] HTTP server returned ${tools.length} tools`)
-  return tools
+    console.log(`[mcp-tools] HTTP server returned ${tools.length} tools`)
+    return tools
+  }
+
+  // First, try without authentication (many servers allow listing tools without auth)
+  console.log("[mcp-tools] Attempting to query tools without authentication...")
+  try {
+    const sendRequestNoAuth = createSendRequest(false)
+    const tools = await queryWithRequest(sendRequestNoAuth)
+    console.log("[mcp-tools] Successfully queried tools without authentication")
+    return tools
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.log(`[mcp-tools] Unauthenticated query failed: ${errorMessage}`)
+
+    // If we have auth credentials and got a 401/403, try with auth
+    if (hasConfiguredAuth && (errorMessage.includes("401") || errorMessage.includes("403") || errorMessage.includes("Unauthorized"))) {
+      console.log("[mcp-tools] Retrying with authentication...")
+      const sendRequestWithAuth = createSendRequest(true)
+      return queryWithRequest(sendRequestWithAuth)
+    }
+
+    // Re-throw the original error
+    throw error
+  }
 }
 
 /**

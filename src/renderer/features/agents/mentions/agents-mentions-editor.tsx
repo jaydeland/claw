@@ -16,7 +16,7 @@ import { createFileIconElement } from "./agents-file-mention"
 const LARGE_TEXT_THRESHOLD = 50000
 
 export interface FileMentionOption {
-  id: string // file:owner/repo:path/to/file.tsx or folder:owner/repo:path/to/folder or skill:skill-name or tool:mcp-tool-name
+  id: string // file:owner/repo:path/to/file.tsx or folder:owner/repo:path/to/folder or skill:skill-name or tool:mcp-server:tool-name
   label: string // filename or folder name or skill name or tool name
   path: string // full path or skill description
   repository: string
@@ -25,7 +25,7 @@ export interface FileMentionOption {
   deletions?: number // for changed files
   type?: "file" | "folder" | "skill" | "agent" | "category" | "tool" // entry type (default: file)
   // Extended data for rich tooltips (skills/agents/tools)
-  description?: string // skill/agent/tool description
+  description?: string // skill/agent description
   tools?: string[] // agent allowed tools
   model?: string // agent model
   source?: "user" | "project" // skill/agent source
@@ -231,16 +231,11 @@ function buildContentFromSerialized(
       option = { id, label: agentName, path: "", repository: "", type: "agent" }
     }
     if (!option && id.startsWith(MENTION_PREFIXES.TOOL)) {
-      // Parse tool mention: tool:mcp__servername__toolname
-      const toolPath = id.slice(MENTION_PREFIXES.TOOL.length)
-      // Extract readable name from tool path (e.g., mcp__figma__get_design -> Get design)
-      const parts = toolPath.split("__")
-      const toolName = parts.length >= 3 ? parts.slice(2).join("__") : toolPath
-      const displayName = toolName
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase())
-        .trim()
-      option = { id, label: displayName, path: toolPath, repository: "", type: "tool" }
+      // Parse tool mention: tool:mcp-server:tool-name
+      const toolPart = id.slice(MENTION_PREFIXES.TOOL.length)
+      const parts = toolPart.split(":")
+      const toolName = parts.length > 1 ? parts[1] : toolPart
+      option = { id, label: toolName, path: toolPart, repository: "", type: "tool" }
     }
     if (option) {
       root.appendChild(createMentionNode(option))
@@ -538,15 +533,11 @@ export const AgentsMentionsEditor = memo(
             return { id, label: agentName, path: "", repository: "", type: "agent" }
           }
           if (id.startsWith(MENTION_PREFIXES.TOOL)) {
-            const toolPath = id.slice(MENTION_PREFIXES.TOOL.length)
-            // Extract readable name from tool path (e.g., mcp__figma__get_design -> Get design)
-            const parts = toolPath.split("__")
-            const toolName = parts.length >= 3 ? parts.slice(2).join("__") : toolPath
-            const displayName = toolName
-              .replace(/_/g, " ")
-              .replace(/\b\w/g, (c) => c.toUpperCase())
-              .trim()
-            return { id, label: displayName, path: toolPath, repository: "", type: "tool" }
+            // Parse tool mention: tool:mcp-server:tool-name
+            const toolPart = id.slice(MENTION_PREFIXES.TOOL.length)
+            const parts = toolPart.split(":")
+            const toolName = parts.length > 1 ? parts[1] : toolPart
+            return { id, label: toolName, path: toolPart, repository: "", type: "tool" }
           }
           return null
         },

@@ -216,7 +216,7 @@ export function AgentsLayout() {
         {/* Header - traffic lights and settings */}
         {!isMobile && isDesktop && (
           <div
-            className="flex items-center justify-between h-8 pl-2 pr-2 border-b border-border/50 bg-background flex-shrink-0"
+            className="flex items-center justify-between h-8 pl-2 pr-2 border-b border-border/50 bg-muted/50 flex-shrink-0"
             style={{
               // @ts-expect-error - WebKit-specific property
               WebkitAppRegion: "drag",
@@ -270,7 +270,7 @@ export function AgentsLayout() {
         <div className="flex-1 overflow-hidden flex min-w-0">
           {/* Sidebar Tab Bar (vertical icons) */}
           {!isMobile && (
-            <div className="flex-shrink-0 border-r border-border/50 bg-background">
+            <div className="flex-shrink-0 border-r border-border/50 bg-muted/50">
               <SidebarTabBar isCollapsed={true} />
             </div>
           )}
@@ -278,7 +278,7 @@ export function AgentsLayout() {
           {/* Sidebar Content Panel - shows list/navigation for selected tab */}
           {/* Note: clusters/gsd tabs don't show sidebar content - they have their own navigation */}
           {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && (
-            <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background overflow-hidden">
+            <div className="w-64 flex-shrink-0 border-r border-border/50 bg-muted/50 overflow-hidden">
               {selectedSidebarTab === "history" ? (
                 <HistoryTabContent className="h-full" />
               ) : selectedSidebarTab === "chats" ? (
@@ -306,7 +306,7 @@ export function AgentsLayout() {
 
           {/* Right Icon Bar (desktop only, chat session view only) */}
           {!isMobile && selectedSidebarTab === "chats" && selectedChatId && (
-            <div className="flex-shrink-0 bg-background">
+            <div className="flex-shrink-0 bg-muted/50">
               <RightIconBar />
             </div>
           )}

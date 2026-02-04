@@ -726,6 +726,86 @@ export const devspaceRouter = router({
       }
     ),
 
+  /**
+   * List git branches for a service directory
+   * Handles both regular git repos and git worktrees
+   */
+  listBranches: publicProcedure
+    .input(
+      z.object({
+        servicePath: z.string(),
+      })
+    )
+    .query(async ({ input }): Promise<{ branches: string[]; currentBranch: string | null; error?: string }> => {
+      console.log("[devspace] listBranches called with servicePath:", input.servicePath)
+
+      try {
+        // First check if the path exists and is a git repo (or worktree)
+        let gitDir: string
+        try {
+          const { stdout } = await execAsync(`git -C "${input.servicePath}" rev-parse --git-dir`, { timeout: 5000 })
+          gitDir = stdout.trim()
+          console.log("[devspace] Git dir:", gitDir)
+        } catch (gitCheckError) {
+          console.error("[devspace] Not a git repository:", input.servicePath, gitCheckError)
+          return { branches: [], currentBranch: null, error: `Not a git repository: ${input.servicePath}` }
+        }
+
+        // Get current branch
+        const { stdout: currentStdout } = await execAsync(
+          `git -C "${input.servicePath}" rev-parse --abbrev-ref HEAD`,
+          { timeout: 5000 }
+        )
+        const currentBranch = currentStdout.trim()
+        console.log("[devspace] Current branch:", currentBranch)
+
+        // Get all local branches using git for-each-ref (more reliable for worktrees)
+        const { stdout: branchesStdout } = await execAsync(
+          `git -C "${input.servicePath}" for-each-ref --format="%(refname:short)" refs/heads/`,
+          { timeout: 5000 }
+        )
+
+        let branches = branchesStdout
+          .trim()
+          .split("\n")
+          .filter(b => b.length > 0)
+
+        // If no local branches found, try fetching remote branches as fallback
+        if (branches.length === 0) {
+          console.log("[devspace] No local branches found, trying remote refs")
+          try {
+            const { stdout: remoteStdout } = await execAsync(
+              `git -C "${input.servicePath}" for-each-ref --format="%(refname:short)" refs/remotes/origin/ | sed 's|origin/||'`,
+              { timeout: 5000 }
+            )
+            branches = remoteStdout
+              .trim()
+              .split("\n")
+              .filter(b => b.length > 0 && b !== "HEAD")
+          } catch {
+            console.log("[devspace] No remote branches either")
+          }
+        }
+
+        // Sort branches
+        branches.sort((a, b) => {
+          // Put current branch first, then main/master, then alphabetical
+          if (a === currentBranch) return -1
+          if (b === currentBranch) return 1
+          if (a === "main" || a === "master") return -1
+          if (b === "main" || b === "master") return 1
+          return a.localeCompare(b)
+        })
+
+        console.log("[devspace] Found branches:", branches.length, branches.slice(0, 5))
+        return { branches, currentBranch }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error("[devspace] Failed to list branches:", errorMessage)
+        return { branches: [], currentBranch: null, error: errorMessage }
+      }
+    }),
+
   // Keep old alias for backward compatibility
   getDevyardServiceInfo: publicProcedure
     .input(

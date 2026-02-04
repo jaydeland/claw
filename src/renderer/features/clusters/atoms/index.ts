@@ -145,6 +145,7 @@ export interface DevSpaceTerminalInstance {
   serviceName: string
   servicePath: string
   createdAt: number
+  targetBranch?: string // Branch to checkout before starting devspace
 }
 
 /**

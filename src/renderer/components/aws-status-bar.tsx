@@ -1,12 +1,17 @@
 "use client"
 
 import { useEffect, useCallback } from "react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Cloud, RefreshCw, Clock, AlertTriangle, Server, Shield } from "lucide-react"
 import { trpc } from "../lib/trpc"
 import { cn } from "../lib/utils"
 import { toast } from "sonner"
-import { clustersFeatureEnabledAtom, clustersDefaultNamespaceAtom } from "../lib/atoms"
+import {
+  clustersFeatureEnabledAtom,
+  clustersDefaultNamespaceAtom,
+  agentsSettingsDialogOpenAtom,
+  agentsSettingsDialogActiveTabAtom,
+} from "../lib/atoms"
 import {
   selectedClusterIdAtom,
   selectedClustersCategoryAtom,
@@ -75,6 +80,16 @@ export function AwsStatusBar() {
 
   // Use default cluster for status bar if set, otherwise use selected
   const displayClusterId = defaultClusterId || selectedClusterId
+
+  // Settings dialog atoms for opening auth settings
+  const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
+  const setSettingsTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
+
+  // Open auth settings
+  const openAuthSettings = useCallback(() => {
+    setSettingsTab("claude-code")
+    setSettingsOpen(true)
+  }, [setSettingsTab, setSettingsOpen])
 
   // Query AWS status
   const { data: awsStatus, refetch: refetchStatus } = trpc.awsSso.getStatus.useQuery(undefined, {
@@ -176,45 +191,59 @@ export function AwsStatusBar() {
 
         {/* Account - show if available, otherwise show "Not authenticated" */}
         {awsStatus.accountName || awsStatus.accountId ? (
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground/70">Account:</span>
-            <span className="font-mono font-semibold text-foreground">
+          <button
+            onClick={openAuthSettings}
+            className="flex items-center gap-1 hover:bg-muted/50 px-1.5 py-0.5 rounded transition-colors"
+            title="Click to open authentication settings"
+          >
+            <span className="font-semibold text-muted-foreground/70">Account:</span>
+            <span className="font-mono text-primary">
               {awsStatus.accountName || awsStatus.accountId}
             </span>
-          </div>
+          </button>
         ) : (
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground/70">Status:</span>
-            <span className="font-semibold text-destructive">Not authenticated</span>
-          </div>
+          <button
+            onClick={openAuthSettings}
+            className="flex items-center gap-1 hover:bg-muted/50 px-1.5 py-0.5 rounded transition-colors"
+            title="Click to open authentication settings"
+          >
+            <span className="font-semibold text-muted-foreground/70">Status:</span>
+            <span className="text-destructive">Not authenticated</span>
+          </button>
         )}
 
         {/* Role */}
         {awsStatus.roleName && (
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground/70">Role:</span>
-            <span className="font-mono font-medium text-muted-foreground">{awsStatus.roleName}</span>
-          </div>
+          <button
+            onClick={openAuthSettings}
+            className="flex items-center gap-1 hover:bg-muted/50 px-1.5 py-0.5 rounded transition-colors"
+            title="Click to open authentication settings"
+          >
+            <span className="font-semibold text-muted-foreground/70">Role:</span>
+            <span className="font-mono text-primary">{awsStatus.roleName}</span>
+          </button>
         )}
 
         {/* Token Expiry */}
         {credentialsExpiry && (
-          <div
+          <button
+            onClick={openAuthSettings}
             className={cn(
-              "flex items-center gap-1",
+              "flex items-center gap-1 hover:bg-muted/50 px-1.5 py-0.5 rounded transition-colors",
               !credentialsExpiry.isExpiringSoon && !credentialsExpiry.isExpired && "text-emerald-600 dark:text-emerald-500",
               credentialsExpiry.isExpiringSoon && "text-amber-600 dark:text-amber-500",
               credentialsExpiry.isExpired && "text-destructive"
             )}
+            title="Click to open authentication settings"
           >
             {credentialsExpiry.isExpiringSoon ? (
               <AlertTriangle className="h-3 w-3" />
             ) : (
               <Clock className="h-3 w-3" />
             )}
-            <span className="text-muted-foreground/70">Token:</span>
-            <span className="font-semibold">{credentialsExpiry.text}</span>
-          </div>
+            <span className="font-semibold text-muted-foreground/70">Token:</span>
+            <span>{credentialsExpiry.text}</span>
+          </button>
         )}
 
         {/* Refresh Button - right after token */}
@@ -240,15 +269,16 @@ export function AwsStatusBar() {
 
       {/* VPN Status Indicator */}
       {vpnStatus?.enabled && (
-        <div
+        <button
+          onClick={openAuthSettings}
           className={cn(
-            "flex items-center gap-1.5 px-2 py-0.5 rounded mr-2",
+            "flex items-center gap-1.5 px-2 py-0.5 rounded mr-2 hover:bg-muted/50 transition-colors",
             vpnStatus.connected ? "text-muted-foreground" : "text-destructive"
           )}
           title={
             vpnStatus.connected
-              ? "VPN Connected"
-              : "VPN Disconnected - Cannot reach internal network"
+              ? "VPN Connected - Click to open authentication settings"
+              : "VPN Disconnected - Click to open authentication settings"
           }
         >
           {/* Connection status dot */}
@@ -259,8 +289,8 @@ export function AwsStatusBar() {
             )}
           />
           <Shield className="h-3 w-3" />
-          <span className="text-xs">VPN</span>
-        </div>
+          <span className="text-xs font-semibold">VPN</span>
+        </button>
       )}
 
       {/* K8s Cluster Indicator (right side) */}
@@ -281,13 +311,13 @@ export function AwsStatusBar() {
             )}
           />
           <Server className="h-3 w-3" />
-          <span className="font-mono text-xs">
+          <span className="font-mono text-xs text-primary">
             {displayClusterId.length > 20
               ? `${displayClusterId.slice(0, 20)}...`
               : displayClusterId}
           </span>
-          <span className="text-muted-foreground/70">/</span>
-          <span className="font-mono text-xs">{effectiveNamespace}</span>
+          <span className="text-muted-foreground/70 font-semibold">/</span>
+          <span className="font-mono text-xs text-primary">{effectiveNamespace}</span>
         </button>
       )}
     </div>

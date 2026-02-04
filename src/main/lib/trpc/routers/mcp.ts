@@ -1059,20 +1059,28 @@ export const mcpRouter = router({
       error?: string
     }> => {
       try {
+        console.log(`[mcp-oauth] Starting OAuth flow for ${input.serverId}`)
         const consolidated = await getConsolidatedConfig(input.projectPath)
         const serverConfig = consolidated.mergedServers[input.serverId]
 
         if (!serverConfig?.url) {
+          console.log(`[mcp-oauth] Server not found or has no URL: ${input.serverId}`)
           return { success: false, error: "Server not found or has no URL" }
         }
 
+        console.log(`[mcp-oauth] Server URL: ${serverConfig.url}`)
+
         // Step 1: Discover OAuth metadata
+        console.log(`[mcp-oauth] Step 1: Discovering OAuth metadata...`)
         const metadata = await discoverOAuthMetadata(serverConfig.url)
         if (!metadata) {
+          console.log(`[mcp-oauth] OAuth discovery failed - server does not support OAuth`)
           return { success: false, error: "Server does not support OAuth" }
         }
+        console.log(`[mcp-oauth] OAuth metadata discovered: issuer=${metadata.issuer}`)
 
         // Step 2: Generate PKCE code verifier and challenge
+        console.log(`[mcp-oauth] Step 2: Generating PKCE parameters...`)
         const codeVerifier = generateCodeVerifier()
         const codeChallenge = generateCodeChallenge(codeVerifier)
 
@@ -1084,6 +1092,7 @@ export const mcpRouter = router({
         const redirectUri = "http://localhost:19283/oauth/callback"
 
         if (metadata.registration_endpoint) {
+          console.log(`[mcp-oauth] Step 3: Registering OAuth client...`)
           const registration = await registerOAuthClient(
             metadata.registration_endpoint,
             redirectUri,
@@ -1091,12 +1100,15 @@ export const mcpRouter = router({
           )
 
           if (!registration) {
+            console.log(`[mcp-oauth] Client registration failed`)
             return { success: false, error: "Failed to register OAuth client" }
           }
 
           clientId = registration.client_id
           clientSecret = registration.client_secret
+          console.log(`[mcp-oauth] Client registered: ${clientId}`)
         } else {
+          console.log(`[mcp-oauth] No registration endpoint available`)
           return {
             success: false,
             error: "Server requires OAuth but does not support dynamic client registration",
@@ -1104,6 +1116,7 @@ export const mcpRouter = router({
         }
 
         // Step 4: Build authorization URL with PKCE
+        console.log(`[mcp-oauth] Step 4: Building authorization URL...`)
         const state = randomBytes(16).toString("hex")
         const authUrl = new URL(metadata.authorization_endpoint)
         authUrl.searchParams.set("response_type", "code")
@@ -1112,6 +1125,7 @@ export const mcpRouter = router({
         authUrl.searchParams.set("code_challenge", codeChallenge)
         authUrl.searchParams.set("code_challenge_method", "S256")
         authUrl.searchParams.set("state", state)
+        console.log(`[mcp-oauth] Authorization URL: ${authUrl.origin}${authUrl.pathname}`)
 
         // Store pending flow state
         pendingOAuthFlows.set(state, {
@@ -1124,13 +1138,16 @@ export const mcpRouter = router({
         })
 
         // Step 5: Open OAuth window
+        console.log(`[mcp-oauth] Step 5: Opening OAuth window...`)
         const parentWindow = BrowserWindow.getFocusedWindow()
+        console.log(`[mcp-oauth] Parent window: ${parentWindow ? 'found' : 'null'}`)
         const result = await startOAuthFlow(parentWindow, {
           authUrl: authUrl.toString(),
           callbackUrlPattern: "localhost:19283.*callback",
           serverId: input.serverId,
           title: `Sign in to ${input.serverId}`,
         })
+        console.log(`[mcp-oauth] OAuth flow result: ${JSON.stringify(result)}`)
 
         // Clean up if cancelled
         if (!result.success || result.cancelled) {

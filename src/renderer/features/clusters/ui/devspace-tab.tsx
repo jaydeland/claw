@@ -55,6 +55,7 @@ let hasInitializedThisSession = false
 export function DevSpaceTab() {
   // Service selection
   const [selectedService, setSelectedService] = useState<string>("")
+  const [selectedBranch, setSelectedBranch] = useState<string>("")
 
   // Terminal management - DevSpace atoms
   const [terminals, setTerminals] = useAtom(devspaceTerminalsAtom)
@@ -117,8 +118,35 @@ export function DevSpaceTab() {
     enabled: isAvailable === true,
   })
 
+  // Get branches for selected service
+  const selectedServicePath = useMemo(() => {
+    if (!selectedService || !devspaceServices) return null
+    const service = devspaceServices.find((s) => s.name === selectedService)
+    return service?.path ?? null
+  }, [selectedService, devspaceServices])
+
+  const {
+    data: branchData,
+    isLoading: branchesLoading,
+    refetch: refetchBranches,
+    isRefetching: isRefetchingBranches,
+    error: branchError,
+  } = trpc.devspace.listBranches.useQuery(
+    { servicePath: selectedServicePath! },
+    { enabled: !!selectedServicePath }
+  )
+
+  // Auto-select current branch when branches load or reset when service changes
+  useEffect(() => {
+    if (branchData?.currentBranch) {
+      setSelectedBranch(branchData.currentBranch)
+    } else {
+      setSelectedBranch("")
+    }
+  }, [branchData?.currentBranch, selectedService])
+
   // Terminal management callbacks
-  const createTerminal = useCallback((serviceName: string, servicePath: string) => {
+  const createTerminal = useCallback((serviceName: string, servicePath: string, targetBranch?: string) => {
     const id = generateTerminalId()
     const paneId = generatePaneId(id)
     const createdAt = Date.now()
@@ -130,6 +158,7 @@ export function DevSpaceTab() {
       serviceName,
       servicePath,
       createdAt,
+      targetBranch,
     }
 
     // Create matching TerminalInstance for main terminal view
@@ -283,9 +312,12 @@ export function DevSpaceTab() {
       return
     }
 
-    // Create a new terminal
-    createTerminal(service.name, service.path)
-    toast.success(`Starting ${service.name}`)
+    // Determine if we need to checkout a different branch
+    const needsBranchSwitch = selectedBranch && selectedBranch !== branchData?.currentBranch
+
+    // Create a new terminal with optional branch
+    createTerminal(service.name, service.path, needsBranchSwitch ? selectedBranch : undefined)
+    toast.success(`Starting ${service.name}${needsBranchSwitch ? ` on branch ${selectedBranch}` : ""}`)
   }
 
   // Get the active terminal
@@ -344,22 +376,15 @@ export function DevSpaceTab() {
               <div className="p-2 text-sm text-muted-foreground">
                 Configure repos path in Kubernetes settings
               </div>
-            ) : devspaceServices && devspaceServices.length > 0 ? (
-              devspaceServices.map((service) => (
+            ) : devspaceServices && devspaceServices.filter(s => s.hasDevConfig).length > 0 ? (
+              devspaceServices.filter(s => s.hasDevConfig).map((service) => (
                 <SelectItem key={service.name} value={service.name}>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs">{service.name}</span>
-                    {service.hasDevConfig && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
-                        config found
-                      </span>
-                    )}
-                  </div>
+                  <span className="font-mono text-xs">{service.name}</span>
                 </SelectItem>
               ))
             ) : (
               <div className="p-2 text-sm text-muted-foreground">
-                No services found in repos path
+                No services with devspace config found
               </div>
             )}
           </SelectContent>
@@ -374,6 +399,65 @@ export function DevSpaceTab() {
         >
           <RefreshCw className={cn("h-4 w-4", isRefetchingServices && "animate-spin")} />
         </button>
+
+        {/* Branch Selector - only shown when service is selected */}
+        {selectedService && (
+          <>
+            <span className="text-sm font-medium whitespace-nowrap">Branch:</span>
+            <Select
+              value={selectedBranch || undefined}
+              onValueChange={setSelectedBranch}
+              disabled={branchesLoading}
+            >
+              <SelectTrigger className="w-full max-w-[200px] h-8 text-xs">
+                <SelectValue placeholder={branchesLoading ? "Loading..." : (branchError || branchData?.error) ? "Error loading" : "Select branch"} />
+              </SelectTrigger>
+              <SelectContent>
+                {branchesLoading ? (
+                  <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading branches...
+                  </div>
+                ) : branchError ? (
+                  <div className="p-2 text-sm text-red-400">
+                    Error: {branchError.message}
+                  </div>
+                ) : branchData?.error ? (
+                  <div className="p-2 text-sm text-red-400">
+                    {branchData.error}
+                  </div>
+                ) : branchData?.branches && branchData.branches.length > 0 ? (
+                  branchData.branches.map((branch) => (
+                    <SelectItem key={branch} value={branch}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{branch}</span>
+                        {branch === branchData.currentBranch && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                            current
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-sm text-muted-foreground">
+                    No branches found
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+
+            <button
+              type="button"
+              onClick={() => refetchBranches()}
+              disabled={isRefetchingBranches}
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+              title="Refresh branches"
+            >
+              <RefreshCw className={cn("h-4 w-4", isRefetchingBranches && "animate-spin")} />
+            </button>
+          </>
+        )}
 
         <button
           type="button"
@@ -435,7 +519,11 @@ export function DevSpaceTab() {
                 paneId={activeTerminal.paneId}
                 cwd={activeTerminal.servicePath}
                 workspaceId="devspace"
-                initialCommands={[settings?.startCommand || "devspace dev"]}
+                initialCommands={
+                  activeTerminal.targetBranch
+                    ? [`git checkout ${activeTerminal.targetBranch}`, settings?.startCommand || "devspace dev"]
+                    : [settings?.startCommand || "devspace dev"]
+                }
               />
             </div>
           )}
