@@ -115,8 +115,23 @@ const OAUTH_ENV_VAR_PATTERNS = [
 ]
 
 /**
+ * API key environment variable patterns (non-OAuth credentials)
+ * If a server only has these, it should use API key auth, not OAuth
+ */
+const API_KEY_ONLY_PATTERNS = [
+  /^[A-Z_]*API[_-]?KEY$/i,
+  /^[A-Z_]*APP[_-]?KEY$/i,
+  /^[A-Z_]*SECRET[_-]?KEY$/i,
+]
+
+/**
  * Detect authentication type for an MCP server
  * Returns OAuth config if OAuth is detected, otherwise API key config
+ *
+ * Priority:
+ * 1. Check env vars first - if only API keys (no OAuth indicators), use api_key type
+ * 2. If OAuth indicators present (CLIENT_ID, OAUTH, etc.), use oauth type
+ * 3. Only use known provider OAuth if explicitly has OAuth env vars
  */
 export function detectAuthType(
   serverId: string,
@@ -125,26 +140,43 @@ export function detectAuthType(
   const envVars = Object.keys(config.env || {})
   const serverIdLower = serverId.toLowerCase()
 
-  // Check if this matches a known OAuth provider
-  for (const [provider, providerConfig] of Object.entries(KNOWN_OAUTH_PROVIDERS)) {
-    if (
-      serverIdLower.includes(provider) ||
-      config.command?.toLowerCase().includes(provider)
-    ) {
-      return {
-        type: "oauth",
-        ...providerConfig,
-        requiredFields: envVars,
-      }
-    }
-  }
-
-  // Check for OAuth-like environment variables
+  // Check for OAuth-like environment variables FIRST
   const hasOAuthIndicators = envVars.some((varName) =>
     OAUTH_ENV_VAR_PATTERNS.some((pattern) => pattern.test(varName))
   )
 
+  // Check if server ONLY has API key style env vars (no OAuth indicators)
+  const hasOnlyApiKeys = envVars.length > 0 &&
+    envVars.every((varName) =>
+      API_KEY_ONLY_PATTERNS.some((pattern) => pattern.test(varName)) ||
+      !OAUTH_ENV_VAR_PATTERNS.some((pattern) => pattern.test(varName))
+    )
+
+  // If server has env vars but NO OAuth indicators, use API key auth
+  // This prevents servers like Datadog (DD_API_KEY, DD_APP_KEY) from being detected as OAuth
+  if (hasOnlyApiKeys && !hasOAuthIndicators) {
+    return {
+      type: "api_key",
+      requiredFields: envVars,
+    }
+  }
+
+  // Only check known OAuth providers if server has OAuth indicators
   if (hasOAuthIndicators) {
+    // Check if this matches a known OAuth provider
+    for (const [provider, providerConfig] of Object.entries(KNOWN_OAUTH_PROVIDERS)) {
+      if (
+        serverIdLower.includes(provider) ||
+        config.command?.toLowerCase().includes(provider)
+      ) {
+        return {
+          type: "oauth",
+          ...providerConfig,
+          requiredFields: envVars,
+        }
+      }
+    }
+
     // Try to detect provider from env var names or values
     let detectedProvider: string | undefined
     const envEntries = Object.entries(config.env || {})

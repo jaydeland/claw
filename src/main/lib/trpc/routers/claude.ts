@@ -404,19 +404,26 @@ export async function warmupMcpCache(): Promise<void> {
       return
     }
 
-    // Find projects with MCP servers (excluding worktrees)
+    // Find projects with MCP servers using consolidator (same source as queries)
+    // This ensures warmup cache matches what queries will actually use
     const projectsWithMcp: Array<{ path: string; servers: Record<string, any> }> = []
-    for (const [projectPath, projectConfig] of Object.entries(config.projects)) {
-      if ((projectConfig as any)?.mcpServers) {
-        // Skip worktrees - they're temporary git working directories and inherit MCP from parent
-        if (projectPath.includes("/.21st/worktrees/") || projectPath.includes("\\.21st\\worktrees\\")) {
-          continue
-        }
+    for (const projectPath of Object.keys(config.projects)) {
+      // Skip worktrees - they're temporary git working directories and inherit MCP from parent
+      if (projectPath.includes("/.21st/worktrees/") || projectPath.includes("\\.21st\\worktrees\\")) {
+        continue
+      }
 
-        projectsWithMcp.push({
-          path: projectPath,
-          servers: (projectConfig as any).mcpServers
-        })
+      try {
+        // Use getMergedMcpConfig (same as queries) instead of ~/.claude.json's mcpServers
+        const mergedConfig = await getMergedMcpConfig(projectPath)
+        if (mergedConfig.mcpServers && Object.keys(mergedConfig.mcpServers).length > 0) {
+          projectsWithMcp.push({
+            path: projectPath,
+            servers: mergedConfig.mcpServers
+          })
+        }
+      } catch (err) {
+        console.warn(`[MCP Warmup] Failed to get merged config for ${projectPath}:`, err)
       }
     }
 
@@ -1114,9 +1121,10 @@ export const claudeRouter = router({
                   })
                 )
               } else {
-                // No cache yet (warmup hasn't completed or ~/.claude.json changed)
-                // Skip MCP servers to avoid delays - they'll be available after warmup completes
-                mcpServersFiltered = undefined
+                // No cache yet - pass ALL servers and let SDK report statuses
+                // This ensures new/uncached servers are discoverable (cache is updated after first query)
+                console.log(`[MCP] No cache for ${lookupPath}, passing all ${Object.keys(mcpServersForSdk).length} servers to SDK`)
+                mcpServersFiltered = mcpServersForSdk
               }
             } else if (isUsingOllama) {
               console.log('[Ollama] Skipping MCP servers to speed up initialization')
