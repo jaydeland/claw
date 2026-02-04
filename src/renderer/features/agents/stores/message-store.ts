@@ -504,11 +504,12 @@ export const messageTokenDataAtom = atom((get) => {
   const ids = get(messageIdsAtom)
   const subChatId = get(currentSubChatIdAtom)
 
-  // Get the last message to check if its tokens changed
+  // Get the last message metadata to check if its tokens changed
+  // Read from metadata store (AI SDK strips metadata during message normalization)
   const lastId = ids[ids.length - 1]
-  const lastMsg = lastId ? get(messageAtomFamily(lastId)) : null
-  // Note: metadata has flat structure (metadata.outputTokens), not nested (metadata.usage.outputTokens)
-  const lastMsgOutputTokens = (lastMsg?.metadata as any)?.outputTokens || 0
+  const lastMetadataKey = lastId ? `${subChatId}:${lastId}` : null
+  const lastMetadata = lastMetadataKey ? get(messageMetadataAtomFamily(lastMetadataKey)) : null
+  const lastMsgOutputTokens = lastMetadata?.outputTokens || 0
 
   const cached = tokenDataCacheByChat.get(subChatId)
 
@@ -532,8 +533,9 @@ export const messageTokenDataAtom = atom((get) => {
   let totalCostUsd = 0
 
   for (const id of ids) {
-    const msg = get(messageAtomFamily(id))
-    const metadata = msg?.metadata as any
+    // Read from separate metadata store (AI SDK strips metadata during normalization)
+    const metadataKey = `${subChatId}:${id}`
+    const metadata = get(messageMetadataAtomFamily(metadataKey))
     // Note: metadata has flat structure from transform.ts (metadata.inputTokens, metadata.outputTokens)
     // Extended fields like cacheReadInputTokens are not currently in MessageMetadata type
     if (metadata) {
