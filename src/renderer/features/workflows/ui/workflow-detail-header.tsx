@@ -8,6 +8,7 @@ import {
   selectedWorkflowCategoryAtom,
   workflowViewModeAtom,
 } from "../atoms"
+import { selectedProjectAtom } from "../../agents/atoms"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { lintWorkflowFile, getLintStatusSummary } from "../lib/markdown-linter"
@@ -19,6 +20,7 @@ import { lintWorkflowFile, getLintStatusSummary } from "../lib/markdown-linter"
 export function WorkflowDetailHeader() {
   const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
   const selectedCategory = useAtomValue(selectedWorkflowCategoryAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
   const [viewMode, setViewMode] = useAtom(workflowViewModeAtom)
   const utils = trpc.useUtils()
 
@@ -46,11 +48,24 @@ export function WorkflowDetailHeader() {
   const handleRefresh = async () => {
     await utils.workflows.getWorkflowGraph.invalidate()
 
-    // For MCP servers, also invalidate the tool queries
-    if (selectedNode?.type === "mcpServer") {
-      await utils.mcp.getSessionTools.invalidate()
-      await utils.mcp.getServerTools.invalidate()
-      console.log("[workflows] Refreshed MCP server tools")
+    // For MCP servers, also invalidate server list and tool queries
+    if (selectedNode?.type === "mcpServer" && selectedProject?.path) {
+      // Refresh server settings/configuration
+      await utils.mcp.listServers.invalidate({ projectPath: selectedProject.path })
+
+      // Refresh session-cached tools for this server
+      await utils.mcp.getSessionTools.invalidate({
+        projectPath: selectedProject.path,
+        serverId: selectedNode.id,
+      })
+
+      // Refresh direct tool query for this server
+      await utils.mcp.getServerTools.invalidate({
+        serverId: selectedNode.id,
+        projectPath: selectedProject.path,
+      })
+
+      console.log("[workflows] Refreshed MCP server:", selectedNode.id)
     }
 
     console.log("[workflows] Refreshed workflow graph")
