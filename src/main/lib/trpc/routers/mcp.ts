@@ -161,6 +161,27 @@ function getAuthStatus(
   }
 }
 
+/**
+ * Inject stored credentials into server config env
+ * This allows credentials stored via the auth modal to be used when querying tools
+ */
+function injectStoredCredentials(
+  config: McpServerConfig,
+  storedCredentials: Record<string, string>
+): McpServerConfig {
+  if (Object.keys(storedCredentials).length === 0) {
+    return config
+  }
+
+  return {
+    ...config,
+    env: {
+      ...config.env,
+      ...storedCredentials, // Stored creds override placeholders
+    },
+  }
+}
+
 // ============ ROUTER ============
 
 export const mcpRouter = router({
@@ -576,8 +597,30 @@ export const mcpRouter = router({
           }
         }
 
+        // Get stored credentials and inject into config
+        const db = getDatabase()
+        const stored = db
+          .select()
+          .from(mcpCredentials)
+          .where(eq(mcpCredentials.id, input.serverId))
+          .get()
+
+        let storedCredentials: Record<string, string> = {}
+        if (stored) {
+          const parsed = parseJsonSafely<Record<string, string>>(stored.credentials, {})
+          for (const [key, value] of Object.entries(parsed)) {
+            const decryptedValue = decryptCredential(value)
+            if (decryptedValue) {
+              storedCredentials[key] = decryptedValue
+            }
+          }
+        }
+
+        // Inject credentials into config before querying
+        const configWithCredentials = injectStoredCredentials(serverConfig, storedCredentials)
+
         // Query tools from the server
-        const tools = await queryMcpServerTools(serverConfig)
+        const tools = await queryMcpServerTools(configWithCredentials)
 
         // Cache the results
         try {
