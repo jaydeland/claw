@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm"
 import { Copy, Check } from "lucide-react"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
 import { highlightCode } from "../lib/themes/shiki-theme-loader"
+import { MermaidBlock } from "./mermaid-block"
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
 export function stripEmojis(text: string): string {
@@ -258,6 +259,11 @@ function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: type
     const isCodeBlock = language || (codeContent.includes("\n") && codeContent.length > 100)
 
     if (isCodeBlock) {
+      // Handle mermaid diagrams specially
+      if (language === "mermaid") {
+        return <MermaidBlock code={codeContent.replace(/\n$/, "")} />
+      }
+
       return (
         <CodeBlock
           language={language}
