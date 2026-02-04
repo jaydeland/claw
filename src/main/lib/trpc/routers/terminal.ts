@@ -123,6 +123,16 @@ export const terminalRouter = router({
 		}),
 
 	/**
+	 * Check if a terminal session is alive.
+	 * Used for cleaning up dead terminals on app startup.
+	 */
+	isSessionAlive: publicProcedure
+		.input(z.string().min(1))
+		.query(({ input: paneId }) => {
+			return terminalManager.isSessionAlive(paneId)
+		}),
+
+	/**
 	 * Get count of active terminal sessions for a workspace
 	 */
 	getActiveSessionCount: publicProcedure

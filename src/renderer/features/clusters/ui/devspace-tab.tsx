@@ -69,29 +69,56 @@ export function DevSpaceTab() {
   // tRPC mutation for killing terminal sessions
   const killMutation = trpc.terminal.kill.useMutation()
 
-  // Clear stale terminals only on first mount per app session
-  // This prevents destroying terminals when navigating between sidebar tabs
-  // PTY sessions survive component unmount via detach/attach, so we only clear on app restart
+  // Smart cleanup: remove terminals with dead PTY sessions on first mount
+  // This preserves terminals that have live backend sessions while cleaning up stale ones
   useEffect(() => {
     if (hasInitializedThisSession) {
-      console.log("[DevSpaceTab] Skipping terminal clear - already initialized this session")
+      console.log("[DevSpaceTab] Skipping terminal cleanup - already initialized this session")
       return
     }
     hasInitializedThisSession = true
-    console.log("[DevSpaceTab] First mount this session - clearing stale terminals from localStorage")
-    setTerminals([])
-    setActiveTerminalId(null)
-    // Also clear from main terminal view's devspace context
-    setAllTerminals((prev) => {
-      const { [DEVSPACE_TERMINAL_ID]: _, ...rest } = prev
-      return rest
-    })
-    setAllActiveIds((prev) => {
-      const { [DEVSPACE_TERMINAL_ID]: _, ...rest } = prev
-      return rest
-    })
-  }, []) // Only run once on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    const cleanupDeadTerminals = async () => {
+      console.log("[DevSpaceTab] First mount - checking terminal health")
+      const aliveTerminals: TerminalInstance[] = []
+
+      for (const terminal of terminals) {
+        try {
+          const isAlive = await trpc.terminal.isSessionAlive.query(terminal.id)
+          if (isAlive) {
+            aliveTerminals.push(terminal)
+            console.log(`[DevSpaceTab] Terminal ${terminal.name} is alive`)
+          } else {
+            console.log(`[DevSpaceTab] Removing dead terminal: ${terminal.name}`)
+          }
+        } catch (error) {
+          console.error(`[DevSpaceTab] Failed to check terminal ${terminal.id}:`, error)
+          // If check fails, assume dead and remove
+        }
+      }
+
+      // Update state only if there were dead terminals
+      if (aliveTerminals.length !== terminals.length) {
+        setTerminals(aliveTerminals)
+        // If active terminal was removed, clear it
+        if (activeTerminalId && !aliveTerminals.find(t => t.id === activeTerminalId)) {
+          setActiveTerminalId(null)
+        }
+      }
+
+      // Also clean up from main terminal view
+      setAllTerminals((prev) => {
+        if (!prev[DEVSPACE_TERMINAL_ID]) return prev
+        const devspaceTerminals = prev[DEVSPACE_TERMINAL_ID]
+        const aliveIds = new Set(aliveTerminals.map(t => t.id))
+        const filtered = devspaceTerminals.filter(t => aliveIds.has(t.id))
+        if (filtered.length === devspaceTerminals.length) return prev
+        return { ...prev, [DEVSPACE_TERMINAL_ID]: filtered }
+      })
+    }
+
+    cleanupDeadTerminals()
+  }, [terminals, activeTerminalId, setTerminals, setActiveTerminalId, setAllTerminals]) // Include dependencies
 
   // Refs to avoid callback recreation
   const terminalsRef = useRef(terminals)

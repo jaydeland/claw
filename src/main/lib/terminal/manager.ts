@@ -364,6 +364,11 @@ export class TerminalManager extends EventEmitter {
 		}
 	}
 
+	isSessionAlive(paneId: string): boolean {
+		const session = this.sessions.get(paneId)
+		return session?.isAlive === true
+	}
+
 	async cleanup(): Promise<void> {
 		const exitPromises: Promise<void>[] = []
 

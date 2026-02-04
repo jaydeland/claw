@@ -422,12 +422,13 @@ function getTerminalCoordsFromEvent(
 
   const dimensions = core._renderService?.dimensions
 
-  if (!dimensions?.css?.cell) return null
+  if (!dimensions?.css?.cell?.width || !dimensions?.css?.cell?.height) {
+    console.warn("[Terminal] Cell dimensions not ready yet")
+    return null
+  }
 
   const cellWidth = dimensions.css.cell.width
   const cellHeight = dimensions.css.cell.height
-
-  if (!cellWidth || !cellHeight) return null
 
   if (cellWidth <= 0 || cellHeight <= 0) return null
 
