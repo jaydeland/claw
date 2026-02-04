@@ -15,56 +15,34 @@ export function Logo({ fill = "currentColor", className, ...props }: LogoProps) 
       aria-label="Claw logo"
       {...props}
     >
-      {/* Robotic claw body/head */}
+      {/* Left brace { */}
       <path
-        d="M 150 100 L 150 80 L 180 80 L 180 60 L 220 60 L 220 80 L 250 80 L 250 100 L 270 100 L 270 160 L 130 160 L 130 100 Z"
+        d="M 120 120 Q 80 120 80 160 L 80 180 Q 80 200 60 200 Q 80 200 80 220 L 80 240 Q 80 280 120 280"
         fill="none"
         stroke={fill}
-        strokeWidth="20"
+        strokeWidth="24"
+        strokeLinecap="round"
         strokeLinejoin="round"
-        strokeLinecap="round"
       />
 
-      {/* Eyes/bolts */}
-      <circle cx="170" cy="120" r="12" fill={fill} />
-      <circle cx="230" cy="120" r="12" fill={fill} />
-
-      {/* Left arm - outer path */}
+      {/* Letter C */}
       <path
-        d="M 130 140 L 90 180 L 90 240 L 50 280 L 50 350 L 90 390 L 130 350"
+        d="M 280 140 Q 200 140 200 200 Q 200 260 280 260"
         fill="none"
         stroke={fill}
-        strokeWidth="20"
-        strokeLinejoin="miter"
+        strokeWidth="24"
         strokeLinecap="round"
-      />
-      {/* Left arm - inner path */}
-      <path
-        d="M 150 160 L 120 200 L 120 260 L 90 300 L 90 350"
-        fill="none"
-        stroke={fill}
-        strokeWidth="20"
-        strokeLinejoin="miter"
-        strokeLinecap="round"
+        strokeLinejoin="round"
       />
 
-      {/* Right arm - outer path */}
+      {/* Right brace } */}
       <path
-        d="M 270 140 L 310 180 L 310 240 L 350 280 L 350 350 L 310 390 L 270 350"
+        d="M 340 120 Q 380 120 380 160 L 380 180 Q 380 200 400 200 Q 380 200 380 220 L 380 240 Q 380 280 340 280"
         fill="none"
         stroke={fill}
-        strokeWidth="20"
-        strokeLinejoin="miter"
+        strokeWidth="24"
         strokeLinecap="round"
-      />
-      {/* Right arm - inner path */}
-      <path
-        d="M 250 160 L 280 200 L 280 260 L 310 300 L 310 350"
-        fill="none"
-        stroke={fill}
-        strokeWidth="20"
-        strokeLinejoin="miter"
-        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )
