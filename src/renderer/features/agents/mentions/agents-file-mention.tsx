@@ -959,7 +959,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
 
     // SUBPAGE: MCP Tools
     if (showingToolsList) {
-      return toolOptions // already filtered by search in toolOptions memo
+      return mcpOptions // already filtered by search in mcpOptions memo
     }
 
     // ROOT VIEW
@@ -969,13 +969,13 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       const filteredCategories = availableCategoryOptions.filter(c =>
         c.label.toLowerCase().includes(searchLower)
       )
-      const allItems = [...changedFileOptions, ...filteredCategories, ...skillOptions, ...agentOptions, ...toolOptions, ...repoFileOptions]
+      const allItems = [...changedFileOptions, ...filteredCategories, ...skillOptions, ...agentOptions, ...mcpOptions, ...repoFileOptions]
       return sortFilesByRelevance(allItems, debouncedSearchText)
     }
 
     // No search: Changed files FIRST (quick access), then category navigation
     return [...changedFileOptions, ...availableCategoryOptions]
-  }, [showingFilesList, showingSkillsList, showingAgentsList, showingToolsList, debouncedSearchText, changedFileOptions, repoFileOptions, skillOptions, agentOptions, toolOptions, hasOnlyFiles, availableCategoryOptions])
+  }, [showingFilesList, showingSkillsList, showingAgentsList, showingToolsList, debouncedSearchText, changedFileOptions, repoFileOptions, skillOptions, agentOptions, mcpOptions, hasOnlyFiles, availableCategoryOptions])
 
   // Track previous values for smarter selection reset
   const prevIsOpenRef = useRef(isOpen)
