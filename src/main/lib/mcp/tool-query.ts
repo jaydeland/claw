@@ -631,6 +631,36 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
               } catch (parseError) {
                 console.log(`[mcp-tools] SSE POST response not JSON, waiting for SSE stream`)
               }
+            } else if (contentType.includes("text/plain")) {
+              // Some servers send SSE events with text/plain content-type
+              // Try reading the body as SSE events
+              try {
+                const responseText = await response.text()
+                console.log(`[mcp-tools] SSE POST response (text/plain): ${responseText.slice(0, 200)}`)
+
+                // Try parsing as SSE events
+                const lines = responseText.split("\n")
+                for (const line of lines) {
+                  if (line.startsWith("data: ")) {
+                    try {
+                      const data = JSON.parse(line.slice(6))
+                      if (data.id === id && pendingRequests.has(id)) {
+                        pendingRequests.delete(id)
+                        if (data.error) {
+                          rejectReq(new Error(`JSON-RPC error: ${data.error.message}`))
+                        } else {
+                          resolveReq(data.result)
+                        }
+                        return
+                      }
+                    } catch { /* not JSON */ }
+                  }
+                }
+                // If we get here, no valid response found, wait for SSE stream
+                console.log(`[mcp-tools] SSE POST response (text/plain) had no valid JSON-RPC response, waiting for SSE stream`)
+              } catch (textError) {
+                console.log(`[mcp-tools] SSE POST response read error:`, textError)
+              }
             } else {
               // Response might come through SSE stream
               console.log(`[mcp-tools] SSE POST response content-type: ${contentType}, waiting for SSE stream`)

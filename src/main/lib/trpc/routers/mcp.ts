@@ -914,9 +914,26 @@ export const mcpRouter = router({
         return { tools }
       } catch (error) {
         console.error("[mcp] Failed to query server tools:", error)
+        const errorMessage = error instanceof Error ? error.message : String(error)
+
+        // If we get 401 Unauthorized or invalid_token error, clear stored credentials
+        // so user can re-authenticate
+        if (errorMessage.includes("401") || errorMessage.includes("invalid_token") || errorMessage.includes("Unauthorized")) {
+          console.log(`[mcp] Detected invalid token for ${input.serverId}, clearing credentials`)
+          try {
+            const db = getDatabase()
+            db.delete(mcpCredentials)
+              .where(eq(mcpCredentials.id, input.serverId))
+              .run()
+            console.log(`[mcp] Cleared invalid credentials for ${input.serverId}`)
+          } catch (deleteError) {
+            console.error(`[mcp] Failed to clear credentials:`, deleteError)
+          }
+        }
+
         return {
           tools: [],
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage,
         }
       }
     }),
