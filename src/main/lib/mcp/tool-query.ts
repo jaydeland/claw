@@ -556,7 +556,16 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
 
     // Handle incoming SSE events
     const handleSseEvent = async (event: string, data: string) => {
-      console.log(`[mcp-tools] SSE event: ${event}`)
+      console.log(`[mcp-tools] SSE event: "${event}" data: "${data.slice(0, 100)}${data.length > 100 ? '...' : ''}"`)
+
+      // Clear timeout on any received event - connection is alive
+      if (connectionTimeout) {
+        clearTimeout(connectionTimeout)
+        connectionTimeout = setTimeout(() => {
+          cleanup()
+          reject(new Error("SSE connection timeout - no endpoint received"))
+        }, 30000)
+      }
 
       if (event === "endpoint") {
         // Server sends the message endpoint URL
@@ -645,7 +654,11 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
     }
 
     // Start SSE connection using fetch (EventSource doesn't support custom headers)
-    console.log("[mcp-tools] Opening SSE connection...")
+    console.log("[mcp-tools] Opening SSE connection to:", sseUrl)
+    console.log("[mcp-tools] SSE headers:", JSON.stringify({
+      ...headers,
+      Authorization: headers.Authorization ? `Bearer ${headers.Authorization.slice(7, 15)}...` : undefined
+    }))
     fetch(sseUrl, {
       method: "GET",
       headers,
@@ -668,12 +681,22 @@ async function querySseMcpServerTools(config: McpServerConfig, mergedEnv: Record
       let buffer = ""
       let currentEvent = "message"
 
+      console.log("[mcp-tools] SSE connection established, reading stream...")
       try {
         while (true) {
           const { done, value } = await reader.read()
-          if (done) break
+          if (done) {
+            console.log("[mcp-tools] SSE stream ended")
+            break
+          }
 
-          buffer += decoder.decode(value, { stream: true })
+          const chunk = decoder.decode(value, { stream: true })
+          buffer += chunk
+
+          // Log raw chunks for debugging (first 200 chars)
+          if (chunk.trim()) {
+            console.log(`[mcp-tools] SSE raw chunk: "${chunk.slice(0, 200).replace(/\n/g, '\\n')}${chunk.length > 200 ? '...' : ''}"`)
+          }
 
           // Process complete lines
           const lines = buffer.split("\n")
@@ -747,6 +770,7 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
   function buildHeaders(useAuth: boolean): Record<string, string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream", // MCP Streamable HTTP transport
     }
 
     if (useAuth) {
@@ -765,7 +789,11 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
     return headers
   }
 
+  // Shared session state for MCP Streamable HTTP transport
+  const sessionState = { sessionId: null as string | null }
+
   // Helper to create request function with specific headers
+  // Tracks session ID for MCP Streamable HTTP transport
   function createSendRequest(headers: Record<string, string>) {
     let requestId = 0
 
@@ -777,14 +805,49 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
         params,
       }
 
+      // Build request headers, including session ID if we have one
+      const requestHeaders = { ...headers }
+      if (sessionState.sessionId) {
+        requestHeaders["Mcp-Session-Id"] = sessionState.sessionId
+      }
+
+      console.log(`[mcp-tools] HTTP request: ${method} (id=${requestId})${sessionState.sessionId ? ` session=${sessionState.sessionId.slice(0, 8)}...` : ''}`)
+
       const response = await fetch(url!, {
         method: "POST",
-        headers,
+        headers: requestHeaders,
         body: JSON.stringify(request),
       })
 
+      // Capture session ID from response for subsequent requests
+      const responseSessionId = response.headers.get("Mcp-Session-Id")
+      if (responseSessionId && responseSessionId !== sessionState.sessionId) {
+        console.log(`[mcp-tools] Received session ID: ${responseSessionId.slice(0, 8)}...`)
+        sessionState.sessionId = responseSessionId
+      }
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        // Try to get error details from response body
+        let errorDetails = ""
+        try {
+          const errorBody = await response.text()
+          if (errorBody) {
+            // Try to parse as JSON for structured error
+            try {
+              const errorJson = JSON.parse(errorBody)
+              errorDetails = errorJson.error?.message || errorJson.message || errorBody.slice(0, 200)
+            } catch {
+              errorDetails = errorBody.slice(0, 200)
+            }
+          }
+        } catch {
+          // Ignore if we can't read the body
+        }
+        const errorMsg = errorDetails
+          ? `HTTP ${response.status}: ${errorDetails}`
+          : `HTTP ${response.status}: ${response.statusText}`
+        console.error(`[mcp-tools] HTTP error for ${method}:`, errorMsg)
+        throw new Error(errorMsg)
       }
 
       const contentType = response.headers.get("content-type") || ""
@@ -832,10 +895,18 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
         params: params || {},
       }
 
+      // Build request headers, including session ID if we have one
+      const requestHeaders = { ...headers }
+      if (sessionState.sessionId) {
+        requestHeaders["Mcp-Session-Id"] = sessionState.sessionId
+      }
+
+      console.log(`[mcp-tools] HTTP notification: ${method}${sessionState.sessionId ? ` session=${sessionState.sessionId.slice(0, 8)}...` : ''}`)
+
       try {
         await fetch(url!, {
           method: "POST",
-          headers,
+          headers: requestHeaders,
           body: JSON.stringify(notification),
         })
         // Notifications don't require a response, so we don't check the result

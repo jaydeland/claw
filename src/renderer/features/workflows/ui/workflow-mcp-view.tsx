@@ -30,8 +30,9 @@ function AvailableToolsSection({ mcpServer }: { mcpServer: McpServer }) {
     }
   )
 
-  // Fall back to direct query if session cache is empty
-  const shouldFallback = !sessionLoading && !sessionToolsData?.fromCache
+  // Fall back to direct query if session cache is empty OR has no tools
+  const hasValidCachedTools = sessionToolsData?.fromCache && (sessionToolsData?.tools?.length ?? 0) > 0
+  const shouldFallback = !sessionLoading && !hasValidCachedTools
   const {
     data: directToolsData,
     isLoading: directLoading,
@@ -44,11 +45,11 @@ function AvailableToolsSection({ mcpServer }: { mcpServer: McpServer }) {
     }
   )
 
-  // Use session tools if available, otherwise use direct query
+  // Use session tools if available and has tools, otherwise use direct query
   const toolsLoading = sessionLoading || (shouldFallback && directLoading)
-  const toolsData = sessionToolsData?.fromCache ? sessionToolsData : directToolsData
+  const toolsData = hasValidCachedTools ? sessionToolsData : directToolsData
   const toolsError = shouldFallback ? directError : null
-  const fromCache = sessionToolsData?.fromCache || false
+  const fromCache = hasValidCachedTools || false
 
   return (
     <div className="space-y-3">

@@ -436,8 +436,10 @@ export function DevSpaceTab() {
               onValueChange={setSelectedBranch}
               disabled={branchesLoading}
             >
-              <SelectTrigger className="w-full max-w-[200px] h-8 text-xs">
-                <SelectValue placeholder={branchesLoading ? "Loading..." : (branchError || branchData?.error) ? "Error loading" : "Select branch"} />
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <span className="truncate">
+                  <SelectValue placeholder={branchesLoading ? "Loading..." : (branchError || branchData?.error) ? "Error loading" : "Select branch"} />
+                </span>
               </SelectTrigger>
               <SelectContent>
                 {branchesLoading ? (
