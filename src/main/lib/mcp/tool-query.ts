@@ -426,21 +426,30 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
   console.log(`[mcp-tools] Querying HTTP MCP server: ${url}`)
 
   // Check if we have auth credentials
-  const accessToken = mergedEnv["MCP_ACCESS_TOKEN"]
+  // After OAuth flow, MCP_ACCESS_TOKEN is stored in config.env (via injectStoredCredentials)
+  // So we need to check both mergedEnv and the expanded config's env
+  const accessTokenFromConfig = expandedConfig.env?.["MCP_ACCESS_TOKEN"]
+  const accessTokenFromEnv = mergedEnv["MCP_ACCESS_TOKEN"]
+  const accessToken = accessTokenFromConfig || accessTokenFromEnv
+
+  if (accessTokenFromConfig) {
+    console.log(`[mcp-tools] Found MCP_ACCESS_TOKEN in config.env (${accessTokenFromConfig.slice(0, 8)}...)`)
+  } else if (accessTokenFromEnv) {
+    console.log(`[mcp-tools] Found MCP_ACCESS_TOKEN in mergedEnv`)
+  } else {
+    console.log(`[mcp-tools] No MCP_ACCESS_TOKEN found`)
+  }
+
   const hasConfiguredAuth = expandedConfig.headers?.["Authorization"] ||
                             expandedConfig.headers?.["authorization"] ||
                             accessToken
 
-  // Helper to create request function with specific headers
-  function createSendRequest(useAuth: boolean) {
-    let requestId = 0
-
-    // Build headers
+  // Build headers for different auth modes
+  function buildHeaders(useAuth: boolean): Record<string, string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     }
 
-    // Only add auth headers if requested and available
     if (useAuth) {
       // Add configured headers
       if (expandedConfig.headers) {
@@ -453,6 +462,13 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
         headers["Authorization"] = `Bearer ${accessToken}`
       }
     }
+
+    return headers
+  }
+
+  // Helper to create request function with specific headers
+  function createSendRequest(headers: Record<string, string>) {
+    let requestId = 0
 
     return async function sendRequest(method: string, params?: Record<string, unknown>): Promise<unknown> {
       const request = {
@@ -506,11 +522,54 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
     }
   }
 
+  // Helper to send a notification (no response expected)
+  // Per JSON-RPC 2.0 spec, notifications MUST NOT have an "id" field
+  function createSendNotification(headers: Record<string, string>) {
+    return async function sendNotification(method: string, params?: Record<string, unknown>): Promise<void> {
+      // JSON-RPC 2.0 notification - no "id" field means server won't send a response
+      const notification = {
+        jsonrpc: "2.0",
+        method,
+        params: params || {},
+      }
+
+      try {
+        await fetch(url!, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(notification),
+        })
+        // Notifications don't require a response, so we don't check the result
+      } catch (error) {
+        // Notifications are fire-and-forget, log but don't throw
+        console.log(`[mcp-tools] Notification ${method} failed:`, error)
+      }
+    }
+  }
+
+  // Server capabilities response type
+  interface InitializeResult {
+    protocolVersion?: string
+    capabilities?: {
+      tools?: Record<string, unknown>
+      resources?: Record<string, unknown>
+      prompts?: Record<string, unknown>
+      logging?: Record<string, unknown>
+    }
+    serverInfo?: {
+      name?: string
+      version?: string
+    }
+  }
+
   // Helper to query tools with a specific sendRequest function
-  async function queryWithRequest(sendRequest: (method: string, params?: Record<string, unknown>) => Promise<unknown>): Promise<McpTool[]> {
-    // Initialize the server
+  async function queryWithRequest(
+    sendRequest: (method: string, params?: Record<string, unknown>) => Promise<unknown>,
+    sendNotification: (method: string, params?: Record<string, unknown>) => Promise<void>
+  ): Promise<McpTool[]> {
+    // Initialize the server and capture capabilities
     console.log("[mcp-tools] Sending initialize request to HTTP server...")
-    await sendRequest("initialize", {
+    const initResult = await sendRequest("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {
         roots: { listChanged: false },
@@ -520,9 +579,26 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
         name: "claw",
         version: "0.1.0",
       },
-    })
+    }) as InitializeResult
 
-    // List tools
+    // Log server info and capabilities for debugging
+    const serverName = initResult?.serverInfo?.name || "unknown"
+    const serverVersion = initResult?.serverInfo?.version || "unknown"
+    const hasToolsCapability = !!initResult?.capabilities?.tools
+    console.log(`[mcp-tools] Server: ${serverName} v${serverVersion}`)
+    console.log(`[mcp-tools] Server capabilities:`, JSON.stringify(initResult?.capabilities || {}))
+    console.log(`[mcp-tools] Server declares tools capability: ${hasToolsCapability}`)
+
+    // CRITICAL: Send 'notifications/initialized' notification after initialize handshake
+    // According to MCP protocol, this notification MUST be sent before other requests
+    // Many servers (including AWS MCP, Datadog) wait for this before responding to tools/list
+    console.log("[mcp-tools] Sending notifications/initialized to HTTP server...")
+    await sendNotification("notifications/initialized", {})
+
+    // Small delay to let server process the notification
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // List tools (even if server didn't declare tools capability - some servers don't advertise properly)
     console.log("[mcp-tools] Requesting tools/list from HTTP server...")
     const result = await sendRequest("tools/list", {}) as { tools?: McpTool[] }
     const tools = result?.tools || []
@@ -534,8 +610,10 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
   // First, try without authentication (many servers allow listing tools without auth)
   console.log("[mcp-tools] Attempting to query tools without authentication...")
   try {
-    const sendRequestNoAuth = createSendRequest(false)
-    const tools = await queryWithRequest(sendRequestNoAuth)
+    const noAuthHeaders = buildHeaders(false)
+    const sendRequestNoAuth = createSendRequest(noAuthHeaders)
+    const sendNotificationNoAuth = createSendNotification(noAuthHeaders)
+    const tools = await queryWithRequest(sendRequestNoAuth, sendNotificationNoAuth)
     console.log("[mcp-tools] Successfully queried tools without authentication")
     return tools
   } catch (error) {
@@ -545,8 +623,10 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
     // If we have auth credentials and got a 401/403, try with auth
     if (hasConfiguredAuth && (errorMessage.includes("401") || errorMessage.includes("403") || errorMessage.includes("Unauthorized"))) {
       console.log("[mcp-tools] Retrying with authentication...")
-      const sendRequestWithAuth = createSendRequest(true)
-      return queryWithRequest(sendRequestWithAuth)
+      const authHeaders = buildHeaders(true)
+      const sendRequestWithAuth = createSendRequest(authHeaders)
+      const sendNotificationWithAuth = createSendNotification(authHeaders)
+      return queryWithRequest(sendRequestWithAuth, sendNotificationWithAuth)
     }
 
     // Re-throw the original error

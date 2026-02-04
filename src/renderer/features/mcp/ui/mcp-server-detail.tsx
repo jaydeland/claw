@@ -322,8 +322,11 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
     }
   )
 
-  // Fall back to direct query if session cache is empty
-  const shouldFallback = !sessionLoading && !sessionToolsData?.fromCache
+  // Fall back to direct query if:
+  // - Session cache is empty (no cache data)
+  // - OR cache has 0 tools (stale cache from before auth, or server error)
+  const hasValidCachedTools = sessionToolsData?.fromCache && (sessionToolsData?.tools?.length ?? 0) > 0
+  const shouldFallback = !sessionLoading && !hasValidCachedTools
   const {
     data: directToolsData,
     isLoading: directLoading,
@@ -337,11 +340,11 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
     }
   )
 
-  // Use session tools if available, otherwise use direct query
+  // Use session tools if available and non-empty, otherwise use direct query
   const isLoading = sessionLoading || (shouldFallback && directLoading)
-  const toolsData = sessionToolsData?.fromCache ? sessionToolsData : directToolsData
+  const toolsData = hasValidCachedTools ? sessionToolsData : directToolsData
   const error = shouldFallback ? directError : null
-  const fromCache = sessionToolsData?.fromCache || false
+  const fromCache = hasValidCachedTools
 
   // Get currently selected tool (if any from this server)
   const currentToolKey = selectedTool?.startsWith(`${serverId}:`)
@@ -470,7 +473,9 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
             {tools.length === 0 ? (
               <div className="p-3">
                 <p className="text-xs text-muted-foreground">
-                  This server does not provide any tools.
+                  {fromCache
+                    ? "No tools found in cache. Start a chat to refresh."
+                    : "This server connected successfully but did not report any tools."}
                 </p>
               </div>
             ) : (
