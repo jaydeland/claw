@@ -419,6 +419,15 @@ async function queryHttpMcpServerTools(config: McpServerConfig, mergedEnv: Recor
     ...expandedConfig.headers,
   }
 
+  // Auto-inject MCP_ACCESS_TOKEN into Authorization header if present and no auth header set
+  if (!headers["Authorization"] && !headers["authorization"]) {
+    const accessToken = mergedEnv["MCP_ACCESS_TOKEN"]
+    if (accessToken) {
+      console.log("[mcp-tools] Injecting MCP_ACCESS_TOKEN into Authorization header")
+      headers["Authorization"] = `Bearer ${accessToken}`
+    }
+  }
+
   let requestId = 0
 
   // Helper to send JSON-RPC request

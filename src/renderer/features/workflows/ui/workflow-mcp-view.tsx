@@ -1,11 +1,13 @@
 "use client"
 
-import { useAtomValue } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { selectedWorkflowNodeAtom } from "../atoms"
 import { selectedProjectAtom } from "../../agents/atoms"
+import { mcpAuthModalOpenAtom, mcpAuthModalServerIdAtom } from "../../mcp/atoms"
 import { trpc } from "../../../lib/trpc"
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Plug } from "lucide-react"
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Plug, Key } from "lucide-react"
 import { cn } from "../../../lib/utils"
+import { Button } from "../../../components/ui/button"
 import type { McpServer } from "../../../../../main/lib/trpc/routers/mcp"
 
 /**
@@ -157,6 +159,8 @@ function AvailableToolsSection({ mcpServer }: { mcpServer: McpServer }) {
 export function WorkflowMcpView() {
   const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
+  const setAuthModalOpen = useSetAtom(mcpAuthModalOpenAtom)
+  const setAuthModalServerId = useSetAtom(mcpAuthModalServerIdAtom)
 
   // Fetch MCP servers list
   const { data: mcpData, isLoading } = trpc.mcp.listServers.useQuery({
@@ -165,6 +169,19 @@ export function WorkflowMcpView() {
 
   // Find the selected MCP server
   const mcpServer = mcpData?.servers.find(s => s.id === selectedNode?.id)
+
+  // Check for OAuth discovery on HTTP/SSE servers
+  const { data: oauthDiscovery } = trpc.mcp.discoverOAuth.useQuery(
+    { serverId: selectedNode?.id!, projectPath: selectedProject?.path || undefined },
+    { enabled: !!selectedNode?.id && (mcpServer?.config.type === "http" || mcpServer?.config.type === "sse") }
+  )
+
+  const handleConfigureAuth = () => {
+    if (selectedNode?.id) {
+      setAuthModalServerId(selectedNode.id)
+      setAuthModalOpen(true)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -318,30 +335,76 @@ export function WorkflowMcpView() {
           )}
         </div>
 
-        {/* Required Credentials */}
-        {mcpServer.credentialEnvVars.length > 0 && (
+        {/* Authentication Section */}
+        {/* Show for servers with detected credentials OR HTTP/SSE servers (which may need OAuth) */}
+        {(mcpServer.credentialEnvVars.length > 0 || mcpServer.config.type === "http" || mcpServer.config.type === "sse") && (
           <div className="space-y-3">
-            <h3 className="text-lg font-semibold">Required Credentials</h3>
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-4 space-y-2">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-2">
-                  <p className="text-sm font-medium">This server requires the following credentials:</p>
-                  <div className="space-y-1">
-                    {mcpServer.credentialEnvVars.map((envVar) => (
-                      <div key={envVar} className="text-sm font-mono bg-background/50 px-2 py-1 rounded">
-                        {envVar}
-                      </div>
-                    ))}
+            <h3 className="text-lg font-semibold">Authentication</h3>
+            {mcpServer.credentialEnvVars.length > 0 ? (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm font-medium">This server requires the following credentials:</p>
+                    <div className="space-y-1">
+                      {mcpServer.credentialEnvVars.map((envVar) => (
+                        <div key={envVar} className="text-sm font-mono bg-background/50 px-2 py-1 rounded">
+                          {envVar}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  {mcpServer.authStatus === "missing_credentials" && (
-                    <p className="text-xs text-muted-foreground">
-                      Configure these in Settings → MCP Servers to enable this server.
-                    </p>
-                  )}
                 </div>
+                <Button
+                  onClick={handleConfigureAuth}
+                  variant={mcpServer.authStatus === "missing_credentials" ? "default" : "outline"}
+                  className="w-full"
+                >
+                  <Key className="h-4 w-4 mr-2" />
+                  {mcpServer.authStatus === "missing_credentials"
+                    ? "Configure Credentials"
+                    : "Update Credentials"}
+                </Button>
               </div>
-            </div>
+            ) : (
+              <div className="bg-muted/50 rounded-md p-4 space-y-3">
+                {oauthDiscovery?.supported ? (
+                  <>
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">OAuth 2.1 Supported</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          This server supports secure OAuth authentication with automatic token management.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleConfigureAuth}
+                      variant="default"
+                      className="w-full"
+                    >
+                      <Key className="h-4 w-4 mr-2" />
+                      Sign in with OAuth
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      This HTTP server may require authentication. If tools fail to load, configure credentials below.
+                    </p>
+                    <Button
+                      onClick={handleConfigureAuth}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Key className="h-4 w-4 mr-2" />
+                      Configure Authentication
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
