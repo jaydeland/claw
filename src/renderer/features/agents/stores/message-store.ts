@@ -493,6 +493,7 @@ type TokenData = {
   cacheWriteTokens: number
   reasoningTokens: number
   totalTokens: number
+  totalCostUsd: number
   messageCount: number
   // Track last message's output tokens to detect when streaming completes
   lastMsgOutputTokens: number
@@ -528,6 +529,7 @@ export const messageTokenDataAtom = atom((get) => {
   let cacheReadTokens = 0
   let cacheWriteTokens = 0
   let reasoningTokens = 0
+  let totalCostUsd = 0
 
   for (const id of ids) {
     const msg = get(messageAtomFamily(id))
@@ -537,6 +539,7 @@ export const messageTokenDataAtom = atom((get) => {
     if (metadata) {
       inputTokens += metadata.inputTokens || 0
       outputTokens += metadata.outputTokens || 0
+      totalCostUsd += metadata.totalCostUsd || 0
       // These fields are not in current MessageMetadata but kept for future compatibility
       cacheReadTokens += metadata.cacheReadInputTokens || 0
       cacheWriteTokens += metadata.cacheCreationInputTokens || 0
@@ -551,6 +554,7 @@ export const messageTokenDataAtom = atom((get) => {
     cacheWriteTokens,
     reasoningTokens,
     totalTokens: inputTokens + outputTokens,
+    totalCostUsd,
     messageCount: ids.length,
     lastMsgOutputTokens,
   }

@@ -17,8 +17,10 @@ import {
   loadedContextSidebarWidthAtom,
 } from "../atoms"
 import { selectedAgentChatIdAtom } from "../../agents/atoms"
+import { messageTokenDataAtom } from "../../agents/stores/message-store"
 import { trpc } from "@/lib/trpc"
 import { calculateLoadedContextTokens } from "../types"
+import { formatCost } from "@/lib/format-tokens"
 
 /**
  * Format token count for header display
@@ -39,6 +41,7 @@ export function LoadedContextSidebar({ projectPath }: LoadedContextSidebarProps)
   const [isOpen, setIsOpen] = useAtom(loadedContextSidebarOpenAtom)
   const setRuntimeOpen = useSetAtom(loadedContextSidebarOpenRuntimeAtom)
   const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+  const tokenData = useAtomValue(messageTokenDataAtom)
 
   // Query the chat to get project info
   const { data: chatData } = trpc.chats.get.useQuery(
@@ -120,6 +123,11 @@ export function LoadedContextSidebar({ projectPath }: LoadedContextSidebarProps)
           {totalTokens > 0 && (
             <span className="text-xs text-muted-foreground ml-1">
               ({formatHeaderTokens(totalTokens)} tokens)
+            </span>
+          )}
+          {tokenData.totalCostUsd > 0 && (
+            <span className="text-xs text-muted-foreground ml-1">
+              • {formatCost(tokenData.totalCostUsd)}
             </span>
           )}
 
