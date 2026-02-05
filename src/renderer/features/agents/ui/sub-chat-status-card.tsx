@@ -380,14 +380,6 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
             onClick={() => handleSectionClick('changes')}
           />
           <SectionButton
-            icon={CheckIcon}
-            label="Tasks"
-            count={tasksTotal}
-            countDetail={tasksDetail}
-            isActive={expandedSection === 'tasks'}
-            onClick={() => handleSectionClick('tasks')}
-          />
-          <SectionButton
             icon={Bot}
             label="Agents"
             count={agentsTotal}
