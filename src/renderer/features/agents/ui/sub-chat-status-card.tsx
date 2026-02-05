@@ -477,50 +477,6 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
                 )
               })}
 
-              {/* Tasks list */}
-              {expandedSection === 'tasks' && tasks?.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => handleTaskClick(task)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      handleTaskClick(task)
-                    }
-                  }}
-                >
-                  <TaskStatusIcon status={task.status} />
-                  <span className="truncate flex-1 font-mono text-[11px]">
-                    {task.command || `Task ${task.id.slice(0, 8)}`}
-                  </span>
-                  <span className={cn(
-                    "text-[10px] capitalize px-1.5 py-0.5 rounded",
-                    task.status === "running" && "bg-blue-500/10 text-blue-500",
-                    task.status === "completed" && "bg-green-500/10 text-green-500",
-                    task.status === "failed" && "bg-red-500/10 text-red-500"
-                  )}>
-                    {task.status}
-                  </span>
-                  {task.status === "running" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        killMutation.mutate({ taskId: task.id })
-                      }}
-                      title="Stop task"
-                    >
-                      <Square className="h-2.5 w-2.5" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-
               {/* Agents list */}
               {expandedSection === 'agents' && subAgents.map((agent) => (
                 <div
