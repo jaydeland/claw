@@ -88,11 +88,14 @@ function getToolState(part: MessagePart): "call" | "result" | "error" {
 
 /**
  * Check if a tool type represents an MCP tool
- * MCP tools use format: mcp__servername__toolname
- * Regular tools use format: tool-ToolName
+ * MCP tools use format: mcp__servername__toolname (in tool names)
+ * Regular tools use format: tool-ToolName (in part types)
+ * Part types are prefixed with "tool-", so MCP tools become: tool-mcp__servername__toolname
  */
 function isMcpTool(partType: string | undefined): boolean {
-  return partType?.startsWith("mcp__") ?? false
+  if (!partType) return false
+  // Handle both formats: "mcp__server__tool" and "tool-mcp__server__tool"
+  return partType.startsWith("mcp__") || partType.startsWith("tool-mcp__")
 }
 
 /**

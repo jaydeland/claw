@@ -21,12 +21,14 @@ import {
   XCircle,
   Clock,
   Loader2,
+  Plug,
 } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { OriginalMCPIcon } from "@/components/ui/icons"
 import { messageAtomFamily } from "../../agents/stores/message-store"
 
 // Tool name to icon mapping
@@ -43,6 +45,7 @@ const toolIconMap: Record<string, React.ComponentType<{ className?: string }>> =
   TodoWrite: ListTodo,
   AskUserQuestion: MessageSquare,
   NotebookEdit: FileEdit,
+  Thinking: Bot, // Use Bot icon (same as Agents sidebar icon)
 }
 
 // Node data types
@@ -205,7 +208,8 @@ export const AssistantResponseNode = memo(function AssistantResponseNode({
 export const ToolCallNode = memo(function ToolCallNode({
   data,
 }: NodeProps<ToolCallNodeData>) {
-  const Icon = toolIconMap[data.toolName] || Terminal
+  // Use OriginalMCPIcon for MCP tools, otherwise use mapped icon or Terminal as fallback
+  const Icon = data.isMcpTool ? OriginalMCPIcon : (toolIconMap[data.toolName] || Terminal)
   const isExpanded = data.isExpanded || false
 
   const bgColor = data.isMcpTool

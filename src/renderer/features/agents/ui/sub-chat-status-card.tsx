@@ -32,7 +32,7 @@ import {
 } from "../../session-flow/atoms"
 
 // Persistent expanded section atom - only one section can be expanded at a time
-const statusBarSectionAtom = atomWithStorage<'changes' | 'tasks' | 'agents' | 'todos' | null>(
+const statusBarSectionAtom = atomWithStorage<'changes' | 'agents' | 'todos' | null>(
   'status-bar-expanded-section',
   null
 )
@@ -255,25 +255,6 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   const todosData = useAtomValue(sessionFlowTodosAtom)
   const subAgents = useAtomValue(sessionFlowSubAgentsAtom)
 
-  // Get tasks from tRPC
-  const { data: tasks, refetch: refetchTasks } = trpc.tasks.listByChat.useQuery(
-    { chatId: chatId || "" },
-    { enabled: !!chatId, refetchInterval: 5000 }
-  )
-
-  // Kill task mutation
-  const killMutation = trpc.tasks.killTask.useMutation({
-    onSuccess: (result) => {
-      if (result.killed) {
-        toast.success("Task stopped")
-      }
-      refetchTasks()
-    },
-    onError: (error) => {
-      toast.error(`Failed to stop task: ${error.message}`)
-    },
-  })
-
   // Listen for file changes from Claude Write/Edit tools
   useFileChangeListener(worktreePath)
 
@@ -334,12 +315,8 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   const agentsComplete = subAgents.filter(a => a.status !== "running").length
   const agentsTotal = subAgents.length
 
-  const tasksRunning = tasks?.filter(t => t.status === "running").length ?? 0
-  const tasksComplete = tasks?.filter(t => t.status !== "running").length ?? 0
-  const tasksTotal = tasks?.length ?? 0
-
   // Section toggle handlers
-  const handleSectionClick = useCallback((section: 'changes' | 'tasks' | 'agents' | 'todos') => {
+  const handleSectionClick = useCallback((section: 'changes' | 'agents' | 'todos') => {
     setExpandedSection(prev => prev === section ? null : section)
   }, [setExpandedSection])
 
