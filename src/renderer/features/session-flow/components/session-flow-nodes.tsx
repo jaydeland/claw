@@ -65,6 +65,7 @@ export interface ToolCallNodeData {
   toolCallId: string
   toolName: string
   state: "call" | "result" | "error"
+  isMcpTool?: boolean // Flag to identify MCP tools (format: mcp__server__tool)
   count?: number // Number of times this tool was invoked (for Thinking and Bash)
   commandPreview?: string // Preview of bash command (for Bash nodes)
   messageId?: string // Add message ID for detail fetching
@@ -207,12 +208,19 @@ export const ToolCallNode = memo(function ToolCallNode({
   const Icon = toolIconMap[data.toolName] || Terminal
   const isExpanded = data.isExpanded || false
 
-  const bgColor =
-    data.state === "result"
-      ? "bg-green-500 border-green-600 hover:bg-green-600"
-      : data.state === "error"
-        ? "bg-red-500 border-red-600 hover:bg-red-600"
-        : "bg-cyan-500 border-cyan-600 hover:bg-cyan-600"
+  const bgColor = data.isMcpTool
+    ? // MCP tools: amber/orange tones
+      data.state === "result"
+        ? "bg-orange-500 border-orange-600 hover:bg-orange-600"
+        : data.state === "error"
+          ? "bg-red-500 border-red-600 hover:bg-red-600"
+          : "bg-amber-500 border-amber-600 hover:bg-amber-600"
+    : // Regular tools: cyan/green/red
+      data.state === "result"
+        ? "bg-green-500 border-green-600 hover:bg-green-600"
+        : data.state === "error"
+          ? "bg-red-500 border-red-600 hover:bg-red-600"
+          : "bg-cyan-500 border-cyan-600 hover:bg-cyan-600"
 
   const hasMultipleInvocations = data.count && data.count > 1
   const canExpand = hasMultipleInvocations

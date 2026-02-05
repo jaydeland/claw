@@ -64,10 +64,14 @@ function getFirstTextContent(parts: MessagePart[] | undefined): string {
 function hasToolBranches(parts: MessagePart[] | undefined): boolean {
   if (!parts) return false
   return parts.some((p) => {
-    // New format: type is "tool-{toolName}" (e.g., "tool-Bash", "tool-Read")
+    // Regular tools: type is "tool-{toolName}" (e.g., "tool-Bash", "tool-Read")
     if (p.type?.startsWith("tool-")) {
       const toolName = p.type.replace("tool-", "")
       return !HIDDEN_TOOLS.has(toolName)
+    }
+    // MCP tools: type is "mcp__servername__toolname"
+    if (p.type?.startsWith("mcp__")) {
+      return true
     }
     return false
   })
@@ -80,6 +84,15 @@ function getToolState(part: MessagePart): "call" | "result" | "error" {
   if (part.error || part.errorText) return "error"
   if (part.output !== undefined || part.result !== undefined) return "result"
   return "call"
+}
+
+/**
+ * Check if a tool type represents an MCP tool
+ * MCP tools use format: mcp__servername__toolname
+ * Regular tools use format: tool-ToolName
+ */
+function isMcpTool(partType: string | undefined): boolean {
+  return partType?.startsWith("mcp__") ?? false
 }
 
 /**
@@ -205,9 +218,16 @@ export function transformMessagesToFlow(
       for (let partIndex = 0; partIndex < parts.length; partIndex++) {
         const part = parts[partIndex]
 
+        // Extract tool name from either regular or MCP tool format
+        let toolName: string | null = null
         if (part.type?.startsWith("tool-")) {
-          const toolName = part.type.replace("tool-", "")
+          toolName = part.type.replace("tool-", "")
+        } else if (part.type?.startsWith("mcp__")) {
+          // MCP format: mcp__servername__toolname -> extract toolname
+          toolName = part.type.split("__").pop() || part.type
+        }
 
+        if (toolName) {
           // Skip hidden tools
           if (HIDDEN_TOOLS.has(toolName)) continue
 
@@ -277,6 +297,7 @@ export function transformMessagesToFlow(
               toolCallId: part.toolCallId || "",
               toolName,
               state,
+              isMcpTool: isMcpTool(part.type),
               onClick: () => options.onNodeClick(message.id, partIndex),
             } as ToolCallNodeData,
           })
@@ -314,6 +335,7 @@ export function transformMessagesToFlow(
             toolCallId: toolName.toLowerCase(),
             toolName,
             state: group.state,
+            isMcpTool: isMcpTool(group.parts[0]?.type),
             count,
             isExpanded,
             // For single invocation: navigate directly. For multiple: no onClick (handled by onToggleExpansion)
@@ -387,6 +409,7 @@ export function transformMessagesToFlow(
                 toolCallId: part.toolCallId || `${toolName.toLowerCase()}-${partIndex}`,
                 toolName,
                 state,
+                isMcpTool: isMcpTool(part.type),
                 commandPreview,
                 input,
                 output,
