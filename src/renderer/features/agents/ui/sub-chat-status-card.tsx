@@ -357,7 +357,6 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
 
   // Build count detail strings - always show even when zero
   const changesDetail = `${changesTotals.fileCount} files +${changesTotals.additions} -${changesTotals.deletions}`
-  const tasksDetail = `${tasksComplete}/${tasksTotal}`
   const agentsDetail = `${agentsComplete}/${agentsTotal}`
   const todosDetail = `${todosComplete}/${todosTotal}`
 
