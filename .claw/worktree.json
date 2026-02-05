@@ -1,1 +1,8 @@
-{}
+{
+  "setup-worktree": [
+    "flox activate"
+  ],
+  "terminal-startup": [
+    "flox activate"
+  ]
+}

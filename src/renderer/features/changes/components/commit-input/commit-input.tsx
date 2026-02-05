@@ -44,8 +44,10 @@ export function CommitInput({
 		onSuccess: () => {
 			setSummary("");
 			setDescription("");
-			// Invalidate the changes.getStatus query to force a fresh fetch
+			// Invalidate queries to force fresh fetches
 			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
 			onRefresh();
 			onCommitSuccess?.();
 		},
@@ -58,6 +60,8 @@ export function CommitInput({
 			setSummary("");
 			setDescription("");
 			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
 			onRefresh();
 			onCommitSuccess?.();
 		},

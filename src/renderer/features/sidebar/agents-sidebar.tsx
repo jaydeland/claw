@@ -1006,12 +1006,12 @@ const SidebarHeader = memo(function SidebarHeader({
         />
       )}
 
-      {/* Custom traffic lights - positioned at top left, centered in 32px area */}
+      {/* Custom traffic lights - positioned to match native macOS position (x:15, y:12) */}
       <TrafficLights
         isHovered={isSidebarHovered}
         isFullscreen={isFullscreen}
         isDesktop={isDesktop}
-        className="absolute left-4 top-[14px] z-20"
+        className="absolute left-[15px] top-[12px] z-20"
       />
 
       {/* Close button - positioned at top right */}

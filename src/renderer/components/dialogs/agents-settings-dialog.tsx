@@ -2,7 +2,7 @@ import { useAtom } from "jotai"
 import { useEffect, useState, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { FolderOpen, Server } from "lucide-react"
+import { FolderOpen, Server, Download } from "lucide-react"
 import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
 import { cn } from "../../lib/utils"
 import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms"
@@ -24,6 +24,7 @@ import { AgentsKubernetesTab } from "./settings-tabs/agents-kubernetes-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
 import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
+import { AgentsBackupTab } from "./settings-tabs/agents-backup-tab"
 import { AgentsClaudeCodeTab } from "../../features/agents/components/settings-tabs/agents-claude-code-tab"
 import { trpc } from "../../lib/trpc"
 
@@ -111,6 +112,12 @@ const ADVANCED_TABS = [
     label: "Worktrees",
     icon: FolderOpen,
     description: "Manage git worktrees",
+  },
+  {
+    id: "backup" as SettingsTab,
+    label: "Backup",
+    icon: Download,
+    description: "Export and import settings",
   },
   {
     id: "beta" as SettingsTab,
@@ -311,6 +318,8 @@ export function AgentsSettingsDialog({
         return <AgentsAdvancedSettingsTab />
       case "worktrees":
         return <AgentsWorktreesTab />
+      case "backup":
+        return <AgentsBackupTab />
       case "beta":
         return <AgentsBetaTab />
       case "debug":

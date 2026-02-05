@@ -188,6 +188,8 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 			setLastFetchTime(new Date());
 			refetchBranches();
 			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
 			onRefresh?.();
 		},
 	});
@@ -196,6 +198,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
 			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
 			onRefresh?.();
 		},
 		onError: (error) => toast.error(`Push failed: ${error.message}`),
@@ -205,6 +208,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
 			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
 			onRefresh?.();
 		},
 		onError: (error) => toast.error(`Pull failed: ${error.message}`),
@@ -214,6 +218,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
 			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
 			onRefresh?.();
 		},
 		onError: (error: { message: string }) => toast.error(`Force push failed: ${error.message}`),
@@ -223,6 +228,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
 			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
+			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
 			onRefresh?.();
 		},
 		onError: (error: { message: string }) => toast.error(`Merge failed: ${error.message}`),

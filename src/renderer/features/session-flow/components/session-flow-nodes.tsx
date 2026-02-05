@@ -67,7 +67,7 @@ export interface AssistantResponseNodeData {
 export interface ToolCallNodeData {
   toolCallId: string
   toolName: string
-  state: "call" | "result" | "error"
+  state: "call" | "result" | "error" | "partial-error"
   isMcpTool?: boolean // Flag to identify MCP tools (format: mcp__server__tool)
   count?: number // Number of times this tool was invoked (for Thinking and Bash)
   commandPreview?: string // Preview of bash command (for Bash nodes)
@@ -218,13 +218,17 @@ export const ToolCallNode = memo(function ToolCallNode({
         ? "bg-orange-500 border-orange-600 hover:bg-orange-600"
         : data.state === "error"
           ? "bg-red-500 border-red-600 hover:bg-red-600"
-          : "bg-amber-500 border-amber-600 hover:bg-amber-600"
-    : // Regular tools: cyan/green/red
+          : data.state === "partial-error"
+            ? "bg-orange-500 border-orange-600 hover:bg-orange-600"
+            : "bg-amber-500 border-amber-600 hover:bg-amber-600"
+    : // Regular tools: cyan/green/red/orange
       data.state === "result"
         ? "bg-green-500 border-green-600 hover:bg-green-600"
         : data.state === "error"
           ? "bg-red-500 border-red-600 hover:bg-red-600"
-          : "bg-cyan-500 border-cyan-600 hover:bg-cyan-600"
+          : data.state === "partial-error"
+            ? "bg-orange-500 border-orange-600 hover:bg-orange-600"
+            : "bg-cyan-500 border-cyan-600 hover:bg-cyan-600"
 
   const hasMultipleInvocations = data.count && data.count > 1
   const canExpand = hasMultipleInvocations
@@ -395,7 +399,7 @@ export const AgentSpawnNode = memo(function AgentSpawnNode({
         >
           <Handle type="target" position={Position.Left} className="!bg-slate-600" />
           <div className="flex items-center gap-1.5">
-            <GitBranch className="h-3 w-3 flex-shrink-0" />
+            <Bot className="h-3 w-3 flex-shrink-0" />
             <span className="text-[10px] font-mono truncate">
               {data.description || "Agent"}
             </span>
