@@ -32,6 +32,7 @@ function parseJsonSafely<T>(json: string, fallback: T): T {
 
 /**
  * Inject stored credentials into a single server config
+ * Handles both stdio servers (credentials in env) and HTTP/SSE servers (credentials in headers)
  */
 function injectStoredCredentials(
   config: McpServerConfig,
@@ -41,6 +42,26 @@ function injectStoredCredentials(
     return config
   }
 
+  // For HTTP/SSE servers, inject MCP_ACCESS_TOKEN into Authorization header
+  if (config.type === "http" || config.type === "sse") {
+    const accessToken = storedCredentials["MCP_ACCESS_TOKEN"]
+    if (accessToken) {
+      return {
+        ...config,
+        headers: {
+          ...config.headers,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        // Also add to env in case server expects it there
+        env: {
+          ...config.env,
+          ...storedCredentials,
+        },
+      }
+    }
+  }
+
+  // For stdio servers, inject credentials into env
   return {
     ...config,
     env: {
@@ -67,10 +88,14 @@ export async function injectAllStoredCredentials(
   for (const cred of allCredentials) {
     const decrypted: Record<string, string> = {}
     const stored = parseJsonSafely<Record<string, string>>(cred.credentials, {})
+    console.log(`[credential-injection] Processing credentials for ${cred.id}: ${Object.keys(stored).length} keys`)
     for (const [key, value] of Object.entries(stored)) {
       const decryptedValue = decryptCredential(value)
       if (decryptedValue) {
         decrypted[key] = decryptedValue
+        console.log(`[credential-injection] Decrypted ${key} for ${cred.id} (length: ${decryptedValue.length})`)
+      } else {
+        console.warn(`[credential-injection] Failed to decrypt ${key} for ${cred.id}`)
       }
     }
     credentialsMap.set(cred.id, decrypted)
@@ -80,8 +105,12 @@ export async function injectAllStoredCredentials(
   const result: Record<string, McpServerConfig> = {}
   for (const [serverId, serverConfig] of Object.entries(servers)) {
     const storedCreds = credentialsMap.get(serverId) || {}
+    if (Object.keys(storedCreds).length > 0) {
+      console.log(`[credential-injection] Injecting ${Object.keys(storedCreds).length} credentials for ${serverId}: ${Object.keys(storedCreds).join(", ")}`)
+    }
     result[serverId] = injectStoredCredentials(serverConfig, storedCreds)
   }
 
+  console.log(`[credential-injection] Injection complete for ${Object.keys(result).length} servers`)
   return result
 }

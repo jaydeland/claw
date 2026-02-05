@@ -1009,7 +1009,8 @@ export const claudeRouter = router({
               try {
                 const lookupPath = input.projectPath || input.cwd
                 const mergedConfig = await getMergedMcpConfig(lookupPath)
-                mcpServersForSdk = mergedConfig.mcpServers
+                // Inject stored OAuth credentials into server configs
+                mcpServersForSdk = await injectAllStoredCredentials(mergedConfig.mcpServers)
               } catch (configErr) {
                 console.error(`[claude] Failed to get merged MCP config:`, configErr)
               }
