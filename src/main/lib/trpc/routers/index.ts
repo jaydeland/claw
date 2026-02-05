@@ -18,6 +18,7 @@ import { awsSsoRouter } from "./aws-sso"
 import { configManagementRouter } from "./config-management"
 import { clustersRouter } from "./clusters"
 import { tasksRouter } from "./tasks"
+import { settingsExportRouter } from "./settings-export"
 import { gsdRouter } from "./gsd"
 import { devspaceRouter } from "./devspace"
 import { conductorRouter } from "./conductor"
@@ -50,6 +51,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     configManagement: configManagementRouter,
     clusters: clustersRouter,
     tasks: tasksRouter,
+    settingsExport: settingsExportRouter,
     gsd: gsdRouter,
     devspace: devspaceRouter,
     conductor: conductorRouter,

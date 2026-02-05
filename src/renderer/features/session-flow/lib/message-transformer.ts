@@ -210,11 +210,13 @@ export function transformMessagesToFlow(
       }> = []
 
       // Track consolidated tools by name
-      // Map<toolName, { parts: MessagePart[], partIndices: number[], state: "call" | "result" | "error" }>
+      // Map<toolName, { parts: MessagePart[], partIndices: number[], state: "call" | "result" | "error" | "partial-error", errorCount: number, resultCount: number }>
       const consolidatedTools = new Map<string, {
         parts: MessagePart[]
         partIndices: number[]
-        state: "call" | "result" | "error"
+        state: "call" | "result" | "error" | "partial-error"
+        errorCount: number
+        resultCount: number
       }>()
 
       // First pass: categorize all tools
@@ -259,20 +261,36 @@ export function transformMessagesToFlow(
 
           // All other tools get consolidated by name
           if (!consolidatedTools.has(toolName)) {
-            consolidatedTools.set(toolName, { parts: [], partIndices: [], state: "call" })
+            consolidatedTools.set(toolName, { parts: [], partIndices: [], state: "call", errorCount: 0, resultCount: 0 })
           }
           const group = consolidatedTools.get(toolName)!
           group.parts.push(part)
           group.partIndices.push(partIndex)
 
-          // Update state priority: error > result > call
+          // Track state counts for determining overall state
           const state = getToolState(part)
-          if (state === "error") group.state = "error"
-          else if (state === "result" && group.state !== "error") group.state = "result"
+          if (state === "error") group.errorCount++
+          else if (state === "result") group.resultCount++
         }
       }
 
-      // Second pass: create nodes for individual tools
+      // Second pass (part 1): determine final state for consolidated tools
+      for (const [toolName, group] of consolidatedTools) {
+        const totalCount = group.parts.length
+        if (group.errorCount > 0 && group.resultCount > 0) {
+          // Mixed results: some failed, some succeeded = partial error (orange)
+          group.state = "partial-error"
+        } else if (group.errorCount === totalCount) {
+          // All failed = complete error (red)
+          group.state = "error"
+        } else if (group.resultCount > 0) {
+          // At least one succeeded and no errors = success (green)
+          group.state = "result"
+        }
+        // else: state remains "call" (all are still pending)
+      }
+
+      // Second pass (part 2): create nodes for individual tools
       for (const { partIndex, part, toolName } of individualTools) {
         const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
         const state = getToolState(part)

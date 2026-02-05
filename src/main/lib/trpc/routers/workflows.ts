@@ -276,11 +276,23 @@ function parseAgentMd(content: string, filename: string): AgentMetadata {
       }
     }
 
+    // Parse tools array (with comma-separated string fallback)
+    let tools: string[] = []
+    if (Array.isArray(data.tools)) {
+      tools = data.tools as string[]
+    } else if (typeof data.tools === "string") {
+      // Fallback: parse comma-separated string (handles invalid YAML format)
+      tools = data.tools
+        .split(",")
+        .map((tool: string) => tool.trim())
+        .filter((tool: string) => tool.length > 0)
+    }
+
     return {
       id: filename.replace(/\.md$/, ""),
       name: typeof data.name === "string" ? data.name : filename.replace(/\.md$/, ""),
       description: typeof data.description === "string" ? data.description : "",
-      tools: Array.isArray(data.tools) ? (data.tools as string[]) : [],
+      tools,
       model: typeof data.model === "string" ? data.model : "",
       sourcePath: "", // Will be set by caller
       source: "user", // Placeholder, will be set by caller
@@ -339,6 +351,12 @@ function parseCommandMd(content: string, filename: string): CommandMetadata {
     let allowedTools: string[] = []
     if (Array.isArray(data["allowed-tools"])) {
       allowedTools = data["allowed-tools"] as string[]
+    } else if (typeof data["allowed-tools"] === "string") {
+      // Fallback: parse comma-separated string (handles invalid YAML format)
+      allowedTools = data["allowed-tools"]
+        .split(",")
+        .map((tool: string) => tool.trim())
+        .filter((tool: string) => tool.length > 0)
     } else if (Array.isArray(data.tools)) {
       // Fallback to 'tools' field if allowed-tools is not present
       allowedTools = data.tools as string[]

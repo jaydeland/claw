@@ -176,6 +176,7 @@ export type SettingsTab =
   | "kubernetes"
   | "advanced"
   | "worktrees"
+  | "backup"
   | "beta"
   | "debug"
   | `project-${string}` // Dynamic project tabs
