@@ -342,20 +342,6 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
     setAgentDialogOpen(true)
   }, [setSelectedAgent, setAgentDialogOpen])
 
-  // Handle task click - open dialog
-  const handleTaskClick = useCallback((task: NonNullable<typeof tasks>[number]) => {
-    setSelectedTask({
-      taskId: task.id,
-      toolCallId: task.toolCallId,
-      command: task.command || "",
-      description: task.description,
-      status: task.status as "running" | "completed" | "failed" | "unknown",
-      messageId: "",
-      partIndex: 0,
-    })
-    setTaskDialogOpen(true)
-  }, [setSelectedTask, setTaskDialogOpen])
-
   // Handle todo click - scroll to message
   const handleTodoClick = useCallback(() => {
     if (todosData.messageId && onScrollToMessage) {
@@ -364,7 +350,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   }, [todosData.messageId, todosData.partIndex, onScrollToMessage])
 
   // Don't show if nothing to display
-  const hasContent = uncommittedFiles.length > 0 || tasksTotal > 0 || agentsTotal > 0 || todosTotal > 0
+  const hasContent = uncommittedFiles.length > 0 || agentsTotal > 0 || todosTotal > 0
   if (!hasContent && !isStreaming) {
     return null
   }
