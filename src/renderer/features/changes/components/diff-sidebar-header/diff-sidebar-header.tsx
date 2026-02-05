@@ -48,7 +48,6 @@ import { usePRStatus } from "../../../../hooks/usePRStatus";
 import { PRIcon } from "../pr-icon";
 import { toast } from "sonner";
 import { DiffModeEnum } from "@git-diff-view/react";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface DiffStats {
 	isLoading: boolean;
@@ -168,7 +167,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [displayTime, setDisplayTime] = useState<string>("");
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-	const queryClient = useQueryClient();
+	const utils = trpc.useUtils();
 
 	const { data: branchData, refetch: refetchBranches } =
 		trpc.changes.getBranches.useQuery(
@@ -187,18 +186,18 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: () => {
 			setLastFetchTime(new Date());
 			refetchBranches();
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
+			utils.changes.getStatus.invalidate();
+			utils.changes.getSyncStatus.invalidate();
+			utils.changes.getGitHubStatus.invalidate();
 			onRefresh?.();
 		},
 	});
 
 	const pushMutation = trpc.changes.push.useMutation({
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
+			utils.changes.getStatus.invalidate();
+			utils.changes.getSyncStatus.invalidate();
+			utils.changes.getGitHubStatus.invalidate();
 			onRefresh?.();
 		},
 		onError: (error) => toast.error(`Push failed: ${error.message}`),
@@ -206,9 +205,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 
 	const pullMutation = trpc.changes.pull.useMutation({
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
+			utils.changes.getStatus.invalidate();
+			utils.changes.getSyncStatus.invalidate();
+			utils.changes.getGitHubStatus.invalidate();
 			onRefresh?.();
 		},
 		onError: (error) => toast.error(`Pull failed: ${error.message}`),
@@ -216,9 +215,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 
 	const forcePushMutation = trpc.changes.forcePush.useMutation({
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
+			utils.changes.getStatus.invalidate();
+			utils.changes.getSyncStatus.invalidate();
+			utils.changes.getGitHubStatus.invalidate();
 			onRefresh?.();
 		},
 		onError: (error: { message: string }) => toast.error(`Force push failed: ${error.message}`),
@@ -226,9 +225,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 
 	const mergeFromDefaultMutation = trpc.changes.mergeFromDefault.useMutation({
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
+			utils.changes.getStatus.invalidate();
+			utils.changes.getSyncStatus.invalidate();
+			utils.changes.getGitHubStatus.invalidate();
 			onRefresh?.();
 		},
 		onError: (error: { message: string }) => toast.error(`Merge failed: ${error.message}`),

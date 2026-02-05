@@ -5,7 +5,6 @@ import { useState } from "react";
 import { trpc } from "../../../../lib/trpc";
 import { cn } from "../../../../lib/utils";
 import { IconSpinner } from "../../../../components/ui/icons";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface CommitInputProps {
 	worktreePath: string;
@@ -34,7 +33,7 @@ export function CommitInput({
 	const [summary, setSummary] = useState("");
 	const [description, setDescription] = useState("");
 	const [isGenerating, setIsGenerating] = useState(false);
-	const queryClient = useQueryClient();
+	const utils = trpc.useUtils();
 
 	// AI commit message generation
 	const generateCommitMutation = trpc.chats.generateCommitMessage.useMutation();
@@ -45,9 +44,9 @@ export function CommitInput({
 			setSummary("");
 			setDescription("");
 			// Invalidate queries to force fresh fetches
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
+			utils.changes.getStatus.invalidate();
+			utils.changes.getSyncStatus.invalidate();
+			utils.changes.getGitHubStatus.invalidate();
 			onRefresh();
 			onCommitSuccess?.();
 		},
@@ -59,9 +58,9 @@ export function CommitInput({
 		onSuccess: () => {
 			setSummary("");
 			setDescription("");
-			queryClient.invalidateQueries({ queryKey: [["changes", "getStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getSyncStatus"]] });
-			queryClient.invalidateQueries({ queryKey: [["changes", "getGitHubStatus"]] });
+			utils.changes.getStatus.invalidate();
+			utils.changes.getSyncStatus.invalidate();
+			utils.changes.getGitHubStatus.invalidate();
 			onRefresh();
 			onCommitSuccess?.();
 		},

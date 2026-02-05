@@ -35,6 +35,7 @@ export function LogsTab() {
   const [streamError, setStreamError] = useState<string | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
+  const [wordWrap, setWordWrap] = useState(true)
 
   // Get derived namespace from email
   const { data: derivedNamespace } = trpc.clusters.getDefaultNamespace.useQuery()
@@ -210,6 +211,13 @@ export function LogsTab() {
               />
               <span className="text-muted-foreground">Auto-scroll</span>
             </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                checked={wordWrap}
+                onCheckedChange={(checked) => setWordWrap(checked === true)}
+              />
+              <span className="text-muted-foreground">Word wrap</span>
+            </label>
           </div>
 
           <div className="flex items-center gap-2">
@@ -287,15 +295,24 @@ export function LogsTab() {
             </div>
           </div>
         ) : (
-          <div className="font-mono text-xs space-y-1">
+          <div className={cn(
+            "font-mono text-xs select-text",
+            wordWrap ? "space-y-1" : "space-y-1 overflow-x-auto"
+          )}>
             {logs.map((log, index) => (
-              <div key={index} className="flex gap-2 hover:bg-muted/50 px-2 py-1 rounded">
+              <div key={index} className={cn(
+                "flex gap-2 hover:bg-muted/50 px-2 py-1 rounded",
+                !wordWrap && "whitespace-nowrap"
+              )}>
                 <span className="text-muted-foreground flex-shrink-0">
                   {new Date(log.timestamp).toLocaleTimeString()}
                 </span>
                 <span className="text-blue-400 flex-shrink-0">{log.podName}</span>
                 <span className="text-green-400 flex-shrink-0">[{log.containerName}]</span>
-                <span className="text-foreground break-all">{log.message}</span>
+                <span className={cn(
+                  "text-foreground",
+                  wordWrap ? "break-all" : "whitespace-pre"
+                )}>{log.message}</span>
               </div>
             ))}
             <div ref={logsEndRef} />
