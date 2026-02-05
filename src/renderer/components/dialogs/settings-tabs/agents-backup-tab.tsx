@@ -60,17 +60,11 @@ export function AgentsBackupTab() {
     return prefs
   }
 
-  // Export query
-  const exportQuery = trpc.settingsExport.exportSettings.useQuery(
-    { uiPreferences: getLocalStoragePreferences() },
-    { enabled: false } // Manual trigger
-  )
+  // Use tRPC utils for manual query execution
+  const utils = trpc.useUtils()
 
-  // Validation query (triggered when file is selected)
-  const validateQuery = trpc.settingsExport.validateImportFile.useQuery(
-    { jsonContent: "" }, // Will be updated with file content
-    { enabled: false }
-  )
+  // Store validation result
+  const [validationResult, setValidationResult] = useState<any>(null)
 
   // Import mutation
   const importMutation = trpc.settingsExport.importSettings.useMutation({
@@ -92,14 +86,18 @@ export function AgentsBackupTab() {
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      const data = await exportQuery.refetch()
-      if (!data.data) {
+      // Fetch export data directly using tRPC client
+      const data = await utils.client.settingsExport.exportSettings.query({
+        uiPreferences: getLocalStoragePreferences(),
+      })
+
+      if (!data) {
         toast.error("Failed to export settings")
         return
       }
 
       // Create JSON blob and download
-      const json = JSON.stringify(data.data, null, 2)
+      const json = JSON.stringify(data, null, 2)
       const blob = new Blob([json], { type: "application/json" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -113,7 +111,7 @@ export function AgentsBackupTab() {
       toast.success("Settings exported successfully")
     } catch (err) {
       console.error("[backup] Export failed:", err)
-      toast.error("Failed to export settings")
+      toast.error(`Failed to export settings: ${err instanceof Error ? err.message : "Unknown error"}`)
     } finally {
       setIsExporting(false)
     }
@@ -129,21 +127,25 @@ export function AgentsBackupTab() {
     // Read and validate file
     try {
       const content = await file.text()
-      const validation = await validateQuery.refetch({
-        queryKey: ["settingsExport.validateImportFile", { jsonContent: content }],
-      } as any)
+      const validation = await utils.client.settingsExport.validateImportFile.query({
+        jsonContent: content,
+      })
 
-      if (validation.data?.valid) {
+      setValidationResult(validation)
+
+      if (validation.valid) {
         // Show preview dialog
         setShowPreviewDialog(true)
       } else {
-        toast.error(validation.data?.error || "Invalid settings file")
+        toast.error(validation.error || "Invalid settings file")
         setSelectedFile(null)
+        setValidationResult(null)
       }
     } catch (err) {
       console.error("[backup] File read failed:", err)
-      toast.error("Failed to read file")
+      toast.error(`Failed to read file: ${err instanceof Error ? err.message : "Unknown error"}`)
       setSelectedFile(null)
+      setValidationResult(null)
     }
 
     // Reset input
@@ -154,16 +156,16 @@ export function AgentsBackupTab() {
 
   // Handle import confirmation
   const handleImport = () => {
-    if (!validateQuery.data?.valid || !validateQuery.data.data) {
+    if (!validationResult?.valid || !validationResult.data) {
       toast.error("No valid settings to import")
       return
     }
 
     // Get UI preferences to import
-    const uiPrefs = validateQuery.data.data.uiPreferences || {}
+    const uiPrefs = validationResult.data.uiPreferences || {}
 
     importMutation.mutate({
-      data: validateQuery.data.data,
+      data: validationResult.data,
       uiPreferences: uiPrefs,
     })
   }
@@ -287,7 +289,7 @@ export function AgentsBackupTab() {
       </div>
 
       {/* Preview Dialog */}
-      {showPreviewDialog && validateQuery.data?.valid && (
+      {showPreviewDialog && validationResult?.valid && (
         <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
@@ -304,29 +306,29 @@ export function AgentsBackupTab() {
                 <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
                   <PreviewItem
                     label="Auth Mode"
-                    value={validateQuery.data.data?.settings.authMode}
+                    value={validationResult.data?.settings.authMode}
                   />
                   <PreviewItem
                     label="Custom Config Dir"
-                    value={validateQuery.data.data?.settings.customConfigDir}
+                    value={validationResult.data?.settings.customConfigDir}
                   />
                   <PreviewItem
                     label="Custom Worktree Location"
-                    value={validateQuery.data.data?.settings.customWorktreeLocation}
+                    value={validationResult.data?.settings.customWorktreeLocation}
                   />
                   <PreviewItem
                     label="Bedrock Region"
-                    value={validateQuery.data.data?.settings.bedrockRegion}
+                    value={validationResult.data?.settings.bedrockRegion}
                   />
                 </div>
               </div>
 
               {/* MCP Configs Preview */}
-              {validateQuery.data.data?.mcpConfigPaths && validateQuery.data.data.mcpConfigPaths.length > 0 && (
+              {validationResult.data?.mcpConfigPaths && validationResult.data.mcpConfigPaths.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="font-medium text-sm">MCP Config Paths ({validateQuery.data.data.mcpConfigPaths.length})</h4>
+                  <h4 className="font-medium text-sm">MCP Config Paths ({validationResult.data.mcpConfigPaths.length})</h4>
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                    {validateQuery.data.data.mcpConfigPaths.map((config, i) => (
+                    {validationResult.data.mcpConfigPaths.map((config, i) => (
                       <div key={i} className="text-xs font-mono truncate">
                         {config.path}
                       </div>
@@ -336,11 +338,11 @@ export function AgentsBackupTab() {
               )}
 
               {/* Plugin Directories Preview */}
-              {validateQuery.data.data?.pluginDirectories && validateQuery.data.data.pluginDirectories.length > 0 && (
+              {validationResult.data?.pluginDirectories && validationResult.data.pluginDirectories.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="font-medium text-sm">Plugin Directories ({validateQuery.data.data.pluginDirectories.length})</h4>
+                  <h4 className="font-medium text-sm">Plugin Directories ({validationResult.data.pluginDirectories.length})</h4>
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                    {validateQuery.data.data.pluginDirectories.map((plugin, i) => (
+                    {validationResult.data.pluginDirectories.map((plugin, i) => (
                       <div key={i} className="text-xs font-mono truncate">
                         {plugin.path}
                       </div>

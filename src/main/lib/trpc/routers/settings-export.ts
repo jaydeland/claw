@@ -1,7 +1,8 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, claudeCodeSettings, configSources } from "../../db"
+import { getDatabase, claudeCodeSettings, configSources, devspaceSettings } from "../../db"
 import { eq } from "drizzle-orm"
+import { expandEnvVars } from "../../path-utils"
 
 // ============ TYPES ============
 
@@ -48,6 +49,11 @@ const ClawSettingsExportSchema = z.object({
     priority: z.number(),
     enabled: z.boolean(),
   })),
+  devspaceSettings: z.object({
+    reposPath: z.string().nullable().optional(),
+    configSubPath: z.string().optional(),
+    startCommand: z.string().optional(),
+  }).optional(),
   uiPreferences: z.object({
     selectedThemeId: z.string().optional(),
     systemLightThemeId: z.string().optional(),
@@ -61,6 +67,17 @@ const ClawSettingsExportSchema = z.object({
 })
 
 type ClawSettingsExport = z.infer<typeof ClawSettingsExportSchema>
+
+// ============ HELPERS ============
+
+/**
+ * Expand environment variables in path fields
+ * Handles $VAR, ${VAR}, and ~ for home directory
+ */
+function expandPathField(value: string | null | undefined): string | null {
+  if (!value) return null
+  return expandEnvVars(value)
+}
 
 // ============ ROUTER ============
 
@@ -107,6 +124,13 @@ export const settingsExportRouter = router({
         .where(eq(configSources.type, "plugin"))
         .all()
 
+      // Get devspace settings
+      const devspace = db
+        .select()
+        .from(devspaceSettings)
+        .where(eq(devspaceSettings.id, "default"))
+        .get()
+
       // Build export object
       const exportData: ClawSettingsExport = {
         version: EXPORT_VERSION,
@@ -152,6 +176,11 @@ export const settingsExportRouter = router({
           priority: p.priority,
           enabled: p.enabled,
         })),
+        devspaceSettings: devspace ? {
+          reposPath: devspace.reposPath || null,
+          configSubPath: devspace.configSubPath,
+          startCommand: devspace.startCommand,
+        } : undefined,
         uiPreferences: input?.uiPreferences || {},
       }
 
@@ -275,13 +304,14 @@ export const settingsExportRouter = router({
         // Start transaction
         await db.transaction(async (tx) => {
           // Update Claude Code settings (preserve ID)
+          // Expand environment variables in path fields ($HOME, ${VAR}, ~)
           const settingsToUpdate: any = {
-            customBinaryPath: input.data.settings.customBinaryPath,
+            customBinaryPath: expandPathField(input.data.settings.customBinaryPath),
             customEnvVars: input.data.settings.customEnvVars
               ? JSON.stringify(input.data.settings.customEnvVars)
               : "{}",
-            customConfigDir: input.data.settings.customConfigDir,
-            customWorktreeLocation: input.data.settings.customWorktreeLocation,
+            customConfigDir: expandPathField(input.data.settings.customConfigDir),
+            customWorktreeLocation: expandPathField(input.data.settings.customWorktreeLocation),
             authMode: input.data.settings.authMode || "oauth",
             anthropicBaseUrl: input.data.settings.anthropicBaseUrl,
             bedrockRegion: input.data.settings.bedrockRegion || "us-east-1",
@@ -314,24 +344,59 @@ export const settingsExportRouter = router({
           await tx.delete(configSources).where(eq(configSources.type, "mcp"))
           await tx.delete(configSources).where(eq(configSources.type, "plugin"))
 
-          // Insert new MCP config sources
+          // Insert new MCP config sources (expand env vars in paths)
           for (const mcpConfig of input.data.mcpConfigPaths) {
-            await tx.insert(configSources).values({
-              type: "mcp",
-              path: mcpConfig.path,
-              priority: mcpConfig.priority,
-              enabled: mcpConfig.enabled,
-            })
+            const expandedPath = expandPathField(mcpConfig.path)
+            if (expandedPath) {
+              await tx.insert(configSources).values({
+                type: "mcp",
+                path: expandedPath,
+                priority: mcpConfig.priority,
+                enabled: mcpConfig.enabled,
+              })
+            }
           }
 
-          // Insert new plugin directories
+          // Insert new plugin directories (expand env vars in paths)
           for (const plugin of input.data.pluginDirectories) {
-            await tx.insert(configSources).values({
-              type: "plugin",
-              path: plugin.path,
-              priority: plugin.priority,
-              enabled: plugin.enabled,
-            })
+            const expandedPath = expandPathField(plugin.path)
+            if (expandedPath) {
+              await tx.insert(configSources).values({
+                type: "plugin",
+                path: expandedPath,
+                priority: plugin.priority,
+                enabled: plugin.enabled,
+              })
+            }
+          }
+
+          // Update devspace settings if provided
+          if (input.data.devspaceSettings) {
+            const devspaceToUpdate = {
+              reposPath: expandPathField(input.data.devspaceSettings.reposPath),
+              configSubPath: input.data.devspaceSettings.configSubPath || "devspace.yaml",
+              startCommand: input.data.devspaceSettings.startCommand || "devspace dev",
+              updatedAt: new Date(),
+            }
+
+            // Check if devspace settings exist
+            const existingDevspace = await tx
+              .select()
+              .from(devspaceSettings)
+              .where(eq(devspaceSettings.id, "default"))
+              .get()
+
+            if (existingDevspace) {
+              await tx
+                .update(devspaceSettings)
+                .set(devspaceToUpdate)
+                .where(eq(devspaceSettings.id, "default"))
+            } else {
+              await tx.insert(devspaceSettings).values({
+                id: "default",
+                ...devspaceToUpdate,
+              })
+            }
           }
         })
 
