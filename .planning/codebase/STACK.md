@@ -1,122 +1,108 @@
 # Technology Stack
 
-**Analysis Date:** 2025-01-30
+**Analysis Date:** 2026-02-05
 
 ## Languages
 
 **Primary:**
-- TypeScript 5.4.5 - All source code (main, preload, renderer)
+- TypeScript 5.4.5 - All application code (`package.json`)
+- TSX/JSX - React components throughout `src/renderer/`
 
 **Secondary:**
-- JavaScript - Build scripts in `scripts/` directory
-- SQL - Database migrations in `drizzle/` directory
+- SQL - Drizzle ORM migrations in `drizzle/`
+- CSS - Tailwind with custom utilities in `src/renderer/styles/`
 
 ## Runtime
 
 **Environment:**
-- Electron 33.4.5 - Desktop application framework
-- Node.js (via Electron) - Main process runtime
-- Chromium (via Electron) - Renderer process runtime
+- Node.js 20.x (via Electron main process)
+- Chromium (via Electron renderer process)
+- Electron 33.4.5 - Desktop app shell (`package.json`)
 
 **Package Manager:**
-- Bun ~1.2 (managed by Flox)
-- Lockfile: `bun.lockb` present
-
-**Dev Environment:**
-- Flox - Reproducible development environment
-- Flox provides: bun runtime, electron binary, python311 (for node-gyp)
-- Config: `.flox/env/manifest.toml`
+- bun - Primary package manager (evident from scripts and lockfile)
 
 ## Frameworks
 
 **Core:**
-- React 19.2.1 - UI framework for renderer process
-- Electron 33.4.5 - Desktop application shell
+- Electron 33.4.5 - Desktop application framework
+- React 19.2.1 - UI framework (`package.json`)
+
+**State Management:**
+- Jotai 2.11.1 - Atomic state management for UI
+- Zustand 5.0.3 - Sub-chat store with persistence
+- TanStack Query (React Query) 5.90.10 - Server state caching
+
+**Data Layer:**
+- Drizzle ORM 0.45.1 - Type-safe SQL ORM
+- better-sqlite3 11.8.1 - SQLite database (native module)
+- tRPC 11.7.1 - Type-safe IPC between main/renderer
+- trpc-electron 0.1.2 - Electron tRPC adapter
 
 **Build/Dev:**
-- electron-vite 3.0.0 - Electron-specific Vite wrapper (handles main/preload/renderer)
-- Vite 6.3.4 - Underlying bundler for renderer
-- electron-builder 25.1.8 - Packaging and distribution
+- electron-vite 3.0.0 - Vite-based Electron build
+- Vite 6.3.4 - Development server and bundling
+- TypeScript 5.4.5 - Type checking and compilation
+- Tailwind CSS 3.4.17 - Utility-first CSS
 
-**Data:**
-- Drizzle ORM 0.45.1 - Database ORM with SQLite
-- tRPC 11.7.1 - Type-safe main<->renderer IPC
+**Testing:**
+- Vitest (via electron-vite) - Test runner
+- Tests co-located with source in `__tests__/` directories
 
 ## Key Dependencies
 
 **Critical:**
-- `@anthropic-ai/claude-agent-sdk` ^0.2.12 - Claude AI integration (ESM module, requires dynamic import)
-- `better-sqlite3` 11.8.1 - SQLite database driver (native module, needs electron-rebuild)
-- `node-pty` ^1.1.0 - Terminal PTY for shell sessions (native module)
-- `trpc-electron` ^0.1.2 - tRPC adapter for Electron IPC
-
-**State Management:**
-- `jotai` ^2.11.1 - Atomic state management (UI state, selections)
-- `zustand` ^5.0.3 - Store-based state (sub-chat tabs, persisted state)
-- `@tanstack/react-query` ^5.90.10 - Server state via tRPC
-
-**UI Components:**
-- Radix UI (multiple packages) - Headless accessible components
-- `lucide-react` ^0.468.0 - Icon library
-- `tailwindcss` ^3.4.17 - Utility CSS framework
-- `motion` ^11.15.0 - Animation library
-- `sonner` ^1.7.1 - Toast notifications
-- `reactflow` ^11.11.4 - Flow diagram visualization
-- `xterm` ^5.3.0 - Terminal emulator for renderer
+- `@anthropic-ai/claude-agent-sdk` 0.2.12 - Claude Code integration (ESM module, dynamically imported)
+- `ai` 6.0.14 + `@ai-sdk/react` 3.0.14 - AI SDK for streaming
+- `node-pty` 1.1.0 - Pseudo-terminal for shell integration (native module)
+- `zod` 4.0.0 - Schema validation
 
 **Infrastructure:**
-- `simple-git` ^3.28.0 - Git operations
-- `chokidar` ^5.0.0 - File system watching
-- `electron-log` ^5.4.3 - Logging
-- `electron-updater` ^6.7.3 - Auto-updates
-- `zod` ^4.0.0 - Schema validation
+- `electron-updater` 6.7.3 - Auto-update functionality
+- `simple-git` 3.28.0 - Git operations
+- `mermaid` 11.12.2 - Diagram generation
+- `shiki` 1.24.4 - Syntax highlighting
+- `reactflow` 11.11.4 - Node-based UI flows
+
+**External Integrations:**
+- AWS SDK packages (EKS, SSO, STS) - AWS Bedrock and EKS support
+- `@xterm/*` packages - Terminal emulator addons
 
 ## Configuration
 
-**Environment Variables:**
-- `MAIN_VITE_*` - Main process variables (Sentry DSN, PostHog, API URL)
-- `VITE_*` - Renderer process variables (PostHog, feedback URL)
-- `.env.example` - Template with all optional variables
+**Environment:**
+- No `.env` file in repository (all settings stored in SQLite DB)
+- Environment variables for build: `ELECTRON_RENDERER_URL` (dev mode)
+- Claude Code credentials stored encrypted with Electron `safeStorage`
 
-**Build Configuration:**
-- `electron.vite.config.ts` - Entry points, bundling, CSS
-- `tailwind.config.js` - Theme customization
-- `tsconfig.json` - TypeScript with bundler module resolution
-- `drizzle.config.ts` - Database schema location
-
-**Path Aliases:**
-- `@/*` -> `./src/renderer/*` - Renderer imports
+**Build:**
+- `electron.vite.config.ts` - Vite configuration for main/preload/renderer
+- `tsconfig.json` - TypeScript configuration with path alias `@/*` → `src/renderer/*`
+- `tailwind.config.ts` - Tailwind with custom theme
+- `drizzle.config.ts` - Database migration configuration
 
 ## Platform Requirements
 
 **Development:**
-- macOS/Linux (Flox environment)
-- Bun 1.2+ (via `flox activate`)
-- Git for source control
-- Python 3.11 for native module compilation (node-gyp)
+- macOS/Windows/Linux (Electron is cross-platform)
+- Flox environment available (`.flox/` directory) for reproducible dev setup
+- Native modules require compilation: `better-sqlite3`, `node-pty`
+- Python 3 required for `electron-rebuild`
 
 **Production:**
-- macOS: arm64 (Apple Silicon) and x64 (Intel)
-- Windows: x64 (NSIS installer + portable)
-- Linux: x64 (AppImage + DEB)
+- Packaged with electron-builder
+- macOS: DMG + ZIP (arm64, x64)
+- Windows: NSIS installer + portable
+- Linux: AppImage + DEB
+- Auto-updater configured (disabled for dev builds)
 
-**Native Module Handling:**
-- `electron-rebuild` runs in postinstall
-- `better-sqlite3` and `node-pty` are unpacked from ASAR
-- Architecture-specific compilation required
-
-## Build Outputs
-
-**Development:**
-- `out/` - Compiled TypeScript (main, preload, renderer)
-- Dev server on port 5174
-
-**Production:**
-- `release/` - Packaged applications
-- `resources/bin/` - Bundled Claude binary per platform
-- `resources/migrations/` - Database migrations
-- `resources/gsd/` - GSD agent resources
+**Special Build Considerations:**
+- Native modules must be rebuilt for Electron: `electron-rebuild -f -w better-sqlite3,node-pty`
+- Architecture-specific binaries bundled in `resources/bin/${platform}-${arch}/`
+- GSD resources bundled from `resources/gsd/`
+- MCP config and plugins bundled
 
 ---
 
-*Stack analysis: 2025-01-30*
+*Stack analysis: 2026-02-05*
+*Update after major dependency changes*

@@ -1,195 +1,169 @@
 # Architecture
 
-**Analysis Date:** 2025-01-30
+**Analysis Date:** 2026-02-05
 
 ## Pattern Overview
 
-**Overall:** Three-tier Electron Architecture with tRPC IPC
+**Overall:** Electron Desktop App with Layered Architecture
 
 **Key Characteristics:**
-- Main process handles business logic, database, external APIs, Claude SDK integration
-- Preload scripts provide secure bridge between main and renderer processes
-- Renderer is a React SPA with feature-based module organization
-- tRPC provides type-safe communication across process boundaries
-- SQLite (Drizzle ORM) for local-first data persistence
+- Multi-process: Main (Node.js) + Renderer (Chromium)
+- Type-safe IPC via tRPC
+- Local-first SQLite database
+- Git worktree isolation per chat
+- Plugin system via MCP servers
 
 ## Layers
 
-**Main Process (`src/main/`):**
-- Purpose: Electron main process - app lifecycle, window management, backend logic
+**Main Process (Backend):**
+- Purpose: Application lifecycle, native APIs, database, file system
+- Contains: tRPC routers, database access, terminal management, git operations
 - Location: `src/main/`
-- Contains: App entry, auth, database, tRPC routers, Claude SDK, git operations, terminal PTY
-- Depends on: Electron APIs, better-sqlite3, @anthropic-ai/claude-agent-sdk
-- Used by: Renderer (via tRPC IPC), system (via IPC handlers)
+- Depends on: Node.js built-ins, Electron APIs, native modules
+- Used by: Renderer process via tRPC
 
-**Preload Scripts (`src/preload/`):**
-- Purpose: Secure bridge exposing limited APIs to renderer
-- Location: `src/preload/index.ts`
-- Contains: contextBridge exposures for window.desktopApi, tRPC IPC setup
-- Depends on: Electron's contextBridge, ipcRenderer
-- Used by: Renderer (via window.desktopApi)
-
-**Renderer (`src/renderer/`):**
-- Purpose: React 19 UI with feature-based organization
+**Renderer Process (Frontend):**
+- Purpose: React UI, user interactions, display
+- Contains: React components, state management, feature modules
 - Location: `src/renderer/`
-- Contains: Components, features, state management (Jotai + Zustand), tRPC client
-- Depends on: React, Radix UI, Tailwind, Jotai, Zustand, React Query
-- Used by: User (direct interaction)
+- Depends on: tRPC client, React, state libraries
+- Used by: User via Electron window
+
+**IPC Layer (tRPC):**
+- Purpose: Type-safe communication between processes
+- Contains: Router definitions, procedure implementations
+- Location: `src/main/lib/trpc/routers/`
+- Depends on: tRPC server, database
+- Used by: Renderer components calling API methods
+
+**Data Layer (Drizzle + SQLite):**
+- Purpose: Persistent storage with type-safe queries
+- Contains: Schema definitions, database initialization
+- Location: `src/main/lib/db/`
+- Depends on: better-sqlite3, drizzle-orm
+- Used by: tRPC routers, background tasks
+
+**Git Layer:**
+- Purpose: Repository operations, worktree management, watching
+- Contains: Git commands, worktree abstraction, file watching
+- Location: `src/main/lib/git/`
+- Depends on: simple-git, chokidar (file watching)
+- Used by: Chat operations, file browser, change tracking
+
+**Terminal Layer:**
+- Purpose: PTY-based shell integration
+- Contains: Terminal sessions, port management, xterm.js integration
+- Location: `src/main/lib/terminal/`
+- Depends on: node-pty, @xterm addons
+- Used by: Chat UI for integrated terminal
 
 ## Data Flow
 
-**Chat Message Flow:**
+**Chat Session Lifecycle:**
 
-1. User types message in `ChatInputArea` component
-2. Component dispatches via tRPC mutation (`claude.streamMessage`)
-3. Main process receives via tRPC router (`src/main/lib/trpc/routers/claude.ts`)
-4. Router spawns Claude SDK session with configured environment
-5. SDK streams messages back via tRPC observable
-6. Renderer transforms chunks via `createTransformer()` and updates UI
-7. Messages persisted to SQLite (sub_chats.messages as JSON)
+1. User creates new chat → `chats` table entry created
+2. Sub-chat created per session → `sub_chats` table with messages JSON
+3. Claude SDK initialized with project path, worktree, environment
+4. User sends message → tRPC `claude.sendMessage` → SDK
+5. SDK streams responses → tRPC observable → React state → UI
+6. Messages persisted to `sub_chats.messages` JSON column
 
-**State Management:**
+**Background Task Flow:**
 
-- **Jotai:** UI state atoms (selected chat, sidebar, preferences) - persisted via atomWithStorage
-- **Zustand:** Complex state with actions (sub-chat tabs, pinning) - localStorage persistence
-- **React Query (via tRPC):** Server state caching, automatic invalidation
+1. Claude SDK spawns background bash task
+2. Task metadata stored in `background_tasks` table
+3. Task watcher polls for updates via SDK
+4. Task status changes → events emitted → UI updates
+5. Notifications shown on task completion
 
-**IPC Communication:**
+**Git Worktree Isolation:**
 
-1. Renderer calls `trpc.{router}.{procedure}.{query|mutate|subscribe}()`
-2. tRPC-electron serializes via superjson over IPC
-3. Main process receives, executes procedure, returns result
-4. Native features use `window.desktopApi.{method}()` (direct ipcRenderer.invoke)
+1. Chat created with associated project (git repository)
+2. Worktree automatically created at `~/.21st/worktrees/{chat-id}/`
+3. Claude operates in worktree directory (isolated from main working tree)
+4. Changes tracked via git status, shown in Changes panel
+5. Worktree pruned on chat archival
 
 ## Key Abstractions
 
-**Projects:**
-- Purpose: Represents a local repository/workspace
-- Examples: `src/main/lib/db/schema/index.ts` (projects table), `src/main/lib/trpc/routers/projects.ts`
-- Pattern: CRUD via tRPC, selected project stored in Jotai atom
+**tRPC Router:**
+- Purpose: API endpoint grouping
+- Examples: `src/main/lib/trpc/routers/claude.ts`, `src/main/lib/trpc/routers/git.ts`
+- Pattern: Procedures grouped by domain, exported from `src/main/lib/trpc/index.ts`
 
-**Chats:**
-- Purpose: A workspace/branch context within a project
-- Examples: `src/main/lib/db/schema/index.ts` (chats table), `src/main/lib/trpc/routers/chats.ts`
-- Pattern: Contains worktree path, branch, PR info; has many sub-chats
+**Claude Session Manager:**
+- Purpose: Manages Claude SDK lifecycle per sub-chat
+- Location: `src/main/lib/claude/index.ts`
+- Pattern: Dynamic SDK import, streaming transformer, credential injection
 
-**SubChats:**
-- Purpose: Individual Claude conversation threads within a chat
-- Examples: `src/main/lib/db/schema/index.ts` (sub_chats table), `src/main/lib/trpc/routers/claude.ts`
-- Pattern: Contains messages (JSON), sessionId for resume, mode (plan/agent)
+**Git Worktree:**
+- Purpose: Isolated git working directory per chat
+- Location: `src/main/lib/git/worktree.ts`
+- Pattern: WorktreeConfig abstraction, auto-cleanup on chat deletion
 
-**tRPC Routers:**
-- Purpose: Type-safe API endpoints for main process operations
-- Examples: `src/main/lib/trpc/routers/` (22+ routers)
-- Pattern: Each router handles a domain (projects, chats, claude, terminal, git, etc.)
+**Terminal Session:**
+- Purpose: Persistent PTY shell per chat
+- Location: `src/main/lib/terminal/session.ts`
+- Pattern: Port-based communication, shell env inheritance
+
+**Database Repository:**
+- Purpose: Type-safe database operations
+- Location: `src/main/lib/db/repositories/`
+- Pattern: Conductor job/log/checkpoint repositories
 
 ## Entry Points
 
-**Main Process Entry:**
+**App Entry:**
 - Location: `src/main/index.ts`
-- Triggers: Electron app.whenReady()
-- Responsibilities: Database init, auth manager, window creation, protocol registration, background tasks
+- Triggers: Electron app launch
+- Responsibilities: Window creation, database init, menu setup, auto-updater
 
 **Renderer Entry:**
-- Location: `src/renderer/App.tsx`
-- Triggers: Electron loadURL/loadFile
-- Responsibilities: Provider setup (Jotai, Theme, tRPC), routing based on onboarding state
+- Location: `src/renderer/index.tsx` → `src/renderer/App.tsx`
+- Triggers: Electron window loads
+- Responsibilities: React mount, providers setup, routing
 
-**Window Creation:**
-- Location: `src/main/windows/main.ts`
-- Triggers: createMainWindow() from main index
-- Responsibilities: BrowserWindow config, IPC handler registration, tRPC IPC setup
+**tRPC Entry:**
+- Location: `src/main/lib/trpc/index.ts`
+- Responsibilities: Router composition, context creation, procedure types
+
+**Preload Entry:**
+- Location: `src/preload/index.ts`
+- Responsibilities: Secure IPC bridge, exposes `desktopApi` + tRPC
 
 ## Error Handling
 
-**Strategy:** Mixed - exceptions bubble up, UI shows user-friendly errors
+**Strategy:** Errors bubble to tRPC boundaries, logged to console, user notification via toast
 
 **Patterns:**
-- tRPC procedures throw errors with structured shape (code, message, data)
-- Renderer catches via React Query error states or try/catch
-- Claude SDK errors emit special `auth-error` type for OAuth re-auth flow
-- Background tasks track status in database, notify on completion/failure
+- tRPC errors serialized and sent to client
+- `TRPCProvider` catches errors and shows toast notifications
+- Background task errors tracked via `background_tasks.sdk_status`
+- Critical errors: database init failure shows dialog, app exits
 
 ## Cross-Cutting Concerns
 
-**Logging:** Console logging throughout with prefixes ([App], [Auth], [DB], [claude], etc.)
+**Logging:**
+- `electron-log` for main process (file rotation)
+- Console methods in renderer (dev tools)
+- Structured logging with `[Component]` prefixes
 
-**Validation:** Zod schemas for tRPC inputs, runtime type checking
+**Validation:**
+- Zod schemas for tRPC inputs
+- Type inference from Drizzle schema
+- No runtime validation on renderer (types only)
 
 **Authentication:**
-- Desktop auth via OAuth flow (21st.dev)
-- Claude Code auth via OAuth or API key (stored encrypted with safeStorage)
-- AWS Bedrock auth via SSO flow
+- Claude Code: OAuth via browser, token encrypted with `safeStorage`
+- AWS Bedrock: SSO or profile credentials, cached with encryption
+- MCP Servers: Per-server credentials encrypted in `mcpCredentials` table
 
-**Configuration:**
-- Claude Code settings in SQLite (`claude_code_settings` table)
-- MCP server config consolidated from multiple sources
-- Preferences stored in Jotai atoms (atomWithStorage to localStorage)
-
-## Database Layer
-
-**ORM:** Drizzle with better-sqlite3
-
-**Location:** `{userData}/data/agents.db`
-
-**Schema:** `src/main/lib/db/schema/index.ts`
-
-**Tables:**
-- `projects` - Local repositories/workspaces
-- `chats` - Workspace contexts with worktree/branch info
-- `sub_chats` - Individual Claude conversations (messages as JSON)
-- `claude_code_credentials` - Encrypted OAuth token
-- `claude_code_settings` - Binary path, MCP settings, auth mode
-- `background_tasks` - Tracks long-running commands from Claude
-- `app_settings` - Migration tracking, app-level config
-- `mcp_credentials` - Encrypted MCP server credentials
-- `config_sources` - Custom MCP/plugin config file paths
-
-**Migrations:** Auto-run on app start from `drizzle/` folder (dev) or `resources/migrations` (packaged)
-
-## Claude SDK Integration
-
-**Package:** `@anthropic-ai/claude-agent-sdk`
-
-**Entry:** `src/main/lib/trpc/routers/claude.ts`
-
-**Pattern:**
-- Dynamic ESM import (cached after first load)
-- Session management with AbortController
-- Message streaming via tRPC observable
-- Transform layer converts SDK events to UI chunks
-
-**Environment:**
-- Built via `buildClaudeEnv()` in `src/main/lib/claude/env.ts`
-- Includes OAuth token, MCP config, working directory, custom settings
-
-**Modes:**
-- `plan` - Read-only (blocks Bash, NotebookEdit tools)
-- `agent` - Full permissions
-
-## Git Integration
-
-**Location:** `src/main/lib/git/`
-
-**Features:**
-- Worktree creation/management for branch isolation
-- Status tracking with file watcher (`src/main/lib/git/watcher/`)
-- Diff parsing and staging operations
-- GitHub integration (PR creation, comments)
-
-**Pattern:** Git operations exposed via `changes` tRPC router
-
-## Terminal Integration
-
-**Location:** `src/main/lib/terminal/`
-
-**Features:**
-- PTY session management with node-pty
-- Port scanning for dev server detection
-- History tracking
-
-**Pattern:** Terminal operations exposed via `terminal` tRPC router
+**State Persistence:**
+- Zustand stores persist to localStorage
+- Database persists all application data
+- Settings stored in `claudeCodeSettings` table (single row, id="default")
 
 ---
 
-*Architecture analysis: 2025-01-30*
+*Architecture analysis: 2026-02-05*
+*Update when major patterns change*

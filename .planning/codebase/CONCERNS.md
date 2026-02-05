@@ -1,202 +1,155 @@
 # Codebase Concerns
 
-**Analysis Date:** 2025-01-30
+**Analysis Date:** 2026-02-05
 
 ## Tech Debt
 
-**Mock API Bridge Still in Use:**
-- Issue: `src/renderer/lib/mock-api.ts` described as "DEPRECATED" in CLAUDE.md, but actively imported by 6+ components
-- Files:
-  - `src/renderer/lib/mock-api.ts`
-  - `src/renderer/features/sidebar/agents-subchats-sidebar.tsx:77`
-  - `src/renderer/features/agents/mentions/agents-file-mention.tsx:4`
-  - `src/renderer/features/agents/main/active-chat.tsx:91`
-  - `src/renderer/features/agents/ui/agents-content.tsx:30`
-  - `src/renderer/features/agents/ui/agent-diff-view.tsx:73`
-  - `src/renderer/features/agents/ui/sub-chat-selector.tsx:43`
-- Impact: Adds complexity with transformation layer between real tRPC and components
-- Fix approach: Complete migration to direct tRPC calls, remove mock-api.ts
+**Large tRPC router files:**
+- Issue: `src/main/lib/trpc/routers/claude.ts` is 1000+ lines with multiple concerns
+- Files: `src/main/lib/trpc/routers/claude.ts`, `src/main/lib/trpc/routers/git.ts`
+- Why: Rapid feature addition without refactoring
+- Impact: Difficult to navigate, test, and maintain
+- Fix approach: Extract handlers to `src/main/lib/handlers/` directory
 
-**Deprecated Atoms Still Exported:**
-- Issue: Multiple deprecated atoms exported from atoms files
-- Files:
-  - `src/renderer/lib/atoms/index.ts:27-29` - `agentsSubChatsSidebarModeAtom`, `agentsSubChatsSidebarWidthAtom`
-  - `src/renderer/lib/atoms/index.ts:231` - Legacy single config atom
-  - `src/renderer/lib/atoms/index.ts:573` - Legacy backwards compatibility atom
-  - `src/renderer/features/agents/atoms/index.ts:349-355` - Same deprecated atoms
-  - `src/renderer/features/workflows/atoms/index.ts:199-204` - Deprecated drawer state
-- Impact: Code bloat, confusion for developers
-- Fix approach: Audit usages, remove if unused, or migrate consumers
+**TODO comments throughout codebase:**
+- Issue: 30+ TODOs indicating incomplete work
+- Files: `src/main/lib/trpc/routers/gsd.ts:628`, `src/renderer/features/*/`
+- Why: Feature flags for future work, temporary workarounds
+- Impact: Unknown which TODOs are critical vs cosmetic
+- Fix approach: Audit TODOs, create issues for important ones, remove stale ones
 
-**Deprecated Files Not Removed:**
-- Issue: File marked as deprecated but still exists
-- Files:
-  - `src/main/lib/aws/oauth-server.ts` - Contains only `export {}`, marked "can be safely deleted"
-- Impact: Unnecessary file in codebase
-- Fix approach: Delete the file
-
-**Monster Component:**
-- Issue: `active-chat.tsx` at 5798 lines is extremely large
-- Files: `src/renderer/features/agents/main/active-chat.tsx`
-- Impact: Difficult to maintain, test, and reason about; slow IDE performance
-- Fix approach: Extract sub-components, hooks documented in file header show refactoring path
+**Mixed auth implementations:**
+- Issue: Three auth modes (OAuth, API key, AWS) with different credential handling
+- Files: `src/main/lib/claude/index.ts`, `src/main/lib/aws/sso-service.ts`
+- Why: Supporting multiple Claude providers
+- Impact: Complex credential management, potential security gaps
+- Fix approach: Abstract credential interface, consistent encryption
 
 ## Known Issues
 
-**Unimplemented TODO Features:**
-- `src/renderer/features/terminal/terminal.tsx:156` - "TODO: Open file in editor" not implemented
-- `src/renderer/features/terminal/terminal.tsx:224` - "TODO: Set tab title" not implemented
-- `src/renderer/features/terminal/terminal.tsx:289` - "TODO: Set focused pane" not implemented
-- `src/renderer/features/agents/main/active-chat.tsx:4265` - "TODO: Need to add endpoint that accepts worktreePath directly"
-- `src/renderer/features/session-flow/ui/session-flow-sidebar.tsx:73` - "TODO: Implement proper PNG export"
-- `src/renderer/features/agents/hooks/use-desktop-notifications.ts:6,9` - Desktop notifications not implemented
-- `src/main/lib/analytics.ts:161` - First launch tracking not implemented
-- `src/main/lib/trpc/routers/gsd.ts:413,432` - GSD progress not persisted
+**Native module architecture issues:**
+- Symptoms: App crashes with "mach-o file, but is an incompatible architecture"
+- Files: `node_modules/better-sqlite3/`, `node_modules/node-pty/`
+- Trigger: Switching between Intel/Apple Silicon Macs, cache corruption
+- Workaround: `rm -rf node_modules/better-sqlite3 && bun install`
+- Root cause: Native modules compiled for wrong architecture
 
-**MCP Feature Issues (documented in TODO.md):**
-- `src/main/lib/trpc/routers/mcp.ts:60` - AUTH pattern too broad, matches AUTHOR, AUTHENTICATE_URL
-- `src/renderer/features/mcp/ui/mcp-auth-modal.tsx` - No error toast notifications on failures
-- `src/renderer/features/mcp/ui/mcp-auth-modal.tsx:57` - useEffect dependency creates new array each render
+**MCP TODO documentation:**
+- Issue: Dedicated TODO file for MCP feature
+- File: `src/renderer/features/mcp/TODO.md`
+- Impact: Indicates incomplete MCP implementation
 
-**Re-enable Required:**
-- `src/renderer/features/agents/main/new-chat-form.tsx:201` - "TODO: Re-enable with better validation logic"
-- `src/renderer/features/layout/agents-layout.tsx:122` - "TODO: Re-enable with better logic that doesn't clear on every render"
+**Disabled features with TODOs:**
+- Issue: Code commented out with TODO for re-enabling
+- Files: `src/renderer/features/agents/main/new-chat-form.tsx:189`
+- Impact: Unclear if features should be enabled or removed
 
 ## Security Considerations
 
-**Base64 Fallback for Credentials:**
-- Risk: When `safeStorage.isEncryptionAvailable()` returns false, MCP credentials stored as base64
-- Files: `src/main/lib/trpc/routers/mcp.ts:85-91`
-- Current mitigation: Uses Electron's safeStorage when available
-- Recommendations: Document this limitation; consider refusing to store if encryption unavailable
+**Credential encryption:**
+- Risk: Multiple credential types stored, encryption surface area large
+- Current mitigation: Electron safeStorage for all sensitive data
+- Files: `src/main/lib/db/schema/index.ts` (claudeCodeSettings, mcpCredentials)
+- Recommendations: Audit all credential paths, add credential rotation
 
-**TLS Verification Disabled:**
-- Risk: Kubernetes connections disable TLS verification
-- Files: `src/main/lib/kubernetes/kubernetes-service.ts:78`
-- Current mitigation: Only for local development clusters
-- Recommendations: Add clear warning in UI; consider user opt-in
+**Git operations without sandboxing:**
+- Risk: Git commands execute in user environment with full permissions
+- Current mitigation: Path validation in `src/main/lib/git/security/`
+- Files: `src/main/lib/git/git-operations.ts`
+- Recommendations: Continue hardening path validation, consider git hooks
 
-**Environment Variable Exposure:**
-- Risk: Sensitive env vars could leak to terminals/child processes
-- Files: `src/main/lib/terminal/env.ts:164,352`
-- Current mitigation: Uses allowlist to filter env vars
-- Recommendations: Audit allowlist regularly; add tests for sensitive var filtering
+**Terminal PTY spawning:**
+- Risk: Full shell access via terminal feature
+- Current mitigation: User's own shell, no privilege escalation
+- Files: `src/main/lib/terminal/session.ts`
+- Recommendations: Document security model clearly
 
-## Performance Bottlenecks
+## Performance Concerns
 
-**Large Component Renders:**
-- Problem: `active-chat.tsx` (5798 lines) with 37 useEffect hooks may cause excessive re-renders
+**Large JSON columns:**
+- Issue: Messages stored as JSON text in SQLite
+- Files: `src/main/lib/db/schema/index.ts` (subChats.messages)
+- Measurement: Could grow large for long conversations
+- Cause: Simpler schema, but poor query performance on message content
+- Improvement path: Consider message pagination, separate table
+
+**React re-renders:**
+- Issue: Active chat component is large (4000+ lines)
 - Files: `src/renderer/features/agents/main/active-chat.tsx`
-- Cause: Complex state management, many effect dependencies
-- Improvement path: Continue hook consolidation (doc shows 30% reduction achieved); extract more sub-components
+- Measurement: Potential render performance issues
+- Cause: Complex state management in single component
+- Improvement path: Extract sub-components, optimize with memo
 
-**Console Logging:**
-- Problem: 1229 console.log/warn/error calls across 138 files
-- Files: Throughout `src/` directory
-- Cause: Debug statements left in production code
-- Improvement path: Implement proper logging framework; strip console.* in production builds
-
-**Icon Components:**
-- Problem: Large icon files with many exports
-- Files:
-  - `src/renderer/components/ui/icons.tsx` (5743 lines)
-  - `src/renderer/components/ui/canvas-icons.tsx` (5090 lines)
-- Cause: All icons bundled together
-- Improvement path: Consider code-splitting or lazy loading icons
+**Git status polling:**
+- Issue: File watching may be resource intensive for large repos
+- Files: `src/main/lib/git/watcher/git-watcher.ts`
+- Cause: chokidar watching all files in project
+- Improvement path: Debounce, exclude patterns
 
 ## Fragile Areas
 
-**Mock API Transformation Layer:**
-- Files: `src/renderer/lib/mock-api.ts`
-- Why fragile: Transforms message formats, tool invocation types between old and new formats
-- Safe modification: Test thoroughly; compare message structures before/after changes
-- Test coverage: No tests for transformation logic
+**Native module dependencies:**
+- Files: `better-sqlite3`, `node-pty`
+- Why fragile: Require compilation, platform-specific, Electron version sensitive
+- Common failures: Build failures, architecture mismatches
+- Safe modification: Test on all platforms, use `electron-rebuild`
 
-**Message Format Migration:**
-- Files: `src/renderer/lib/mock-api.ts:47-82`
-- Why fragile: Migrates "tool-invocation" to "tool-{toolName}" format inline during queries
-- Safe modification: Ensure backwards compatibility; test with old message formats
-- Test coverage: No tests
+**Claude SDK integration:**
+- Files: `src/main/lib/claude/index.ts`, `src/main/lib/trpc/routers/claude.ts`
+- Why fragile: ESM-only module, requires dynamic import, streaming complex
+- Common failures: Import errors, stream handling bugs
+- Safe modification: Test thoroughly with all auth modes
 
-**Database Schema:**
-- Files: `src/main/lib/db/schema/index.ts:205`
-- Why fragile: Contains deprecated `pid` column; schema changes require careful migration
-- Safe modification: Follow migration process in CLAUDE.md
-- Test coverage: Limited migration tests
-
-## Test Coverage Gaps
-
-**Critical Gap - Only 7 test files for 533 source files:**
-- Test files:
-  - `src/main/lib/background-tasks/__tests__/session-cleanup.test.ts`
-  - `src/main/lib/background-tasks/__tests__/task-lifecycle.test.ts`
-  - `src/main/lib/background-tasks/__tests__/watcher.test.ts`
-  - `src/main/lib/migrations/__tests__/worktree-location-migration.test.ts`
-  - `src/main/lib/trpc/routers/__tests__/pagination-integration.test.ts`
-  - `src/main/lib/trpc/routers/__tests__/tasks.test.ts`
-  - `src/renderer/features/workflows/lib/markdown-linter.test.ts`
-- Risk: Changes to core functionality could break without detection
-- Priority: High
-
-**Untested Areas:**
-- `src/renderer/features/agents/*` - Main chat interface (no tests)
-- `src/main/lib/claude/*` - Claude SDK integration (no tests)
-- `src/main/lib/git/*` - Git operations (no tests)
-- `src/main/auth-manager.ts` - Authentication flow (no tests)
-- `src/renderer/lib/mock-api.ts` - Critical data transformation (no tests)
-
-**MCP Feature:**
-- What's not tested: All MCP tRPC procedures
-- Files: `src/main/lib/trpc/routers/mcp.ts`
-- Risk: Credential handling, server config updates could fail silently
-- Priority: Medium (documented in `src/renderer/features/mcp/TODO.md`)
-
-## Type Safety Concerns
-
-**Excessive Type Suppressions:**
-- 50+ `@ts-expect-error` comments (mostly for WebKit-specific properties)
-- 6+ `eslint-disable` for `@typescript-eslint/no-explicit-any`
-- 206 occurrences of `as any)` type casts
-- Files: Throughout renderer, especially `src/renderer/features/agents/ui/sub-chat-selector.tsx`
-- Risk: Runtime errors from incorrect type assumptions
-- Fix approach: Create proper types for WebKit properties; reduce `any` usage
+**Worktree management:**
+- Files: `src/main/lib/git/worktree.ts`
+- Why fragile: Git worktrees can become orphaned, disk state mismatches
+- Common failures: Orphaned worktrees, pruned while in use
+- Safe modification: Add worktree health checks on startup
 
 ## Dependencies at Risk
 
-**Database Column Deprecation:**
-- Package: Schema - `pid` column in tasks table
-- Risk: Column marked deprecated but still in schema
-- Impact: Confusion, potential data inconsistency
-- Migration plan: Remove column after confirming no usage
+**node-pty:**
+- Risk: Native module maintenance, Node.js version compatibility
+- Impact: Terminal feature breaks without it
+- Mitigation: electron-rebuild handles compilation
 
-## Incomplete Features
+**@anthropic-ai/claude-agent-sdk:**
+- Risk: Proprietary SDK, version compatibility
+- Impact: Core AI functionality
+- Mitigation: Version pinned, bundled with app
 
-**Git Worktree Per Chat:**
-- Problem: Mentioned in CLAUDE.md as "Planned" but not fully implemented
-- Blocks: Full isolation between chat sessions
+**electron-updater:**
+- Risk: Auto-update signature validation
+- Impact: Security critical for updates
+- Mitigation: Proper code signing configured
 
-**ProjectSelector Component:**
-- Problem: Marked "In Progress" in CLAUDE.md
-- Blocks: Clean project/folder selection UX
+## Missing Critical Features
 
-**Desktop Notifications:**
-- Problem: Placeholder implementations in `use-desktop-notifications.ts`
-- Files: `src/renderer/features/agents/hooks/use-desktop-notifications.ts`
-- Blocks: User awareness of agent completion
+**Comprehensive test coverage:**
+- Problem: Only 7 test files for large codebase
+- Current workaround: Manual testing
+- Blocks: Safe refactoring, CI/CD confidence
+- Implementation complexity: High (native modules, Electron environment)
 
-## Timer/Interval Management
+**E2E testing:**
+- Problem: No automated E2E tests for critical flows
+- Current workaround: Manual testing
+- Blocks: Regression detection
+- Implementation complexity: Medium (Playwright with Electron)
 
-**Multiple Background Tasks:**
-- Concern: Many setInterval/setTimeout usages across codebase
-- Files:
-  - `src/main/lib/background-tasks/watcher-v2.ts:54` - setInterval
-  - `src/main/lib/terminal/port-manager.ts:57` - setInterval
-  - `src/main/lib/background-tasks/watcher-bashoutput.ts:48` - setInterval
-  - `src/main/lib/background-tasks/cleanup.ts:288` - setInterval
-  - `src/main/auth-manager.ts:166` - setTimeout for refresh timer
-- Risk: Memory leaks if not properly cleaned up
-- Recommendation: Audit cleanup on app close; ensure clearInterval/clearTimeout called
+## Documentation Gaps
+
+**Architecture documentation:**
+- Gap: No high-level architecture diagram
+- Impact: New contributors struggle to understand data flow
+- Files: README.md has some, but incomplete
+
+**Conductor feature:**
+- Gap: Limited documentation for Conductor multi-agent system
+- Files: `src/main/lib/conductor/`
+- Impact: Complex feature hard to understand
 
 ---
 
-*Concerns audit: 2025-01-30*
+*Concerns audit: 2026-02-05*
+*Update as issues are fixed or new ones discovered*

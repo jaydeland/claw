@@ -1,244 +1,193 @@
 # Codebase Structure
 
-**Analysis Date:** 2025-01-30
+**Analysis Date:** 2026-02-05
 
 ## Directory Layout
 
 ```
-wt-claw-11/
+claw/
 ├── src/
-│   ├── main/                    # Electron main process
-│   │   ├── index.ts             # App entry, lifecycle, protocol handling
-│   │   ├── auth-manager.ts      # OAuth flow management
-│   │   ├── auth-store.ts        # Encrypted credential storage
-│   │   ├── windows/             # Window creation and IPC handlers
-│   │   └── lib/                 # Main process libraries
-│   │       ├── db/              # Drizzle ORM + SQLite
-│   │       ├── trpc/            # tRPC router definitions
-│   │       ├── claude/          # Claude SDK integration
-│   │       ├── git/             # Git operations
-│   │       ├── terminal/        # PTY terminal management
-│   │       ├── aws/             # AWS SSO integration
-│   │       ├── kubernetes/      # K8s cluster operations
-│   │       ├── background-tasks/# Long-running task tracking
-│   │       ├── config/          # MCP config consolidation
-│   │       ├── migrations/      # Data migrations
-│   │       ├── mcp/             # MCP tool queries
-│   │       └── ollama/          # Offline mode detection
-│   ├── preload/
-│   │   └── index.ts             # IPC bridge, desktopApi exposure
-│   └── renderer/                # React 19 UI
-│       ├── App.tsx              # Root component, providers
-│       ├── components/          # Shared UI components
-│       │   ├── ui/              # Radix UI primitives
-│       │   └── dialogs/         # Modal dialogs
-│       ├── contexts/            # React contexts
-│       ├── features/            # Feature modules
-│       │   ├── agents/          # Main chat interface
-│       │   ├── sidebar/         # Navigation sidebar
-│       │   ├── changes/         # Git diff/staging UI
-│       │   ├── terminal/        # Terminal emulator
-│       │   ├── layout/          # App layout components
-│       │   ├── workflows/       # Workflow automation
-│       │   ├── clusters/        # Kubernetes clusters
-│       │   ├── session-flow/    # Session visualization
-│       │   └── onboarding/      # Onboarding screens
-│       └── lib/                 # Renderer utilities
-│           ├── atoms/           # Global Jotai atoms
-│           ├── stores/          # Zustand stores
-│           ├── hooks/           # Custom React hooks
-│           ├── themes/          # VS Code theme system
-│           └── trpc.ts          # tRPC client setup
-├── drizzle/                     # Database migrations
-├── resources/                   # App resources (icons, bin)
-├── build/                       # Electron builder config
-├── scripts/                     # Build/release scripts
-└── .planning/                   # GSD planning docs
+│   ├── main/                    # Electron main process (backend)
+│   │   ├── index.ts             # App entry point
+│   │   ├── lib/
+│   │   │   ├── db/              # Drizzle ORM + SQLite
+│   │   │   ├── trpc/routers/    # tRPC API routes
+│   │   │   ├── claude/          # Claude SDK integration
+│   │   │   ├── git/             # Git operations + worktrees
+│   │   │   ├── terminal/        # PTY terminal management
+│   │   │   ├── background-tasks/# Task tracking + watching
+│   │   │   ├── conductor/       # Conductor multi-agent system
+│   │   │   ├── config/          # MCP config consolidation
+│   │   │   ├── mcp/             # MCP server integration
+│   │   │   ├── aws/             # AWS SSO/EKS integration
+│   │   │   ├── kubernetes/      # Kubernetes service
+│   │   │   └── swarm/           # Swarm agent management
+│   │   └── windows/
+│   │       └── main.ts          # Main window creation
+│   ├── preload/                 # IPC bridge (context isolation)
+│   │   └── index.ts             # Exposes desktopApi + tRPC
+│   ├── renderer/                # React UI (frontend)
+│   │   ├── App.tsx              # Root component
+│   │   ├── components/          # Shared UI components
+│   │   ├── features/            # Feature modules
+│   │   │   ├── agents/          # Main chat interface
+│   │   │   ├── conductor/       # Conductor job UI
+│   │   │   ├── terminal/        # Terminal UI
+│   │   │   ├── changes/         # Git changes panel
+│   │   │   ├── sub-chats/       # Sub-chat management
+│   │   │   ├── sidebar/         # Navigation sidebar
+│   │   │   └── workflows/       # Workflow/linter utilities
+│   │   ├── lib/                 # Utilities + stores + atoms
+│   │   └── styles/              # CSS + Tailwind
+│   └── shared/                  # Shared types (main/renderer)
+├── drizzle/                     # Database migrations (30+ files)
+├── resources/                   # Bundled resources
+│   ├── agents/swarm/            # Swarm agent definitions
+│   ├── gsd/                     # GSD system files
+│   └── bin/                     # Platform-specific binaries
+├── build/                       # Build resources (icons, entitlements)
+├── out/                         # Build output (gitignored)
+└── release/                     # Packaged app output (gitignored)
 ```
 
 ## Directory Purposes
 
-**`src/main/`:**
-- Purpose: All Electron main process code
-- Contains: Business logic, database access, external API calls
-- Key files: `index.ts` (entry), `windows/main.ts` (window setup)
+**src/main/:**
+- Purpose: Electron main process - Node.js backend
+- Contains: App lifecycle, native APIs, database, tRPC server
+- Key files: `index.ts` (entry), `lib/trpc/routers/*.ts` (API)
+- Subdirectories: All backend functionality organized by domain
 
-**`src/main/lib/db/`:**
-- Purpose: Database layer with Drizzle ORM
-- Contains: Schema definitions, init/migration logic, utilities
-- Key files: `schema/index.ts` (all tables), `index.ts` (init + getDatabase)
+**src/preload/:**
+- Purpose: Secure bridge between main and renderer
+- Contains: IPC context bridge, tRPC link setup
+- Key files: `index.ts` (exposes safe APIs to renderer)
 
-**`src/main/lib/trpc/routers/`:**
-- Purpose: All tRPC API endpoints
-- Contains: 22+ routers for different domains
-- Key files: `index.ts` (router composition), `claude.ts` (main chat), `projects.ts`, `chats.ts`
+**src/renderer/:**
+- Purpose: React frontend - user interface
+- Contains: Components, features, state management
+- Key files: `App.tsx` (root), `features/agents/main/active-chat.tsx` (main UI)
+- Subdirectories: Organized by feature domains
 
-**`src/main/lib/claude/`:**
-- Purpose: Claude SDK integration utilities
-- Contains: Environment builder, message transformer, background sessions
-- Key files: `env.ts` (buildClaudeEnv), `transform.ts` (createTransformer)
+**src/renderer/features/agents/:**
+- Purpose: Core chat functionality
+- Contains: Message display, input handling, Claude integration UI
+- Key files: `main/active-chat.tsx`, `main/chat-input-area.tsx`
 
-**`src/main/lib/git/`:**
-- Purpose: Git operations and file watching
-- Contains: Status, staging, diff, worktree, GitHub integration
-- Key files: `index.ts` (createGitRouter), `watcher/` (file change detection)
+**src/renderer/features/conductor/:**
+- Purpose: Multi-agent orchestration UI
+- Contains: Kanban board, job management, detail panels
+- Key files: `ui/conductor-kanban.tsx`, `ui/conductor-detail-panel.tsx`
 
-**`src/preload/`:**
-- Purpose: Secure IPC bridge for renderer
-- Contains: Single entry file exposing desktopApi and tRPC
-- Key files: `index.ts` (contextBridge.exposeInMainWorld)
+**drizzle/:**
+- Purpose: Database schema migrations
+- Contains: 30+ SQL migration files
+- Key files: `meta/` (migration journal)
+- Pattern: Drizzle Kit generates, app auto-migrates on startup
 
-**`src/renderer/features/`:**
-- Purpose: Feature-based module organization
-- Contains: Self-contained feature modules with their own atoms/stores/components
-- Key files: Each feature has `atoms/`, `components/`, `ui/`, `lib/` subdirs
-
-**`src/renderer/features/agents/`:**
-- Purpose: Main chat interface (core feature)
-- Contains: Chat input, message rendering, tool displays, mentions
-- Key files: `main/active-chat.tsx`, `atoms/index.ts`, `ui/agents-content.tsx`
-
-**`src/renderer/features/sidebar/`:**
-- Purpose: Left navigation sidebar with tabs
-- Contains: Tab bar, workspace list, history, commands, MCP servers
-- Key files: `components/` (tab content components)
-
-**`src/renderer/features/changes/`:**
-- Purpose: Git diff and staging UI
-- Contains: File list, diff viewer, commit UI, merge dialogs
-- Key files: `components/file-list/`, `components/diff-full-page-view/`
-
-**`src/renderer/lib/atoms/`:**
-- Purpose: Global Jotai atoms and re-exports
-- Contains: Settings, preferences, onboarding state
-- Key files: `index.ts` (re-exports from features/agents/atoms + global atoms)
-
-**`src/renderer/lib/stores/`:**
-- Purpose: Zustand stores for complex state
-- Contains: Sub-chat tab management
-- Key files: `sub-chat-store.ts`
-
-**`src/renderer/components/ui/`:**
-- Purpose: Radix UI primitive wrappers
-- Contains: Button, Dialog, Dropdown, Tabs, etc.
-- Pattern: Thin wrappers with Tailwind styling
+**resources/:**
+- Purpose: Files bundled with packaged app
+- Contains: GSD commands, swarm agents, binaries
+- Key files: Copied to `resources/` in packaged app
 
 ## Key File Locations
 
 **Entry Points:**
-- `src/main/index.ts`: Main process entry
-- `src/preload/index.ts`: Preload script
-- `src/renderer/App.tsx`: Renderer entry
-- `src/renderer/main.tsx`: React DOM render
+- `src/main/index.ts` - Electron main process entry
+- `src/preload/index.ts` - Preload script entry
+- `src/renderer/index.tsx` - React entry point
 
 **Configuration:**
-- `electron.vite.config.ts`: Build config for main/preload/renderer
-- `package.json`: Dependencies and scripts
-- `drizzle.config.ts`: Drizzle ORM config
-- `tailwind.config.js`: Tailwind CSS config
+- `package.json` - Dependencies, scripts, electron-builder config
+- `electron.vite.config.ts` - Vite build configuration
+- `tsconfig.json` - TypeScript configuration
+- `tailwind.config.ts` - Tailwind CSS configuration
+- `drizzle.config.ts` - Database migration configuration
 
 **Core Logic:**
-- `src/main/lib/trpc/routers/claude.ts`: Claude SDK streaming
-- `src/main/lib/db/schema/index.ts`: All database tables
-- `src/renderer/features/agents/main/active-chat.tsx`: Main chat component
-- `src/renderer/features/agents/atoms/index.ts`: Agent UI state
+- `src/main/lib/db/schema/index.ts` - Database schema (source of truth)
+- `src/main/lib/trpc/routers/claude.ts` - Claude SDK integration
+- `src/main/lib/claude/index.ts` - Claude session management
+- `src/main/lib/git/worktree.ts` - Worktree operations
 
-**Testing:**
-- `src/main/lib/**/__tests__/`: Main process tests (vitest)
-- Pattern: Co-located `__tests__/` folders
+**UI Components:**
+- `src/renderer/features/agents/main/active-chat.tsx` - Main chat interface
+- `src/renderer/components/ui/*.tsx` - Radix UI wrapper components
+
+**Tests:**
+- `src/main/lib/**/__tests__/*.test.ts` - Unit tests co-located with source
+- Pattern: 7 test files found in background-tasks, migrations, trpc routers
 
 ## Naming Conventions
 
 **Files:**
-- Components: PascalCase (`ActiveChat.tsx`, `AgentsSidebar.tsx`)
-- Utilities/hooks: camelCase (`useFileUpload.ts`, `formatters.ts`)
-- Stores: kebab-case (`sub-chat-store.ts`)
-- Atoms: camelCase with collection suffix (`index.ts` in atoms folders)
+- `kebab-case.ts` - Utility files, config files
+- `PascalCase.tsx` - React components
+- `*.test.ts` - Test files (co-located with source)
+- `index.ts` - Barrel exports
+
+**Functions/Variables:**
+- `camelCase` - Functions, variables
+- `PascalCase` - React components, TypeScript types/interfaces
+- `UPPER_SNAKE_CASE` - Constants, environment variable names
 
 **Directories:**
-- Features: kebab-case (`agents/`, `session-flow/`)
-- Sub-modules: kebab-case (`main/`, `ui/`, `atoms/`)
+- `kebab-case` - All directories
+- Feature directories plural: `features/`, `components/`, `lib/`
 
-**Exports:**
-- Atoms: camelCase with `Atom` suffix (`selectedAgentChatIdAtom`)
-- Stores: `use{Name}Store` pattern (`useAgentSubChatStore`)
-- Components: PascalCase (`AgentsLayout`)
+**Special Patterns:**
+- `active-*.tsx` - Main feature components
+- `use-*.ts` - React hooks
+- `*-store.ts` - Zustand stores
+- `*-atom.ts` / `*Atom` - Jotai atoms
+- `*.router.ts` / `router.ts` - tRPC routers
 
 ## Where to Add New Code
 
 **New Feature:**
-- Create directory: `src/renderer/features/{feature-name}/`
-- Add subdirs: `atoms/`, `components/`, `ui/`, `lib/`, `hooks/`
-- Create atoms in `atoms/index.ts`
-- Export main component from `ui/{feature-name}-content.tsx`
-- Add tRPC router: `src/main/lib/trpc/routers/{feature}.ts`
-- Register router in `src/main/lib/trpc/routers/index.ts`
-
-**New Database Table:**
-- Add schema: `src/main/lib/db/schema/index.ts`
-- Run `bun run db:generate` to create migration
-- Migration auto-applies on next app start
+- Backend logic: `src/main/lib/{feature}/`
+- UI components: `src/renderer/features/{feature}/`
+- Types: Add to existing schema or create `src/shared/types/`
 
 **New tRPC Router:**
-- Create file: `src/main/lib/trpc/routers/{name}.ts`
-- Export router using `router()` and `publicProcedure`
-- Register in `src/main/lib/trpc/routers/index.ts`
+- Router file: `src/main/lib/trpc/routers/{name}.ts`
+- Registration: Add to `src/main/lib/trpc/index.ts`
+
+**New Database Table:**
+- Schema: `src/main/lib/db/schema/index.ts` or `src/main/lib/db/schema/{domain}.ts`
+- Migration: `bun run db:generate` creates file in `drizzle/`
 
 **New UI Component:**
 - Shared: `src/renderer/components/ui/{name}.tsx`
 - Feature-specific: `src/renderer/features/{feature}/components/{name}.tsx`
 
-**New Atom:**
-- Global: `src/renderer/lib/atoms/index.ts`
-- Feature-specific: `src/renderer/features/{feature}/atoms/index.ts`
-
-**New IPC Handler:**
-- Add to `src/main/windows/main.ts` in `registerIpcHandlers()`
-- Expose in `src/preload/index.ts` via `contextBridge.exposeInMainWorld`
-- Add types to `DesktopApi` interface in preload
-
-**New Main Process Library:**
-- Create directory: `src/main/lib/{name}/`
-- Add `index.ts` for exports
-- Import in routers or main index as needed
+**New Test:**
+- Location: `__tests__/` directory adjacent to source file
+- Naming: `{source-file}.test.ts`
 
 ## Special Directories
 
-**`drizzle/`:**
-- Purpose: Database migration SQL files
-- Generated: Yes (via `bun run db:generate`)
-- Committed: Yes
+**out/:**
+- Purpose: Build artifacts (main, preload, renderer compiled output)
+- Source: electron-vite build
+- Committed: No (in .gitignore)
 
-**`resources/`:**
-- Purpose: App resources bundled with packaged app
-- Generated: Partially (VERSION file, migrations copied at build)
-- Committed: Yes (bin/, icons)
+**release/:**
+- Purpose: Packaged application output
+- Source: electron-builder
+- Committed: No (in .gitignore)
 
-**`build/`:**
-- Purpose: Electron builder icon resources
-- Generated: No
-- Committed: Yes
+**resources/bin/:**
+- Purpose: Platform-specific Claude Code binaries
+- Source: Downloaded via `scripts/download-claude-binary.mjs`
+- Committed: No (binaries are large, downloaded on build)
 
-**`release/`:**
-- Purpose: Build output (DMGs, ZIPs)
-- Generated: Yes (via packaging)
-- Committed: No (gitignored)
-
-**`node_modules/`:**
-- Purpose: Dependencies
-- Generated: Yes (via `bun install`)
-- Committed: No (gitignored)
-
-**`out/`:**
-- Purpose: Compiled output
-- Generated: Yes (via `bun run build`)
-- Committed: No (gitignored)
-
-**`.planning/`:**
-- Purpose: GSD planning and codebase analysis docs
-- Generated: By GSD tools
-- Committed: Yes
+**drizzle/meta/:**
+- Purpose: Migration journal tracking
+- Source: Drizzle Kit
+- Committed: Yes (required for migration state)
 
 ---
 
-*Structure analysis: 2025-01-30*
+*Structure analysis: 2026-02-05*
+*Update when directory structure changes*
