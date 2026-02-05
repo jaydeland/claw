@@ -15,10 +15,10 @@
 
   <!-- Letter C -->
   <path
-    d="M 720 360 Q 520 360 520 500 Q 520 640 720 640"
+    d="M 720 320 Q 500 320 500 500 Q 500 680 720 680"
     fill="none"
     stroke="#ffffff"
-    stroke-width="48"
+    stroke-width="56"
     stroke-linecap="round"
     stroke-linejoin="round"
   />

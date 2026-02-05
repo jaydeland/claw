@@ -27,10 +27,10 @@ export function Logo({ fill = "currentColor", className, ...props }: LogoProps) 
 
       {/* Letter C */}
       <path
-        d="M 280 140 Q 200 140 200 200 Q 200 260 280 260"
+        d="M 285 128 Q 190 128 190 200 Q 190 272 285 272"
         fill="none"
         stroke={fill}
-        strokeWidth="24"
+        strokeWidth="28"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
