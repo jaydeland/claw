@@ -99,20 +99,27 @@ export function initDatabase() {
   sqlite.pragma("journal_mode = WAL")
   sqlite.pragma("foreign_keys = ON")
 
-  // Create Drizzle instance
-  db = drizzle(sqlite, { schema })
+  // Create Drizzle instance (but don't assign to global `db` yet)
+  const drizzleInstance = drizzle(sqlite, { schema })
 
-  // Run migrations
+  // Run migrations BEFORE setting the global db variable
+  // This ensures that if migrations fail, getDatabase() will retry on next call
   const migrationsPath = getMigrationsPath()
   console.log(`[DB] Running migrations from: ${migrationsPath}`)
 
   try {
-    migrate(db, { migrationsFolder: migrationsPath })
+    migrate(drizzleInstance, { migrationsFolder: migrationsPath })
     console.log("[DB] Migrations completed")
   } catch (error) {
+    // Close the SQLite connection since we're not going to use it
+    sqlite.close()
+    sqlite = null
     console.error("[DB] Migration error:", error)
     throw error
   }
+
+  // Only set the global db AFTER migrations complete successfully
+  db = drizzleInstance
 
   // Ensure default Home workspace exists
   ensureDefaultHomeWorkspace(db)
