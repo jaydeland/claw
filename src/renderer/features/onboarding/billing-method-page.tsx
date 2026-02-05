@@ -2,7 +2,7 @@
 
 import { useSetAtom } from "jotai"
 import { useState } from "react"
-import { Check } from "lucide-react"
+import { Check, Cloud } from "lucide-react"
 
 import { ClaudeCodeIcon, KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
 import { billingMethodAtom, type BillingMethod } from "../../lib/atoms"
@@ -35,6 +35,12 @@ const billingOptions: BillingOption[] = [
     title: "Custom Model",
     subtitle: "Use a custom base URL and model.",
     icon: <SettingsFilledIcon className="w-5 h-5" />,
+  },
+  {
+    id: "aws-bedrock",
+    title: "AWS Bedrock",
+    subtitle: "Use Claude via Amazon Bedrock with SSO.",
+    icon: <Cloud className="w-5 h-5" />,
   },
 ]
 

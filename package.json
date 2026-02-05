@@ -1,6 +1,6 @@
 {
   "name": "claw-desktop",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "description": "Claw - The Claude Code Wrapper",
   "author": {
@@ -173,12 +173,16 @@
       {
         "from": "resources/gsd",
         "to": "gsd",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/agents/swarm",
         "to": "agents/swarm",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asar": true,
