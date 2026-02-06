@@ -73,7 +73,7 @@ export const subChats = sqliteTable("sub_chats", {
     .references(() => chats.id, { onDelete: "cascade" }),
   sessionId: text("session_id"), // Claude SDK session ID for resume
   streamId: text("stream_id"), // Track in-progress streams
-  mode: text("mode").notNull().default("agent"), // "plan" | "agent" | "swarm"
+  mode: text("mode").notNull().default("agent"), // "plan" | "agent"
   model: text("model").default("sonnet"), // "opus" | "sonnet" | "haiku" (defaults to sonnet)
   messages: text("messages").notNull().default("[]"), // JSON array
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
@@ -283,7 +283,7 @@ export const devspaceStartedProcesses = sqliteTable("devspace_started_processes"
 export * from "./conductor"
 
 // ============ TYPE EXPORTS ============
-export type SubChatMode = "plan" | "agent" | "swarm"
+export type SubChatMode = "plan" | "agent"
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert

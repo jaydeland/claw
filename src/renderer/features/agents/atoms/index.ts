@@ -184,10 +184,10 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-// Agent mode type - supports agent, plan, and swarm modes
-export type AgentMode = "agent" | "plan" | "swarm"
+// Agent mode type - supports agent and plan modes
+export type AgentMode = "agent" | "plan"
 
-// Primary mode atom - tri-state for agent, plan, and swarm modes
+// Primary mode atom - bi-state for agent and plan modes
 export const agentModeAtom = atomWithStorage<AgentMode>(
   "agents:agentMode",
   "agent", // default to agent mode
