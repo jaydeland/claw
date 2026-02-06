@@ -1067,32 +1067,17 @@ export const claudeRouter = router({
             console.log(`[claude] Session ID to resume: ${resumeSessionId} (Existing: ${existingSessionId})`)
             console.log(`[claude] Resume at UUID: ${resumeAtUuid}`)
 
-            // Clean up stale session files from isolated config when starting fresh
-            // This prevents the SDK from discovering old session files via `continue: true`
-            // or any automatic session discovery mechanism
-            if (!resumeSessionId) {
+            // Clean up stale session state when starting fresh (no resumeSessionId)
+            // The SDK can discover old sessions from projects/, debug/, todos/, or any subdirectory
+            // To prevent "No conversation found" errors, remove the ENTIRE isolated config directory
+            if (!resumeSessionId && existsSync(isolatedConfigDir)) {
               try {
-                const projectsDir = path.join(isolatedConfigDir, "projects")
-                if (existsSync(projectsDir)) {
-                  const projectDirs = readdirSync(projectsDir)
-                  for (const dir of projectDirs) {
-                    const sessionDir = path.join(projectsDir, dir)
-                    const dirStat = statSync(sessionDir)
-                    if (dirStat.isDirectory()) {
-                      // Remove all .jsonl session files from the project directory
-                      const files = readdirSync(sessionDir)
-                      for (const file of files) {
-                        if (file.endsWith(".jsonl")) {
-                          const filePath = path.join(sessionDir, file)
-                          unlinkSync(filePath)
-                          console.log(`[claude] Cleaned up stale session file: ${file}`)
-                        }
-                      }
-                    }
-                  }
-                }
+                await fs.rm(isolatedConfigDir, { recursive: true, force: true })
+                console.log(`[claude] Deleted isolated config directory for fresh start`)
+                // Recreate the directory
+                mkdirSync(isolatedConfigDir, { recursive: true })
               } catch (cleanupErr) {
-                console.warn(`[claude] Failed to clean up stale session files:`, cleanupErr)
+                console.warn(`[claude] Failed to clean up session directory:`, cleanupErr)
               }
             }
             
