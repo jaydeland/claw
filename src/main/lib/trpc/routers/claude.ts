@@ -1234,8 +1234,6 @@ export const claudeRouter = router({
                 // Use bundled binary
                 pathToClaudeCodeExecutable: claudeBinaryPath,
                 // Session handling with rollback support
-                // Pre-generate session ID using subChatId (only for new sessions, not resume)
-                ...(!resumeSessionId && { sessionId: input.subChatId }),
                 enableFileCheckpointing: true, // Enable SDK-native file rollback
                 ...(resumeSessionId && {
                   resume: resumeSessionId,
@@ -1244,8 +1242,8 @@ export const claudeRouter = router({
                     ? { resumeSessionAt: resumeAtUuid }
                     : { continue: true }),
                 }),
-                // For first message in chat, don't use continue mode when setting custom sessionId
-                // (SDK doesn't allow sessionId + continue together for new sessions)
+                // For first message in chat (no session ID yet), use continue mode
+                ...(!resumeSessionId && { continue: true }),
                 ...(resolvedModel && { model: resolvedModel }),
                 // Fallback to Sonnet if primary model unavailable
                 fallbackModel: resolvedModel === "opus" ? "claude-sonnet-4-5-20241022" : undefined,
@@ -1809,6 +1807,19 @@ export const claudeRouter = router({
                     case "message-metadata":
                       metadata = { ...metadata, ...chunk.messageMetadata }
                       break
+                    case "error":
+                      // Check for invalid session error and clear sessionId from DB
+                      if (
+                        chunk.errorText.includes("No conversation found") ||
+                        chunk.errorText.includes("Invalid session ID")
+                      ) {
+                        console.log(`[claude] Clearing invalid session ID from subChat ${input.subChatId}`)
+                        db.update(subChats)
+                          .set({ sessionId: null })
+                          .where(eq(subChats.id, input.subChatId))
+                          .run()
+                      }
+                      break
                     case "system-Compact":
                       // Add system-Compact to parts so it renders in the chat
                       // Find existing part by toolCallId or add new one
@@ -1829,6 +1840,14 @@ export const claudeRouter = router({
                   // Detect result finish chunk
                   if (chunk.type === "finish") {
                     resultReceived = true
+
+                    // Handle SDK errors from result message
+                    if (chunk.messageMetadata?.resultSubtype === "error_during_execution") {
+                      // Check for session-not-found error specifically
+                      // The error is in the result.errors array, which gets passed through metadata
+                      // We need to emit this as an error chunk if not already done by transform
+                      console.log("[claude] SDK error detected in result, checking if session should be cleared")
+                    }
                   }
                   // Break from chunk loop if plan is done
                   if (planCompleted) {
@@ -1898,6 +1917,18 @@ export const claudeRouter = router({
               ) {
                 errorContext = "Network error - check your connection"
                 errorCategory = "NETWORK_ERROR"
+              } else if (
+                err.message?.includes("No conversation found") ||
+                err.message?.includes("Invalid session ID")
+              ) {
+                errorContext = "Session no longer exists - starting fresh"
+                errorCategory = "INVALID_SESSION"
+                // Clear invalid sessionId from database
+                db.update(subChats)
+                  .set({ sessionId: null })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+                console.log(`[claude] Cleared invalid session ID from subChat ${input.subChatId}`)
               }
 
               // Send error with stderr output to frontend (only if not aborted by user)

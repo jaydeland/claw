@@ -523,9 +523,18 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
       // Check for error subtype before processing
       if (msg.subtype === "error_during_execution") {
         console.error("[transform] ERROR_DURING_EXECUTION result - tool execution failed")
+        console.error("[transform] Error details:", msg.errors)
         yield* endTextBlock()
         yield* endToolInput()
-        // Note: error details will be in the result metadata
+
+        // Emit SDK errors to UI
+        if (msg.errors && Array.isArray(msg.errors) && msg.errors.length > 0) {
+          const errorText = msg.errors.join("\n")
+          yield {
+            type: "error",
+            errorText: `SDK Error: ${errorText}`,
+          }
+        }
       } else {
         yield* endTextBlock()
         yield* endToolInput()
