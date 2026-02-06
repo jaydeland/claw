@@ -714,14 +714,14 @@ export function AwsSsoSection({
               id="max-mcp-output-tokens"
               type="number"
               min="1000"
-              max="64000"
+              max="48000"
               step="1000"
-              value={maxMcpOutputTokens || 64000}
-              onChange={(e) => onMaxMcpOutputTokensChange(parseInt(e.target.value) || 64000)}
+              value={maxMcpOutputTokens || 48000}
+              onChange={(e) => onMaxMcpOutputTokensChange(parseInt(e.target.value) || 48000)}
               className="font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              Default: 64,000 (max for Bedrock Sonnet 4.5)
+              Default: 48,000 (safe limit for Bedrock Sonnet 4.5)
             </p>
           </div>
 
@@ -736,12 +736,12 @@ export function AwsSsoSection({
               min="0"
               max="64000"
               step="1000"
-              value={maxThinkingTokens || 50000}
-              onChange={(e) => onMaxThinkingTokensChange(parseInt(e.target.value) || 50000)}
+              value={maxThinkingTokens || 15000}
+              onChange={(e) => onMaxThinkingTokensChange(parseInt(e.target.value) || 15000)}
               className="font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              Default: 50,000 (must fit within 64k total output limit)
+              Default: 15,000 (total with MCP output must not exceed 64k)
             </p>
           </div>
         </div>
