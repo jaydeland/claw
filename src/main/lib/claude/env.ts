@@ -537,4 +537,13 @@ export function logClaudeEnv(
   console.log(
     `${prefix}[claude-env] ANTHROPIC_AUTH_TOKEN: ${env.ANTHROPIC_AUTH_TOKEN ? "set" : "not set"}`,
   )
+  console.log(
+    `${prefix}[claude-env] ANTHROPIC_API_KEY: ${env.ANTHROPIC_API_KEY ? "set" : "not set"}`,
+  )
+  console.log(
+    `${prefix}[claude-env] OLLAMA_API_KEY: ${env.OLLAMA_API_KEY ? "set" : "not set"}`,
+  )
+  if (env.ANTHROPIC_AUTH_TOKEN === "ollama") {
+    console.log(`${prefix}[claude-env] Ollama mode detected`)
+  }
 }

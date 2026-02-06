@@ -168,7 +168,7 @@ export const clearSubChatSelectionAtom = atom(null, (_get, set) => {
 // Settings dialog
 export type SettingsTab =
   | "profile"
-  | "claude-code"
+  | "providers"
   | "appearance"
   | "keyboard"
   | "preferences"
@@ -187,6 +187,8 @@ export type CustomClaudeConfig = {
   model: string
   token: string
   baseUrl: string
+  apiKey?: string
+  ollamaApiKey?: string
 }
 
 // Model profile system - support multiple configs
@@ -203,6 +205,8 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
     model: "",
     token: "",
     baseUrl: "",
+    apiKey: "",
+    ollamaApiKey: "",
   },
   undefined,
   { getOnInit: true },
@@ -224,16 +228,39 @@ export const activeProfileIdAtom = atomWithStorage<string | null>(
   { getOnInit: true },
 )
 
+// ============================================
+// AI PROVIDER SELECTION
+// ============================================
+
+export type AIProvider = "anthropic-oauth" | "aws-bedrock" | "ollama" | "custom-api" | null
+
+/**
+ * Active AI provider selection
+ * - "anthropic-oauth": Claude Code via OAuth (default)
+ * - "aws-bedrock": AWS Bedrock via SSO or profile
+ * - "ollama": Local or cloud Ollama instance
+ * - "custom-api": Custom API endpoint
+ * - null: No provider selected (use default)
+ */
+export const activeProviderAtom = atomWithStorage<AIProvider>(
+  "agents:active-provider",
+  "anthropic-oauth", // Default to Claude Code OAuth
+  undefined,
+  { getOnInit: true },
+)
+
 export function normalizeCustomClaudeConfig(
   config: CustomClaudeConfig,
 ): CustomClaudeConfig | undefined {
   const model = config.model.trim()
   const token = config.token.trim()
   const baseUrl = config.baseUrl.trim()
+  const apiKey = config.apiKey?.trim() || ""
+  const ollamaApiKey = config.ollamaApiKey?.trim() || ""
 
   if (!model || !token || !baseUrl) return undefined
 
-  return { model, token, baseUrl }
+  return { model, token, baseUrl, apiKey, ollamaApiKey }
 }
 
 // Get active config

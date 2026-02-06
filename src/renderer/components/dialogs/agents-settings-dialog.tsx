@@ -25,7 +25,7 @@ import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktre
 import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
 import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
 import { AgentsBackupTab } from "./settings-tabs/agents-backup-tab"
-import { AgentsClaudeCodeTab } from "../../features/agents/components/settings-tabs/agents-claude-code-tab"
+import { AgentsProvidersTab } from "./settings-tabs/agents-providers-tab"
 import { trpc } from "../../lib/trpc"
 
 // Hook to detect narrow screen
@@ -62,10 +62,10 @@ const MAIN_TABS = [
     description: "Manage your account settings",
   },
   {
-    id: "claude-code" as SettingsTab,
-    label: "Authentication",
+    id: "providers" as SettingsTab,
+    label: "AI Providers",
     icon: SettingsIcon,
-    description: "Claude Code and AWS Bedrock authentication",
+    description: "Configure AI service providers (Claude, AWS, Ollama, Custom)",
   },
   {
     id: "appearance" as SettingsTab,
@@ -302,8 +302,8 @@ export function AgentsSettingsDialog({
     switch (activeTab) {
       case "profile":
         return <AgentsProfileTab />
-      case "claude-code":
-        return <AgentsClaudeCodeTab />
+      case "providers":
+        return <AgentsProvidersTab />
       case "appearance":
         return <AgentsAppearanceTab />
       case "keyboard":

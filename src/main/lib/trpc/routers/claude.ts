@@ -629,6 +629,8 @@ export const claudeRouter = router({
             model: z.string().min(1),
             token: z.string().min(1),
             baseUrl: z.string().min(1),
+            apiKey: z.string().optional(),
+            ollamaApiKey: z.string().optional(),
           })
           .optional(),
         maxThinkingTokens: z.number().optional(), // Enable extended thinking
@@ -892,6 +894,12 @@ export const claudeRouter = router({
                     customEnv: {
                       ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
                       ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
+                      ...(finalCustomConfig.apiKey && {
+                        ANTHROPIC_API_KEY: finalCustomConfig.apiKey,
+                      }),
+                      ...(finalCustomConfig.ollamaApiKey && {
+                        OLLAMA_API_KEY: finalCustomConfig.ollamaApiKey,
+                      }),
                     },
                   }
                 : undefined,
@@ -1042,6 +1050,8 @@ export const claudeRouter = router({
               const redactedConfig = {
                 ...finalCustomConfig,
                 token: `${finalCustomConfig.token.slice(0, 6)}...`,
+                apiKey: finalCustomConfig.apiKey ? `${finalCustomConfig.apiKey.slice(0, 6)}...` : undefined,
+                ollamaApiKey: finalCustomConfig.ollamaApiKey ? `${finalCustomConfig.ollamaApiKey.slice(0, 6)}...` : undefined,
               }
               console.log(`[claude] Custom config: ${JSON.stringify(redactedConfig)}`)
             }

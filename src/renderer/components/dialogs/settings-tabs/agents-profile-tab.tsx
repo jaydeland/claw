@@ -147,6 +147,11 @@ export function AgentsProfileTab() {
         </div>
       </div>
 
+      {/* AI Provider Note */}
+      <div className="text-xs text-muted-foreground">
+        AI provider connections are managed in the{" "}
+        <span className="text-foreground font-medium">AI Providers</span> tab.
+      </div>
     </div>
   )
 }
