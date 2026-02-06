@@ -218,6 +218,20 @@
       "when": 1738367000000,
       "tag": "0030_add_mcp_tool_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1770396776677,
+      "tag": "0031_worried_slyde",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1770396852124,
+      "tag": "0032_new_madame_web",
+      "breakpoints": true
     }
   ]
 }

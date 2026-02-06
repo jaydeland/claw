@@ -179,6 +179,7 @@ export async function initBackgroundSession(
         pathToClaudeCodeExecutable: claudeBinaryPath,
         continue: true,
         model,
+        persistSession: false, // Don't save ephemeral utility sessions
       },
     }
 
@@ -305,6 +306,7 @@ export async function queryBackgroundSession(
         resume: sessionState.sessionId || undefined,
         continue: true,
         model,
+        persistSession: false, // Don't save ephemeral utility sessions
       },
     }
 
@@ -410,6 +412,7 @@ export async function checkBackgroundTaskStatus(
         resume: sessionState.sessionId || undefined,
         continue: true,
         model: "haiku",
+        persistSession: false, // Don't save ephemeral utility sessions
         outputFormat: {
           type: 'json_schema' as const,
           schema: schema
@@ -659,6 +662,7 @@ Start by reading the file.`
         resume: sessionState.sessionId || undefined,
         continue: true,
         model: "sonnet", // Use sonnet for code fixes (better at code)
+        persistSession: false, // Don't save ephemeral utility sessions
       },
     }
 

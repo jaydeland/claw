@@ -19,6 +19,7 @@ import {
   backgroundTasks,
   chats,
   claudeCodeCredentials,
+  claudeCodeSettings,
   getDatabase,
   subChats,
 } from "../../db"
@@ -30,6 +31,10 @@ import { getMergedMcpConfig } from "../../config/consolidator"
 import { taskEvents, taskWatcher } from "../../background-tasks"
 import { injectAllStoredCredentials } from "../../mcp/credential-injection"
 import { getBundledGsdPath } from "./gsd"
+
+// Store active Query objects for MCP server runtime control and file checkpointing
+// Map: subChatId -> Query object (stream from SDK)
+const activeQueries = new Map<string, AsyncIterable<any>>()
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -581,6 +586,13 @@ export const claudeRouter = router({
 
     // Available models (from env.ts defaults)
     const availableModels = [
+      {
+        id: 'opus-4-6',
+        name: 'Claude Opus 4.6',
+        description: 'Latest and most capable model (Binary 2.1.32+)',
+        modelId: 'claude-opus-4-6-20260205',
+        badge: 'NEW',
+      },
       {
         id: 'opus-4-5',
         name: 'Claude Opus 4.5',
@@ -1212,6 +1224,8 @@ export const claudeRouter = router({
                 // Use bundled binary
                 pathToClaudeCodeExecutable: claudeBinaryPath,
                 // Session handling with rollback support
+                sessionId: input.subChatId, // Pre-generate session ID using subChatId
+                enableFileCheckpointing: true, // Enable SDK-native file rollback
                 ...(resumeSessionId && {
                   resume: resumeSessionId,
                   // Rollback support - resume at specific message UUID (from DB)
@@ -1222,10 +1236,69 @@ export const claudeRouter = router({
                 // For first message in chat (no session ID yet), use continue mode
                 ...(!resumeSessionId && { continue: true }),
                 ...(resolvedModel && { model: resolvedModel }),
-                // fallbackModel: "claude-opus-4-5-20251101",
+                // Fallback to Sonnet if primary model unavailable
+                fallbackModel: resolvedModel === "opus" ? "claude-sonnet-4-5-20241022" : undefined,
+                // Debug logging (when environment variable is set)
+                ...(process.env.CLAW_DEBUG_CLAUDE && {
+                  debug: true,
+                  debugFile: path.join(app.getPath('userData'), 'logs', `claude-debug-${Date.now()}.log`),
+                }),
                 ...(input.maxThinkingTokens && {
                   maxThinkingTokens: input.maxThinkingTokens,
                 }),
+                // Budget limit for cost control (from settings)
+                ...((() => {
+                  const db = getDatabase()
+                  const settings = db
+                    .select()
+                    .from(claudeCodeSettings)
+                    .where(eq(claudeCodeSettings.id, "default"))
+                    .get()
+                  return settings?.maxBudgetUsd ? { maxBudgetUsd: settings.maxBudgetUsd } : {}
+                })()),
+                // Hooks system for lifecycle events
+                hooks: {
+                  // Desktop notifications for important events
+                  async Notification({ message }: { message: string }) {
+                    console.log(`[CLAUDE] Notification: ${message}`)
+                    const mainWindow = BrowserWindow.getAllWindows()[0]
+                    if (mainWindow) {
+                      mainWindow.webContents.send('claude-notification', {
+                        type: 'info',
+                        message,
+                      })
+                    }
+                  },
+                  // Pre-tool use guardrails
+                  async PreToolUse({ toolName, args }: { toolName: string; args: any }) {
+                    console.log(`[CLAUDE] PreToolUse: ${toolName}`)
+                    // Example: Log destructive Bash commands
+                    if (toolName === "Bash" && typeof args.command === "string") {
+                      const dangerousPatterns = ["rm -rf", "sudo rm", "format", "mkfs"]
+                      if (dangerousPatterns.some(p => args.command.includes(p))) {
+                        console.warn(`[CLAUDE] ⚠️ Potentially destructive Bash command: ${args.command}`)
+                      }
+                    }
+                  },
+                  // Post-tool use audit logging
+                  async PostToolUse({ toolName, result }: { toolName: string; result: any }) {
+                    console.log(`[CLAUDE] PostToolUse: ${toolName} - status: ${result?.status || 'unknown'}`)
+                  },
+                  // Agent team events (when experimental flag enabled)
+                  async TeammateIdle({ teammate_name }: { teammate_name: string }) {
+                    console.log(`[CLAUDE] TeammateIdle: ${teammate_name}`)
+                  },
+                  async TaskCompleted({ task_id, task_subject }: { task_id: string; task_subject: string }) {
+                    console.log(`[CLAUDE] TaskCompleted: ${task_id} - ${task_subject}`)
+                    const mainWindow = BrowserWindow.getAllWindows()[0]
+                    if (mainWindow) {
+                      mainWindow.webContents.send('claude-notification', {
+                        type: 'success',
+                        message: `Task completed: ${task_subject}`,
+                      })
+                    }
+                  },
+                },
               },
             }
 
@@ -1233,6 +1306,9 @@ export const claudeRouter = router({
             let stream
             try {
               stream = claudeQuery(queryOptions as any)
+              // Store query object for MCP server runtime control and file checkpointing
+              activeQueries.set(input.subChatId, stream)
+              console.log(`[CLAUDE] Stored active query for subChat ${input.subChatId}`)
             } catch (queryError) {
               console.error(
                 "[CLAUDE] ✗ Failed to create SDK query:",
@@ -1944,6 +2020,11 @@ export const claudeRouter = router({
             safeComplete()
           } finally {
             activeSessions.delete(input.subChatId)
+            // Clean up active query object
+            if (activeQueries.has(input.subChatId)) {
+              activeQueries.delete(input.subChatId)
+              console.log(`[CLAUDE] Cleaned up active query for subChat ${input.subChatId}`)
+            }
           }
         })()
 
@@ -2087,5 +2168,87 @@ export const claudeRouter = router({
     .mutation(async ({ input }) => {
       const { fixLintErrors } = await import("../../claude/background-session")
       return fixLintErrors(input.filePath, input.diagnostics, input.cwd)
+    }),
+
+  /**
+   * Reconnect a failed MCP server without restarting the chat session
+   * Requires SDK 0.2.21+ with runtime MCP server management
+   */
+  reconnectMcpServer: publicProcedure
+    .input(
+      z.object({
+        subChatId: z.string(),
+        serverName: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const query = activeQueries.get(input.subChatId) as any
+      if (!query) {
+        throw new Error(`No active session for subChat ${input.subChatId}`)
+      }
+      if (!query.reconnectMcpServer) {
+        throw new Error("SDK version does not support reconnectMcpServer. Requires SDK 0.2.21+")
+      }
+      console.log(`[CLAUDE] Reconnecting MCP server: ${input.serverName}`)
+      await query.reconnectMcpServer(input.serverName)
+      return { success: true, serverName: input.serverName }
+    }),
+
+  /**
+   * Toggle MCP server on/off without restarting the chat session
+   * Requires SDK 0.2.21+ with runtime MCP server management
+   */
+  toggleMcpServer: publicProcedure
+    .input(
+      z.object({
+        subChatId: z.string(),
+        serverName: z.string(),
+        enabled: z.boolean(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const query = activeQueries.get(input.subChatId) as any
+      if (!query) {
+        throw new Error(`No active session for subChat ${input.subChatId}`)
+      }
+      if (!query.toggleMcpServer) {
+        throw new Error("SDK version does not support toggleMcpServer. Requires SDK 0.2.21+")
+      }
+      console.log(`[CLAUDE] Toggling MCP server ${input.serverName}: ${input.enabled ? 'enabled' : 'disabled'}`)
+      await query.toggleMcpServer(input.serverName, input.enabled)
+      return { success: true, serverName: input.serverName, enabled: input.enabled }
+    }),
+
+  /**
+   * Rewind files to a previous message state using SDK-native checkpointing
+   * Replaces git stash-based rollback with more precise file-level tracking
+   * Requires SDK 0.2.21+ with enableFileCheckpointing: true
+   */
+  rewindFiles: publicProcedure
+    .input(
+      z.object({
+        subChatId: z.string(),
+        userMessageId: z.string(), // SDK message UUID to rewind to
+        dryRun: z.boolean().optional().default(false),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const query = activeQueries.get(input.subChatId) as any
+      if (!query) {
+        throw new Error(`No active session for subChat ${input.subChatId}`)
+      }
+      if (!query.rewindFiles) {
+        throw new Error("SDK version does not support rewindFiles. Requires SDK 0.2.21+ with enableFileCheckpointing")
+      }
+      console.log(`[CLAUDE] Rewinding files to message ${input.userMessageId} (dryRun: ${input.dryRun})`)
+      const result = await query.rewindFiles(input.userMessageId, { dryRun: input.dryRun })
+      return {
+        success: true,
+        dryRun: input.dryRun,
+        filesChanged: result.filesChanged || 0,
+        insertions: result.insertions || 0,
+        deletions: result.deletions || 0,
+        changes: result.changes || [],
+      }
     }),
 })

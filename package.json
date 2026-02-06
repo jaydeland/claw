@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",
-    "@anthropic-ai/claude-agent-sdk": "^0.2.12",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.34",
     "@aws-sdk/client-eks": "^3.975.0",
     "@aws-sdk/client-sso": "^3.974.0",
     "@aws-sdk/client-sso-oidc": "^3.974.0",

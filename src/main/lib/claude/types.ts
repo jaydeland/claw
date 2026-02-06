@@ -85,6 +85,9 @@ export type MCPServer = {
     version: string
   }
   error?: string
+  tools?: string[] // List of tool names provided by this server (SDK 0.2.21+)
+  scope?: string // Server scope/permissions (SDK 0.2.21+)
+  config?: Record<string, any> // Server configuration (SDK 0.2.21+)
 }
 
 export type MessageMetadata = {
@@ -97,4 +100,5 @@ export type MessageMetadata = {
   durationMs?: number
   resultSubtype?: string
   finalTextId?: string
+  stopReason?: string | null // Why the model stopped (end_turn, max_tokens, tool_use, etc.)
 }

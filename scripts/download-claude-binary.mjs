@@ -150,8 +150,8 @@ async function getLatestVersion() {
   }
 
   // Fallback to known version
-  console.log("Using fallback version: 2.1.17")
-  return "2.1.17"
+  console.log("Using fallback version: 2.1.34")
+  return "2.1.34"
 }
 
 /**

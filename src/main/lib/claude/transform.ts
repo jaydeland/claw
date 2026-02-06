@@ -425,7 +425,15 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
         })
         // Map MCP servers with validated status type and additional info
         const mcpServers: MCPServer[] = (msg.mcp_servers || []).map(
-          (s: { name: string; status: string; serverInfo?: { name: string; version: string }; error?: string }) => ({
+          (s: {
+            name: string;
+            status: string;
+            serverInfo?: { name: string; version: string };
+            error?: string;
+            tools?: string[];
+            scope?: string;
+            config?: Record<string, any>;
+          }) => ({
             name: s.name,
             status: (["connected", "failed", "pending", "needs-auth"].includes(
               s.status,
@@ -434,6 +442,10 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
               : "pending") as MCPServerStatus,
             ...(s.serverInfo && { serverInfo: s.serverInfo }),
             ...(s.error && { error: s.error }),
+            // Extract richer MCP server status (SDK 0.2.21+)
+            ...(s.tools && { tools: s.tools }),
+            ...(s.scope && { scope: s.scope }),
+            ...(s.config && { config: s.config }),
           }),
         )
         // Map slash commands from SDK
@@ -572,6 +584,8 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
         resultSubtype: msg.subtype || "success",
         // Include finalTextId for collapsing tools when there's a final response
         finalTextId: lastTextId || undefined,
+        // Why the model stopped (end_turn, max_tokens, tool_use, etc.)
+        stopReason: msg.stop_reason ?? null,
       }
       yield { type: "message-metadata", messageMetadata: metadata }
       yield { type: "finish-step" }

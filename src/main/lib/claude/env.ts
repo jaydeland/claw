@@ -465,21 +465,21 @@ export function buildClaudeEnv(options?: {
     }
   }
 
-  // 6. Add AWS Bedrock credentials if in AWS mode
+  // 6. Read settings once (used for both Bedrock and experimental features)
+  const db = getDatabase()
+  const settings = db
+    .select()
+    .from(claudeCodeSettings)
+    .where(eq(claudeCodeSettings.id, "default"))
+    .get()
+
+  // 7. Add AWS Bedrock credentials if in AWS mode
   const awsCreds = getAwsCredentials()
   if (awsCreds) {
     env.CLAUDE_CODE_API_PROVIDER = "bedrock"
     env.CLAUDE_CODE_USE_BEDROCK = "1"
     env.AWS_REGION = awsCreds.region
     env.AWS_DEFAULT_REGION = awsCreds.region
-
-    // Read Bedrock model overrides from settings
-    const db = getDatabase()
-    const settings = db
-      .select()
-      .from(claudeCodeSettings)
-      .where(eq(claudeCodeSettings.id, "default"))
-      .get()
 
     // Bedrock model defaults (use settings or fall back to defaults)
     env.ANTHROPIC_DEFAULT_OPUS_MODEL = settings?.bedrockOpusModel || "global.anthropic.claude-opus-4-5-20251101-v1:0"
@@ -506,7 +506,13 @@ export function buildClaudeEnv(options?: {
     }
   }
 
-  // 7. Mark as SDK entry
+  // 8. Experimental features (from settings)
+  if (settings?.enableAgentTeams) {
+    env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
+    console.log("[claude-env] Agent teams enabled (experimental)")
+  }
+
+  // 9. Mark as SDK entry
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts"
 
   return env
