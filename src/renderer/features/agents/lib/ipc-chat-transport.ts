@@ -1,6 +1,7 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
+  activeProviderAtom,
   agentsLoginModalOpenAtom,
   customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
@@ -285,22 +286,32 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 }
               }
 
-              // Handle authentication errors - show Claude login modal
+              // Handle authentication errors - show Claude login modal only for anthropic-oauth
               if (chunk.type === "auth-error") {
-                // Store the failed message for retry after successful auth
-                // readyToRetry=false prevents immediate retry - modal sets it to true on OAuth success
-                appStore.set(pendingAuthRetryMessageAtom, {
-                  subChatId: this.config.subChatId,
-                  prompt,
-                  ...(images.length > 0 && { images }),
-                  readyToRetry: false,
-                })
-                // Show the Claude Code login modal
-                appStore.set(agentsLoginModalOpenAtom, true)
+                const activeProvider = appStore.get(activeProviderAtom)
+
+                // Only show Claude Code login modal for anthropic-oauth provider
+                if (activeProvider === "anthropic-oauth") {
+                  // Store the failed message for retry after successful auth
+                  // readyToRetry=false prevents immediate retry - modal sets it to true on OAuth success
+                  appStore.set(pendingAuthRetryMessageAtom, {
+                    subChatId: this.config.subChatId,
+                    prompt,
+                    ...(images.length > 0 && { images }),
+                    readyToRetry: false,
+                  })
+                  // Show the Claude Code login modal
+                  appStore.set(agentsLoginModalOpenAtom, true)
+                } else {
+                  // For other providers (Ollama, AWS Bedrock, Custom API),
+                  // don't show Claude login modal - error will be displayed in chat
+                  console.warn(`[ipc-chat-transport] Auth error for provider ${activeProvider}:`, chunk)
+                }
+
                 // Use controller.error() instead of controller.close() so that
                 // the SDK Chat properly resets status from "streaming" to "ready"
                 // This allows user to retry sending messages after failed auth
-                console.log(`[SD] R:AUTH_ERR sub=${subId}`)
+                console.log(`[SD] R:AUTH_ERR sub=${subId} provider=${activeProvider}`)
                 controller.error(new Error("Authentication required"))
                 return
               }
