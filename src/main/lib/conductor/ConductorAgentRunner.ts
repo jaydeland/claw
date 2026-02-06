@@ -824,7 +824,7 @@ class ConductorAgentRunner extends EventEmitter {
           }),
           // Resume from previous session if available
           ...(resumeCheckpointId && { resume: sessionId, continue: true }),
-          ...(!resumeCheckpointId && { continue: true }),
+          // For new checkpoints, omit continue to start fresh
           // Tool approval callback
           canUseTool: async (
             toolName: string,

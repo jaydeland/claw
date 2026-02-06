@@ -2137,11 +2137,13 @@ export const claudeRouter = router({
 
           // Save sessionId on abort so conversation can be resumed
           // Clear streamId since we're no longer streaming
+          // IMPORTANT: Don't save broken session IDs - they'll fail on resume
           const db = getDatabase()
+          const shouldSaveSession = currentSessionId && !brokenSessionIds.has(currentSessionId)
           db.update(subChats)
             .set({
               streamId: null,
-              ...(currentSessionId && { sessionId: currentSessionId })
+              ...(shouldSaveSession && { sessionId: currentSessionId })
             })
             .where(eq(subChats.id, input.subChatId))
             .run()

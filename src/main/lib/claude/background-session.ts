@@ -12,6 +12,8 @@
 
 import { app } from "electron"
 import * as path from "path"
+import * as fs from "fs/promises"
+import { existsSync } from "fs"
 import { buildClaudeEnv, getBundledClaudeBinaryPath } from "./env"
 import { getDatabase, claudeCodeCredentials } from "../db"
 import { eq } from "drizzle-orm"
@@ -163,6 +165,13 @@ export async function initBackgroundSession(
 
     sessionState.model = model
 
+    // Clean up any stale session files before initializing
+    const backgroundProjectsDir = path.join(backgroundConfigDir, "projects")
+    if (existsSync(backgroundProjectsDir)) {
+      await fs.rm(backgroundProjectsDir, { recursive: true, force: true })
+      console.log("[background-session] Cleaned up stale session files")
+    }
+
     // Initialize with a simple ping to verify the session works
     const queryOptions = {
       prompt: "ping",
@@ -177,7 +186,7 @@ export async function initBackgroundSession(
         permissionMode: "bypassPermissions" as const,
         allowDangerouslySkipPermissions: true,
         pathToClaudeCodeExecutable: claudeBinaryPath,
-        continue: true,
+        // Omit continue for fresh initialization - let SDK create new session
         model,
         persistSession: false, // Don't save ephemeral utility sessions
       },
@@ -303,8 +312,11 @@ export async function queryBackgroundSession(
         permissionMode: "bypassPermissions" as const,
         allowDangerouslySkipPermissions: true,
         pathToClaudeCodeExecutable: claudeBinaryPath,
-        resume: sessionState.sessionId || undefined,
-        continue: true,
+        // Only use continue when we have a valid sessionId to resume
+        ...(sessionState.sessionId && {
+          resume: sessionState.sessionId,
+          continue: true,
+        }),
         model,
         persistSession: false, // Don't save ephemeral utility sessions
       },
@@ -409,8 +421,11 @@ export async function checkBackgroundTaskStatus(
         permissionMode: "bypassPermissions" as const,
         allowDangerouslySkipPermissions: true,
         pathToClaudeCodeExecutable: claudeBinaryPath,
-        resume: sessionState.sessionId || undefined,
-        continue: true,
+        // Only use continue when we have a valid sessionId to resume
+        ...(sessionState.sessionId && {
+          resume: sessionState.sessionId,
+          continue: true,
+        }),
         model: "haiku",
         persistSession: false, // Don't save ephemeral utility sessions
         outputFormat: {
@@ -659,8 +674,11 @@ Start by reading the file.`
         permissionMode: "bypassPermissions" as const,
         allowDangerouslySkipPermissions: true,
         pathToClaudeCodeExecutable: claudeBinaryPath,
-        resume: sessionState.sessionId || undefined,
-        continue: true,
+        // Only use continue when we have a valid sessionId to resume
+        ...(sessionState.sessionId && {
+          resume: sessionState.sessionId,
+          continue: true,
+        }),
         model: "sonnet", // Use sonnet for code fixes (better at code)
         persistSession: false, // Don't save ephemeral utility sessions
       },
