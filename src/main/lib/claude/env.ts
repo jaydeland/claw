@@ -485,8 +485,8 @@ export function buildClaudeEnv(options?: {
     env.ANTHROPIC_DEFAULT_OPUS_MODEL = settings?.bedrockOpusModel || "global.anthropic.claude-opus-4-5-20251101-v1:0"
     env.ANTHROPIC_DEFAULT_SONNET_MODEL = settings?.bedrockSonnetModel || "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"
     env.ANTHROPIC_DEFAULT_HAIKU_MODEL = settings?.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"
-    env.MAX_MCP_OUTPUT_TOKENS = String(settings?.maxMcpOutputTokens ?? 200000)
-    env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 1000000)
+    env.MAX_MCP_OUTPUT_TOKENS = String(settings?.maxMcpOutputTokens ?? 64000) // Bedrock Sonnet 4.5 limit
+    env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 50000) // Must fit within 64k total
 
     // Profile mode - set AWS_PROFILE for Claude SDK
     if (awsCreds.profileName) {

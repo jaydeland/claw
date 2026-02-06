@@ -714,14 +714,14 @@ export function AwsSsoSection({
               id="max-mcp-output-tokens"
               type="number"
               min="1000"
-              max="200000"
+              max="64000"
               step="1000"
-              value={maxMcpOutputTokens || 200000}
-              onChange={(e) => onMaxMcpOutputTokensChange(parseInt(e.target.value) || 200000)}
+              value={maxMcpOutputTokens || 64000}
+              onChange={(e) => onMaxMcpOutputTokensChange(parseInt(e.target.value) || 64000)}
               className="font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              Default: 200,000 (max for Bedrock Sonnet 4.5)
+              Default: 64,000 (max for Bedrock Sonnet 4.5)
             </p>
           </div>
 
@@ -734,20 +734,20 @@ export function AwsSsoSection({
               id="max-thinking-tokens"
               type="number"
               min="0"
-              max="200000"
+              max="64000"
               step="1000"
-              value={maxThinkingTokens || 100000}
-              onChange={(e) => onMaxThinkingTokensChange(parseInt(e.target.value) || 100000)}
+              value={maxThinkingTokens || 50000}
+              onChange={(e) => onMaxThinkingTokensChange(parseInt(e.target.value) || 50000)}
               className="font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              Default: 100,000 (must fit within total output limit)
+              Default: 50,000 (must fit within 64k total output limit)
             </p>
           </div>
         </div>
 
         <div className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded">
-          ⚠️ Total output tokens (thinking + response) cannot exceed 200,000 for Bedrock Sonnet 4.5
+          ⚠️ Total output tokens (thinking + response) cannot exceed 64,000 for Bedrock Sonnet 4.5
         </div>
       </div>
 
