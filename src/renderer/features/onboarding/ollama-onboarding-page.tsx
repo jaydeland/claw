@@ -19,6 +19,7 @@ import { billingMethodAtom, ollamaOnboardingCompletedAtom, customClaudeConfigAto
 import { cn } from "../../lib/utils"
 
 const OLLAMA_MODELS = [
+  { id: "kimi-k2.5:cloud", name: "Kimi K2.5 Cloud", description: "Cloud-based Kimi model" },
   { id: "qwen3-coder", name: "Qwen 3 Coder", description: "Strong coding performance" },
   { id: "glm-4.7", name: "GLM 4.7", description: "General purpose" },
   { id: "gpt-oss:20b", name: "GPT-OSS 20B", description: "20B parameter model" },
