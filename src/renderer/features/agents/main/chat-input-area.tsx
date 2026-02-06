@@ -711,7 +711,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onContentChange={handleContentChange}
                   onSubmit={onSubmitWithQuestionAnswer || handleEditorSubmit}
                   onForceSubmit={onForceSend}
-                  onShiftTab={() => setAgentMode((prev) => prev === "agent" ? "plan" : prev === "plan" ? "swarm" : "agent")}
+                  onShiftTab={() => setAgentMode((prev) => prev === "agent" ? "plan" : "agent")}
                   placeholder={isStreaming ? "Add follow up" : "Plan, @ for context, / for commands"}
                   className={cn(
                     "bg-transparent max-h-[200px] overflow-y-auto p-1",
@@ -724,7 +724,7 @@ export const ChatInputArea = memo(function ChatInputArea({
               </div>
               <PromptInputActions className="w-full">
                 <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                  {/* Mode toggle (Agent/Plan/Swarm) */}
+                  {/* Mode toggle (Agent/Plan) */}
                   <DropdownMenu
                     open={modeDropdownOpen}
                     onOpenChange={(open) => {
