@@ -571,17 +571,27 @@ export const claudeRouter = router({
       console.error('[claude] Failed to read SDK version:', error)
     }
 
-    // Get Claude binary version
+    // Get Claude binary version from bundled binary (not PATH)
     let binaryVersion = 'unknown'
     try {
       const { execSync } = await import('child_process')
-      const output = execSync('claude --version', { encoding: 'utf-8', timeout: 5000 })
-      // Parse output like "claude 2.1.5"
-      const match = output.trim().match(/claude\s+(\S+)/)
+      const bundledBinaryPath = getBundledClaudeBinaryPath()
+      const output = execSync(`"${bundledBinaryPath}" --version`, { encoding: 'utf-8', timeout: 5000 })
+      // Parse output like "claude 2.1.34 (Claude Code)" or "2.1.34 (Claude Code)"
+      const match = output.trim().match(/(?:claude\s+)?(\d+\.\d+\.\d+)/)
       binaryVersion = match ? match[1] : output.trim()
+      console.log('[claude] Bundled binary version:', binaryVersion)
     } catch (error: any) {
-      console.error('[claude] Failed to get binary version:', error.message)
-      binaryVersion = 'Not installed or not in PATH'
+      console.error('[claude] Failed to get bundled binary version:', error.message)
+      // Fallback: read from VERSION file
+      try {
+        const versionFile = path.join(app.getAppPath(), 'resources/bin/VERSION')
+        const versionContent = readFileSync(versionFile, 'utf-8')
+        binaryVersion = versionContent.split('\n')[0].trim()
+        console.log('[claude] Read version from VERSION file:', binaryVersion)
+      } catch {
+        binaryVersion = 'Not found'
+      }
     }
 
     // Available models (from env.ts defaults)
