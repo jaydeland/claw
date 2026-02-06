@@ -1402,6 +1402,10 @@ export const claudeRouter = router({
                     msgAny.error || msgAny.message || "Unknown SDK error"
                   lastError = new Error(sdkError)
 
+                  // Log the actual SDK error message for debugging
+                  console.error(`[claude] SDK ERROR: ${sdkError}`)
+                  console.error(`[claude] Full error object:`, JSON.stringify(msgAny, null, 2))
+
                   // Categorize SDK-level errors
                   let errorCategory = "SDK_ERROR"
                   let errorContext = "Claude SDK error"
