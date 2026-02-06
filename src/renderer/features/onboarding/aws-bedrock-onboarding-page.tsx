@@ -33,7 +33,7 @@ export function AwsBedrockOnboardingPage() {
   const setAwsBedrockOnboardingCompleted = useSetAtom(awsBedrockOnboardingCompletedAtom)
   const setActiveProvider = useSetAtom(activeProviderAtom)
 
-  const [ssoStartUrl, setSsoStartUrl] = useState("https://d-9067694978.awsapps.com/start")
+  const [ssoStartUrl, setSsoStartUrl] = useState("https://d-NUMBER.awsapps.com/start")
   const [isAuthenticating, setIsAuthenticating] = useState(false)
   const [deviceAuth, setDeviceAuth] = useState<DeviceAuthState | null>(null)
   const [codeCopied, setCodeCopied] = useState(false)
