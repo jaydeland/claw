@@ -37,6 +37,10 @@ interface AwsSsoSectionProps {
   onConnectionMethodChange: (method: "sso" | "profile") => void
   awsProfileName: string
   onAwsProfileNameChange: (name: string) => void
+  maxMcpOutputTokens?: number
+  onMaxMcpOutputTokensChange: (value: number) => void
+  maxThinkingTokens?: number
+  onMaxThinkingTokensChange: (value: number) => void
 }
 
 type ConnectionMethod = "sso" | "profile"
@@ -100,6 +104,10 @@ export function AwsSsoSection({
   onConnectionMethodChange,
   awsProfileName,
   onAwsProfileNameChange,
+  maxMcpOutputTokens,
+  onMaxMcpOutputTokensChange,
+  maxThinkingTokens,
+  onMaxThinkingTokensChange,
 }: AwsSsoSectionProps) {
   const [ssoStartUrl, setSsoStartUrl] = useState("")
   const [ssoRegion, setSsoRegion] = useState("us-east-1")
@@ -687,13 +695,69 @@ export function AwsSsoSection({
         </div>
       )}
 
+      {/* Token Limits */}
+      <div className="space-y-4 p-3 bg-muted/30 rounded-lg border border-border/50">
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">Model Token Limits</Label>
+          <p className="text-xs text-muted-foreground">
+            Configure output and thinking token limits for Bedrock models. These must not exceed the model's maximum capacity.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          {/* MCP Output Tokens */}
+          <div className="space-y-2">
+            <Label htmlFor="max-mcp-output-tokens" className="text-sm">
+              Max MCP Output Tokens
+            </Label>
+            <Input
+              id="max-mcp-output-tokens"
+              type="number"
+              min="1000"
+              max="200000"
+              step="1000"
+              value={maxMcpOutputTokens || 200000}
+              onChange={(e) => onMaxMcpOutputTokensChange(parseInt(e.target.value) || 200000)}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Default: 200,000 (max for Bedrock Sonnet 4.5)
+            </p>
+          </div>
+
+          {/* Thinking Tokens */}
+          <div className="space-y-2">
+            <Label htmlFor="max-thinking-tokens" className="text-sm">
+              Max Thinking Tokens
+            </Label>
+            <Input
+              id="max-thinking-tokens"
+              type="number"
+              min="0"
+              max="200000"
+              step="1000"
+              value={maxThinkingTokens || 100000}
+              onChange={(e) => onMaxThinkingTokensChange(parseInt(e.target.value) || 100000)}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Default: 100,000 (must fit within total output limit)
+            </p>
+          </div>
+        </div>
+
+        <div className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded">
+          ⚠️ Total output tokens (thinking + response) cannot exceed 200,000 for Bedrock Sonnet 4.5
+        </div>
+      </div>
+
       {/* Save Button */}
       <div className="flex justify-end pt-2">
         <Button onClick={onSave} disabled={isSaving}>
           {isSaving && <IconSpinner className="h-4 w-4 mr-2" />}
           Save Settings
         </Button>
-      </div>
+      </div}
 
       {/* Device Code Modal */}
       <Dialog open={!!deviceAuth} onOpenChange={(open) => !open && handleCancelAuth()}>

@@ -353,6 +353,8 @@ function AWSBedrockProvider() {
   const [vpnCheckUrl, setVpnCheckUrl] = useState("")
   const [connectionMethod, setConnectionMethod] = useState<"sso" | "profile">("sso")
   const [awsProfileName, setAwsProfileName] = useState("")
+  const [maxMcpOutputTokens, setMaxMcpOutputTokens] = useState(200000)
+  const [maxThinkingTokens, setMaxThinkingTokens] = useState(100000)
 
   const { data: claudeSettings, refetch: refetchSettings } = trpc.claudeSettings.getSettings.useQuery()
 
@@ -374,6 +376,8 @@ function AWSBedrockProvider() {
       setVpnCheckUrl(claudeSettings.vpnCheckUrl || "")
       setConnectionMethod(claudeSettings.bedrockConnectionMethod || "sso")
       setAwsProfileName(claudeSettings.awsProfileName || "")
+      setMaxMcpOutputTokens(claudeSettings.maxMcpOutputTokens || 200000)
+      setMaxThinkingTokens(claudeSettings.maxThinkingTokens || 100000)
     }
   }, [claudeSettings])
 
@@ -395,6 +399,8 @@ function AWSBedrockProvider() {
             vpnCheckUrl,
             bedrockConnectionMethod: connectionMethod,
             awsProfileName: connectionMethod === "profile" ? awsProfileName : null,
+            maxMcpOutputTokens,
+            maxThinkingTokens,
           })
         }}
         isSaving={updateSettings.isPending}
@@ -406,6 +412,10 @@ function AWSBedrockProvider() {
         onConnectionMethodChange={setConnectionMethod}
         awsProfileName={awsProfileName}
         onAwsProfileNameChange={setAwsProfileName}
+        maxMcpOutputTokens={maxMcpOutputTokens}
+        onMaxMcpOutputTokensChange={setMaxMcpOutputTokens}
+        maxThinkingTokens={maxThinkingTokens}
+        onMaxThinkingTokensChange={setMaxThinkingTokens}
       />
     </div>
   )
