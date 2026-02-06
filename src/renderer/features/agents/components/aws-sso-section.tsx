@@ -757,7 +757,7 @@ export function AwsSsoSection({
           {isSaving && <IconSpinner className="h-4 w-4 mr-2" />}
           Save Settings
         </Button>
-      </div}
+      </div>
 
       {/* Device Code Modal */}
       <Dialog open={!!deviceAuth} onOpenChange={(open) => !open && handleCancelAuth()}>
