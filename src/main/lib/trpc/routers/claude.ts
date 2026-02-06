@@ -36,6 +36,10 @@ import { getBundledGsdPath } from "./gsd"
 // Map: subChatId -> Query object (stream from SDK)
 const activeQueries = new Map<string, AsyncIterable<any>>()
 
+// Track session IDs that failed with "No conversation found" errors
+// Prevents repeated resume attempts for expired/invalid sessions
+const brokenSessionIds = new Set<string>()
+
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
  * Returns the cleaned prompt and lists of mentioned agents/skills/tools
@@ -1062,7 +1066,19 @@ export const claudeRouter = router({
             // Get bundled Claude binary path
             const claudeBinaryPath = getBundledClaudeBinaryPath()
 
-            const resumeSessionId = input.sessionId || existingSessionId || undefined
+            let resumeSessionId = input.sessionId || existingSessionId || undefined
+
+            // CRITICAL: Skip resume if this session ID previously failed
+            // Prevents repeated "No conversation found" errors for expired sessions
+            if (resumeSessionId && brokenSessionIds.has(resumeSessionId)) {
+              console.log(`[claude] Skipping resume for broken session: ${resumeSessionId}`)
+              resumeSessionId = undefined
+              // Also clear from DB to prevent future attempts
+              db.update(subChats)
+                .set({ sessionId: null })
+                .where(eq(subChats.id, input.subChatId))
+                .run()
+            }
 
             console.log(`[claude] Session ID to resume: ${resumeSessionId} (Existing: ${existingSessionId})`)
             console.log(`[claude] Resume at UUID: ${resumeAtUuid}`)
@@ -1831,11 +1847,24 @@ export const claudeRouter = router({
                         chunk.errorText.includes("No conversation found") ||
                         chunk.errorText.includes("Invalid session ID")
                       ) {
-                        console.log(`[claude] Clearing invalid session ID from subChat ${input.subChatId}`)
+                        // Extract session ID from error message if possible
+                        const sessionMatch = chunk.errorText.match(/session ID: ([a-f0-9-]+)/)
+                        const brokenSessionId = sessionMatch ? sessionMatch[1] : null
+
+                        console.log(`[claude] Detected broken session ID: ${brokenSessionId || 'unknown'}`)
+
+                        if (brokenSessionId) {
+                          // Add to broken sessions set to prevent future resume attempts
+                          brokenSessionIds.add(brokenSessionId)
+                          console.log(`[claude] Added ${brokenSessionId} to broken sessions list (${brokenSessionIds.size} total)`)
+                        }
+
+                        // Clear from database
                         db.update(subChats)
                           .set({ sessionId: null })
                           .where(eq(subChats.id, input.subChatId))
                           .run()
+                        console.log(`[claude] Cleared session ID from subChat ${input.subChatId} in database`)
                       }
                       break
                     case "system-Compact":
@@ -1939,8 +1968,18 @@ export const claudeRouter = router({
                 err.message?.includes("No conversation found") ||
                 err.message?.includes("Invalid session ID")
               ) {
-                errorContext = "Session no longer exists - starting fresh"
+                errorContext = "Session no longer exists - please retry"
                 errorCategory = "INVALID_SESSION"
+
+                // Extract and track broken session ID
+                const sessionMatch = err.message?.match(/session ID: ([a-f0-9-]+)/)
+                const brokenSessionId = sessionMatch ? sessionMatch[1] : resumeSessionId
+
+                if (brokenSessionId) {
+                  brokenSessionIds.add(brokenSessionId)
+                  console.log(`[claude] Added ${brokenSessionId} to broken sessions list (${brokenSessionIds.size} total)`)
+                }
+
                 // Clear invalid sessionId from database
                 db.update(subChats)
                   .set({ sessionId: null })
