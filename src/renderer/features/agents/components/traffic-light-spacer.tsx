@@ -22,52 +22,28 @@ export function TrafficLights({
   const [isHovered, setIsHovered] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Toggle native traffic light visibility based on hover state
-  useEffect(() => {
-    if (!isDesktop || isFullscreen) return
-    if (typeof window === "undefined" || !window.desktopApi?.setTrafficLightVisibility) return
-
-    window.desktopApi.setTrafficLightVisibility(isHovered)
-  }, [isHovered, isDesktop, isFullscreen])
-
   // Handle mouse enter/leave for the hover zone
+  // Toggle native traffic lights synchronously on hover to avoid flicker
   const handleMouseEnter = useCallback(() => {
+    if (isDesktop && !isFullscreen && window.desktopApi?.setTrafficLightVisibility) {
+      window.desktopApi.setTrafficLightVisibility(true)
+    }
     setIsHovered(true)
-  }, [])
+  }, [isDesktop, isFullscreen])
 
   const handleMouseLeave = useCallback(() => {
+    if (isDesktop && !isFullscreen && window.desktopApi?.setTrafficLightVisibility) {
+      window.desktopApi.setTrafficLightVisibility(false)
+    }
     setIsHovered(false)
-  }, [])
+  }, [isDesktop, isFullscreen])
 
   // Only show in desktop app, hide in fullscreen (native traffic lights always show in fullscreen)
   // isFullscreen === true means fullscreen, null or false means not fullscreen
   if (!isDesktop || isFullscreen === true) return null
 
-  // When hovered, native lights are visible - render invisible placeholder to maintain layout
-  if (isHovered) {
-    return (
-      <div
-        ref={containerRef}
-        className={cn("relative", className)}
-        style={{
-          // @ts-expect-error - WebKit-specific property
-          WebkitAppRegion: "no-drag",
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        data-sidebar-content
-      >
-        <div className="flex items-center gap-2" data-sidebar-content>
-          {/* Invisible placeholders - native traffic lights show in this space */}
-          <div className="w-3 h-3" />
-          <div className="w-3 h-3" />
-          <div className="w-3 h-3" />
-        </div>
-      </div>
-    )
-  }
-
-  // When NOT hovered, native lights are hidden - show custom muted circles
+  // Single render path with CSS transitions - avoids DOM swap flicker
+  // Expand hover zone with padding to fully cover native button area (y=6..18)
   return (
     <div
       ref={containerRef}
@@ -75,23 +51,35 @@ export function TrafficLights({
       style={{
         // @ts-expect-error - WebKit-specific property
         WebkitAppRegion: "no-drag",
+        // Expand hover zone to cover native button area
+        padding: "6px 4px",
+        margin: "-6px -4px", // Compensate so layout isn't affected
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       data-sidebar-content
     >
-      {/* Muted traffic lights - just circles with border */}
+      {/* Muted traffic lights - fade out on hover as native buttons appear */}
       <div className="flex items-center gap-2" data-sidebar-content>
         <div
-          className="w-3 h-3 rounded-full border border-foreground/20 bg-transparent"
+          className={cn(
+            "w-3 h-3 rounded-full border transition-opacity duration-75",
+            isHovered ? "opacity-0 border-transparent" : "opacity-100 border-foreground/20"
+          )}
           aria-hidden="true"
         />
         <div
-          className="w-3 h-3 rounded-full border border-foreground/20 bg-transparent"
+          className={cn(
+            "w-3 h-3 rounded-full border transition-opacity duration-75",
+            isHovered ? "opacity-0 border-transparent" : "opacity-100 border-foreground/20"
+          )}
           aria-hidden="true"
         />
         <div
-          className="w-3 h-3 rounded-full border border-foreground/20 bg-transparent"
+          className={cn(
+            "w-3 h-3 rounded-full border transition-opacity duration-75",
+            isHovered ? "opacity-0 border-transparent" : "opacity-100 border-foreground/20"
+          )}
           aria-hidden="true"
         />
       </div>
