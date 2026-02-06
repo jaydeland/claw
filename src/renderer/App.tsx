@@ -1,4 +1,4 @@
-import { Provider as JotaiProvider, useAtomValue, useSetAtom } from "jotai"
+import { Provider as JotaiProvider, useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
 import { useEffect, useMemo } from "react"
 import { Toaster } from "sonner"
