@@ -1386,6 +1386,22 @@ export const claudeRouter = router({
                   console.error(`[claude] SDK ERROR: ${sdkError}`)
                   console.error(`[claude] Full error object:`, JSON.stringify(msgAny, null, 2))
 
+                  // Check for token limit errors - these mean the server-side session is broken
+                  const errorText = msgAny.message?.content?.[0]?.text || sdkError
+                  if (errorText.includes("maximum tokens") && errorText.includes("exceeds the model limit")) {
+                    const sessionId = msgAny.session_id
+                    if (sessionId) {
+                      console.log(`[claude] Token limit error - marking session as broken: ${sessionId}`)
+                      brokenSessionIds.add(sessionId)
+                      // Clear from database to prevent resume attempts
+                      db.update(subChats)
+                        .set({ sessionId: null })
+                        .where(eq(subChats.id, input.subChatId))
+                        .run()
+                      console.log(`[claude] Cleared broken session ID from subChat ${input.subChatId}`)
+                    }
+                  }
+
                   // Categorize SDK-level errors
                   let errorCategory = "SDK_ERROR"
                   let errorContext = "Claude SDK error"
