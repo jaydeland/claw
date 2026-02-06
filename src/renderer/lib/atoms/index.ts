@@ -558,7 +558,7 @@ export const isFullscreenAtom = atom<boolean | null>(null)
 // "custom-model" = use custom base URL and model (e.g. for proxies or alternative providers)
 // "aws-bedrock" = use AWS Bedrock via SSO
 // null = not yet selected (show billing method selection screen)
-export type BillingMethod = "claude-subscription" | "api-key" | "custom-model" | "aws-bedrock" | null
+export type BillingMethod = "claude-subscription" | "api-key" | "custom-model" | "aws-bedrock" | "ollama" | null
 
 export const billingMethodAtom = atomWithStorage<BillingMethod>(
   "onboarding:billing-method",
@@ -589,6 +589,15 @@ export const apiKeyOnboardingCompletedAtom = atomWithStorage<boolean>(
 // Only relevant when billingMethod is "aws-bedrock"
 export const awsBedrockOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:aws-bedrock-completed",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+// Whether user has completed Ollama configuration during onboarding
+// Only relevant when billingMethod is "ollama"
+export const ollamaOnboardingCompletedAtom = atomWithStorage<boolean>(
+  "onboarding:ollama-completed",
   false,
   undefined,
   { getOnInit: true },

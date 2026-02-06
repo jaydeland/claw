@@ -11,12 +11,14 @@ import {
   ApiKeyOnboardingPage,
   AwsBedrockOnboardingPage,
   BillingMethodPage,
+  OllamaOnboardingPage,
   SelectRepoPage,
 } from "./features/onboarding"
 import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
   awsBedrockOnboardingCompletedAtom,
+  ollamaOnboardingCompletedAtom,
   billingMethodAtom,
   activeProviderAtom
 } from "./lib/atoms"
@@ -51,6 +53,7 @@ function AppContent() {
   )
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const awsBedrockOnboardingCompleted = useAtomValue(awsBedrockOnboardingCompletedAtom)
+  const ollamaOnboardingCompleted = useAtomValue(ollamaOnboardingCompletedAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
 
   // Migration: If user already completed Anthropic onboarding but has no billing method set,
@@ -70,6 +73,7 @@ function AppContent() {
         "api-key": "custom-api" as const, // API key is handled as custom API
         "custom-model": "custom-api" as const,
         "aws-bedrock": "aws-bedrock" as const,
+        "ollama": "ollama" as const,
       }
       const mappedProvider = providerMapping[billingMethod]
       if (mappedProvider) {
@@ -101,8 +105,9 @@ function AppContent() {
   // 2. Claude subscription selected but not completed -> AnthropicOnboardingPage
   // 3. API key or custom model selected but not completed -> ApiKeyOnboardingPage
   // 4. AWS Bedrock selected but not completed -> AwsBedrockOnboardingPage
-  // 5. No valid project selected -> SelectRepoPage
-  // 6. Otherwise -> AgentsLayout
+  // 5. Ollama selected but not completed -> OllamaOnboardingPage
+  // 6. No valid project selected -> SelectRepoPage
+  // 7. Otherwise -> AgentsLayout
   if (!billingMethod) {
     return <BillingMethodPage />
   }
@@ -120,6 +125,10 @@ function AppContent() {
 
   if (billingMethod === "aws-bedrock" && !awsBedrockOnboardingCompleted) {
     return <AwsBedrockOnboardingPage />
+  }
+
+  if (billingMethod === "ollama" && !ollamaOnboardingCompleted) {
+    return <OllamaOnboardingPage />
   }
 
   if (!validatedProject && !isLoadingProjects) {

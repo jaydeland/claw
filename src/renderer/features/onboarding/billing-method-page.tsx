@@ -2,10 +2,10 @@
 
 import { useSetAtom } from "jotai"
 import { useState } from "react"
-import { Check, Cloud } from "lucide-react"
+import { Check, Cloud, Server } from "lucide-react"
 
 import { ClaudeCodeIcon, KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
-import { billingMethodAtom, type BillingMethod } from "../../lib/atoms"
+import { billingMethodAtom, type BillingMethod, activeProviderAtom } from "../../lib/atoms"
 import { cn } from "../../lib/utils"
 
 type BillingOption = {
@@ -42,15 +42,33 @@ const billingOptions: BillingOption[] = [
     subtitle: "Use Claude via Amazon Bedrock with SSO.",
     icon: <Cloud className="w-5 h-5" />,
   },
+  {
+    id: "ollama",
+    title: "Ollama",
+    subtitle: "Local or cloud Ollama models.",
+    icon: <Server className="w-5 h-5" />,
+  },
 ]
 
 export function BillingMethodPage() {
   const setBillingMethod = useSetAtom(billingMethodAtom)
+  const setActiveProvider = useSetAtom(activeProviderAtom)
   const [selectedOption, setSelectedOption] =
     useState<Exclude<BillingMethod, null>>("claude-subscription")
 
   const handleContinue = () => {
+    // Map billing method to active provider
+    const providerMapping = {
+      "claude-subscription": "anthropic-oauth" as const,
+      "api-key": "custom-api" as const,
+      "custom-model": "custom-api" as const,
+      "aws-bedrock": "aws-bedrock" as const,
+      "ollama": "ollama" as const,
+    }
+
+    // Set both for backwards compatibility
     setBillingMethod(selectedOption)
+    setActiveProvider(providerMapping[selectedOption])
   }
 
   return (
