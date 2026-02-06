@@ -1224,7 +1224,8 @@ export const claudeRouter = router({
                 // Use bundled binary
                 pathToClaudeCodeExecutable: claudeBinaryPath,
                 // Session handling with rollback support
-                sessionId: input.subChatId, // Pre-generate session ID using subChatId
+                // Pre-generate session ID using subChatId (only for new sessions, not resume)
+                ...(!resumeSessionId && { sessionId: input.subChatId }),
                 enableFileCheckpointing: true, // Enable SDK-native file rollback
                 ...(resumeSessionId && {
                   resume: resumeSessionId,
@@ -1233,8 +1234,8 @@ export const claudeRouter = router({
                     ? { resumeSessionAt: resumeAtUuid }
                     : { continue: true }),
                 }),
-                // For first message in chat (no session ID yet), use continue mode
-                ...(!resumeSessionId && { continue: true }),
+                // For first message in chat, don't use continue mode when setting custom sessionId
+                // (SDK doesn't allow sessionId + continue together for new sessions)
                 ...(resolvedModel && { model: resolvedModel }),
                 // Fallback to Sonnet if primary model unavailable
                 fallbackModel: resolvedModel === "opus" ? "claude-sonnet-4-5-20241022" : undefined,
