@@ -13,6 +13,7 @@ import {
   billingMethodAtom,
   customClaudeConfigAtom,
   type CustomClaudeConfig,
+  activeProviderAtom,
 } from "../../lib/atoms"
 import { cn } from "../../lib/utils"
 
@@ -27,6 +28,7 @@ export function ApiKeyOnboardingPage() {
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
+  const setActiveProvider = useSetAtom(activeProviderAtom)
 
   const isCustomModel = billingMethod === "custom-model"
 
@@ -67,6 +69,7 @@ export function ApiKeyOnboardingPage() {
     }
     setStoredConfig(config)
     setApiKeyOnboardingCompleted(true)
+    setActiveProvider("custom-api")
 
     setIsSubmitting(false)
   }
@@ -88,6 +91,7 @@ export function ApiKeyOnboardingPage() {
     }
     setStoredConfig(config)
     setApiKeyOnboardingCompleted(true)
+    setActiveProvider("custom-api")
 
     setIsSubmitting(false)
   }

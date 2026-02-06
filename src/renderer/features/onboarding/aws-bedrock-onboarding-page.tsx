@@ -8,7 +8,7 @@ import { Logo } from "../../components/ui/logo"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
-import { billingMethodAtom, awsBedrockOnboardingCompletedAtom } from "../../lib/atoms"
+import { billingMethodAtom, awsBedrockOnboardingCompletedAtom, activeProviderAtom } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
 import { toast } from "sonner"
 import {
@@ -31,6 +31,7 @@ interface DeviceAuthState {
 export function AwsBedrockOnboardingPage() {
   const setBillingMethod = useSetAtom(billingMethodAtom)
   const setAwsBedrockOnboardingCompleted = useSetAtom(awsBedrockOnboardingCompletedAtom)
+  const setActiveProvider = useSetAtom(activeProviderAtom)
 
   const [ssoStartUrl, setSsoStartUrl] = useState("https://d-9067694978.awsapps.com/start")
   const [isAuthenticating, setIsAuthenticating] = useState(false)
@@ -52,8 +53,9 @@ export function AwsBedrockOnboardingPage() {
   useEffect(() => {
     if (awsStatus?.authenticated && awsStatus?.hasCredentials) {
       setAwsBedrockOnboardingCompleted(true)
+      setActiveProvider("aws-bedrock")
     }
-  }, [awsStatus, setAwsBedrockOnboardingCompleted])
+  }, [awsStatus, setAwsBedrockOnboardingCompleted, setActiveProvider])
 
   // Clean up polling on unmount
   useEffect(() => {
@@ -147,6 +149,7 @@ export function AwsBedrockOnboardingPage() {
             // Complete onboarding
             setTimeout(() => {
               setAwsBedrockOnboardingCompleted(true)
+              setActiveProvider("aws-bedrock")
             }, 1000)
           } else if (pollResult.status === "expired") {
             stopPolling()

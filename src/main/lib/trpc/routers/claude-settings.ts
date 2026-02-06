@@ -365,4 +365,40 @@ export const claudeSettingsRouter = router({
 
     return { servers }
   }),
+
+  /**
+   * Sync active provider to backend auth mode
+   * Maps frontend activeProvider to database authMode for Claude execution
+   */
+  syncProviderToBackend: publicProcedure
+    .input(
+      z.object({
+        provider: z.enum(["anthropic-oauth", "anthropic-api", "aws-bedrock", "ollama", "custom-api"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+
+      // Map provider to backend auth mode
+      const authModeMap = {
+        "anthropic-oauth": "oauth" as const,
+        "anthropic-api": "apiKey" as const,
+        "aws-bedrock": "aws" as const,
+        "ollama": "apiKey" as const,
+        "custom-api": "apiKey" as const,
+      }
+
+      const authMode = authModeMap[input.provider]
+
+      // Update database
+      await db
+        .update(claudeCodeSettings)
+        .set({ authMode })
+        .where(eq(claudeCodeSettings.id, "default"))
+        .run()
+
+      console.log(`[claude-settings] Synced provider ${input.provider} to backend authMode: ${authMode}`)
+
+      return { success: true, authMode }
+    }),
 })

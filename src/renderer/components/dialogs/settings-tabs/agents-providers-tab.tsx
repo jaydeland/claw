@@ -727,6 +727,9 @@ export function AgentsProvidersTab() {
   const [activeProvider, setActiveProvider] = useAtom(activeProviderAtom)
   const [customConfig] = useAtom(customClaudeConfigAtom)
 
+  // Backend sync mutation
+  const syncMutation = trpc.claudeSettings.syncProviderToBackend.useMutation()
+
   // Check connection status for each provider
   const { data: claudeIntegration } = trpc.claudeCode.getIntegration.useQuery()
   const { data: awsStatus } = trpc.awsSso.getStatus.useQuery()
@@ -771,6 +774,13 @@ export function AgentsProvidersTab() {
     },
   ]
 
+  // Handler to activate provider and sync to backend
+  const handleActivateProvider = (providerId: AIProvider) => {
+    setActiveProvider(providerId)
+    // Sync to backend so authMode is updated
+    syncMutation.mutate({ provider: providerId })
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -792,7 +802,7 @@ export function AgentsProvidersTab() {
             icon={provider.icon}
             isActive={activeProvider === provider.id}
             isConnected={provider.isConnected}
-            onActivate={() => setActiveProvider(provider.id)}
+            onActivate={() => handleActivateProvider(provider.id)}
           >
             {provider.id === "anthropic-oauth" && <ClaudeCodeProvider />}
             {provider.id === "aws-bedrock" && <AWSBedrockProvider />}

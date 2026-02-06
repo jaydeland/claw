@@ -17,7 +17,8 @@ import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
   awsBedrockOnboardingCompletedAtom,
-  billingMethodAtom
+  billingMethodAtom,
+  activeProviderAtom
 } from "./lib/atoms"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
@@ -44,6 +45,7 @@ function ThemedToaster() {
 function AppContent() {
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
+  const [activeProvider, setActiveProvider] = useAtom(activeProviderAtom)
   const anthropicOnboardingCompleted = useAtomValue(
     anthropicOnboardingCompletedAtom
   )
@@ -58,6 +60,23 @@ function AppContent() {
       setBillingMethod("claude-subscription")
     }
   }, [billingMethod, anthropicOnboardingCompleted, setBillingMethod])
+
+  // Migration: Convert old billingMethod to new activeProvider
+  // This ensures existing users transition smoothly to the new provider system
+  useEffect(() => {
+    if (billingMethod && !activeProvider) {
+      const providerMapping = {
+        "claude-subscription": "anthropic-oauth" as const,
+        "api-key": "custom-api" as const, // API key is handled as custom API
+        "custom-model": "custom-api" as const,
+        "aws-bedrock": "aws-bedrock" as const,
+      }
+      const mappedProvider = providerMapping[billingMethod]
+      if (mappedProvider) {
+        setActiveProvider(mappedProvider)
+      }
+    }
+  }, [billingMethod, activeProvider, setActiveProvider])
 
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =

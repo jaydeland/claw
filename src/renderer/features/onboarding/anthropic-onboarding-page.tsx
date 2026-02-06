@@ -10,6 +10,7 @@ import { Logo } from "../../components/ui/logo"
 import {
   anthropicOnboardingCompletedAtom,
   billingMethodAtom,
+  activeProviderAtom,
 } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
 
@@ -46,6 +47,7 @@ export function AnthropicOnboardingPage() {
     anthropicOnboardingCompletedAtom
   )
   const setBillingMethod = useSetAtom(billingMethodAtom)
+  const setActiveProvider = useSetAtom(activeProviderAtom)
 
   const handleBack = () => {
     setBillingMethod(null)
@@ -190,6 +192,7 @@ export function AnthropicOnboardingPage() {
     try {
       await importSystemTokenMutation.mutateAsync()
       setAnthropicOnboardingCompleted(true)
+      setActiveProvider("anthropic-oauth")
     } catch (err) {
       setExistingTokenError(
         err instanceof Error ? err.message : "Failed to use existing token"
@@ -219,6 +222,7 @@ export function AnthropicOnboardingPage() {
       })
       // Success - mark onboarding as completed
       setAnthropicOnboardingCompleted(true)
+      setActiveProvider("anthropic-oauth")
     } catch (err) {
       setFlowState({
         step: "error",
