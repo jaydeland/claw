@@ -2,7 +2,7 @@ import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
 import * as fs from "fs/promises"
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync, statSync, appendFileSync } from "fs"
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync, statSync, appendFileSync, readdirSync } from "fs"
 import * as os from "os"
 import path, { dirname, join } from "path"
 import { z } from "zod"
@@ -1066,6 +1066,35 @@ export const claudeRouter = router({
 
             console.log(`[claude] Session ID to resume: ${resumeSessionId} (Existing: ${existingSessionId})`)
             console.log(`[claude] Resume at UUID: ${resumeAtUuid}`)
+
+            // Clean up stale session files from isolated config when starting fresh
+            // This prevents the SDK from discovering old session files via `continue: true`
+            // or any automatic session discovery mechanism
+            if (!resumeSessionId) {
+              try {
+                const projectsDir = path.join(isolatedConfigDir, "projects")
+                if (existsSync(projectsDir)) {
+                  const projectDirs = readdirSync(projectsDir)
+                  for (const dir of projectDirs) {
+                    const sessionDir = path.join(projectsDir, dir)
+                    const dirStat = statSync(sessionDir)
+                    if (dirStat.isDirectory()) {
+                      // Remove all .jsonl session files from the project directory
+                      const files = readdirSync(sessionDir)
+                      for (const file of files) {
+                        if (file.endsWith(".jsonl")) {
+                          const filePath = path.join(sessionDir, file)
+                          unlinkSync(filePath)
+                          console.log(`[claude] Cleaned up stale session file: ${file}`)
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (cleanupErr) {
+                console.warn(`[claude] Failed to clean up stale session files:`, cleanupErr)
+              }
+            }
             
             console.log(`[SD] Query options - cwd: ${input.cwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`)
             if (finalCustomConfig) {
@@ -1242,8 +1271,12 @@ export const claudeRouter = router({
                     ? { resumeSessionAt: resumeAtUuid }
                     : { continue: true }),
                 }),
-                // For first message in chat (no session ID yet), use continue mode
-                ...(!resumeSessionId && { continue: true }),
+                // NOTE: Do NOT set `continue: true` when there is no resumeSessionId.
+                // `continue: true` without an explicit session ID causes the SDK to scan
+                // CLAUDE_CONFIG_DIR/projects/ for the most recent session file on disk
+                // and attempt to resume it. If that server-side session has expired or
+                // been deleted, we get "No conversation found with session ID: ..."
+                // For truly new sessions, omit `continue` so the SDK starts fresh.
                 ...(resolvedModel && { model: resolvedModel }),
                 // Fallback to Sonnet if primary model unavailable
                 fallbackModel: resolvedModel === "opus" ? "claude-sonnet-4-5-20241022" : undefined,
