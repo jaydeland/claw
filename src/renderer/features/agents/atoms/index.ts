@@ -184,10 +184,10 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
-// Agent mode type - supports agent, plan, and swarm modes
-export type AgentMode = "agent" | "plan" | "swarm"
+// Agent mode type - supports agent and plan modes
+export type AgentMode = "agent" | "plan"
 
-// Primary mode atom - tri-state for agent, plan, and swarm modes
+// Primary mode atom - bi-state for agent and plan modes
 export const agentModeAtom = atomWithStorage<AgentMode>(
   "agents:agentMode",
   "agent", // default to agent mode
@@ -213,6 +213,8 @@ export const isPlanModeAtom = atom(
 
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
+  "opus-4-6-team": "claude-opus-4-6-20260205",
+  "opus-4-6": "claude-opus-4-6-20260205",
   opus: "opus",
   sonnet: "sonnet",
   haiku: "haiku",

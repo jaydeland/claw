@@ -22,7 +22,6 @@ import {
   IconChevronDown,
   PlanIcon,
   SearchIcon,
-  SwarmIcon,
 } from "../../../components/ui/icons"
 import {
   Popover,
@@ -1171,7 +1170,7 @@ export function NewChatForm({
                       onCloseSlashTrigger={handleCloseSlashTrigger}
                       onContentChange={handleContentChange}
                       onSubmit={handleSend}
-                      onShiftTab={() => setAgentMode((prev) => prev === "agent" ? "plan" : prev === "plan" ? "swarm" : "agent")}
+                      onShiftTab={() => setAgentMode((prev) => prev === "agent" ? "plan" : "agent")}
                       placeholder="Plan, @ for context, / for commands"
                       className={cn(
                         "bg-transparent max-h-[240px] overflow-y-auto p-1",
@@ -1203,8 +1202,6 @@ export function NewChatForm({
                         <DropdownMenuTrigger className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
                           {agentMode === "plan" ? (
                             <PlanIcon className="h-3.5 w-3.5" />
-                          ) : agentMode === "swarm" ? (
-                            <SwarmIcon className="h-3.5 w-3.5" />
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5" />
                           )}
@@ -1328,61 +1325,6 @@ export function NewChatForm({
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                             )}
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("swarm")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect = e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "swarm",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <SwarmIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Swarm</span>
-                            </div>
-                            {agentMode === "swarm" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                         {modeTooltip?.visible &&
                           createPortal(
@@ -1401,8 +1343,6 @@ export function NewChatForm({
                                 <span>
                                   {modeTooltip.mode === "agent"
                                     ? "Apply changes directly without a plan"
-                                    : modeTooltip.mode === "swarm"
-                                    ? "Coordinate multiple agents to work together"
                                     : "Create a plan before making changes"}
                                 </span>
                               </div>

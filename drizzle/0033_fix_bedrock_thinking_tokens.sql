@@ -1,13 +1,15 @@
 -- Fix token limits for Bedrock compatibility
--- Bedrock Sonnet 4.5 has a 64,000 TOTAL output token limit (thinking + response combined!)
--- The previous defaults of 1,000,000 thinking + 200,000 MCP output far exceeded this
--- Even 64k + 50k = 114k total exceeds the 64k limit
+-- Bedrock Sonnet 4.5 has a 64,000 thinking token limit (separate from MCP output)
+-- The previous defaults of 1,000,000 thinking tokens exceeded the model limit
 -- causing "API Error: 400 The maximum tokens you requested exceeds the model limit of 64000"
 
+-- Only update if settings have the old bad values (>=200000 thinking tokens)
+-- This makes the migration idempotent - it won't overwrite user's manual changes
 UPDATE claude_code_settings
-SET max_thinking_tokens = 15000,
-    max_mcp_output_tokens = 48000
-WHERE id = 'default';
+SET max_thinking_tokens = 60000,
+    max_mcp_output_tokens = 150000
+WHERE id = 'default'
+  AND max_thinking_tokens >= 200000; -- Only fix if still using old bad defaults
 
 -- Clear all existing session IDs to force fresh starts with correct token limits
 -- Sessions created with old token limits will fail on server with "No conversation found"

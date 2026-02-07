@@ -711,7 +711,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onContentChange={handleContentChange}
                   onSubmit={onSubmitWithQuestionAnswer || handleEditorSubmit}
                   onForceSubmit={onForceSend}
-                  onShiftTab={() => setAgentMode((prev) => prev === "agent" ? "plan" : prev === "plan" ? "swarm" : "agent")}
+                  onShiftTab={() => setAgentMode((prev) => prev === "agent" ? "plan" : "agent")}
                   placeholder={isStreaming ? "Add follow up" : "Plan, @ for context, / for commands"}
                   className={cn(
                     "bg-transparent max-h-[200px] overflow-y-auto p-1",
@@ -724,7 +724,7 @@ export const ChatInputArea = memo(function ChatInputArea({
               </div>
               <PromptInputActions className="w-full">
                 <div className="flex items-center gap-0.5 flex-1 min-w-0">
-                  {/* Mode toggle (Agent/Plan/Swarm) */}
+                  {/* Mode toggle (Agent/Plan) */}
                   <DropdownMenu
                     open={modeDropdownOpen}
                     onOpenChange={(open) => {
@@ -742,17 +742,15 @@ export const ChatInputArea = memo(function ChatInputArea({
                     <DropdownMenuTrigger asChild>
                       <button
                         className="flex items-center gap-1 px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                        title={agentMode === "plan" ? "Plan mode" : agentMode === "swarm" ? "Swarm mode" : "Agent mode"}
-                        aria-label={agentMode === "plan" ? "Plan mode" : agentMode === "swarm" ? "Swarm mode" : "Agent mode"}
+                        title={agentMode === "plan" ? "Plan mode" : "Agent mode"}
+                        aria-label={agentMode === "plan" ? "Plan mode" : "Agent mode"}
                       >
                         {agentMode === "plan" ? (
                           <PlanIcon className="h-3.5 w-3.5 shrink-0" />
-                        ) : agentMode === "swarm" ? (
-                          <SwarmIcon className="h-3.5 w-3.5 shrink-0" />
                         ) : (
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                         )}
-                        <span>{agentMode === "plan" ? "Plan" : agentMode === "swarm" ? "Swarm" : "Agent"}</span>
+                        <span>{agentMode === "plan" ? "Plan" : "Agent"}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
@@ -872,61 +870,6 @@ export const ChatInputArea = memo(function ChatInputArea({
                           <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                         )}
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                          setAgentMode("swarm")
-                          setModeDropdownOpen(false)
-                        }}
-                        className="justify-between gap-2"
-                        onMouseEnter={(e) => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          const rect = e.currentTarget.getBoundingClientRect()
-                          const showTooltip = () => {
-                            setModeTooltip({
-                              visible: true,
-                              position: {
-                                top: rect.top,
-                                left: rect.right + 8,
-                              },
-                              mode: "swarm",
-                            })
-                            hasShownTooltipRef.current = true
-                            tooltipTimeoutRef.current = null
-                          }
-                          if (hasShownTooltipRef.current) {
-                            showTooltip()
-                          } else {
-                            tooltipTimeoutRef.current = setTimeout(
-                              showTooltip,
-                              1000,
-                            )
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <SwarmIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Swarm</span>
-                        </div>
-                        {agentMode === "swarm" && (
-                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                        )}
-                      </DropdownMenuItem>
                     </DropdownMenuContent>
                     {modeTooltip?.visible &&
                       createPortal(
@@ -945,9 +888,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                             <span>
                               {modeTooltip.mode === "agent"
                                 ? "Apply changes directly without a plan"
-                                : modeTooltip.mode === "plan"
-                                ? "Create a plan before making changes"
-                                : "Coordinate multiple agents to work together"}
+                                : "Create a plan before making changes"}
                             </span>
                           </div>
                         </div>,
@@ -973,14 +914,14 @@ export const ChatInputArea = memo(function ChatInputArea({
                               ? "opacity-70 cursor-not-allowed"
                               : "hover:text-foreground hover:bg-muted/50",
                           )}
-                          title={hasCustomClaudeConfig ? "Custom Model" : `${selectedModel?.name} 4.5`}
-                          aria-label={hasCustomClaudeConfig ? "Custom Model" : `Claude ${selectedModel?.name} 4.5`}
+                          title={hasCustomClaudeConfig ? "Custom Model" : selectedModel?.name}
+                          aria-label={hasCustomClaudeConfig ? "Custom Model" : `Claude ${selectedModel?.name}`}
                         >
                           <span>{hasCustomClaudeConfig ? "Custom" : selectedModel?.name || "Model"}</span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[200px]">
+                      <DropdownMenuContent align="start" className="w-[220px]">
                         {availableModels.models.map((model) => {
                           const isSelected = selectedModel?.id === model.id
                           return (
@@ -994,10 +935,16 @@ export const ChatInputArea = memo(function ChatInputArea({
                             >
                               <div className="flex items-center gap-1.5">
                                 <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span>
-                                  {model.name}{" "}
-                                  <span className="text-muted-foreground">4.5</span>
-                                </span>
+                                <span>{model.name}</span>
+                                {model.badge && (
+                                  <span className={cn(
+                                    "text-[10px] font-medium px-1 py-0.5 rounded",
+                                    model.badge === "TEAM" && "bg-purple-500/20 text-purple-500",
+                                    model.badge === "NEW" && "bg-green-500/20 text-green-500",
+                                  )}>
+                                    {model.badge}
+                                  </span>
+                                )}
                               </div>
                               {isSelected && (
                                 <CheckIcon className="h-3.5 w-3.5 shrink-0" />

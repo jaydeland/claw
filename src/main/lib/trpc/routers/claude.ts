@@ -26,7 +26,6 @@ import {
 import { createRollbackStash } from "../../git/stash"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
-import { getSwarmManager } from "../../swarm/swarm-manager"
 import { getMergedMcpConfig } from "../../config/consolidator"
 import { taskEvents, taskWatcher } from "../../background-tasks"
 import { injectAllStoredCredentials } from "../../mcp/credential-injection"
@@ -601,6 +600,13 @@ export const claudeRouter = router({
     // Available models (from env.ts defaults)
     const availableModels = [
       {
+        id: 'opus-4-6-team',
+        name: 'Claude Opus 4.6 Team',
+        description: 'Team mode with parallel sub-agents for complex tasks',
+        modelId: 'claude-opus-4-6-20260205',
+        badge: 'TEAM',
+      },
+      {
         id: 'opus-4-6',
         name: 'Claude Opus 4.6',
         description: 'Latest and most capable model (Binary 2.1.32+)',
@@ -647,7 +653,7 @@ export const claudeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
-        mode: z.enum(["plan", "agent", "swarm"]).default("agent"),
+        mode: z.enum(["plan", "agent"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
         customConfig: z
@@ -810,30 +816,16 @@ export const claudeRouter = router({
             const { cleanedPrompt, agentMentions, skillMentions } = parseMentions(input.prompt)
 
             // Build agents option for SDK (proper registration via options.agents)
-            // In swarm mode, load swarm agents instead of @mentioned agents
+            // Load @mentioned agents
             let agentsOption: Record<string, any> = {}
             let finalPrompt = cleanedPrompt
 
-            if (input.mode === "swarm") {
-              // Swarm mode: Load all swarm agents (orchestrator, coder, reviewer, tester)
-              try {
-                const swarmManager = await getSwarmManager()
-                agentsOption = swarmManager.getAgentsForSDK()
-                // Use orchestrator's enhanced prompt with worker context and review workflow
-                finalPrompt = swarmManager.getOrchestratorPrompt(cleanedPrompt)
-                console.log(`[claude] Swarm mode: Loaded agents:`, Object.keys(agentsOption))
-              } catch (err) {
-                console.error("[claude] Failed to initialize swarm:", err)
-                throw new Error(`Failed to initialize swarm mode: ${err instanceof Error ? err.message : String(err)}`)
-              }
-            } else {
-              // Regular agent/plan mode: Load @mentioned agents
-              agentsOption = await buildAgentsOption(agentMentions, input.cwd)
+            // Load @mentioned agents
+            agentsOption = await buildAgentsOption(agentMentions, input.cwd)
 
-              // Log if agents were mentioned
-              if (agentMentions.length > 0) {
-                console.log(`[claude] Registering agents via SDK:`, Object.keys(agentsOption))
-              }
+            // Log if agents were mentioned
+            if (agentMentions.length > 0) {
+              console.log(`[claude] Registering agents via SDK:`, Object.keys(agentsOption))
             }
 
             // Log if skills were mentioned
@@ -841,24 +833,19 @@ export const claudeRouter = router({
               console.log(`[claude] Skills mentioned:`, skillMentions)
             }
 
-            // Build final prompt with skill instructions if needed (for non-swarm modes)
-            if (input.mode !== "swarm") {
-              // Handle empty prompt when only mentions are present
-              if (!finalPrompt.trim()) {
-                if (agentMentions.length > 0 && skillMentions.length > 0) {
-                  finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) and invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
-                } else if (agentMentions.length > 0) {
-                  finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) for this task.`
-                } else if (skillMentions.length > 0) {
-                  finalPrompt = `Invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
-                }
+            // Build final prompt with skill instructions if needed
+            // Handle empty prompt when only mentions are present
+            if (!finalPrompt.trim()) {
+              if (agentMentions.length > 0 && skillMentions.length > 0) {
+                finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) and invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
+              } else if (agentMentions.length > 0) {
+                finalPrompt = `Use the ${agentMentions.join(", ")} agent(s) for this task.`
               } else if (skillMentions.length > 0) {
-                // Append skill instruction to existing prompt
-                finalPrompt = `${finalPrompt}\n\nUse the "${skillMentions.join('", "')}" skill(s) for this task.`
+                finalPrompt = `Invoke the "${skillMentions.join('", "')}" skill(s) using the Skill tool for this task.`
               }
             } else if (skillMentions.length > 0) {
-              // Swarm mode with skills: append skill instruction
-              finalPrompt = `${finalPrompt}\n\nAlso use the "${skillMentions.join('", "')}" skill(s) for this task.`
+              // Append skill instruction to existing prompt
+              finalPrompt = `${finalPrompt}\n\nUse the "${skillMentions.join('", "')}" skill(s) for this task.`
             }
 
             // Build prompt: if there are images, create an AsyncIterable<SDKUserMessage>
@@ -1110,6 +1097,11 @@ export const claudeRouter = router({
 
             const resolvedModel = finalCustomConfig?.model || input.model
 
+            // Check if this is an Opus 4.6 Team request (from UI selection)
+            // The UI passes the original model ID before mapping, so we check input.model
+            const isOpus46Team = input.model === "opus-4-6-team" ||
+              (resolvedModel && resolvedModel.includes("opus-4-6") && input.model?.includes("team"))
+
             // Filter MCP servers: skip ONLY non-working servers (failed, needs-auth)
             // Pass working/unknown servers in options so Claude can see them
             // OPTIMIZATION: Cache is populated at app startup via warmupMcpCache()
@@ -1135,11 +1127,32 @@ export const claudeRouter = router({
               }
             }
 
-            // System prompt config
-            const systemPromptConfig = {
-              type: "preset" as const,
-              preset: "claude_code" as const,
-            }
+            // System prompt config - use team mode for Opus 4.6 Team
+            const systemPromptConfig = isOpus46Team
+              ? {
+                  type: "custom" as const,
+                  custom: `You are Claude, operating in Team Mode. You have access to specialized sub-agents that can work in parallel on different aspects of tasks.
+
+TEAM MODE INSTRUCTIONS:
+- You are the lead agent coordinating a team of specialized sub-agents
+- Use the Task tool to delegate work to sub-agents when tasks can be parallelized
+- Launch multiple agents simultaneously for independent tasks to maximize efficiency
+- Coordinate results from sub-agents to provide comprehensive solutions
+- When facing complex multi-step problems, break them down and assign to appropriate sub-agents
+- Sub-agents have access to the same tools as you (Bash, Read, Write, Edit, Grep, Glob, etc.)
+
+Available sub-agent types you can delegate to:
+- Bash: For command execution, git operations, and terminal tasks
+- Explore: For codebase exploration, file searching, and code understanding
+- Plan: For designing implementation strategies and architectural planning
+- general-purpose: For complex multi-step research and execution tasks
+
+IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independent tasks, launch them simultaneously in a single message with multiple Task tool calls.`,
+                }
+              : {
+                  type: "preset" as const,
+                  preset: "claude_code" as const,
+                }
 
             const queryOptions = {
               prompt,
@@ -1405,6 +1418,22 @@ export const claudeRouter = router({
                   // Log the actual SDK error message for debugging
                   console.error(`[claude] SDK ERROR: ${sdkError}`)
                   console.error(`[claude] Full error object:`, JSON.stringify(msgAny, null, 2))
+
+                  // Check for token limit errors - these mean the server-side session is broken
+                  const errorText = msgAny.message?.content?.[0]?.text || sdkError
+                  if (errorText.includes("maximum tokens") && errorText.includes("exceeds the model limit")) {
+                    const sessionId = msgAny.session_id
+                    if (sessionId) {
+                      console.log(`[claude] Token limit error - marking session as broken: ${sessionId}`)
+                      brokenSessionIds.add(sessionId)
+                      // Clear from database to prevent resume attempts
+                      db.update(subChats)
+                        .set({ sessionId: null })
+                        .where(eq(subChats.id, input.subChatId))
+                        .run()
+                      console.log(`[claude] Cleared broken session ID from subChat ${input.subChatId}`)
+                    }
+                  }
 
                   // Categorize SDK-level errors
                   let errorCategory = "SDK_ERROR"
@@ -2356,4 +2385,59 @@ export const claudeRouter = router({
         changes: result.changes || [],
       }
     }),
+
+  /**
+   * Detect if any broken sessions exist (sessions with token limit errors)
+   */
+  detectBrokenSessions: publicProcedure.query(() => {
+    const hasBroken = brokenSessionIds.size > 0
+    console.log(`[claude] Broken sessions check: ${hasBroken ? brokenSessionIds.size : 0} broken session(s)`)
+
+    return {
+      hasBroken,
+      count: brokenSessionIds.size,
+    }
+  }),
+
+  /**
+   * Clear all broken sessions (session IDs and isolated directories)
+   */
+  clearBrokenSessions: publicProcedure.mutation(async () => {
+    const db = getDatabase()
+
+    // Clear all session IDs from database
+    db.run(`UPDATE sub_chats SET session_id = NULL WHERE session_id IS NOT NULL`)
+
+    // Clear isolated config directories
+    const sessionsDir = path.join(app.getPath("userData"), "claude-sessions")
+    let clearedDirs = 0
+
+    try {
+      if (existsSync(sessionsDir)) {
+        const sessions = readdirSync(sessionsDir)
+
+        for (const sessionDir of sessions) {
+          const projectsPath = path.join(sessionsDir, sessionDir, "projects")
+          if (existsSync(projectsPath)) {
+            await fs.rm(projectsPath, { recursive: true, force: true })
+            clearedDirs++
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[claude] Error clearing session directories:", error)
+    }
+
+    // Clear the broken sessions set
+    const clearedCount = brokenSessionIds.size
+    brokenSessionIds.clear()
+
+    console.log(`[claude] Cleared ${clearedCount} broken session IDs and ${clearedDirs} session directories`)
+
+    return {
+      cleared: true,
+      sessionIdsCleared: clearedCount,
+      directoriesCleared: clearedDirs,
+    }
+  }),
 })

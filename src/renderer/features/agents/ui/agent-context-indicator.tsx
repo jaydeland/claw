@@ -11,6 +11,8 @@ import { formatTokenCount } from "../../../lib/format-tokens"
 
 // Claude model context windows
 const CONTEXT_WINDOWS = {
+  "opus-4-6-team": 1_000_000,
+  "opus-4-6": 1_000_000,
   opus: 1_000_000,
   sonnet: 1_000_000,
   haiku: 1_000_000,

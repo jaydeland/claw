@@ -144,7 +144,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     // Read extended thinking setting dynamically (so toggle applies to existing chats)
     const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
-    const maxThinkingTokens = thinkingEnabled ? 128_000 : undefined
+    // Don't pass maxThinkingTokens - let the backend use settings from database
+    // The backend reads maxThinkingTokens from claudeCodeSettings which has
+    // auto-configured limits based on the Bedrock model (32k for Sonnet 4.5)
+    const maxThinkingTokens = undefined // Backend will use database settings
     const historyEnabled = appStore.get(historyEnabledAtom)
 
     // Read model selection dynamically (so model changes apply to existing chats)
