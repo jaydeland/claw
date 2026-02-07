@@ -136,12 +136,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
 
-    // Get sessionId for resume
-    const lastAssistant = [...options.messages]
-      .reverse()
-      .find((m) => m.role === "assistant")
-    const sessionId = (lastAssistant as any)?.metadata?.sessionId
-
     // Read extended thinking setting dynamically (so toggle applies to existing chats)
     const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
     // Don't pass maxThinkingTokens - let the backend use settings from database
@@ -181,7 +175,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             cwd: this.config.cwd,
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
-            sessionId,
             ...(maxThinkingTokens && { maxThinkingTokens }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
