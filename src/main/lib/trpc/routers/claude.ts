@@ -30,14 +30,29 @@ import { getMergedMcpConfig } from "../../config/consolidator"
 import { taskEvents, taskWatcher } from "../../background-tasks"
 import { injectAllStoredCredentials } from "../../mcp/credential-injection"
 import { getBundledGsdPath } from "./gsd"
-
-// Store active Query objects for MCP server runtime control and file checkpointing
-// Map: subChatId -> Query object (stream from SDK)
-const activeQueries = new Map<string, AsyncIterable<any>>()
-
-// Track session IDs that failed with "No conversation found" errors
-// Prevents repeated resume attempts for expired/invalid sessions
-const brokenSessionIds = new Set<string>()
+import { ensureSymlinks } from "../../session/symlink-manager"
+import {
+  getCachedMcpTools,
+  setCachedMcpTools,
+  getMcpServerStatusCache,
+  setMcpServerStatusCache,
+  loadMcpStatusFromDisk,
+  saveMcpStatusToDisk,
+  clearMcpCaches,
+  getAllMcpServerStatusCaches,
+  type McpToolsCacheEntry,
+  type McpServerWithTools,
+} from "../../mcp/cache"
+import {
+  registerSession,
+  getSession,
+  removeSession,
+  hasActiveSession,
+  getSessionQuery,
+  abortSession,
+  updateSessionQuery,
+  updateSessionId,
+} from "../../session/session-registry"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -154,77 +169,6 @@ const getClaudeQuery = async () => {
 }
 
 // Active sessions for cancellation (onAbort handles stash + abort + restore)
-// Active sessions for cancellation
-const activeSessions = new Map<string, AbortController>()
-
-// Cache for symlinks (track which subChatIds have already set up symlinks)
-const symlinksCreated = new Set<string>()
-
-// Cache for MCP server statuses (to filter out failed/needs-auth servers)
-// Maps project path -> server name -> status
-const mcpServerStatusCache = new Map<string, Map<string, string>>()
-
-// Cache for MCP tools from Claude session init message
-// Maps project path -> { servers: [{name, status, tools}], allTools: [...], cachedAt }
-interface McpServerWithTools {
-  name: string
-  status: string
-  tools: Array<{
-    name: string
-    description?: string
-    inputSchema?: {
-      type: string
-      properties?: Record<string, unknown>
-      required?: string[]
-      [key: string]: unknown
-    }
-  }>
-}
-
-interface McpToolsCacheEntry {
-  servers: McpServerWithTools[]
-  allTools: string[] // All tool names for quick lookup
-  cachedAt: number
-}
-
-const mcpToolsCache = new Map<string, McpToolsCacheEntry>()
-const MCP_TOOLS_TTL = 10 * 60 * 1000 // 10 minutes (tools change less frequently than status)
-
-/**
- * Get cached MCP tools for a project path
- * Returns null if cache is empty or expired
- */
-export function getCachedMcpTools(projectPath: string): McpToolsCacheEntry | null {
-  const cached = mcpToolsCache.get(projectPath)
-  if (!cached) return null
-
-  // Check if expired
-  if (Date.now() - cached.cachedAt > MCP_TOOLS_TTL) {
-    mcpToolsCache.delete(projectPath)
-    return null
-  }
-
-  return cached
-}
-
-// Disk cache types and configuration for MCP server statuses
-interface CachedMcpStatus {
-  status: string
-  cachedAt: number
-}
-
-interface McpCacheData {
-  version: number
-  entries: Record<string, {
-    servers: Record<string, CachedMcpStatus>
-    updatedAt: number
-  }>
-}
-
-const MCP_STATUS_TTL = 5 * 60 * 1000 // 5 minutes
-const MCP_CACHE_PATH = join(app.getPath("userData"), "cache", "mcp-status.json")
-let diskCacheLastLoadTime = 0 // Track when disk cache was last loaded
-
 const pendingToolApprovals = new Map<
   string,
   {
@@ -260,129 +204,11 @@ const imageAttachmentSchema = z.object({
 export type ImageAttachment = z.infer<typeof imageAttachmentSchema>
 
 /**
- * Load MCP status cache from disk
- * Reloads if cache was updated on disk since last load (for concurrent requests)
- */
-function loadMcpStatusFromDisk(): void {
-  try {
-    if (!existsSync(MCP_CACHE_PATH)) {
-      diskCacheLastLoadTime = Date.now()
-      return
-    }
-
-    // Check if file was modified since last load (handles concurrent requests)
-    const stats = statSync(MCP_CACHE_PATH)
-    const fileModTime = stats.mtimeMs
-
-    if (diskCacheLastLoadTime > 0 && fileModTime <= diskCacheLastLoadTime) {
-      // File hasn't changed since last load, skip
-      return
-    }
-
-    const data: McpCacheData = JSON.parse(readFileSync(MCP_CACHE_PATH, "utf-8"))
-
-    if (data.version !== 1) {
-      console.warn(`[MCP Cache] Unknown version ${data.version}, ignoring`)
-      diskCacheLastLoadTime = Date.now()
-      return
-    }
-
-    const now = Date.now()
-    let loadedCount = 0
-    let expiredCount = 0
-
-    for (const [projectPath, entry] of Object.entries(data.entries)) {
-      const serverMap = new Map<string, string>()
-
-      for (const [serverName, cached] of Object.entries(entry.servers)) {
-        if (now - cached.cachedAt < MCP_STATUS_TTL) {
-          serverMap.set(serverName, cached.status)
-          loadedCount++
-        } else {
-          expiredCount++
-        }
-      }
-
-      if (serverMap.size > 0) {
-        mcpServerStatusCache.set(projectPath, serverMap)
-      }
-    }
-
-    diskCacheLastLoadTime = Date.now()
-    if (loadedCount > 0) {
-      console.log(`[MCP Cache] Loaded ${loadedCount} cached server statuses`)
-    }
-  } catch (error) {
-    console.warn("[MCP Cache] Failed to load from disk:", error)
-    diskCacheLastLoadTime = Date.now()
-    try {
-      if (existsSync(MCP_CACHE_PATH)) {
-        unlinkSync(MCP_CACHE_PATH)
-      }
-    } catch {}
-  }
-}
-
-/**
- * Save MCP status cache to disk (write-through)
- */
-function saveMcpStatusToDisk(): void {
-  try {
-    const cacheDir = dirname(MCP_CACHE_PATH)
-    if (!existsSync(cacheDir)) {
-      mkdirSync(cacheDir, { recursive: true })
-    }
-
-    const data: McpCacheData = {
-      version: 1,
-      entries: Object.fromEntries(
-        Array.from(mcpServerStatusCache.entries()).map(([projectPath, serverMap]) => [
-          projectPath,
-          {
-            servers: Object.fromEntries(
-              Array.from(serverMap.entries()).map(([name, status]) => [
-                name,
-                { status, cachedAt: Date.now() }
-              ])
-            ),
-            updatedAt: Date.now()
-          }
-        ])
-      )
-    }
-
-    const tempPath = MCP_CACHE_PATH + ".tmp"
-    writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8")
-    renameSync(tempPath, MCP_CACHE_PATH)
-
-    const totalServers = Array.from(mcpServerStatusCache.values())
-      .reduce((sum, map) => sum + map.size, 0)
-    console.log(`[MCP Cache] Saved ${totalServers} statuses to disk`)
-  } catch (error) {
-    console.error("[MCP Cache] Failed to save to disk:", error)
-  }
-}
-
-/**
  * Clear all performance caches (for testing/debugging)
  */
 export function clearClaudeCaches() {
   cachedClaudeQuery = null
-  symlinksCreated.clear()
-  mcpServerStatusCache.clear()
-  mcpToolsCache.clear()
-  diskCacheLastLoadTime = 0
-
-  // Clear disk cache
-  try {
-    if (existsSync(MCP_CACHE_PATH)) {
-      unlinkSync(MCP_CACHE_PATH)
-      console.log("[MCP Cache] Cleared disk cache")
-    }
-  } catch (error) {
-    console.error("[MCP Cache] Failed to clear disk cache:", error)
-  }
-
+  clearMcpCaches()
   console.log("[claude] All caches cleared")
 }
 
@@ -522,11 +348,11 @@ export async function warmupMcpCache(): Promise<void> {
               }
             }
 
-            mcpServerStatusCache.set(project.path, statusMap)
+            setMcpServerStatusCache(project.path, statusMap)
 
             // Cache tools
             if (serversWithTools.length > 0) {
-              mcpToolsCache.set(project.path, {
+              setCachedMcpTools(project.path, {
                 servers: serversWithTools,
                 allTools: allToolNames,
                 cachedAt: Date.now(),
@@ -549,7 +375,7 @@ export async function warmupMcpCache(): Promise<void> {
     // Save all cached statuses to disk
     saveMcpStatusToDisk()
 
-    const totalServers = Array.from(mcpServerStatusCache.values())
+    const totalServers = Array.from(getAllMcpServerStatusCaches().values())
       .reduce((sum, map) => sum + map.size, 0)
     const warmupDuration = Date.now() - warmupStart
     console.log(`[MCP Warmup] Initialized ${totalServers} servers across ${projectsWithMcp.length} projects in ${warmupDuration}ms`)
@@ -654,7 +480,6 @@ export const claudeRouter = router({
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
         mode: z.enum(["plan", "agent"]).default("agent"),
-        sessionId: z.string().optional(),
         model: z.string().optional(),
         customConfig: z
           .object({
@@ -674,7 +499,17 @@ export const claudeRouter = router({
       return observable<UIMessageChunk>((emit) => {
         const abortController = new AbortController()
         const streamId = crypto.randomUUID()
-        activeSessions.set(input.subChatId, abortController)
+
+        // Register session in unified registry
+        registerSession({
+          subChatId: input.subChatId,
+          chatId: input.chatId,
+          abortController,
+          query: null, // Will be set after SDK query is created
+          sessionId: null, // Will be updated from DB or SDK
+          streamId,
+          startedAt: Date.now(),
+        })
 
         // Stream debug logging
         const subId = input.subChatId.slice(-8) // Short ID for logs
@@ -936,94 +771,10 @@ export const claudeRouter = router({
             let mcpServersForSdk: Record<string, any> | undefined
 
             // Ensure isolated config dir exists and symlink skills/agents from ~/.claude/
-            // This is needed because SDK looks for skills at $CLAUDE_CONFIG_DIR/skills/
-            // OPTIMIZATION: Only create symlinks once per subChatId (cached)
+            // This is idempotent - recreates symlinks if directory was deleted
             // BUNDLED GSD: Prefer bundled GSD resources over user's ~/.claude/ directory
             try {
-              await fs.mkdir(isolatedConfigDir, { recursive: true })
-
-              // Only create symlinks if not already created for this config dir
-              if (!symlinksCreated.has(input.subChatId)) {
-                const homeClaudeDir = path.join(os.homedir(), ".claude")
-                const bundledGsdPath = getBundledGsdPath()
-
-                // Helper to check if path exists
-                const pathExists = async (p: string) => fs.stat(p).then(() => true).catch(() => false)
-
-                // Symlink skills directory - prefer bundled GSD, fallback to ~/.claude/
-                try {
-                  const skillsTarget = path.join(isolatedConfigDir, "skills")
-                  const skillsTargetExists = await fs.lstat(skillsTarget).then(() => true).catch(() => false)
-                  if (!skillsTargetExists) {
-                    // Check bundled GSD first (GSD doesn't have skills, but keep pattern consistent)
-                    const bundledSkillsSource = path.join(bundledGsdPath, "skills")
-                    const userSkillsSource = path.join(homeClaudeDir, "skills")
-                    const bundledExists = await pathExists(bundledSkillsSource)
-                    const userExists = await pathExists(userSkillsSource)
-                    const skillsSource = bundledExists ? bundledSkillsSource : (userExists ? userSkillsSource : null)
-                    if (skillsSource) {
-                      await fs.symlink(skillsSource, skillsTarget, "dir")
-                      console.log(`[claude] Symlinked skills: ${skillsSource} → ${skillsTarget}`)
-                    }
-                  }
-                } catch (symlinkErr) {
-                  console.error(`[claude] Failed to symlink skills directory:`, symlinkErr)
-                }
-
-                // Symlink agents directory - prefer bundled GSD, fallback to ~/.claude/
-                try {
-                  const agentsTarget = path.join(isolatedConfigDir, "agents")
-                  const agentsTargetExists = await fs.lstat(agentsTarget).then(() => true).catch(() => false)
-                  if (!agentsTargetExists) {
-                    const bundledAgentsSource = path.join(bundledGsdPath, "agents")
-                    const userAgentsSource = path.join(homeClaudeDir, "agents")
-                    const bundledExists = await pathExists(bundledAgentsSource)
-                    const userExists = await pathExists(userAgentsSource)
-                    const agentsSource = bundledExists ? bundledAgentsSource : (userExists ? userAgentsSource : null)
-                    if (agentsSource) {
-                      await fs.symlink(agentsSource, agentsTarget, "dir")
-                      console.log(`[claude] Symlinked agents: ${agentsSource} → ${agentsTarget}${bundledExists ? " (bundled GSD)" : ""}`)
-                    }
-                  }
-                } catch (symlinkErr) {
-                  console.error(`[claude] Failed to symlink agents directory:`, symlinkErr)
-                }
-
-                // Symlink commands directory - prefer bundled GSD, fallback to ~/.claude/
-                try {
-                  const commandsTarget = path.join(isolatedConfigDir, "commands")
-                  const commandsTargetExists = await fs.lstat(commandsTarget).then(() => true).catch(() => false)
-                  if (!commandsTargetExists) {
-                    const bundledCommandsSource = path.join(bundledGsdPath, "commands")
-                    const userCommandsSource = path.join(homeClaudeDir, "commands")
-                    const bundledExists = await pathExists(bundledCommandsSource)
-                    const userExists = await pathExists(userCommandsSource)
-                    const commandsSource = bundledExists ? bundledCommandsSource : (userExists ? userCommandsSource : null)
-                    if (commandsSource) {
-                      await fs.symlink(commandsSource, commandsTarget, "dir")
-                      console.log(`[claude] Symlinked commands: ${commandsSource} → ${commandsTarget}${bundledExists ? " (bundled GSD)" : ""}`)
-                    }
-                  }
-                } catch (symlinkErr) {
-                  console.error(`[claude] Failed to symlink commands directory:`, symlinkErr)
-                }
-
-                // Symlink rules directory - only from ~/.claude/ (GSD doesn't have rules)
-                try {
-                  const rulesSource = path.join(homeClaudeDir, "rules")
-                  const rulesTarget = path.join(isolatedConfigDir, "rules")
-                  const rulesSourceExists = await pathExists(rulesSource)
-                  const rulesTargetExists = await fs.lstat(rulesTarget).then(() => true).catch(() => false)
-                  if (rulesSourceExists && !rulesTargetExists) {
-                    await fs.symlink(rulesSource, rulesTarget, "dir")
-                    console.log(`[claude] Symlinked rules: ${rulesSource} → ${rulesTarget}`)
-                  }
-                } catch (symlinkErr) {
-                  console.error(`[claude] Failed to symlink rules directory:`, symlinkErr)
-                }
-
-                symlinksCreated.add(input.subChatId)
-              }
+              await ensureSymlinks(isolatedConfigDir)
 
               // Get merged MCP config from all sources (project, custom, user, custom)
               // This consolidates configs in priority order: project (10) → custom (20) → user (100)
@@ -1053,21 +804,10 @@ export const claudeRouter = router({
             // Get bundled Claude binary path
             const claudeBinaryPath = getBundledClaudeBinaryPath()
 
-            let resumeSessionId = input.sessionId || existingSessionId || undefined
+            // Backend is sole authority for session IDs - read from database
+            let resumeSessionId = existingSessionId || undefined
 
-            // CRITICAL: Skip resume if this session ID previously failed
-            // Prevents repeated "No conversation found" errors for expired sessions
-            if (resumeSessionId && brokenSessionIds.has(resumeSessionId)) {
-              console.log(`[claude] Skipping resume for broken session: ${resumeSessionId}`)
-              resumeSessionId = undefined
-              // Also clear from DB to prevent future attempts
-              db.update(subChats)
-                .set({ sessionId: null })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
-            }
-
-            console.log(`[claude] Session ID to resume: ${resumeSessionId} (Existing: ${existingSessionId})`)
+            console.log(`[claude] Session ID to resume: ${resumeSessionId}`)
             console.log(`[claude] Resume at UUID: ${resumeAtUuid}`)
 
             // Clean up stale session state when starting fresh (no resumeSessionId)
@@ -1111,7 +851,7 @@ export const claudeRouter = router({
               const lookupPath = input.projectPath || input.cwd
 
               // Load cached statuses from disk if needed
-              if (!mcpServerStatusCache.has(lookupPath)) {
+              if (!getMcpServerStatusCache(lookupPath)) {
                 loadMcpStatusFromDisk()
               }
 
@@ -1122,7 +862,7 @@ export const claudeRouter = router({
               mcpServersFiltered = mcpServersForSdk
 
               // Load cached statuses from disk if needed (for logging/debugging)
-              if (!mcpServerStatusCache.has(lookupPath)) {
+              if (!getMcpServerStatusCache(lookupPath)) {
                 loadMcpStatusFromDisk()
               }
             }
@@ -1362,8 +1102,8 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
             let stream
             try {
               stream = claudeQuery(queryOptions as any)
-              // Store query object for MCP server runtime control and file checkpointing
-              activeQueries.set(input.subChatId, stream)
+              // Store query object in session registry for MCP server runtime control and file checkpointing
+              updateSessionQuery(input.subChatId, stream)
               console.log(`[CLAUDE] Stored active query for subChat ${input.subChatId}`)
             } catch (queryError) {
               console.error(
@@ -1419,20 +1159,16 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                   console.error(`[claude] SDK ERROR: ${sdkError}`)
                   console.error(`[claude] Full error object:`, JSON.stringify(msgAny, null, 2))
 
-                  // Check for token limit errors - these mean the server-side session is broken
+                  // Check for token limit errors - clear session ID from DB
                   const errorText = msgAny.message?.content?.[0]?.text || sdkError
                   if (errorText.includes("maximum tokens") && errorText.includes("exceeds the model limit")) {
-                    const sessionId = msgAny.session_id
-                    if (sessionId) {
-                      console.log(`[claude] Token limit error - marking session as broken: ${sessionId}`)
-                      brokenSessionIds.add(sessionId)
-                      // Clear from database to prevent resume attempts
-                      db.update(subChats)
-                        .set({ sessionId: null })
-                        .where(eq(subChats.id, input.subChatId))
-                        .run()
-                      console.log(`[claude] Cleared broken session ID from subChat ${input.subChatId}`)
-                    }
+                    console.log(`[claude] Token limit error - clearing session ID from database`)
+                    // Clear from database to start fresh on next message
+                    db.update(subChats)
+                      .set({ sessionId: null })
+                      .where(eq(subChats.id, input.subChatId))
+                      .run()
+                    console.log(`[claude] Cleared session ID from subChat ${input.subChatId}`)
                   }
 
                   // Categorize SDK-level errors
@@ -1542,13 +1278,13 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                       }
                     }
 
-                    mcpServerStatusCache.set(lookupPath, statusMap)
+                    setMcpServerStatusCache(lookupPath, statusMap)
                     // Persist status to disk immediately (write-through)
                     saveMcpStatusToDisk()
 
                     // Cache tools (in-memory only, not persisted to disk)
                     if (serversWithTools.length > 0) {
-                      mcpToolsCache.set(lookupPath, {
+                      setCachedMcpTools(lookupPath, {
                         servers: serversWithTools,
                         allTools: allToolNames,
                         cachedAt: Date.now(),
@@ -1880,19 +1616,9 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                         chunk.errorText.includes("No conversation found") ||
                         chunk.errorText.includes("Invalid session ID")
                       ) {
-                        // Extract session ID from error message if possible
-                        const sessionMatch = chunk.errorText.match(/session ID: ([a-f0-9-]+)/)
-                        const brokenSessionId = sessionMatch ? sessionMatch[1] : null
+                        console.log(`[claude] Detected invalid session error, clearing from database`)
 
-                        console.log(`[claude] Detected broken session ID: ${brokenSessionId || 'unknown'}`)
-
-                        if (brokenSessionId) {
-                          // Add to broken sessions set to prevent future resume attempts
-                          brokenSessionIds.add(brokenSessionId)
-                          console.log(`[claude] Added ${brokenSessionId} to broken sessions list (${brokenSessionIds.size} total)`)
-                        }
-
-                        // Clear from database
+                        // Clear from database to start fresh on next message
                         db.update(subChats)
                           .set({ sessionId: null })
                           .where(eq(subChats.id, input.subChatId))
@@ -2004,16 +1730,9 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                 errorContext = "Session no longer exists - please retry"
                 errorCategory = "INVALID_SESSION"
 
-                // Extract and track broken session ID
-                const sessionMatch = err.message?.match(/session ID: ([a-f0-9-]+)/)
-                const brokenSessionId = sessionMatch ? sessionMatch[1] : resumeSessionId
+                console.log(`[claude] Detected invalid session error, clearing from database`)
 
-                if (brokenSessionId) {
-                  brokenSessionIds.add(brokenSessionId)
-                  console.log(`[claude] Added ${brokenSessionId} to broken sessions list (${brokenSessionIds.size} total)`)
-                }
-
-                // Clear invalid sessionId from database
+                // Clear invalid sessionId from database to start fresh on next message
                 db.update(subChats)
                   .set({ sessionId: null })
                   .where(eq(subChats.id, input.subChatId))
@@ -2151,12 +1870,9 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
             safeEmit({ type: "finish" } as UIMessageChunk)
             safeComplete()
           } finally {
-            activeSessions.delete(input.subChatId)
-            // Clean up active query object
-            if (activeQueries.has(input.subChatId)) {
-              activeQueries.delete(input.subChatId)
-              console.log(`[CLAUDE] Cleaned up active query for subChat ${input.subChatId}`)
-            }
+            // Clean up session from registry
+            removeSession(input.subChatId)
+            console.log(`[CLAUDE] Cleaned up session for subChat ${input.subChatId}`)
           }
         })()
 
@@ -2165,18 +1881,16 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
           console.log(`[SD] M:CLEANUP sub=${subId} sessionId=${currentSessionId || 'none'}`)
           isObservableActive = false // Prevent emit after unsubscribe
           abortController.abort()
-          activeSessions.delete(input.subChatId)
+          removeSession(input.subChatId)
           clearPendingApprovals("Session ended.", input.subChatId)
 
           // Save sessionId on abort so conversation can be resumed
           // Clear streamId since we're no longer streaming
-          // IMPORTANT: Don't save broken session IDs - they'll fail on resume
           const db = getDatabase()
-          const shouldSaveSession = currentSessionId && !brokenSessionIds.has(currentSessionId)
           db.update(subChats)
             .set({
               streamId: null,
-              ...(shouldSaveSession && { sessionId: currentSessionId })
+              ...(currentSessionId && { sessionId: currentSessionId })
             })
             .where(eq(subChats.id, input.subChatId))
             .run()
@@ -2222,10 +1936,10 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
   cancel: publicProcedure
     .input(z.object({ subChatId: z.string() }))
     .mutation(({ input }) => {
-      const controller = activeSessions.get(input.subChatId)
-      if (controller) {
-        controller.abort()
-        activeSessions.delete(input.subChatId)
+      const session = getSession(input.subChatId)
+      if (session) {
+        session.abortController.abort()
+        removeSession(input.subChatId)
         clearPendingApprovals("Session cancelled.", input.subChatId)
         return { cancelled: true }
       }
@@ -2237,7 +1951,7 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
    */
   isActive: publicProcedure
     .input(z.object({ subChatId: z.string() }))
-    .query(({ input }) => activeSessions.has(input.subChatId)),
+    .query(({ input }) => hasActiveSession(input.subChatId)),
   respondToolApproval: publicProcedure
     .input(
       z.object({
@@ -2316,7 +2030,7 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
       })
     )
     .mutation(async ({ input }) => {
-      const query = activeQueries.get(input.subChatId) as any
+      const query = getSessionQuery(input.subChatId) as any
       if (!query) {
         throw new Error(`No active session for subChat ${input.subChatId}`)
       }
@@ -2341,7 +2055,7 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
       })
     )
     .mutation(async ({ input }) => {
-      const query = activeQueries.get(input.subChatId) as any
+      const query = getSessionQuery(input.subChatId) as any
       if (!query) {
         throw new Error(`No active session for subChat ${input.subChatId}`)
       }
@@ -2367,7 +2081,7 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
       })
     )
     .mutation(async ({ input }) => {
-      const query = activeQueries.get(input.subChatId) as any
+      const query = getSessionQuery(input.subChatId) as any
       if (!query) {
         throw new Error(`No active session for subChat ${input.subChatId}`)
       }
@@ -2386,58 +2100,4 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
       }
     }),
 
-  /**
-   * Detect if any broken sessions exist (sessions with token limit errors)
-   */
-  detectBrokenSessions: publicProcedure.query(() => {
-    const hasBroken = brokenSessionIds.size > 0
-    console.log(`[claude] Broken sessions check: ${hasBroken ? brokenSessionIds.size : 0} broken session(s)`)
-
-    return {
-      hasBroken,
-      count: brokenSessionIds.size,
-    }
-  }),
-
-  /**
-   * Clear all broken sessions (session IDs and isolated directories)
-   */
-  clearBrokenSessions: publicProcedure.mutation(async () => {
-    const db = getDatabase()
-
-    // Clear all session IDs from database
-    db.run(`UPDATE sub_chats SET session_id = NULL WHERE session_id IS NOT NULL`)
-
-    // Clear isolated config directories
-    const sessionsDir = path.join(app.getPath("userData"), "claude-sessions")
-    let clearedDirs = 0
-
-    try {
-      if (existsSync(sessionsDir)) {
-        const sessions = readdirSync(sessionsDir)
-
-        for (const sessionDir of sessions) {
-          const projectsPath = path.join(sessionsDir, sessionDir, "projects")
-          if (existsSync(projectsPath)) {
-            await fs.rm(projectsPath, { recursive: true, force: true })
-            clearedDirs++
-          }
-        }
-      }
-    } catch (error) {
-      console.error("[claude] Error clearing session directories:", error)
-    }
-
-    // Clear the broken sessions set
-    const clearedCount = brokenSessionIds.size
-    brokenSessionIds.clear()
-
-    console.log(`[claude] Cleared ${clearedCount} broken session IDs and ${clearedDirs} session directories`)
-
-    return {
-      cleared: true,
-      sessionIdsCleared: clearedCount,
-      directoriesCleared: clearedDirs,
-    }
-  }),
 })

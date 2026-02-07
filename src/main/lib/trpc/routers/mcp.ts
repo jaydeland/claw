@@ -24,7 +24,7 @@ import {
   type OAuthFlowResult,
 } from "../../mcp/oauth-window"
 import { BrowserWindow } from "electron"
-import { getCachedMcpTools } from "./claude"
+import { getCachedMcpTools } from "../../mcp/cache"
 
 // ============ TYPES ============
 
