@@ -432,9 +432,16 @@ export const claudeSettingsRouter = router({
         console.log("[claude-settings] Auto-corrected Ollama URL: https://api.ollama.com -> https://ollama.com")
       }
 
+      // Determine the correct auth token
+      // For Ollama Cloud: use the Ollama API key as the auth token (not the "ollama" marker)
+      // For Ollama Local: use "ollama" as the marker token
+      const isOllamaMode = input.token === "ollama"
+      const isOllamaCloud = isOllamaMode && correctedBaseUrl.includes("ollama.com")
+      const authToken = (isOllamaCloud && input.ollamaApiKey) ? input.ollamaApiKey : input.token
+
       // Build customEnvVars with Ollama/Custom API settings
       const customEnvVars = {
-        ANTHROPIC_AUTH_TOKEN: input.token,
+        ANTHROPIC_AUTH_TOKEN: authToken,
         ANTHROPIC_BASE_URL: correctedBaseUrl,
         ...(input.apiKey && { ANTHROPIC_API_KEY: input.apiKey }),
         ...(input.ollamaApiKey && { OLLAMA_API_KEY: input.ollamaApiKey }),

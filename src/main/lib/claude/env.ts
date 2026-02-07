@@ -522,15 +522,20 @@ export function buildClaudeEnv(options?: {
           env.ANTHROPIC_API_KEY = customEnv.ANTHROPIC_API_KEY
         }
 
-        // Ollama-specific API key for cloud access
+        // Ollama-specific API key for cloud access (also stored in OLLAMA_API_KEY for reference)
         if (customEnv.OLLAMA_API_KEY) {
           env.OLLAMA_API_KEY = customEnv.OLLAMA_API_KEY
         }
 
-        // Determine if this is Ollama mode
-        if (customEnv.ANTHROPIC_AUTH_TOKEN === "ollama") {
+        // Determine if this is Ollama mode (check by baseUrl or the "ollama" marker token)
+        const isOllamaMode = customEnv.ANTHROPIC_AUTH_TOKEN === "ollama" ||
+                             (customEnv.ANTHROPIC_BASE_URL && customEnv.ANTHROPIC_BASE_URL.includes("ollama.com"))
+        if (isOllamaMode) {
+          // For Ollama Cloud, the ANTHROPIC_AUTH_TOKEN is the actual API key (not "ollama" marker)
+          const isCloudMode = customEnv.ANTHROPIC_BASE_URL && !customEnv.ANTHROPIC_BASE_URL.includes("localhost")
           console.log("[claude-env] Using Ollama configuration:", {
             baseUrl: customEnv.ANTHROPIC_BASE_URL,
+            mode: isCloudMode ? "cloud" : "local",
             hasOllamaApiKey: !!customEnv.OLLAMA_API_KEY,
           })
         } else {
