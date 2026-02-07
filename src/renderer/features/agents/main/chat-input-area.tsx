@@ -914,14 +914,14 @@ export const ChatInputArea = memo(function ChatInputArea({
                               ? "opacity-70 cursor-not-allowed"
                               : "hover:text-foreground hover:bg-muted/50",
                           )}
-                          title={hasCustomClaudeConfig ? "Custom Model" : `${selectedModel?.name} 4.5`}
-                          aria-label={hasCustomClaudeConfig ? "Custom Model" : `Claude ${selectedModel?.name} 4.5`}
+                          title={hasCustomClaudeConfig ? "Custom Model" : selectedModel?.name}
+                          aria-label={hasCustomClaudeConfig ? "Custom Model" : `Claude ${selectedModel?.name}`}
                         >
                           <span>{hasCustomClaudeConfig ? "Custom" : selectedModel?.name || "Model"}</span>
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[200px]">
+                      <DropdownMenuContent align="start" className="w-[220px]">
                         {availableModels.models.map((model) => {
                           const isSelected = selectedModel?.id === model.id
                           return (
@@ -935,10 +935,16 @@ export const ChatInputArea = memo(function ChatInputArea({
                             >
                               <div className="flex items-center gap-1.5">
                                 <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span>
-                                  {model.name}{" "}
-                                  <span className="text-muted-foreground">4.5</span>
-                                </span>
+                                <span>{model.name}</span>
+                                {model.badge && (
+                                  <span className={cn(
+                                    "text-[10px] font-medium px-1 py-0.5 rounded",
+                                    model.badge === "TEAM" && "bg-purple-500/20 text-purple-500",
+                                    model.badge === "NEW" && "bg-green-500/20 text-green-500",
+                                  )}>
+                                    {model.badge}
+                                  </span>
+                                )}
                               </div>
                               {isSelected && (
                                 <CheckIcon className="h-3.5 w-3.5 shrink-0" />

@@ -600,6 +600,13 @@ export const claudeRouter = router({
     // Available models (from env.ts defaults)
     const availableModels = [
       {
+        id: 'opus-4-6-team',
+        name: 'Claude Opus 4.6 Team',
+        description: 'Team mode with parallel sub-agents for complex tasks',
+        modelId: 'claude-opus-4-6-20260205',
+        badge: 'TEAM',
+      },
+      {
         id: 'opus-4-6',
         name: 'Claude Opus 4.6',
         description: 'Latest and most capable model (Binary 2.1.32+)',
@@ -1090,6 +1097,11 @@ export const claudeRouter = router({
 
             const resolvedModel = finalCustomConfig?.model || input.model
 
+            // Check if this is an Opus 4.6 Team request (from UI selection)
+            // The UI passes the original model ID before mapping, so we check input.model
+            const isOpus46Team = input.model === "opus-4-6-team" ||
+              (resolvedModel && resolvedModel.includes("opus-4-6") && input.model?.includes("team"))
+
             // Filter MCP servers: skip ONLY non-working servers (failed, needs-auth)
             // Pass working/unknown servers in options so Claude can see them
             // OPTIMIZATION: Cache is populated at app startup via warmupMcpCache()
@@ -1115,11 +1127,32 @@ export const claudeRouter = router({
               }
             }
 
-            // System prompt config
-            const systemPromptConfig = {
-              type: "preset" as const,
-              preset: "claude_code" as const,
-            }
+            // System prompt config - use team mode for Opus 4.6 Team
+            const systemPromptConfig = isOpus46Team
+              ? {
+                  type: "custom" as const,
+                  custom: `You are Claude, operating in Team Mode. You have access to specialized sub-agents that can work in parallel on different aspects of tasks.
+
+TEAM MODE INSTRUCTIONS:
+- You are the lead agent coordinating a team of specialized sub-agents
+- Use the Task tool to delegate work to sub-agents when tasks can be parallelized
+- Launch multiple agents simultaneously for independent tasks to maximize efficiency
+- Coordinate results from sub-agents to provide comprehensive solutions
+- When facing complex multi-step problems, break them down and assign to appropriate sub-agents
+- Sub-agents have access to the same tools as you (Bash, Read, Write, Edit, Grep, Glob, etc.)
+
+Available sub-agent types you can delegate to:
+- Bash: For command execution, git operations, and terminal tasks
+- Explore: For codebase exploration, file searching, and code understanding
+- Plan: For designing implementation strategies and architectural planning
+- general-purpose: For complex multi-step research and execution tasks
+
+IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independent tasks, launch them simultaneously in a single message with multiple Task tool calls.`,
+                }
+              : {
+                  type: "preset" as const,
+                  preset: "claude_code" as const,
+                }
 
             const queryOptions = {
               prompt,

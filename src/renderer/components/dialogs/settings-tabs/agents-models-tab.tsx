@@ -39,8 +39,9 @@ function useIsNarrowScreen(): boolean {
 
 // Model options for each provider
 const CLAUDE_MODELS = [
+  { id: "claude-opus-4-6-team", name: "Claude Opus 4.6 Team", description: "Team mode with parallel agents" },
+  { id: "claude-opus-4-6", name: "Claude Opus 4.6", description: "Latest and most capable" },
   { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", description: "Balanced performance" },
-  { id: "claude-opus-4-6", name: "Claude Opus 4.6", description: "Maximum capability" },
   { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", description: "Fast and efficient" },
 ]
 
@@ -52,8 +53,9 @@ const OLLAMA_MODELS = [
 ]
 
 const BEDROCK_MODELS = [
+  { id: "global.anthropic.claude-opus-4-6-team-v1:0", name: "Claude Opus 4.6 Team", description: "Team mode via Bedrock" },
+  { id: "global.anthropic.claude-opus-4-6-v1:0", name: "Claude Opus 4.6", description: "Via Bedrock" },
   { id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0", name: "Claude Sonnet", description: "Via Bedrock" },
-  { id: "global.anthropic.claude-opus-4-6-v1:0", name: "Claude Opus", description: "Via Bedrock" },
   { id: "us.anthropic.claude-haiku-4-5-20251001-v1:0", name: "Claude Haiku", description: "Via Bedrock" },
 ]
 
