@@ -297,12 +297,22 @@ export function AwsSsoSection({
     setIsSelectingProfile(true)
 
     try {
-      await selectProfileMutation.mutateAsync({
+      const result = await selectProfileMutation.mutateAsync({
         accountId: selectedAccountId,
         accountName: account?.accountName || selectedAccountId,
         roleName: selectedRoleName,
       })
-      toast.success("AWS profile selected")
+
+      // Show success with token limit info if configured
+      if (result.tokenLimitsConfigured && result.limits) {
+        toast.success(
+          `AWS profile selected. Token limits: ${(result.limits.maxThinking / 1000).toFixed(0)}k thinking / ${(result.limits.maxMcpOutput / 1000).toFixed(0)}k MCP output`,
+          { duration: 5000 }
+        )
+      } else {
+        toast.success("AWS profile selected")
+      }
+
       await refetchStatus()
     } catch (error: any) {
       toast.error(error.message || "Failed to select AWS profile")

@@ -2352,4 +2352,59 @@ export const claudeRouter = router({
         changes: result.changes || [],
       }
     }),
+
+  /**
+   * Detect if any broken sessions exist (sessions with token limit errors)
+   */
+  detectBrokenSessions: publicProcedure.query(() => {
+    const hasBroken = brokenSessionIds.size > 0
+    console.log(`[claude] Broken sessions check: ${hasBroken ? brokenSessionIds.size : 0} broken session(s)`)
+
+    return {
+      hasBroken,
+      count: brokenSessionIds.size,
+    }
+  }),
+
+  /**
+   * Clear all broken sessions (session IDs and isolated directories)
+   */
+  clearBrokenSessions: publicProcedure.mutation(async () => {
+    const db = getDatabase()
+
+    // Clear all session IDs from database
+    db.run(`UPDATE sub_chats SET session_id = NULL WHERE session_id IS NOT NULL`)
+
+    // Clear isolated config directories
+    const sessionsDir = path.join(app.getPath("userData"), "claude-sessions")
+    let clearedDirs = 0
+
+    try {
+      if (existsSync(sessionsDir)) {
+        const sessions = readdirSync(sessionsDir)
+
+        for (const sessionDir of sessions) {
+          const projectsPath = path.join(sessionsDir, sessionDir, "projects")
+          if (existsSync(projectsPath)) {
+            await fs.rm(projectsPath, { recursive: true, force: true })
+            clearedDirs++
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[claude] Error clearing session directories:", error)
+    }
+
+    // Clear the broken sessions set
+    const clearedCount = brokenSessionIds.size
+    brokenSessionIds.clear()
+
+    console.log(`[claude] Cleared ${clearedCount} broken session IDs and ${clearedDirs} session directories`)
+
+    return {
+      cleared: true,
+      sessionIdsCleared: clearedCount,
+      directoriesCleared: clearedDirs,
+    }
+  }),
 })

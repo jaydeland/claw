@@ -23,6 +23,7 @@
 import {
   stripEmojis
 } from "../../../components/chat-markdown-renderer"
+import { BrokenSessionsBanner } from "../components/broken-sessions-banner"
 import { Button } from "../../../components/ui/button"
 import {
   AgentIcon,
@@ -5607,6 +5608,9 @@ Make sure to preserve all functionality from both branches when resolving confli
           className="flex-1 flex flex-col overflow-hidden relative"
           style={{ minWidth: "350px" }}
         >
+          {/* Broken Sessions Banner - shows when sessions with incompatible token limits exist */}
+          <BrokenSessionsBanner />
+
           {/* SubChatSelector header - absolute when sidebar open (desktop only), regular div otherwise */}
           {!shouldHideChatHeader && (
             <div

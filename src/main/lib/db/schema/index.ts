@@ -161,8 +161,8 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   bedrockOpus46Model: text("bedrock_opus_46_model").default("global.anthropic.claude-opus-4-6-20260205-v1:0"), // Opus 4.6 (Binary 2.1.32+)
   bedrockSonnetModel: text("bedrock_sonnet_model").default("us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"),
   bedrockHaikuModel: text("bedrock_haiku_model").default("us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"),
-  maxMcpOutputTokens: integer("max_mcp_output_tokens").notNull().default(48000), // Safe limit for Bedrock Sonnet 4.5
-  maxThinkingTokens: integer("max_thinking_tokens").notNull().default(15000), // Total must not exceed 64k
+  maxMcpOutputTokens: integer("max_mcp_output_tokens").notNull().default(150000), // MCP tool output limit
+  maxThinkingTokens: integer("max_thinking_tokens").notNull().default(60000), // Thinking token limit (64k max for Bedrock)
 
   // Experimental features (SDK 0.2.34+)
   enableAgentTeams: integer("enable_agent_teams", { mode: "boolean" }).notNull().default(false), // Enable multi-agent collaboration (experimental)

@@ -87,8 +87,8 @@ export const claudeSettingsRouter = router({
         bedrockOpusModel: "global.anthropic.claude-opus-4-5-20251101-v1:0",
         bedrockSonnetModel: "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]",
         bedrockHaikuModel: "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
-        maxMcpOutputTokens: 48000, // Safe limit for Bedrock
-        maxThinkingTokens: 15000, // Total must not exceed 64k
+        maxMcpOutputTokens: 150000, // MCP tool output limit
+        maxThinkingTokens: 60000, // Thinking token limit (64k max for Bedrock)
         // SSO fields (not used in fallback)
         bedrockConnectionMethod: null,
         awsProfileName: null,
@@ -139,8 +139,8 @@ export const claudeSettingsRouter = router({
       bedrockOpusModel: settings.bedrockOpusModel || "global.anthropic.claude-opus-4-5-20251101-v1:0",
       bedrockSonnetModel: settings.bedrockSonnetModel || "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]",
       bedrockHaikuModel: settings.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
-      maxMcpOutputTokens: settings.maxMcpOutputTokens ?? 48000, // Safe limit for Bedrock
-      maxThinkingTokens: settings.maxThinkingTokens ?? 15000, // Total must not exceed 64k
+      maxMcpOutputTokens: settings.maxMcpOutputTokens ?? 150000, // MCP tool output limit
+      maxThinkingTokens: settings.maxThinkingTokens ?? 60000, // Thinking token limit (64k max for Bedrock)
       // AWS connection method
       bedrockConnectionMethod: (settings.bedrockConnectionMethod || "profile") as "sso" | "profile",
       awsProfileName: settings.awsProfileName || null,

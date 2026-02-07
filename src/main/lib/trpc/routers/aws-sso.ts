@@ -12,6 +12,17 @@ import { URL } from "url"
 
 const dnsLookup = promisify(lookup)
 
+// Bedrock model token limits
+// Based on AWS Bedrock testing: "exceeds the model limit of 64000" error
+// The SDK appears to validate that budget_tokens + some overhead < 64k hard limit
+// Conservative values to ensure: thinking + MCP output + overhead < 64k
+const BEDROCK_MODEL_LIMITS: Record<string, { maxThinking: number; maxMcpOutput: number }> = {
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]": { maxThinking: 32000, maxMcpOutput: 30000 },
+  "global.anthropic.claude-opus-4-5-20251101-v1:0": { maxThinking: 32000, maxMcpOutput: 150000 },
+  "global.anthropic.claude-opus-4-6-20260205-v1:0": { maxThinking: 32000, maxMcpOutput: 150000 },
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]": { maxThinking: 32000, maxMcpOutput: 30000 },
+}
+
 // Cached service instance
 let ssoService: AwsSsoService | null = null
 
@@ -311,9 +322,35 @@ export const awsSsoRouter = router({
         throw new Error(`Credentials saved but validation failed: ${validationError.message}`)
       }
 
+      // Auto-configure token limits for the selected Bedrock model
+      const sonnetModel = settings.bedrockSonnetModel || "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"
+      const limits = BEDROCK_MODEL_LIMITS[sonnetModel]
+
+      let tokenLimitsConfigured = false
+      if (limits) {
+        console.log(`[aws-sso] Auto-configuring token limits for ${sonnetModel}: thinking=${limits.maxThinking} mcp=${limits.maxMcpOutput}`)
+
+        db.update(claudeCodeSettings)
+          .set({
+            maxThinkingTokens: limits.maxThinking,
+            maxMcpOutputTokens: limits.maxMcpOutput,
+          })
+          .where(eq(claudeCodeSettings.id, "default"))
+          .run()
+
+        tokenLimitsConfigured = true
+      } else {
+        console.warn(`[aws-sso] No token limits found for model ${sonnetModel}, using existing settings`)
+      }
+
       return {
         success: true,
         expiresAt: credentials.expiration.toISOString(),
+        tokenLimitsConfigured,
+        limits: limits ? {
+          maxThinking: limits.maxThinking,
+          maxMcpOutput: limits.maxMcpOutput,
+        } : undefined,
       }
     }),
 
