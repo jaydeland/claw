@@ -361,10 +361,24 @@ export function NewChatForm({
   // Get available models
   const availableModels = useAvailableModels()
 
-  const [selectedModel, setSelectedModel] = useState(
-    () =>
-      availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[1],
-  )
+  // Initialize selected model:
+  // 1. Use lastSelectedModelId if it matches an available model
+  // 2. For Ollama, use the default model from settings if available
+  // 3. Otherwise use the first available model
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const lastMatch = availableModels.models.find((m) => m.id === lastSelectedModelId)
+    if (lastMatch) return lastMatch
+
+    // For Ollama, use the configured default model
+    if (activeProvider === "ollama" && customConfig.model) {
+      const defaultMatch = availableModels.models.find((m) => m.id === customConfig.model)
+      if (defaultMatch) return defaultMatch
+    }
+
+    // Fallback to first available model
+    return availableModels.models[0]
+  })
+
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
   const [lastSelectedBranches, setLastSelectedBranches] = useAtom(

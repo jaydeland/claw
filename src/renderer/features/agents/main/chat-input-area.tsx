@@ -411,14 +411,29 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
   const [lastSelectedModelId, setLastSelectedModelId] = useAtom(lastSelectedModelIdAtom)
   const availableModels = useAvailableModels()
-  const [selectedModel, setSelectedModel] = useState(
-    () => availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[1],
-  )
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
+  const [activeProvider] = useAtom(activeProviderAtom)
+
+  // Initialize selected model:
+  // 1. Use lastSelectedModelId if it matches an available model
+  // 2. For Ollama, use the default model from settings if available
+  // 3. Otherwise use the first available model
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const lastMatch = availableModels.models.find((m) => m.id === lastSelectedModelId)
+    if (lastMatch) return lastMatch
+
+    // For Ollama, use the configured default model
+    if (activeProvider === "ollama" && customClaudeConfig.model) {
+      const defaultMatch = availableModels.models.find((m) => m.id === customClaudeConfig.model)
+      if (defaultMatch) return defaultMatch
+    }
+
+    // Fallback to first available model
+    return availableModels.models[0]
+  })
+
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
-  // Get active provider for model dropdown logic
-  const [activeProvider] = useAtom(activeProviderAtom)
   // Only disable model dropdown for custom API, not Ollama
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig) && activeProvider !== "ollama"
 
