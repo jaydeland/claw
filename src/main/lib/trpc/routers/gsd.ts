@@ -419,6 +419,108 @@ export const gsdRouter = router({
     }),
 
   /**
+   * Parse STATE.md to get current planning state
+   */
+  getPlanningState: publicProcedure
+    .input(z.object({ projectPath: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const statePath = path.join(input.projectPath, ".planning", "STATE.md")
+        const content = await fs.readFile(statePath, "utf-8")
+
+        // Parse current phase section
+        const phaseMatch = content.match(/\*\*Phase\s+(\d+)\*\*:\s*([^\n]+)/)
+        const phaseNumber = phaseMatch?.[1] || null
+        const phaseName = phaseMatch?.[2]?.trim() || null
+
+        // Parse status
+        const statusMatch = content.match(/Status:\s*([^\n]+)/i)
+        const phaseStatus = statusMatch?.[1]?.trim() || "Unknown"
+
+        // Parse blockers section
+        const blockersSection = content.match(/##\s*Blockers[\s\S]*?(?=##|$)/i)
+        const blockers: string[] = []
+        if (blockersSection) {
+          const blockerMatches = blockersSection[0].matchAll(/^-\s*(.+)$/gm)
+          for (const match of blockerMatches) {
+            const blocker = match[1].trim()
+            if (blocker && blocker.toLowerCase() !== "none currently.") {
+              blockers.push(blocker)
+            }
+          }
+        }
+
+        // Parse next actions section
+        const actionsSection = content.match(/##\s*Next Actions[\s\S]*?(?=##|$)/i)
+        const nextActions: string[] = []
+        if (actionsSection) {
+          const actionMatches = actionsSection[0].matchAll(/^\d+\.\s*(.+)$/gm)
+          for (const match of actionMatches) {
+            nextActions.push(match[1].trim())
+          }
+        }
+
+        // Parse decisions made
+        const decisionsSection = content.match(/##\s*Decisions Made[\s\S]*?(?=##|$)/i)
+        const decisions: Array<{ decision: string; madeIn: string; status: string }> = []
+        if (decisionsSection) {
+          const decisionRows = decisionsSection[0].matchAll(/^\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/gm)
+          for (const match of decisionRows) {
+            const decision = match[1].trim()
+            if (decision && decision !== "Decision") {
+              decisions.push({
+                decision,
+                madeIn: match[2].trim(),
+                status: match[3].trim(),
+              })
+            }
+          }
+        }
+
+        // Parse phase history
+        const historySection = content.match(/##\s*Phase History[\s\S]*?(?=##|$)/i)
+        const phaseHistory: Array<{ phase: string; started: string; completed: string; notes: string }> = []
+        if (historySection) {
+          const historyRows = historySection[0].matchAll(/^\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/gm)
+          for (const match of historyRows) {
+            const phase = match[1].trim()
+            if (phase && phase !== "Phase" && phase !== "-") {
+              phaseHistory.push({
+                phase,
+                started: match[2].trim(),
+                completed: match[3].trim(),
+                notes: match[4].trim(),
+              })
+            }
+          }
+        }
+
+        return {
+          currentPhase: phaseNumber
+            ? {
+                number: phaseNumber,
+                name: phaseName,
+                status: phaseStatus,
+              }
+            : null,
+          blockers,
+          nextActions,
+          decisions,
+          phaseHistory,
+        }
+      } catch {
+        return {
+          currentPhase: null,
+          blockers: [],
+          nextActions: [],
+          decisions: [],
+          phaseHistory: [],
+          error: "STATE.md not found",
+        }
+      }
+    }),
+
+  /**
    * Write a file to project's .planning/ directory
    */
   writePlanningDoc: publicProcedure

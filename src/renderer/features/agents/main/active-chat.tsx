@@ -60,6 +60,7 @@ import {
   ArrowDown,
   ChevronDown,
   ListTree,
+  Rocket,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import {
@@ -96,6 +97,9 @@ import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
+import { gsdChatSidebarOpenAtom, selectedGsdDocumentAtom } from "../atoms"
+import { GsdChatSidebar } from "../components/gsd-chat-sidebar"
+import { GsdDocumentDialog } from "../components/gsd-document-dialog"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
 import {
   sessionFlowSidebarOpenAtom,
@@ -2086,6 +2090,10 @@ const ChatViewInner = memo(function ChatViewInner({
   const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
   const [, setSessionFlowBottomTab] = useAtom(sessionFlowBottomTabAtom)
 
+  // GSD Chat Sidebar state
+  const [isGsdSidebarOpen, setIsGsdSidebarOpen] = useAtom(gsdChatSidebarOpenAtom)
+  const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocumentAtom)
+
   // Tasks panel visibility (deprecated - now uses session flow Tasks tab)
   const [showTasksPanel, setShowTasksPanel] = useAtom(showTasksPanelAtom)
 
@@ -3210,6 +3218,17 @@ const ChatViewInner = memo(function ChatViewInner({
     addToQueue,
   ])
 
+  // Handler for GSD sidebar commands - auto-sends the command to chat
+  const handleRunGsdCommand = useCallback(
+    (command: string) => {
+      // Set the command in editor
+      editorRef.current?.setValue(command)
+      // Trigger send immediately (no user input needed)
+      setTimeout(() => handleSend(), 0)
+    },
+    [handleSend],
+  )
+
   // Queue handlers for sending queued messages
   const handleSendFromQueue = useCallback(async (itemId: string) => {
     const item = popItemFromQueue(subChatId, itemId)
@@ -3777,6 +3796,17 @@ const ChatViewInner = memo(function ChatViewInner({
     </SearchHighlightProvider>
 
       {/* Tasks Panel moved to Session Flow as a tab */}
+
+      {/* GSD Planning Sidebar - shows when enabled and project has .planning docs */}
+      {isGsdSidebarOpen && (
+        <>
+          <div className="w-px bg-border flex-shrink-0" />
+          <GsdChatSidebar
+            onRunCommand={handleRunGsdCommand}
+            onViewDocument={(path) => setSelectedGsdDoc(path)}
+          />
+        </>
+      )}
     </TextSelectionProvider>
   )
 })
@@ -3841,6 +3871,9 @@ export function ChatView({
   const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
     sessionFlowSidebarOpenAtom,
   )
+  // GSD Chat Sidebar state
+  const [isGsdSidebarOpen, setIsGsdSidebarOpen] = useAtom(gsdChatSidebarOpenAtom)
+  const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocumentAtom)
   const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)
   const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
   const [diffStats, setDiffStatsRaw] = useState({
@@ -5696,6 +5729,34 @@ Make sure to preserve all functionality from both branches when resolving confli
                       </span>
                     </PreviewSetupHoverCard>
                   ))}
+                {/* GSD Planning Sidebar Toggle - shows when project has .planning docs */}
+                {!isMobileFullscreen && originalProjectPath && (
+                  <Tooltip delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsGsdSidebarOpen(!isGsdSidebarOpen)}
+                        className={cn(
+                          "h-6 w-6 p-0 hover:bg-foreground/10 transition-colors flex-shrink-0 rounded-md ml-2",
+                          isGsdSidebarOpen
+                            ? "text-primary bg-primary/10"
+                            : "text-foreground",
+                        )}
+                        aria-label={
+                          isGsdSidebarOpen ? "Close GSD sidebar" : "Open GSD sidebar"
+                        }
+                      >
+                        <Rocket className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isGsdSidebarOpen ? "Close GSD sidebar" : "Open GSD sidebar"}
+                      <Kbd className="ml-1">⌘⇧G</Kbd>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
                 {/* Terminal and Session Flow buttons moved to right icon bar */}
                 {/* Restore Button - shows when viewing archived workspace (desktop only) */}
                 {!isMobileFullscreen && isArchived && (
@@ -6009,6 +6070,14 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* File content dialog - for viewing file contents from Read tool */}
         <FileContentDialog chatId={chatId} />
+
+        {/* GSD Document Viewer Dialog */}
+        <GsdDocumentDialog
+          isOpen={selectedGsdDoc !== null}
+          documentPath={selectedGsdDoc}
+          projectPath={originalProjectPath || worktreePath || null}
+          onClose={() => setSelectedGsdDoc(null)}
+        />
       </div>
     </div>
   )

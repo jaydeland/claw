@@ -146,7 +146,11 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     // Read model selection dynamically (so model changes apply to existing chats)
     const selectedModelId = appStore.get(lastSelectedModelIdAtom)
-    const modelString = MODEL_ID_MAP[selectedModelId]
+    const activeProvider = appStore.get(activeProviderAtom)
+    // For Ollama, use the model ID directly; for Claude, map through MODEL_ID_MAP
+    const modelString = activeProvider === "ollama"
+      ? selectedModelId
+      : MODEL_ID_MAP[selectedModelId]
 
     const storedCustomConfig = appStore.get(
       customClaudeConfigAtom,

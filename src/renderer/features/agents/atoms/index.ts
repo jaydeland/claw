@@ -740,3 +740,24 @@ export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
  * Used by agents-content.tsx to display session flow for archived chats
  */
 export const viewingHistoryChatIdAtom = atom<string | null>(null)
+
+// ============================================
+// GSD CHAT SIDEBAR
+// ============================================
+
+/**
+ * GSD planning sidebar open state (right sidebar in chat view)
+ * Controls visibility of the GSD planning sidebar that shows STATE.md data
+ */
+export const gsdChatSidebarOpenAtom = atomWithStorage<boolean>(
+  "agents:gsdChatSidebarOpen",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Currently selected GSD document for viewing in dialog
+ * null = no document selected
+ */
+export const selectedGsdDocumentAtom = atom<string | null>(null)
