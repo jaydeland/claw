@@ -255,6 +255,8 @@ export function NewChatForm({
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
+  // Get active provider for model dropdown logic
+  const [activeProvider] = useAtom(activeProviderAtom)
   // Only disable model dropdown for custom API, not Ollama
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig) && activeProvider !== "ollama"
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
