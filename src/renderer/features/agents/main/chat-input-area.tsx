@@ -54,23 +54,73 @@ import {
   saveSubChatDraftWithAttachments,
   clearSubChatDraft,
 } from "../lib/drafts"
-import { CLAUDE_MODELS } from "../lib/models"
+import { CLAUDE_MODELS, type ClaudeModel } from "../lib/models"
+import { trpc } from "../../../lib/trpc"
 import { type SubChatFileChange } from "../atoms"
 import {
   customClaudeConfigAtom,
   normalizeCustomClaudeConfig,
   activeConfigAtom,
   extendedThinkingEnabledAtom,
+  activeProviderAtom,
 } from "../../../lib/atoms"
 
-// Hook to get available models (Ollama offline mode removed)
-function useAvailableModels() {
+// Hook to get available models
+interface OllamaModel {
+  id: string
+  name: string
+  description?: string
+  size?: number
+}
+
+interface AvailableModelsResult {
+  models: ClaudeModel[]
+  ollamaModels: OllamaModel[]
+  recommendedModel: string | undefined
+  isOffline: boolean
+  hasOllama: boolean
+}
+
+function useAvailableModels(): AvailableModelsResult {
+  const [activeProvider] = useAtom(activeProviderAtom)
+  const [customConfig] = useAtom(customClaudeConfigAtom)
+
+  // Fetch Ollama models when Ollama is the active provider
+  const { data: ollamaModelsData } = trpc.claude.getOllamaModels.useQuery(
+    {
+      baseUrl: customConfig.baseUrl || "http://localhost:11434",
+      apiKey: customConfig.ollamaApiKey,
+    },
+    {
+      enabled: activeProvider === "ollama" && !!customConfig.baseUrl,
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    }
+  )
+
+  // Get models based on active provider
+  const models: ClaudeModel[] = activeProvider === "ollama"
+    ? (() => {
+        // Use user's configured models if available
+        const userModels = customConfig.ollamaModels
+        if (userModels && userModels.length > 0) {
+          return userModels.map((m) => ({ id: m.id, name: m.name }))
+        }
+        // Fall back to fetched models from API
+        const fetched = ollamaModelsData?.models ?? []
+        if (fetched.length > 0) {
+          return fetched.map((m: OllamaModel) => ({ id: m.id, name: m.name }))
+        }
+        // Final fallback
+        return []
+      })()
+    : CLAUDE_MODELS
+
   return {
-    models: CLAUDE_MODELS,
-    ollamaModels: [] as string[],
-    recommendedModel: undefined as string | undefined,
+    models,
+    ollamaModels: ollamaModelsData?.models ?? [],
+    recommendedModel: undefined,
     isOffline: false,
-    hasOllama: false,
+    hasOllama: activeProvider === "ollama" && !!customConfig.baseUrl,
   }
 }
 
@@ -367,7 +417,10 @@ export const ChatInputArea = memo(function ChatInputArea({
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
+  // Get active provider for model dropdown logic
+  const [activeProvider] = useAtom(activeProviderAtom)
+  // Only disable model dropdown for custom API, not Ollama
+  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig) && activeProvider !== "ollama"
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)

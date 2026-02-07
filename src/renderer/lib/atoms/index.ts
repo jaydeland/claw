@@ -183,12 +183,21 @@ export type SettingsTab =
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("profile")
 export const agentsSettingsDialogOpenAtom = atom<boolean>(false)
 
+export interface OllamaModelConfig {
+  id: string
+  name: string
+  description?: string
+  size?: string
+  isPulled?: boolean // Whether the model has been pulled locally
+}
+
 export type CustomClaudeConfig = {
   model: string
   token: string
   baseUrl: string
   apiKey?: string
   ollamaApiKey?: string
+  ollamaModels?: OllamaModelConfig[] // User's selected/favorite Ollama models
 }
 
 // Model profile system - support multiple configs

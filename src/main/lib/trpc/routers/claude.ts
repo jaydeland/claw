@@ -469,6 +469,76 @@ export const claudeRouter = router({
   }),
 
   /**
+   * Fetch available models from Ollama API
+   */
+  getOllamaModels: publicProcedure
+    .input(
+      z.object({
+        baseUrl: z.string(),
+        apiKey: z.string().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        // Normalize the base URL
+        let url = input.baseUrl.trim()
+        if (url.endsWith('/')) {
+          url = url.slice(0, -1)
+        }
+
+        // Handle Ollama Cloud vs Local
+        const isOllamaCloud = url.includes('ollama.com')
+        const apiUrl = isOllamaCloud ? `${url}/api/tags` : `${url}/api/tags`
+
+        const headers: Record<string, string> = {
+          'Accept': 'application/json',
+        }
+
+        // Add authentication if provided
+        if (input.apiKey) {
+          headers['Authorization'] = `Bearer ${input.apiKey}`
+        }
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers,
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Unknown error')
+          console.error(`[claude] Ollama API error (${response.status}):`, errorText)
+          return {
+            success: false,
+            error: `Failed to fetch models: ${response.status} ${response.statusText}`,
+            models: [],
+          }
+        }
+
+        const data = await response.json()
+
+        // Ollama API returns { models: Array<{ name: string, model?: string, ... }> }
+        const models = (data.models || []).map((model: any) => ({
+          id: model.model || model.name,
+          name: model.name,
+          description: model.details?.description || `${model.details?.parameter_size || ''} ${model.details?.family || ''}`.trim() || 'Local model',
+          size: model.size,
+        }))
+
+        return {
+          success: true,
+          models,
+        }
+      } catch (error) {
+        console.error('[claude] Failed to fetch Ollama models:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to connect to Ollama',
+          models: [],
+        }
+      }
+    }),
+
+  /**
    * Stream chat with Claude - single subscription handles everything
    */
   chat: publicProcedure
