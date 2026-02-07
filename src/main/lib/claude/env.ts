@@ -506,13 +506,52 @@ export function buildClaudeEnv(options?: {
     }
   }
 
-  // 8. Experimental features (from settings)
+  // 8. Handle Custom API / Ollama configuration (from customEnvVars in database)
+  if (settings?.authMode === "apiKey" && settings?.customEnvVars) {
+    try {
+      const customEnv = JSON.parse(settings.customEnvVars)
+
+      // Check for Ollama/Custom API config in customEnvVars
+      // These are set by syncCustomConfig tRPC endpoint from frontend
+      if (customEnv.ANTHROPIC_AUTH_TOKEN && customEnv.ANTHROPIC_BASE_URL) {
+        env.ANTHROPIC_AUTH_TOKEN = customEnv.ANTHROPIC_AUTH_TOKEN
+        env.ANTHROPIC_BASE_URL = customEnv.ANTHROPIC_BASE_URL
+
+        // Optional API key for authentication
+        if (customEnv.ANTHROPIC_API_KEY) {
+          env.ANTHROPIC_API_KEY = customEnv.ANTHROPIC_API_KEY
+        }
+
+        // Ollama-specific API key for cloud access
+        if (customEnv.OLLAMA_API_KEY) {
+          env.OLLAMA_API_KEY = customEnv.OLLAMA_API_KEY
+        }
+
+        // Determine if this is Ollama mode
+        if (customEnv.ANTHROPIC_AUTH_TOKEN === "ollama") {
+          console.log("[claude-env] Using Ollama configuration:", {
+            baseUrl: customEnv.ANTHROPIC_BASE_URL,
+            hasOllamaApiKey: !!customEnv.OLLAMA_API_KEY,
+          })
+        } else {
+          console.log("[claude-env] Using Custom API configuration:", {
+            baseUrl: customEnv.ANTHROPIC_BASE_URL,
+            hasApiKey: !!customEnv.ANTHROPIC_API_KEY,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("[claude-env] Failed to parse customEnvVars:", error)
+    }
+  }
+
+  // 9. Experimental features (from settings)
   if (settings?.enableAgentTeams) {
     env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
     console.log("[claude-env] Agent teams enabled (experimental)")
   }
 
-  // 9. Mark as SDK entry
+  // 10. Mark as SDK entry
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts"
 
   return env

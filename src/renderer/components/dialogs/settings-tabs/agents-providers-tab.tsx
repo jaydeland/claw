@@ -468,17 +468,27 @@ function OllamaProvider() {
     }
   }
 
+  // Sync mutation for Ollama config
+  const syncCustomConfig = trpc.claudeSettings.syncCustomConfig.useMutation({
+    onError: (error) => {
+      console.error("[ollama] Failed to sync config to backend:", error)
+    },
+  })
+
   const handleSave = () => {
     if (!model.trim() || !baseUrl.trim() || !token.trim()) {
       toast.error("Please fill in all required fields")
       return
     }
-    setStoredConfig({
+    const config = {
       model: model.trim(),
       token: token.trim(),
       baseUrl: baseUrl.trim(),
       ollamaApiKey: ollamaApiKey.trim() || undefined,
-    })
+    }
+    setStoredConfig(config)
+    // Sync to backend for background session
+    syncCustomConfig.mutate(config)
     toast.success("Ollama configuration saved")
   }
 
@@ -632,6 +642,14 @@ function CustomApiProvider() {
   const [token, setToken] = useState(storedConfig.token)
   const [apiKey, setApiKey] = useState(storedConfig.apiKey || "")
 
+  // Sync mutation for Custom API config
+  const syncCustomConfig = trpc.claudeSettings.syncCustomConfig.useMutation({
+    onError: (error) => {
+      console.error("[custom-api] Failed to sync config to backend:", error)
+    },
+  })
+  const clearCustomConfig = trpc.claudeSettings.clearCustomConfig.useMutation()
+
   useEffect(() => {
     setModel(storedConfig.model)
     setBaseUrl(storedConfig.baseUrl)
@@ -644,12 +662,15 @@ function CustomApiProvider() {
       toast.error("Please fill in model, token, and base URL")
       return
     }
-    setStoredConfig({
+    const config = {
       model: model.trim(),
       token: token.trim(),
       baseUrl: baseUrl.trim(),
       apiKey: apiKey.trim() || undefined,
-    })
+    }
+    setStoredConfig(config)
+    // Sync to backend for background session
+    syncCustomConfig.mutate(config)
     toast.success("Custom API configuration saved")
   }
 
@@ -659,6 +680,8 @@ function CustomApiProvider() {
     setBaseUrl("")
     setToken("")
     setApiKey("")
+    // Clear from backend as well
+    clearCustomConfig.mutate()
   }
 
   const isConfigured = Boolean(storedConfig.model && storedConfig.baseUrl && storedConfig.token)
@@ -789,7 +812,9 @@ export function AgentsProvidersTab() {
   const handleActivateProvider = (providerId: AIProvider) => {
     setActiveProvider(providerId)
     // Sync to backend so authMode is updated
-    syncMutation.mutate({ provider: providerId })
+    if (providerId) {
+      syncMutation.mutate({ provider: providerId })
+    }
   }
 
   return (

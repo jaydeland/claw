@@ -85,10 +85,13 @@ export const claudeSettingsRouter = router({
         updatedAt: new Date(),
         // Bedrock fields (will be set by migration)
         bedrockOpusModel: "global.anthropic.claude-opus-4-5-20251101-v1:0",
+        bedrockOpus46Model: "global.anthropic.claude-opus-4-6-20260205-v1:0",
         bedrockSonnetModel: "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]",
         bedrockHaikuModel: "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
         maxMcpOutputTokens: 48000, // Safe limit for Bedrock
         maxThinkingTokens: 15000, // Total must not exceed 64k
+        enableAgentTeams: false,
+        maxBudgetUsd: null,
         // SSO fields (not used in fallback)
         bedrockConnectionMethod: null,
         awsProfileName: null,
@@ -113,37 +116,40 @@ export const claudeSettingsRouter = router({
       }
     }
 
+    // At this point settings is guaranteed to be defined
+    const s = settings!
+
     return {
-      customBinaryPath: settings.customBinaryPath,
+      customBinaryPath: s.customBinaryPath,
       customEnvVars: parseJsonSafely<Record<string, string>>(
-        settings.customEnvVars,
+        s.customEnvVars,
         {}
       ),
-      customConfigDir: settings.customConfigDir,
-      customWorktreeLocation: settings.customWorktreeLocation || null,
+      customConfigDir: s.customConfigDir,
+      customWorktreeLocation: s.customWorktreeLocation || null,
       defaultStartCommands: parseJsonSafely<string[]>(
-        settings.defaultStartCommands || "[]",
+        s.defaultStartCommands || "[]",
         []
       ),
       mcpServerSettings: parseJsonSafely<Record<string, { enabled: boolean }>>(
-        settings.mcpServerSettings ?? "{}",
+        s.mcpServerSettings ?? "{}",
         {}
       ),
-      authMode: (settings.authMode || "oauth") as "oauth" | "aws" | "apiKey",
-      apiKey: settings.apiKey ? "••••••••" : null, // Masked for UI
-      bedrockRegion: settings.bedrockRegion || "us-east-1",
-      anthropicBaseUrl: settings.anthropicBaseUrl || null,
-      vpnCheckEnabled: settings.vpnCheckEnabled || false,
-      vpnCheckUrl: settings.vpnCheckUrl || null,
+      authMode: (s.authMode || "oauth") as "oauth" | "aws" | "apiKey",
+      apiKey: s.apiKey ? "••••••••" : null, // Masked for UI
+      bedrockRegion: s.bedrockRegion || "us-east-1",
+      anthropicBaseUrl: s.anthropicBaseUrl || null,
+      vpnCheckEnabled: s.vpnCheckEnabled || false,
+      vpnCheckUrl: s.vpnCheckUrl || null,
       // Bedrock model overrides
-      bedrockOpusModel: settings.bedrockOpusModel || "global.anthropic.claude-opus-4-5-20251101-v1:0",
-      bedrockSonnetModel: settings.bedrockSonnetModel || "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]",
-      bedrockHaikuModel: settings.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
-      maxMcpOutputTokens: settings.maxMcpOutputTokens ?? 48000, // Safe limit for Bedrock
-      maxThinkingTokens: settings.maxThinkingTokens ?? 15000, // Total must not exceed 64k
+      bedrockOpusModel: s.bedrockOpusModel || "global.anthropic.claude-opus-4-5-20251101-v1:0",
+      bedrockSonnetModel: s.bedrockSonnetModel || "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]",
+      bedrockHaikuModel: s.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
+      maxMcpOutputTokens: s.maxMcpOutputTokens ?? 48000, // Safe limit for Bedrock
+      maxThinkingTokens: s.maxThinkingTokens ?? 15000, // Total must not exceed 64k
       // AWS connection method
-      bedrockConnectionMethod: (settings.bedrockConnectionMethod || "profile") as "sso" | "profile",
-      awsProfileName: settings.awsProfileName || null,
+      bedrockConnectionMethod: (s.bedrockConnectionMethod || "profile") as "sso" | "profile",
+      awsProfileName: s.awsProfileName || null,
     }
   }),
 
@@ -400,5 +406,112 @@ export const claudeSettingsRouter = router({
       console.log(`[claude-settings] Synced provider ${input.provider} to backend authMode: ${authMode}`)
 
       return { success: true, authMode }
+    }),
+
+  /**
+   * Sync custom API/Ollama config from frontend to backend
+   * Stores the custom config in customEnvVars for background session access
+   */
+  syncCustomConfig: publicProcedure
+    .input(
+      z.object({
+        model: z.string(),
+        token: z.string(),
+        baseUrl: z.string(),
+        apiKey: z.string().optional(),
+        ollamaApiKey: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+
+      // Build customEnvVars with Ollama/Custom API settings
+      const customEnvVars = {
+        ANTHROPIC_AUTH_TOKEN: input.token,
+        ANTHROPIC_BASE_URL: input.baseUrl,
+        ...(input.apiKey && { ANTHROPIC_API_KEY: input.apiKey }),
+        ...(input.ollamaApiKey && { OLLAMA_API_KEY: input.ollamaApiKey }),
+      }
+
+      // Check if settings exist
+      const existing = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      if (existing) {
+        // Update existing settings
+        db.update(claudeCodeSettings)
+          .set({
+            customEnvVars: JSON.stringify(customEnvVars),
+            authMode: "apiKey", // Ensure authMode is set for custom API
+            updatedAt: new Date(),
+          })
+          .where(eq(claudeCodeSettings.id, "default"))
+          .run()
+      } else {
+        // Insert new settings
+        db.insert(claudeCodeSettings)
+          .values({
+            id: "default",
+            authMode: "apiKey",
+            customEnvVars: JSON.stringify(customEnvVars),
+            bedrockRegion: "us-east-1",
+            mcpServerSettings: "{}",
+            defaultStartCommands: "[]",
+            maxMcpOutputTokens: 48000,
+            maxThinkingTokens: 15000,
+            updatedAt: new Date(),
+          })
+          .run()
+      }
+
+      console.log(`[claude-settings] Synced custom config: model=${input.model}, token=${input.token.slice(0, 10)}..., baseUrl=${input.baseUrl}`)
+
+      return { success: true }
+    }),
+
+  /**
+   * Clear custom API/Ollama config from backend
+   * Removes the custom config from customEnvVars
+   */
+  clearCustomConfig: publicProcedure
+    .mutation(async () => {
+      const db = getDatabase()
+
+      // Get existing customEnvVars
+      const existing = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      if (existing?.customEnvVars) {
+        try {
+          const customEnv = JSON.parse(existing.customEnvVars)
+
+          // Remove custom API/Ollama specific keys
+          delete customEnv.ANTHROPIC_AUTH_TOKEN
+          delete customEnv.ANTHROPIC_BASE_URL
+          delete customEnv.ANTHROPIC_API_KEY
+          delete customEnv.OLLAMA_API_KEY
+
+          // Update database
+          db.update(claudeCodeSettings)
+            .set({
+              customEnvVars: JSON.stringify(customEnv),
+              updatedAt: new Date(),
+            })
+            .where(eq(claudeCodeSettings.id, "default"))
+            .run()
+
+          console.log("[claude-settings] Cleared custom config")
+        } catch (error) {
+          console.error("[claude-settings] Failed to clear custom config:", error)
+        }
+      }
+
+      return { success: true }
     }),
 })
