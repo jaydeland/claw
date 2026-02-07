@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom } from "jotai"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { trpc } from "../../../lib/trpc"
 import {
   activeProviderAtom,
@@ -442,16 +442,30 @@ function OllamaProvider() {
   const [token, setToken] = useState(storedConfig.token)
   const [ollamaApiKey, setOllamaApiKey] = useState(storedConfig.ollamaApiKey || "")
   const [ollamaMode, setOllamaMode] = useState<OllamaMode>(null)
+  const hasCorrectedUrl = useRef(false)
 
   useEffect(() => {
+    // Auto-correct old Ollama cloud URL to new one (only once)
+    let correctedBaseUrl = storedConfig.baseUrl
+    if (!hasCorrectedUrl.current && storedConfig.baseUrl === "https://api.ollama.com") {
+      correctedBaseUrl = "https://ollama.com"
+      hasCorrectedUrl.current = true
+      // Update stored config with corrected URL
+      setStoredConfig({
+        ...storedConfig,
+        baseUrl: correctedBaseUrl,
+      })
+    }
+
     // Infer mode from stored config
-    if (storedConfig.baseUrl.includes("localhost")) {
+    if (correctedBaseUrl.includes("localhost")) {
       setOllamaMode("local")
-    } else if (storedConfig.baseUrl.includes("ollama.com")) {
+    } else if (correctedBaseUrl === "https://ollama.com" || correctedBaseUrl.includes("api.ollama.com")) {
+      // Handle both old (api.ollama.com) and new (ollama.com) URLs for backwards compatibility
       setOllamaMode("cloud")
     }
     setModel(storedConfig.model)
-    setBaseUrl(storedConfig.baseUrl)
+    setBaseUrl(correctedBaseUrl)
     setToken(storedConfig.token)
     setOllamaApiKey(storedConfig.ollamaApiKey || "")
   }, [storedConfig])
@@ -464,7 +478,7 @@ function OllamaProvider() {
       setOllamaApiKey("")
     } else if (mode === "cloud") {
       setToken("ollama")
-      setBaseUrl("https://api.ollama.com")
+      setBaseUrl("https://ollama.com")
     }
   }
 
@@ -520,7 +534,7 @@ function OllamaProvider() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Local uses localhost:11434, Cloud uses api.ollama.com
+          Local uses localhost:11434, Cloud uses ollama.com
         </p>
       </div>
 
@@ -577,7 +591,7 @@ function OllamaProvider() {
             <Input
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder={ollamaMode === "local" ? "http://localhost:11434" : "https://api.ollama.com"}
+              placeholder={ollamaMode === "local" ? "http://localhost:11434" : "https://ollama.com"}
               className="font-mono"
             />
           </div>
