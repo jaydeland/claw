@@ -933,38 +933,14 @@ export const claudeRouter = router({
               }
             }
 
-            // System prompt config - use team mode for Opus Team
+            // System prompt config - use preset for both modes
+            // For team mode, append guidance to encourage team creation
+            // The "claude_code" preset includes built-in team coordination when delegate mode is active
             const systemPromptConfig = isOpusTeam
               ? {
-                  type: "custom" as const,
-                  custom: `You are Claude, operating as the lead of an Agent Team. You coordinate multiple independent teammates that work in parallel, communicate with each other, and share a task list.
-
-TEAM LEAD INSTRUCTIONS:
-- Create an agent team when the user's task benefits from parallel work
-- Spawn teammates with distinct roles (e.g., one on architecture, one on implementation, one on testing)
-- Break work into a shared task list that teammates can claim and complete independently
-- Teammates are full Claude Code sessions with their own context windows — they can explore, edit, run commands, and message each other directly
-- Synthesize findings from teammates into a coherent response
-
-WHEN TO CREATE A TEAM:
-- Research and review: teammates investigate different aspects simultaneously
-- New features: teammates each own a separate module or layer (frontend, backend, tests)
-- Debugging: teammates test competing hypotheses in parallel and challenge each other's findings
-- Cross-layer changes: changes spanning frontend, backend, and tests, each owned by a different teammate
-
-TEAM COORDINATION:
-- Give each teammate a clear role and enough context in their spawn prompt
-- Size tasks so each teammate can work independently without blocking others
-- Avoid assigning the same files to multiple teammates
-- Wait for teammates to complete before synthesizing results
-- Use the task list to track progress across the team
-
-WHEN NOT TO CREATE A TEAM:
-- Simple, single-file changes
-- Sequential tasks where each step depends on the previous
-- Tasks that would be faster done directly
-
-IMPORTANT: For complex tasks with 2+ independent work streams, proactively create an agent team rather than doing everything yourself. Parallel teammates are more effective than sequential work for research, review, and multi-module changes.`,
+                  type: "preset" as const,
+                  preset: "claude_code" as const,
+                  append: `For complex tasks with 2+ independent work streams, proactively create an agent team rather than doing everything yourself. Spawn teammates with distinct roles and break work into a shared task list. Parallel teammates are more effective than sequential work for research, review, and multi-module changes.`,
                 }
               : {
                   type: "preset" as const,
@@ -985,8 +961,11 @@ IMPORTANT: For complex tasks with 2+ independent work streams, proactively creat
                 permissionMode:
                   input.mode === "plan"
                     ? ("plan" as const)
-                    : ("bypassPermissions" as const),
-                ...(input.mode !== "plan" && {
+                    : isOpusTeam
+                      ? ("delegate" as const)
+                      : ("bypassPermissions" as const),
+                // allowDangerouslySkipPermissions is only required for bypassPermissions mode
+                ...(input.mode !== "plan" && !isOpusTeam && {
                   allowDangerouslySkipPermissions: true,
                 }),
                 includePartialMessages: true,

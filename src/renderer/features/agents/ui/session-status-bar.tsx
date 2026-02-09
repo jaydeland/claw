@@ -523,7 +523,7 @@ export const SessionStatusBar = memo(function SessionStatusBar({
 
   return (
     <div
-      className="w-[95%] mx-auto border border-border bg-muted/30 overflow-hidden flex flex-col rounded-t-xl border-b-0 pb-6"
+      className="w-[98%] mx-auto border border-border bg-muted/30 overflow-hidden flex flex-col rounded-t-xl border-b-0 pb-6"
     >
       {/* Processing status text - always shown when streaming */}
       <AnimatePresence>

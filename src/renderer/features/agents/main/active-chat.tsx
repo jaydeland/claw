@@ -3726,7 +3726,7 @@ const ChatViewInner = memo(function ChatViewInner({
       {/* Unified session status bar - queue + changes + tasks + agents + todos */}
       {!pendingQuestions && (
         <div className="px-2 -mb-6 relative z-10">
-          <div className="w-[90%] max-w-4xl mx-auto px-2">
+          <div className="w-full max-w-[90%] mx-auto">
             <SessionStatusBar
               chatId={parentChatId}
               subChatId={subChatId}
