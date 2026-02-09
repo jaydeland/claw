@@ -1690,7 +1690,12 @@ export const claudeRouter = router({
                   }
                   // Detect result finish chunk
                   if (chunk.type === "finish") {
-                    resultReceived = true
+                    // In team/delegate mode, don't break on finish — the SDK will yield
+                    // more messages (teammate messages, status updates, subsequent turns).
+                    // The for-await loop should run until the SDK's stream naturally ends.
+                    if (!isOpusTeam) {
+                      resultReceived = true
+                    }
 
                     // Handle SDK errors from result message
                     if (chunk.messageMetadata?.resultSubtype === "error_during_execution") {

@@ -376,11 +376,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                     metadata: chunk.messageMetadata,
                   })
                 }
-                try {
-                  controller.close()
-                } catch {
-                  // Already closed
-                }
+                // Don't close the ReadableStream here — let onComplete handle it.
+                // In team/delegate mode, the SDK sends intermediate finish chunks
+                // between turns while teammates are still running. Closing here
+                // kills the transport before teammate messages can be delivered.
               }
             },
             onError: (err: Error) => {
