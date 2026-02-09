@@ -18,17 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../../ui/dialog"
-import { Input } from "../../ui/input"
-import { Brain, Server, Cloud, Settings, Check, Plus, Trash2, Download } from "lucide-react"
+import { Brain, Server, Cloud, Settings, Check, Trash2 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 
 // Hook to detect narrow screen
@@ -165,8 +155,6 @@ export function AgentsModelsTab() {
     },
   })
 
-  // Default model selection state
-  const [defaultModel, setDefaultModel] = useState<string>("")
 
   // Bedrock model overrides (for advanced section)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -176,13 +164,10 @@ export function AgentsModelsTab() {
   const [maxMcpOutputTokens, setMaxMcpOutputTokens] = useState("")
   const [maxThinkingTokens, setMaxThinkingTokens] = useState("")
 
-  // Ollama model management state
-  const [showAddModelDialog, setShowAddModelDialog] = useState(false)
-  const [newModelName, setNewModelName] = useState("")
-  const [newModelDescription, setNewModelDescription] = useState("")
-  const [isPullingModel, setIsPullingModel] = useState(false)
+  // Track which model is being added
+  const [addingModelId, setAddingModelId] = useState<string | null>(null)
 
-  // Sync from settings
+  // Sync Bedrock settings from database
   useEffect(() => {
     if (claudeSettings) {
       setBedrockOpusModel(claudeSettings.bedrockOpusModel || "")
@@ -198,100 +183,38 @@ export function AgentsModelsTab() {
 
   const providerInfo = getProviderInfo(activeProvider)
 
-  // Transform fetched Ollama models to the expected format
-  interface FetchedOllamaModel {
-    id: string
-    name: string
-    description: string
-  }
-
-  const fetchedOllamaModels: FetchedOllamaModel[] | undefined = ollamaModelsData?.success && ollamaModelsData.models
-    ? ollamaModelsData.models.map((m: FetchedOllamaModel) => ({ id: m.id, name: m.name, description: m.description }))
-    : undefined
-
   // Determine Ollama mode from base URL
   const isOllamaCloud = customConfig.baseUrl === "https://ollama.com" ||
     customConfig.baseUrl?.includes("api.ollama.com") ||
     customConfig.baseUrl?.includes("ollama.com")
-  const isOllamaLocal = customConfig.baseUrl?.includes("localhost") ||
-    customConfig.baseUrl?.includes("127.0.0.1")
-  const ollamaMode: "cloud" | "local" | "custom" = isOllamaCloud ? "cloud" : isOllamaLocal ? "local" : "custom"
 
   // Get user's selected Ollama models from config
   const userOllamaModels = customConfig.ollamaModels || []
 
-  // Combine user models with fetched models for the dropdown
-  const combinedOllamaModels: OllamaModelConfig[] = (() => {
-    const fetched = ollamaModelsData?.success ? ollamaModelsData.models : []
-    const user = userOllamaModels
+  // Get available cloud models (fetched models not already in user's list)
+  const availableCloudModels = ollamaModelsData?.success && ollamaModelsData.models
+    ? ollamaModelsData.models.filter(
+        (m: { id: string }) => !userOllamaModels.some((um) => um.id === m.id)
+      )
+    : []
 
-    // Create a map to avoid duplicates
-    const modelMap = new Map<string, OllamaModelConfig>()
-
-    // Add user models first (they take precedence)
-    user.forEach((m) => modelMap.set(m.id, { ...m, isPulled: true }))
-
-    // Add fetched models if not already in user list
-    fetched.forEach((m) => {
-      if (!modelMap.has(m.id)) {
-        modelMap.set(m.id, {
-          id: m.id,
-          name: m.name,
-          description: m.description || "From Ollama",
-          isPulled: true,
-        })
-      }
-    })
-
-    return Array.from(modelMap.values())
-  })()
-
-  // Filter to only cloud models when in cloud mode
-  // Cloud models are those that are either:
-  // 1. Already pulled (available via API)
-  // 2. User has explicitly added them
-  const cloudOllamaModels = isOllamaCloud
-    ? combinedOllamaModels
-    : combinedOllamaModels
-
-  // Get available models based on provider
-  const availableModels = activeProvider === "ollama"
-    ? combinedOllamaModels
-    : getModelsForProvider(activeProvider, fetchedOllamaModels)
-
-  const handleModelChange = (modelId: string) => {
-    setDefaultModel(modelId)
-    // For custom API or Ollama, update the stored config
-    if (activeProvider === "custom-api" || activeProvider === "ollama") {
-      setCustomConfig({
-        ...customConfig,
-        model: modelId,
-      })
-    }
-    toast.success(`Default model set to ${modelId}`)
-  }
-
-  // Add a new Ollama model
-  const handleAddModel = async () => {
-    if (!newModelName.trim()) {
-      toast.error("Please enter a model name")
+  // Add a new Ollama model from the cloud models list
+  const handleAddModel = async (modelToAdd: { id: string; name: string; description?: string; size?: string }) => {
+    // Check if model already exists in user's list
+    if (userOllamaModels.some((m) => m.id === modelToAdd.id)) {
+      toast.error(`Model "${modelToAdd.name}" is already in your list`)
       return
     }
 
-    const modelId = newModelName.trim()
-
-    // Check if model already exists
-    if (combinedOllamaModels.some((m) => m.id === modelId)) {
-      toast.error(`Model "${modelId}" is already in your list`)
-      return
-    }
+    setAddingModelId(modelToAdd.id)
 
     // Add to user's model list
     const newModel: OllamaModelConfig = {
-      id: modelId,
-      name: modelId,
-      description: newModelDescription.trim() || "Custom model",
-      isPulled: false,
+      id: modelToAdd.id,
+      name: modelToAdd.name,
+      description: modelToAdd.description || "From Ollama Cloud",
+      size: modelToAdd.size,
+      isPulled: true,
     }
 
     setCustomConfig({
@@ -299,10 +222,8 @@ export function AgentsModelsTab() {
       ollamaModels: [...(customConfig.ollamaModels || []), newModel],
     })
 
-    setNewModelName("")
-    setNewModelDescription("")
-    setShowAddModelDialog(false)
-    toast.success(`Model "${modelId}" added to your list`)
+    setAddingModelId(null)
+    toast.success(`Model "${modelToAdd.name}" added to your list`)
   }
 
   // Remove an Ollama model from user's list
@@ -384,185 +305,123 @@ export function AgentsModelsTab() {
         </div>
       </div>
 
-      {/* Default Model Selection */}
-      <div className="space-y-2">
-        <div className="pb-2">
-          <h4 className="text-sm font-medium text-foreground">Default Model</h4>
-          <p className="text-xs text-muted-foreground mt-1">
-            Select the default model for new conversations
-          </p>
-        </div>
-
-        <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <div className="p-4">
-            {activeProvider === "custom-api" ? (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Custom API provider uses the model configured in the provider settings.
-                </p>
-                <p className="text-sm font-mono text-foreground">
-                  {customConfig.model || "No model configured"}
-                </p>
-              </div>
-            ) : (
-              <Select value={defaultModel} onValueChange={handleModelChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select default model..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">{model.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Ollama Model Management - Only for Ollama provider */}
       {activeProvider === "ollama" && (
-        <div className="space-y-2">
-          <div className="pb-2 flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-medium text-foreground">
-                {isOllamaCloud ? "Cloud Models" : "Local Models"}
-              </h4>
+        <div className="space-y-4">
+          {/* Add Model Dropdown */}
+          <div className="space-y-2">
+            <div className="pb-2">
+              <h4 className="text-sm font-medium text-foreground">Available Cloud Models</h4>
               <p className="text-xs text-muted-foreground mt-1">
-                {isOllamaCloud
-                  ? "Models available from Ollama Cloud"
-                  : "Models available in your local Ollama instance"}
+                Select a model from Ollama Cloud to add to your list
               </p>
             </div>
-            <Dialog open={showAddModelDialog} onOpenChange={setShowAddModelDialog}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1">
-                  <Plus className="h-4 w-4" />
-                  Add Model
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Add Ollama Model</DialogTitle>
-                  <DialogDescription>
-                    Add a model to your list. The model name should match the Ollama model tag (e.g., "llama3.2", "qwen2.5-coder").
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <label htmlFor="model-name" className="text-sm font-medium">
-                      Model Name
-                    </label>
-                    <Input
-                      id="model-name"
-                      placeholder="e.g., llama3.2, qwen2.5-coder"
-                      value={newModelName}
-                      onChange={(e) => setNewModelName(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Visit ollama.com/library for available models
-                    </p>
+
+            <div className="bg-background rounded-lg border border-border overflow-hidden">
+              <div className="p-4">
+                {isLoadingOllamaModels ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Cloud className="h-4 w-4 animate-pulse" />
+                    <span className="text-sm">Loading available models...</span>
                   </div>
-                  <div className="grid gap-2">
-                    <label htmlFor="model-description" className="text-sm font-medium">
-                      Description (optional)
-                    </label>
-                    <Input
-                      id="model-description"
-                      placeholder="e.g., Latest Llama 3.2 model"
-                      value={newModelDescription}
-                      onChange={(e) => setNewModelDescription(e.target.value)}
-                    />
+                ) : availableCloudModels.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    {isOllamaCloud
+                      ? "All available cloud models have been added to your list"
+                      : "Connect to Ollama Cloud to see available models"}
                   </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowAddModelDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleAddModel} disabled={!newModelName.trim()}>
-                    Add Model
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                ) : (
+                  <Select
+                    onValueChange={(value) => {
+                      const model = availableCloudModels.find((m) => m.id === value)
+                      if (model) {
+                        handleAddModel({
+                          id: model.id,
+                          name: model.name,
+                          description: model.description,
+                          size: model.size,
+                        })
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a model to add..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableCloudModels.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{model.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {model.description}
+                              {model.size && ` • ${model.size}`}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="bg-background rounded-lg border border-border overflow-hidden">
-            {cloudOllamaModels.length === 0 ? (
-              <div className="p-6 text-center text-muted-foreground">
-                <Cloud className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">
-                  {isOllamaCloud ? "No cloud models configured" : "No local models configured"}
-                </p>
-                <p className="text-xs mt-1">
-                  {isOllamaCloud
-                    ? "Click \"Add Model\" to add models from Ollama Cloud"
-                    : "Click \"Add Model\" to add models from ollama.com/library"}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {cloudOllamaModels.map((model) => (
-                  <div
-                    key={model.id}
-                    className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-foreground truncate">
-                          {model.name}
-                        </span>
-                        {customConfig.model === model.id && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                            Default
+          {/* My Models List */}
+          <div className="space-y-2">
+            <div className="pb-2">
+              <h4 className="text-sm font-medium text-foreground">My Models</h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                Models available in the input field dropdown
+              </p>
+            </div>
+
+            <div className="bg-background rounded-lg border border-border overflow-hidden">
+              {userOllamaModels.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  <Cloud className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No models in your list</p>
+                  <p className="text-xs mt-1">
+                    Select a model from the dropdown above to add it
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {userOllamaModels.map((model) => (
+                    <div
+                      key={model.id}
+                      className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground truncate">
+                            {model.name}
                           </span>
-                        )}
-                        {!isOllamaCloud && !model.isPulled && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600">
-                            Not pulled
-                          </span>
-                        )}
-                        {isOllamaCloud && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600">
-                            Cloud
-                          </span>
+                          {model.size && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                              {model.size}
+                            </span>
+                          )}
+                        </div>
+                        {model.description && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {model.description}
+                          </p>
                         )}
                       </div>
-                      {model.description && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {model.description}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 ml-2">
-                      {customConfig.model !== model.id && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleModelChange(model.id)}
-                          className="text-xs h-7"
-                        >
-                          Set Default
-                        </Button>
-                      )}
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => handleRemoveModel(model.id)}
+                        disabled={addingModelId === model.id}
                         className="h-7 w-7 text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
