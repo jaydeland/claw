@@ -127,8 +127,8 @@ No dependencies on other plans. This is the foundation plan for Phase 1.
 
 ## Success Criteria
 
-- [ ] Two distinct sections visible in UI
-- [ ] Available Cloud Models correctly excludes My Models
-- [ ] My Models shows only user's curated list
-- [ ] Both sections styled consistently
-- [ ] No visual regressions in other settings sections
+- [x] Two distinct sections visible in UI
+- [x] Available Cloud Models correctly excludes My Models
+- [x] My Models shows only user's curated list
+- [x] Both sections styled consistently
+- [x] No visual regressions in other settings sections

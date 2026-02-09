@@ -179,11 +179,11 @@ If issues occur:
 
 ## Success Criteria
 
-- [ ] Loading state shows while fetching
-- [ ] Empty state for Available when all models added
-- [ ] Empty state for My Models when no models
-- [ ] Error state shows with retry button on API failure
-- [ ] Not configured state guides users to setup
-- [ ] State transitions are smooth
-- [ ] All states have appropriate icons and messaging
-- [ ] Visual consistency with app design maintained
+- [x] Loading state shows while fetching
+- [x] Empty state for Available when all models added
+- [x] Empty state for My Models when no models
+- [x] Error state shows with retry button on API failure
+- [x] Not configured state guides users to setup
+- [x] State transitions are smooth
+- [x] All states have appropriate icons and messaging
+- [x] Visual consistency with app design maintained

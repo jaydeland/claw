@@ -16,12 +16,12 @@ Users have control over which Ollama models appear in their dropdown, making mod
 
 ### Active
 
-- [ ] Browse available Cloud Models from Ollama API/library
-- [ ] Add models from Cloud list to personal "My Models" list
-- [ ] Remove models from personal "My Models" list
-- [ ] Set one model as default for new chats
-- [ ] Model dropdown shows only "My Models" (not all fetched models)
-- [ ] Selected model in dropdown is used for chat requests
+- [x] Browse available Cloud Models from Ollama API/library
+- [x] Add models from Cloud list to personal "My Models" list
+- [x] Remove models from personal "My Models" list
+- [x] Set one model as default for new chats
+- [x] Model dropdown shows only "My Models" (not all fetched models)
+- [x] Selected model in dropdown is used for chat requests
 
 ### Out of Scope
 

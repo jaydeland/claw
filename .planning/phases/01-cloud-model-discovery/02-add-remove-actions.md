@@ -162,10 +162,10 @@ If issues occur:
 
 ## Success Criteria
 
-- [ ] "+ Add" button works on all Available Cloud Models
-- [ ] Remove button works on all My Models
-- [ ] Models move correctly between sections
-- [ ] Persistence works across app restarts
-- [ ] Toast notifications confirm all actions
-- [ ] No duplicate models possible
-- [ ] Old dialog UI removed
+- [x] "+ Add" button works on all Available Cloud Models
+- [x] Remove button works on all My Models
+- [x] Models move correctly between sections
+- [x] Persistence works across app restarts
+- [x] Toast notifications confirm all actions
+- [x] No duplicate models possible
+- [x] Old dialog UI removed
