@@ -108,7 +108,9 @@ import { SessionFlowRenderer } from "../../session-flow/ui/session-flow-renderer
 import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
 import { LoadedContextRenderer } from "../../loaded-context/ui/loaded-context-renderer"
 import { FileContentDialog } from "../ui/file-content-dialog"
-import { selectedGsdDocumentAtom } from "../atoms"
+import { gsdChatSidebarOpenAtom, selectedGsdDocumentAtom } from "../atoms"
+import { GsdChatSidebar } from "../components/gsd-chat-sidebar"
+import { GsdDocumentDialog } from "../components/gsd-document-dialog"
 import { GsdRenderer } from "../components/gsd-renderer"
 import {
   agentsChangesPanelCollapsedAtom,
@@ -3863,6 +3865,8 @@ export function ChatView({
   const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
     sessionFlowSidebarOpenAtom,
   )
+  // GSD Chat Sidebar state
+  const [isGsdSidebarOpen, setIsGsdSidebarOpen] = useAtom(gsdChatSidebarOpenAtom)
   // GSD Document viewer state (for viewing planning docs)
   const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocumentAtom)
   const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)

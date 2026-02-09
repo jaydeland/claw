@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { DialogIcons, DialogIconSizes } from "@/lib/dialog-icons"
-import { GsdContent } from "../../gsd/ui/gsd-content"
+import { GsdPlanningRightPanel } from "../../gsd/ui/gsd-planning-right-panel"
 import {
   gsdDisplayModeAtom,
   gsdChatSidebarOpenAtom,
@@ -18,8 +18,7 @@ import {
   gsdSidebarWidthAtom,
   selectedProjectAtom,
 } from "../atoms"
-import { selectedGsdProjectIdAtom, selectedGsdCategoryAtom } from "../../gsd/atoms"
-import { trpc } from "../../../lib/trpc"
+import { selectedGsdProjectIdAtom } from "../../gsd/atoms"
 
 interface GsdPlanningSidebarProps {
   onRunCommand: (command: string) => void
@@ -32,10 +31,13 @@ export function GsdPlanningSidebar({ onRunCommand, onViewDocument }: GsdPlanning
   const setRuntimeOpen = useSetAtom(gsdChatSidebarOpenRuntimeAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const [selectedProjectId, setSelectedProjectId] = useAtom(selectedGsdProjectIdAtom)
-  const setSelectedGsdCategory = useSetAtom(selectedGsdCategoryAtom)
 
   // Sync project selection - use current chat's project if none selected
-  const utils = trpc.useUtils()
+  useEffect(() => {
+    if (!selectedProjectId && selectedProject?.id) {
+      setSelectedProjectId(selectedProject.id)
+    }
+  }, [selectedProjectId, selectedProject?.id, setSelectedProjectId])
 
   const closeSidebar = useCallback(() => {
     if (displayMode === "side-peek") {
@@ -45,19 +47,14 @@ export function GsdPlanningSidebar({ onRunCommand, onViewDocument }: GsdPlanning
     }
   }, [displayMode, setIsOpen, setRuntimeOpen])
 
-  // Ensure project is synced
-  if (!selectedProjectId && selectedProject?.id) {
-    setSelectedProjectId(selectedProject.id)
-  }
-
   return (
     <ResizableSidebar
       isOpen={isOpen}
       onClose={closeSidebar}
       widthAtom={gsdSidebarWidthAtom}
       side="right"
-      minWidth={320}
-      maxWidth={800}
+      minWidth={280}
+      maxWidth={500}
       animationDuration={0}
       initialWidth={0}
       exitWidth={0}
@@ -82,33 +79,14 @@ export function GsdPlanningSidebar({ onRunCommand, onViewDocument }: GsdPlanning
             </TooltipTrigger>
             <TooltipContent side="bottom">Close GSD planning</TooltipContent>
           </Tooltip>
-          <span className="text-sm font-medium ml-1">GSD Planning</span>
+          <span className="text-sm font-medium ml-1">Planning Docs</span>
         </div>
 
-        {/* Full GSD Content */}
+        {/* Right Panel Content - File list and next actions */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          <GsdContentWrapper
-            onRunCommand={onRunCommand}
-            onViewDocument={onViewDocument}
-          />
+          <GsdPlanningRightPanel onRunCommand={onRunCommand} />
         </div>
       </div>
     </ResizableSidebar>
   )
-}
-
-/**
- * Wrapper component that adapts GsdContent for sidebar use
- * Syncs with current chat's project and provides compact layout
- */
-function GsdContentWrapper({
-  onRunCommand,
-  onViewDocument,
-}: {
-  onRunCommand: (command: string) => void
-  onViewDocument: (path: string) => void
-}) {
-  // Use the full GsdContent component which has all the features
-  // It's already designed to work with the selectedGsdProjectIdAtom
-  return <GsdContent />
 }

@@ -50,7 +50,6 @@ function useIsNarrowScreen(): boolean {
 
 // Model options for each provider
 const CLAUDE_MODELS = [
-  { id: "opus-team", name: "Claude Opus Team", description: "Team mode with parallel agents" },
   { id: "opus", name: "Claude Opus", description: "Most capable model" },
   { id: "sonnet", name: "Claude Sonnet", description: "Balanced performance" },
   { id: "haiku", name: "Claude Haiku", description: "Fast and efficient" },
@@ -65,7 +64,6 @@ const OLLAMA_FALLBACK_MODELS = [
 ]
 
 const BEDROCK_MODELS = [
-  { id: "opus-team", name: "Claude Opus Team", description: "Team mode via Bedrock" },
   { id: "opus", name: "Claude Opus", description: "Via Bedrock" },
   { id: "sonnet", name: "Claude Sonnet", description: "Via Bedrock" },
   { id: "haiku", name: "Claude Haiku", description: "Via Bedrock" },
