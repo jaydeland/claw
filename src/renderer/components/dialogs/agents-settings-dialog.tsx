@@ -119,12 +119,7 @@ const ADVANCED_TABS = [
     icon: Download,
     description: "Export and import settings",
   },
-  {
-    id: "beta" as SettingsTab,
-    label: "Beta",
-    icon: FlaskFilledIcon,
-    description: "Experimental features",
-  },
+  // Beta tab removed from UI but code kept in agents-beta-tab.tsx for future use
   // Debug tab - always shown in desktop for development
   ...(isDevelopment
     ? [
@@ -320,8 +315,9 @@ export function AgentsSettingsDialog({
         return <AgentsWorktreesTab />
       case "backup":
         return <AgentsBackupTab />
-      case "beta":
-        return <AgentsBetaTab />
+      // Beta tab removed from UI but code kept for future use
+      // case "beta":
+      //   return <AgentsBetaTab />
       case "debug":
         return isDevelopment ? <AgentsDebugTab /> : null
       default:

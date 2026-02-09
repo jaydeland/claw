@@ -53,7 +53,7 @@ export function GsdDocumentDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] p-0 gap-0 overflow-hidden">
+      <DialogContent showCloseButton={false} className="max-w-3xl max-h-[85vh] p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between space-y-0">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
