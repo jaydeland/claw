@@ -287,7 +287,7 @@ export function createMainWindow(): BrowserWindow {
     // Native lights will be moved on-screen in fullscreen mode
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition:
-      process.platform === "darwin" ? { x: 12, y: 10 } : undefined, // Centered in 32px header: (32-12)/2 = 10
+      process.platform === "darwin" ? { x: 8, y: 9 } : undefined, // Fine-tuned to align with CSS circles
     // Windows: Use native frame or frameless based on user preference
     ...(process.platform === "win32" && {
       frame: useNativeFrame,

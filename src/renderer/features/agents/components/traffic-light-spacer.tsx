@@ -43,43 +43,30 @@ export function TrafficLights({
   if (!isDesktop || isFullscreen === true) return null
 
   // Single render path with CSS transitions - avoids DOM swap flicker
-  // Expand hover zone with padding to fully cover native button area (y=6..18)
   return (
     <div
       ref={containerRef}
-      className={cn("relative", className)}
+      className={cn("relative flex items-center", className)}
       style={{
         // @ts-expect-error - WebKit-specific property
         WebkitAppRegion: "no-drag",
-        // Expand hover zone to cover native button area
-        padding: "6px 4px",
-        margin: "-6px -4px", // Compensate so layout isn't affected
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       data-sidebar-content
     >
       {/* Muted traffic lights - always visible for alignment debugging */}
-      <div className="flex items-center gap-2" data-sidebar-content>
+      <div className="flex items-center gap-[6px]" data-sidebar-content>
         <div
-          className={cn(
-            "w-3 h-3 rounded-full border transition-opacity duration-75",
-            "opacity-100 border-foreground/30"
-          )}
+          className="w-[12px] h-[12px] rounded-full border border-foreground/30"
           aria-hidden="true"
         />
         <div
-          className={cn(
-            "w-3 h-3 rounded-full border transition-opacity duration-75",
-            "opacity-100 border-foreground/30"
-          )}
+          className="w-[12px] h-[12px] rounded-full border border-foreground/30"
           aria-hidden="true"
         />
         <div
-          className={cn(
-            "w-3 h-3 rounded-full border transition-opacity duration-75",
-            "opacity-100 border-foreground/30"
-          )}
+          className="w-[12px] h-[12px] rounded-full border border-foreground/30"
           aria-hidden="true"
         />
       </div>
