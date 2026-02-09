@@ -5,7 +5,7 @@ import { useAtom, useAtomValue } from "jotai"
 import {
   FileText, Folder, ChevronRight, Sparkles, CheckCircle2, Circle,
   ArrowRight, Play, ListChecks, Layers, ShieldCheck, Plus, RefreshCw,
-  Zap, AlertTriangle, CheckCircle, XCircle, HelpCircle,
+  Zap, AlertTriangle, CheckCircle, XCircle, HelpCircle, MessageCircle,
 } from "lucide-react"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
@@ -635,20 +635,21 @@ function PlanTabContent({
   return (
     <div className="p-2 space-y-1">
       {plans.map((plan) => (
-        <button
+        <div
           key={`${plan.phaseNumber}-${plan.planNumber}`}
-          onClick={() => {
-            // Try to open the plan file relative to .planning/
-            const relPath = plan.planPath.split(".planning/")[1]
-            if (relPath) onFileClick(relPath)
-          }}
           className={cn(
-            "w-full flex items-start gap-2 px-2 py-1.5 rounded text-left",
+            "flex items-start gap-2 px-2 py-1.5 rounded",
             "hover:bg-accent/50 transition-colors group"
           )}
         >
           <ListChecks className="h-3.5 w-3.5 text-blue-500 mt-0.5 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
+          <button
+            onClick={() => {
+              const relPath = plan.planPath.split(".planning/")[1]
+              if (relPath) onFileClick(relPath)
+            }}
+            className="flex-1 min-w-0 text-left"
+          >
             <p className="text-xs font-medium truncate group-hover:text-foreground">
               Phase {plan.phaseNumber} / Plan {plan.planNumber}
             </p>
@@ -656,9 +657,33 @@ function PlanTabContent({
               {plan.tasks.length} task{plan.tasks.length !== 1 ? "s" : ""}
               {plan.mustHaves.length > 0 && ` · ${plan.mustHaves.length} must-have${plan.mustHaves.length !== 1 ? "s" : ""}`}
             </p>
-          </div>
-          <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0 mt-0.5" />
-        </button>
+          </button>
+          {onRunCommand && (
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+              <button
+                onClick={() => onRunCommand(`/gsd:plan-phase ${plan.phaseNumber}`)}
+                className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+                title="Plan this phase"
+              >
+                <ListChecks className="h-3 w-3 text-primary" />
+              </button>
+              <button
+                onClick={() => onRunCommand(`/gsd:discuss-phase ${plan.phaseNumber}`)}
+                className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+                title="Discuss this phase"
+              >
+                <MessageCircle className="h-3 w-3 text-blue-500" />
+              </button>
+              <button
+                onClick={() => onRunCommand(`/gsd:execute-phase ${plan.phaseNumber}`)}
+                className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+                title="Execute this phase"
+              >
+                <Play className="h-3 w-3 text-amber-500" />
+              </button>
+            </div>
+          )}
+        </div>
       ))}
 
       {/* Quick actions */}
