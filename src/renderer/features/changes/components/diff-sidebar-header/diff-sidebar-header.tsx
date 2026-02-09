@@ -23,7 +23,7 @@ import {
 import { IconFetch, IconForcePush, IconSpinner, AgentIcon, CircleFilterIcon, IconReview, ExternalLinkIcon } from "../../../../components/ui/icons";
 import { DialogIcons, DialogIconSizes } from "../../../../lib/dialog-icons";
 import { DiffViewModeSwitcher } from "./diff-view-mode-switcher";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, useCallback } from "react";
 import { HiArrowPath, HiChevronDown } from "react-icons/hi2";
 import { LuGitBranch } from "react-icons/lu";
 import {
@@ -265,7 +265,14 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	};
 
 	const handlePush = () => {
-		pushMutation.mutate({ worktreePath, setUpstream: !hasUpstream });
+		if (isPushing) return;
+		setIsPushing(true);
+		pushMutation.mutate(
+			{ worktreePath, setUpstream: !hasUpstream },
+			{
+				onError: () => setIsPushing(false),
+			}
+		);
 	};
 
 	const handlePull = () => {
@@ -273,8 +280,15 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	};
 
 	const handleForcePush = () => {
+		if (isForcePushing) return;
 		if (window.confirm("Are you sure you want to force push? This will overwrite the remote branch.")) {
-			forcePushMutation.mutate({ worktreePath });
+			setIsForcePushing(true);
+			forcePushMutation.mutate(
+				{ worktreePath },
+				{
+					onError: () => setIsForcePushing(false),
+				}
+			);
 		}
 	};
 
@@ -300,8 +314,28 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		};
 	}, []);
 
+	// Track pushing state to prevent button flicker after mutation succeeds
+	// but before parent props update (pushCount becomes 0)
+	const [isPushing, setIsPushing] = useState(false);
+	const [isForcePushing, setIsForcePushing] = useState(false);
+
+	// Clear pushing state when mutation completes
+	useEffect(() => {
+		if (isPushing && !pushMutation.isPending) {
+			const timer = setTimeout(() => setIsPushing(false), 500);
+			return () => clearTimeout(timer);
+		}
+	}, [isPushing, pushMutation.isPending]);
+
+	useEffect(() => {
+		if (isForcePushing && !forcePushMutation.isPending) {
+			const timer = setTimeout(() => setIsForcePushing(false), 500);
+			return () => clearTimeout(timer);
+		}
+	}, [isForcePushing, forcePushMutation.isPending]);
+
 	// Check pending states
-	const isPushPending = pushMutation.isPending;
+	const isPushPending = pushMutation.isPending || isPushing;
 	const isPullPending = pullMutation.isPending;
 	const isFetchPending = isRefreshing || fetchMutation.isPending;
 

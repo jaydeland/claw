@@ -1,7 +1,7 @@
 import { Button } from "../../../../components/ui/button";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/ui/tooltip";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "../../../../lib/trpc";
 import { cn } from "../../../../lib/utils";
 import { IconSpinner } from "../../../../components/ui/icons";
@@ -50,7 +50,10 @@ export function CommitInput({
 			onRefresh();
 			onCommitSuccess?.();
 		},
-		onError: (error) => toast.error(`Commit failed: ${error.message}`),
+		onError: (error) => {
+			toast.error(`Commit failed: ${error.message}`);
+			setIsCommitting(false);
+		},
 	});
 
 	// Fallback to regular commit for staged changes
@@ -64,10 +67,28 @@ export function CommitInput({
 			onRefresh();
 			onCommitSuccess?.();
 		},
-		onError: (error) => toast.error(`Commit failed: ${error.message}`),
+		onError: (error) => {
+			toast.error(`Commit failed: ${error.message}`);
+			setIsCommitting(false);
+		},
 	});
 
-	const isPending = commitMutation.isPending || atomicCommitMutation.isPending || isGenerating;
+	// Track committing state to prevent button flicker after mutation succeeds
+	// but before parent props update (hasStagedChanges becomes false)
+	const [isCommitting, setIsCommitting] = useState(false);
+
+	const isPending = commitMutation.isPending || atomicCommitMutation.isPending || isGenerating || isCommitting;
+
+	// Clear isCommitting when mutations complete and parent state has had time to update
+	useEffect(() => {
+		if (isCommitting && !commitMutation.isPending && !atomicCommitMutation.isPending) {
+			// Keep committing state active briefly to allow parent props to update
+			const timer = setTimeout(() => {
+				setIsCommitting(false);
+			}, 500);
+			return () => clearTimeout(timer);
+		}
+	}, [isCommitting, commitMutation.isPending, atomicCommitMutation.isPending]);
 
 	// Build full commit message from summary and description
 	const getCommitMessage = () => {
@@ -83,7 +104,9 @@ export function CommitInput({
 	const canCommit = hasStagedChanges;
 
 	const handleCommit = async () => {
-		if (!canCommit) return;
+		if (!canCommit || isCommitting) return;
+
+		setIsCommitting(true);
 
 		try {
 			// Get commit message - generate if empty
