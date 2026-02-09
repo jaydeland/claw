@@ -257,6 +257,12 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
     // ===== ASSISTANT MESSAGE (complete, often with tool_use) =====
     // When streaming is enabled, text arrives via stream_event, not here
     if (msg.type === "assistant" && msg.message?.content) {
+      // Ensure content is an array before processing
+      if (!Array.isArray(msg.message.content)) {
+        console.warn("[Transform] Expected content to be array, got:", typeof msg.message.content, msg.message.content)
+        return
+      }
+
       for (const block of msg.message.content) {
         // Handle thinking blocks from Extended Thinking
         // Skip if already emitted via streaming (thinking_delta)
@@ -355,6 +361,12 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
 
     // ===== USER MESSAGE (tool results) =====
     if (msg.type === "user" && msg.message?.content) {
+      // Ensure content is an array before processing
+      if (!Array.isArray(msg.message.content)) {
+        console.warn("[Transform] Expected content to be array, got:", typeof msg.message.content, msg.message.content)
+        return
+      }
+
       // DEBUG: Log the message structure to understand tool_use_result
       console.log("[Transform DEBUG] User message:", {
         tool_use_result: msg.tool_use_result,

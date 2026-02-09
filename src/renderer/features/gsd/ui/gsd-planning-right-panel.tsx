@@ -22,14 +22,6 @@ interface PlanningFile {
   children?: PlanningFile[]
 }
 
-interface NextAction {
-  file: string
-  title: string
-  priority: "high" | "medium" | "low"
-  hasCommand?: boolean
-  fullText?: string
-}
-
 interface GsdPlanningRightPanelProps {
   onRunCommand?: (command: string) => void
 }
@@ -72,12 +64,6 @@ export function GsdPlanningRightPanel({ onRunCommand }: GsdPlanningRightPanelPro
       filePath: selectedDoc || "",
     },
     { enabled: !!cwdPath && !!selectedDoc && dialogOpen }
-  )
-
-  // Get planning state (current phase, next actions, blockers)
-  const { data: planningState } = trpc.gsd.getPlanningState.useQuery(
-    { projectPath: cwdPath },
-    { enabled: !!cwdPath }
   )
 
   // Build file tree structure from listPlanningDocs response
@@ -184,68 +170,6 @@ export function GsdPlanningRightPanel({ onRunCommand }: GsdPlanningRightPanelPro
     return sortFiles(rootItems)
   }, [planningFiles])
 
-  // Extract next actions from STATE.md planning state
-  const nextActions = useMemo(() => {
-    const actions: NextAction[] = []
-
-    // Use parsed next actions from STATE.md if available
-    if (planningState?.nextActions && planningState.nextActions.length > 0) {
-      planningState.nextActions.forEach((actionText, index) => {
-        // Parse command from patterns like `/gsd:command args`
-        const commandMatch = actionText.match(/`(\/[^`]+)`/)
-        const hasCommand = !!commandMatch
-
-        // Clean title by removing command markdown
-        const title = actionText.replace(/`[^`]+`/g, "").trim() || actionText
-
-        // Priority based on order (first = high priority)
-        const priority = index === 0 ? "high" : index === 1 ? "medium" : "low"
-
-        actions.push({
-          file: commandMatch ? commandMatch[1] : "",
-          title,
-          priority,
-          hasCommand,
-          fullText: actionText,
-        })
-      })
-      return actions
-    }
-
-    // Fallback: Look for files that suggest next actions based on naming patterns
-    if (!planningFiles?.files) return actions
-
-    const actionPatterns = [
-      { pattern: /next|todo|action|upcoming/i, priority: "high" as const },
-      { pattern: /phase|milestone|sprint/i, priority: "medium" as const },
-      { pattern: /plan|roadmap|backlog/i, priority: "low" as const },
-    ]
-
-    planningFiles.files
-      .filter(entry => !entry.isDirectory) // Only consider files
-      .forEach((entry) => {
-        const name = entry.name
-        const title = name.replace(/\.md$/i, "").replace(/[-_]/g, " ")
-
-        for (const { pattern, priority } of actionPatterns) {
-          if (pattern.test(name)) {
-            actions.push({
-              file: entry.path,
-              title,
-              priority,
-              hasCommand: false,
-              fullText: title,
-            })
-            break
-          }
-        }
-      })
-
-    // Sort by priority
-    const priorityOrder = { high: 0, medium: 1, low: 2 }
-    return actions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
-  }, [planningFiles, planningState])
-
   // Handle file click
   const handleFileClick = useCallback((path: string) => {
     setSelectedDoc(path)
@@ -257,18 +181,6 @@ export function GsdPlanningRightPanel({ onRunCommand }: GsdPlanningRightPanelPro
     setDialogOpen(false)
     setSelectedDoc(null)
   }, [setSelectedDoc])
-
-  // Handle next action click - run command if available, otherwise open file
-  const handleActionClick = useCallback((action: NextAction) => {
-    if (action.hasCommand && action.file && onRunCommand) {
-      // Run the command in chat
-      onRunCommand(action.file)
-    } else if (action.file) {
-      // Open the file
-      setSelectedDoc(action.file)
-      setDialogOpen(true)
-    }
-  }, [setSelectedDoc, onRunCommand])
 
   if (!selectedProjectId) {
     return (
@@ -319,8 +231,6 @@ export function GsdPlanningRightPanel({ onRunCommand }: GsdPlanningRightPanelPro
         {/* Tabbed Bottom Section */}
         <GsdPanelTabs
           cwdPath={cwdPath}
-          nextActions={nextActions}
-          onActionClick={handleActionClick}
           onRunCommand={onRunCommand}
           onFileClick={handleFileClick}
         />
@@ -465,13 +375,11 @@ const TAB_CONFIG: Array<{ id: GsdPanelTab; label: string; icon: typeof Sparkles 
 
 interface GsdPanelTabsProps {
   cwdPath: string
-  nextActions: NextAction[]
-  onActionClick: (action: NextAction) => void
   onRunCommand?: (command: string) => void
   onFileClick: (path: string) => void
 }
 
-function GsdPanelTabs({ cwdPath, nextActions, onActionClick, onRunCommand, onFileClick }: GsdPanelTabsProps) {
+function GsdPanelTabs({ cwdPath, onRunCommand, onFileClick }: GsdPanelTabsProps) {
   const [activeTab, setActiveTab] = useAtom(gsdPanelActiveTabAtom)
 
   return (
@@ -505,7 +413,7 @@ function GsdPanelTabs({ cwdPath, nextActions, onActionClick, onRunCommand, onFil
         {/* Tab Content */}
         <div className="max-h-[250px] overflow-y-auto">
           {activeTab === "next" && (
-            <NextTabContent actions={nextActions} onActionClick={onActionClick} />
+            <NextTabContent cwdPath={cwdPath} onRunCommand={onRunCommand} />
           )}
           {activeTab === "plan" && (
             <PlanTabContent cwdPath={cwdPath} onRunCommand={onRunCommand} onFileClick={onFileClick} />
@@ -523,64 +431,184 @@ function GsdPanelTabs({ cwdPath, nextActions, onActionClick, onRunCommand, onFil
 }
 
 // ============================================
-// Next Tab - Suggested next actions
+// Next Tab - Derives next actions from live phase/plan state
 // ============================================
 
+interface DerivedAction {
+  label: string
+  description: string
+  command: string
+  icon: "play" | "plan" | "discuss" | "verify" | "add"
+}
+
 function NextTabContent({
-  actions,
-  onActionClick,
+  cwdPath,
+  onRunCommand,
 }: {
-  actions: NextAction[]
-  onActionClick: (action: NextAction) => void
+  cwdPath: string
+  onRunCommand?: (command: string) => void
 }) {
+  const { data: phasesData, isLoading: phasesLoading } = trpc.gsd.getRoadmapPhases.useQuery(
+    { projectPath: cwdPath },
+    { enabled: !!cwdPath }
+  )
+  const { data: plansData, isLoading: plansLoading } = trpc.gsd.getIncompletePlans.useQuery(
+    { projectPath: cwdPath },
+    { enabled: !!cwdPath }
+  )
+  const { data: verifyData } = trpc.gsd.getVerificationStatus.useQuery(
+    { projectPath: cwdPath },
+    { enabled: !!cwdPath }
+  )
+
+  const isLoading = phasesLoading || plansLoading
+
+  const actions = useMemo((): DerivedAction[] => {
+    const phases = phasesData?.phases || []
+    const plans = plansData?.plans || []
+    const verifications = verifyData?.verifications || []
+    const result: DerivedAction[] = []
+
+    if (phases.length === 0) {
+      result.push({
+        label: "Initialize project",
+        description: "Set up GSD planning for this project",
+        command: "/gsd:new-project",
+        icon: "add",
+      })
+      return result
+    }
+
+    // Find current phase: first in_progress, or first not_started
+    const inProgress = phases.find(p => p.status === "in_progress")
+    const nextNotStarted = phases.find(p => p.status === "not_started")
+    const currentPhase = inProgress || nextNotStarted
+
+    if (!currentPhase) {
+      // All phases complete or deferred
+      result.push({
+        label: "All phases complete",
+        description: "Add a new phase or milestone",
+        command: "/gsd:add-phase",
+        icon: "add",
+      })
+      return result
+    }
+
+    const phaseNum = currentPhase.phaseNumber
+    const phasePlans = plans.filter(p => p.phaseNumber === phaseNum)
+
+    if (inProgress) {
+      if (phasePlans.length > 0) {
+        // Has plans → execute
+        result.push({
+          label: `Execute Phase ${phaseNum}: ${currentPhase.phaseName}`,
+          description: `${phasePlans.length} plan${phasePlans.length !== 1 ? "s" : ""} ready`,
+          command: `/gsd:execute-phase ${phaseNum}`,
+          icon: "play",
+        })
+      } else {
+        // In progress but no plans → needs planning
+        result.push({
+          label: `Plan Phase ${phaseNum}: ${currentPhase.phaseName}`,
+          description: "Create execution plans for this phase",
+          command: `/gsd:plan-phase ${phaseNum}`,
+          icon: "plan",
+        })
+        result.push({
+          label: `Discuss Phase ${phaseNum} first`,
+          description: "Gather context before planning",
+          command: `/gsd:discuss-phase ${phaseNum}`,
+          icon: "discuss",
+        })
+      }
+
+      // Check if verification is needed for any completed phases
+      const needsVerify = verifications.find(
+        v => v.status === "not_verified" || v.status === "gaps_found"
+      )
+      if (needsVerify) {
+        result.push({
+          label: `Verify Phase ${needsVerify.phaseNumber}`,
+          description: needsVerify.status === "gaps_found" ? "Gaps found — re-verify" : "Verify completed work",
+          command: `/gsd:verify-work ${needsVerify.phaseNumber}`,
+          icon: "verify",
+        })
+      }
+    } else {
+      // Not started → discuss or plan
+      result.push({
+        label: `Discuss Phase ${phaseNum}: ${currentPhase.phaseName}`,
+        description: "Gather context and clarify approach",
+        command: `/gsd:discuss-phase ${phaseNum}`,
+        icon: "discuss",
+      })
+      result.push({
+        label: `Plan Phase ${phaseNum} directly`,
+        description: "Skip discussion, create plans",
+        command: `/gsd:plan-phase ${phaseNum}`,
+        icon: "plan",
+      })
+    }
+
+    return result
+  }, [phasesData, plansData, verifyData])
+
+  if (isLoading) {
+    return (
+      <div className="p-3 flex justify-center">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
   if (actions.length === 0) {
     return (
       <div className="p-3 text-center text-muted-foreground">
         <Sparkles className="h-5 w-5 mx-auto mb-1.5 opacity-30" />
         <p className="text-xs">No next actions found</p>
-        <p className="text-[10px] mt-0.5 opacity-70">Actions are parsed from STATE.md</p>
       </div>
     )
   }
 
+  const ICON_MAP = {
+    play: { Icon: Play, color: "text-amber-500" },
+    plan: { Icon: ListChecks, color: "text-primary" },
+    discuss: { Icon: MessageCircle, color: "text-blue-500" },
+    verify: { Icon: ShieldCheck, color: "text-green-500" },
+    add: { Icon: Plus, color: "text-primary" },
+  } as const
+
   return (
     <div className="p-2 space-y-1">
-      {actions.map((action, index) => (
-        <button
-          key={index}
-          onClick={() => onActionClick(action)}
-          className={cn(
-            "w-full flex items-start gap-2 px-2 py-1.5 rounded text-left",
-            "hover:bg-accent/50 transition-colors",
-            "group"
-          )}
-        >
-          {action.hasCommand ? (
-            <Play className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0 fill-primary/20" />
-          ) : action.priority === "high" ? (
-            <Circle className="h-3.5 w-3.5 text-red-500 mt-0.5 flex-shrink-0 fill-red-500/20" />
-          ) : action.priority === "medium" ? (
-            <Circle className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0 fill-amber-500/20" />
-          ) : (
-            <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium truncate group-hover:text-foreground">
-              {action.title}
-            </p>
-            {action.hasCommand ? (
-              <p className="text-[10px] text-primary truncate font-mono">
-                {action.file}
-              </p>
-            ) : (
-              <p className="text-[10px] text-muted-foreground truncate">
-                {action.file}
-              </p>
+      {actions.map((action, index) => {
+        const { Icon, color } = ICON_MAP[action.icon]
+        return (
+          <button
+            key={index}
+            onClick={() => onRunCommand?.(action.command)}
+            className={cn(
+              "w-full flex items-start gap-2 px-2 py-1.5 rounded text-left",
+              "hover:bg-accent/50 transition-colors",
+              "group"
             )}
-          </div>
-          <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0 mt-0.5" />
-        </button>
-      ))}
+          >
+            <Icon className={cn("h-3.5 w-3.5 mt-0.5 flex-shrink-0", color)} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate group-hover:text-foreground">
+                {action.label}
+              </p>
+              <p className="text-[10px] text-muted-foreground truncate">
+                {action.description}
+              </p>
+              <p className="text-[10px] text-primary truncate font-mono">
+                {action.command}
+              </p>
+            </div>
+            <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0 mt-0.5" />
+          </button>
+        )
+      })}
     </div>
   )
 }
