@@ -12,6 +12,7 @@ import { AgentBashTool } from "../ui/agent-bash-tool"
 import { AgentEditTool } from "../ui/agent-edit-tool"
 import { AgentExitPlanModeTool } from "../ui/agent-exit-plan-mode-tool"
 import { AgentExploringGroup } from "../ui/agent-exploring-group"
+import { AgentTeamGroup } from "../ui/agent-team-group"
 import { AgentGenericTool } from "../ui/agent-generic-tool"
 import { AgentReadTool } from "../ui/agent-read-tool"
 import {
@@ -68,6 +69,46 @@ function groupExploringTools(parts: any[], nestedToolIds: Set<string>): any[] {
     result.push(...currentGroup)
   }
   return result
+}
+
+// Group consecutive Task tools into team-group (for team mode parallel agents)
+// Only groups when isTeamMode is true (from message metadata) - distinguishes team from regular sub-agents
+function groupTeamTasks(parts: any[], nestedToolIds: Set<string>, isTeamMode?: boolean): any[] {
+  const result: any[] = []
+  let currentTaskGroup: any[] = []
+
+  for (const part of parts) {
+    const isNested = part.toolCallId && nestedToolIds.has(part.toolCallId)
+
+    if (part.type === "tool-Task" && !isNested) {
+      currentTaskGroup.push(part)
+    } else {
+      // Flush task group if we have 2+ AND in team mode (parallel agents)
+      if (isTeamMode && currentTaskGroup.length >= 2) {
+        result.push({ type: "team-group", parts: currentTaskGroup })
+      } else {
+        // Single task or non-team mode - render normally
+        result.push(...currentTaskGroup)
+      }
+      currentTaskGroup = []
+      result.push(part)
+    }
+  }
+
+  // Handle trailing group
+  if (isTeamMode && currentTaskGroup.length >= 2) {
+    result.push({ type: "team-group", parts: currentTaskGroup })
+  } else {
+    result.push(...currentTaskGroup)
+  }
+
+  return result
+}
+
+// Combined grouping: first group team tasks, then group exploring tools
+function groupParts(parts: any[], nestedToolIds: Set<string>, isTeamMode?: boolean): any[] {
+  const teamGrouped = groupTeamTasks(parts, nestedToolIds, isTeamMode)
+  return groupExploringTools(teamGrouped, nestedToolIds)
 }
 
 // Collapsible steps component
@@ -148,6 +189,13 @@ interface MessageStateSnapshot {
   lastPartState: string | undefined
 }
 const messageStateCache = new Map<string, MessageStateSnapshot>()
+
+// Clean up cache entries for a set of message IDs (called when sub-chat tab is closed)
+export function clearMessageStateCacheEntries(messageIds: Set<string>) {
+  for (const id of messageIds) {
+    messageStateCache.delete(id)
+  }
+}
 
 // Custom comparison - check if message content actually changed
 // CRITICAL: AI SDK mutates objects in-place! So prev.message.parts[i].text === next.message.parts[i].text
@@ -247,6 +295,9 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     isStreaming &&
     isLastMessage &&
     contentParts.length === 0
+
+  // Check if this message was created in team mode (for grouping parallel Task tools)
+  const isTeamMode = Boolean((message.metadata as { isTeamMode?: boolean })?.isTeamMode)
 
   const { nestedToolsMap, nestedToolIds, orphanTaskGroups, orphanToolCallIds, orphanFirstToolCallIds } = useMemo(() => {
     const nestedToolsMap = new Map<string, any[]>()
@@ -517,7 +568,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
         {(hasFinalText || hasPlan) && visibleStepsCount > 0 && (
           <CollapsibleSteps stepsCount={visibleStepsCount}>
             {(() => {
-              const grouped = groupExploringTools(stepParts, nestedToolIds)
+              const grouped = groupParts(stepParts, nestedToolIds, isTeamMode)
               return grouped.map((part: any, idx: number) => {
                 if (part.type === "exploring-group") {
                   const isLast = idx === grouped.length - 1
@@ -531,6 +582,19 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
                     />
                   )
                 }
+                if (part.type === "team-group") {
+                  const isLast = idx === grouped.length - 1
+                  const isGroupStreaming = isStreaming && isLastMessage && isLast
+                  return (
+                    <AgentTeamGroup
+                      key={idx}
+                      taskParts={part.parts}
+                      nestedToolsMap={nestedToolsMap}
+                      chatStatus={status}
+                      isStreaming={isGroupStreaming}
+                    />
+                  )
+                }
                 return renderPart(part, idx, false)
               })
             })()}
@@ -538,7 +602,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
         )}
 
         {(() => {
-          const grouped = groupExploringTools(finalParts, nestedToolIds)
+          const grouped = groupParts(finalParts, nestedToolIds, isTeamMode)
           return grouped.map((part: any, idx: number) => {
             if (part.type === "exploring-group") {
               const isLast = idx === grouped.length - 1
@@ -547,6 +611,19 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
                 <AgentExploringGroup
                   key={idx}
                   parts={part.parts}
+                  chatStatus={status}
+                  isStreaming={isGroupStreaming}
+                />
+              )
+            }
+            if (part.type === "team-group") {
+              const isLast = idx === grouped.length - 1
+              const isGroupStreaming = isStreaming && isLastMessage && isLast
+              return (
+                <AgentTeamGroup
+                  key={idx}
+                  taskParts={part.parts}
+                  nestedToolsMap={nestedToolsMap}
                   chatStatus={status}
                   isStreaming={isGroupStreaming}
                 />

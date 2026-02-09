@@ -21,6 +21,9 @@ export type { DiffStats, AgentDiffViewRef } from "./agent-diff-view"
 // Exploring group component
 export { AgentExploringGroup } from "./agent-exploring-group"
 
+// Team group component (for parallel sub-agents in team mode)
+export { AgentTeamGroup } from "./agent-team-group"
+
 // Thinking component (Extended Thinking)
 export { AgentThinkingTool } from "./agent-thinking-tool"
 

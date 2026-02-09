@@ -213,8 +213,7 @@ export const isPlanModeAtom = atom(
 
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
-  "opus-4-6-team": "claude-opus-4-6-20260205",
-  "opus-4-6": "claude-opus-4-6-20260205",
+  "opus-team": "opus",  // Team mode uses opus + custom system prompt
   opus: "opus",
   sonnet: "sonnet",
   haiku: "haiku",
@@ -740,3 +739,44 @@ export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
  * Used by agents-content.tsx to display session flow for archived chats
  */
 export const viewingHistoryChatIdAtom = atom<string | null>(null)
+
+// ============================================
+// CLEANUP - Release localStorage on chat deletion
+// ============================================
+
+/**
+ * Clean up all localStorage entries for a deleted chat
+ * Call this when a chat is permanently deleted or archived
+ */
+export function cleanupChatLocalStorage(chatId: string) {
+  if (typeof window === "undefined") return
+
+  // Clear per-chat atomWithStorage entries
+  const storageKeys = [
+    "agents:previewPaths",
+    "agents:viewportModes",
+    "agents:previewScales",
+    "agents:mobileDevices",
+    "agents:diffSidebarOpen",
+    "agents:viewedFiles",
+  ]
+
+  for (const key of storageKeys) {
+    try {
+      const stored = localStorage.getItem(key)
+      if (!stored) continue
+      const data = JSON.parse(stored)
+      if (chatId in data) {
+        delete data[chatId]
+        localStorage.setItem(key, JSON.stringify(data))
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Clear sub-chat localStorage entries (from sub-chat-store.ts)
+  localStorage.removeItem(`agent-open-sub-chats-${chatId}`)
+  localStorage.removeItem(`agent-active-sub-chats-${chatId}`)
+  localStorage.removeItem(`agent-pinned-sub-chats-${chatId}`)
+}

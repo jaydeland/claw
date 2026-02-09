@@ -373,7 +373,9 @@ export function createMainWindow(): BrowserWindow {
 
   if (devServerUrl) {
     window.loadURL(devServerUrl)
-    window.webContents.openDevTools()
+    if (process.env.OPEN_DEVTOOLS !== "0") {
+      window.webContents.openDevTools()
+    }
   } else {
     window.loadFile(join(__dirname, "../renderer/index.html"))
   }

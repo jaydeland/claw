@@ -4932,6 +4932,10 @@ Make sure to preserve all functionality from both branches when resolving confli
           // Sync status to global store for queue processing (even when component unmounted)
           useStreamingStatusStore.getState().setStatus(subChatId, "ready")
 
+          // Invalidate polling queries for instant updates when streaming finishes
+          trpcUtils.chats.getFileStats.invalidate().catch(() => {})
+          trpcUtils.chats.getPendingPlanApprovals.invalidate().catch(() => {})
+
           // Check if this was a manual abort (ESC/Ctrl+C) - skip sound if so
           const wasManuallyAborted =
             agentChatStore.wasManuallyAborted(subChatId)
@@ -5815,16 +5819,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                           >
                             <ClaudeCodeIcon className="h-3.5 w-3.5" />
                             <span>
-                              {hasCustomClaudeConfig ? (
-                                "Custom Model"
-                              ) : (
-                                <>
-                                  Sonnet{" "}
-                                  <span className="text-muted-foreground">
-                                    4.5
-                                  </span>
-                                </>
-                              )}
+                              {hasCustomClaudeConfig ? "Custom Model" : "Sonnet"}
                             </span>
                             <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                           </button>
