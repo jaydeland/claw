@@ -111,6 +111,25 @@ export const gsdSettingsAtom = atom<GsdSettings>({
 })
 
 // ============================================
+// GSD PANEL TABS
+// ============================================
+
+/**
+ * Active tab in the GSD planning right panel bottom section
+ * next = Suggested next step
+ * plan = Incomplete plans
+ * phase = Incomplete phases
+ * verify = Verification state
+ */
+export type GsdPanelTab = "next" | "plan" | "phase" | "verify"
+export const gsdPanelActiveTabAtom = atomWithStorage<GsdPanelTab>(
+  "gsd:panelActiveTab",
+  "next",
+  undefined,
+  { getOnInit: true },
+)
+
+// ============================================
 // EDIT MODE
 // ============================================
 

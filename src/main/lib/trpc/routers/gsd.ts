@@ -9,6 +9,7 @@ import { getDatabase } from "../../db"
 import { projects } from "../../db/schema"
 import { eq } from "drizzle-orm"
 import { parseRoadmap } from "../../gsd/roadmap-parser"
+import { parsePhasePlans } from "../../gsd/plan-parser"
 import matter from "gray-matter"
 import yaml from "js-yaml"
 
@@ -748,6 +749,196 @@ export const gsdRouter = router({
     .mutation(async ({ input }) => {
       // TODO: Save to database or electron-store
       return { success: true, settings: input }
+    }),
+
+  // ============================================
+  // Roadmap, Plans & Verification Procedures
+  // ============================================
+
+  /**
+   * Get all phases from ROADMAP.md
+   */
+  getRoadmapPhases: publicProcedure
+    .input(z.object({ projectPath: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const phases = await parseRoadmap(input.projectPath)
+        return { phases }
+      } catch {
+        return { phases: [], error: "ROADMAP.md not found or invalid" }
+      }
+    }),
+
+  /**
+   * Get plans for incomplete phases (or a specific phase)
+   */
+  getIncompletePlans: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        phaseNumber: z.string().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        // If a specific phase is requested, just get that one
+        if (input.phaseNumber) {
+          const plans = await parsePhasePlans(input.projectPath, input.phaseNumber)
+          return { plans }
+        }
+
+        // Otherwise, get plans for all incomplete phases
+        const phases = await parseRoadmap(input.projectPath)
+        const incompletePhases = phases.filter(
+          (p) => p.status === "in_progress" || p.status === "not_started"
+        )
+
+        const allPlans = []
+        for (const phase of incompletePhases) {
+          const plans = await parsePhasePlans(input.projectPath, phase.phaseNumber)
+          allPlans.push(...plans)
+        }
+
+        return { plans: allPlans }
+      } catch {
+        return { plans: [], error: "Failed to parse plans" }
+      }
+    }),
+
+  /**
+   * Get verification status for phases
+   * Reads VERIFICATION.md files from phase directories
+   */
+  getVerificationStatus: publicProcedure
+    .input(z.object({ projectPath: z.string() }))
+    .query(async ({ input }) => {
+      const results: Array<{
+        phaseNumber: string
+        phaseName: string
+        status: "passed" | "gaps_found" | "human_needed" | "not_verified"
+        verificationPath: string | null
+        gaps: string[]
+        commands: string[]
+      }> = []
+
+      try {
+        const phases = await parseRoadmap(input.projectPath)
+        const phasesDir = path.join(input.projectPath, ".planning", "phases")
+
+        for (const phase of phases) {
+          // Find the phase directory
+          let phaseDir: string | null = null
+          try {
+            const entries = await fs.readdir(phasesDir, { withFileTypes: true })
+            for (const entry of entries) {
+              if (!entry.isDirectory()) continue
+              const match = entry.name.match(/^([\d.]+)/)
+              if (match && match[1] === phase.phaseNumber) {
+                phaseDir = path.join(phasesDir, entry.name)
+                break
+              }
+            }
+          } catch {
+            // phases directory doesn't exist
+          }
+
+          if (!phaseDir) {
+            results.push({
+              phaseNumber: phase.phaseNumber,
+              phaseName: phase.phaseName,
+              status: "not_verified",
+              verificationPath: null,
+              gaps: [],
+              commands: [],
+            })
+            continue
+          }
+
+          // Look for VERIFICATION.md
+          try {
+            const verificationFiles = await fs.readdir(phaseDir)
+            const verFile = verificationFiles.find(
+              (f) => f.toLowerCase().includes("verification") && f.endsWith(".md")
+            )
+
+            if (!verFile) {
+              results.push({
+                phaseNumber: phase.phaseNumber,
+                phaseName: phase.phaseName,
+                status: "not_verified",
+                verificationPath: null,
+                gaps: [],
+                commands: phase.status === "complete" || phase.status === "in_progress"
+                  ? [`/gsd:verify-work phase ${phase.phaseNumber}`]
+                  : [],
+              })
+              continue
+            }
+
+            const verPath = path.join(phaseDir, verFile)
+            const content = await fs.readFile(verPath, "utf-8")
+
+            // Parse verification status from frontmatter or content
+            let status: "passed" | "gaps_found" | "human_needed" | "not_verified" = "not_verified"
+            const statusMatch = content.match(/status:\s*(passed|gaps_found|human_needed)/i)
+            if (statusMatch) {
+              status = statusMatch[1].toLowerCase() as typeof status
+            } else if (content.match(/##.*passed/i) || content.match(/verdict.*passed/i)) {
+              status = "passed"
+            } else if (content.match(/gaps_found|gaps found/i)) {
+              status = "gaps_found"
+            } else if (content.match(/human_needed|human needed/i)) {
+              status = "human_needed"
+            }
+
+            // Parse gaps
+            const gaps: string[] = []
+            const gapsSection = content.match(/##\s*Gaps[\s\S]*?(?=\n##|$)/i)
+            if (gapsSection) {
+              const gapMatches = gapsSection[0].matchAll(/^[-*]\s*(.+)$/gm)
+              for (const m of gapMatches) {
+                gaps.push(m[1].trim())
+              }
+            }
+
+            // Build commands
+            const commands: string[] = []
+            if (status === "gaps_found") {
+              commands.push(`/gsd:plan-phase ${phase.phaseNumber} --gaps`)
+            }
+            if (status !== "passed") {
+              commands.push(`/gsd:verify-work phase ${phase.phaseNumber}`)
+            }
+
+            const relVerPath = path.relative(
+              path.join(input.projectPath, ".planning"),
+              verPath
+            )
+
+            results.push({
+              phaseNumber: phase.phaseNumber,
+              phaseName: phase.phaseName,
+              status,
+              verificationPath: relVerPath,
+              gaps,
+              commands,
+            })
+          } catch {
+            results.push({
+              phaseNumber: phase.phaseNumber,
+              phaseName: phase.phaseName,
+              status: "not_verified",
+              verificationPath: null,
+              gaps: [],
+              commands: [],
+            })
+          }
+        }
+      } catch {
+        // ROADMAP.md not found or parse error
+      }
+
+      return { verifications: results }
     }),
 
   // ============================================

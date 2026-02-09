@@ -2,10 +2,15 @@
 
 import { useState, useMemo, useCallback } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { FileText, Folder, ChevronRight, Sparkles, CheckCircle2, Circle, ArrowRight, Play } from "lucide-react"
+import {
+  FileText, Folder, ChevronRight, Sparkles, CheckCircle2, Circle,
+  ArrowRight, Play, ListChecks, Layers, ShieldCheck, Plus, RefreshCw,
+  Zap, AlertTriangle, CheckCircle, XCircle, HelpCircle,
+} from "lucide-react"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { selectedGsdProjectIdAtom, selectedPlanningDocAtom } from "../atoms"
+import { selectedGsdProjectIdAtom, selectedPlanningDocAtom, gsdPanelActiveTabAtom } from "../atoms"
+import type { GsdPanelTab } from "../atoms"
 import { selectedAgentChatIdAtom } from "../../agents/atoms"
 import { GsdDocumentDialog } from "../../agents/components/gsd-document-dialog"
 
@@ -311,60 +316,14 @@ export function GsdPlanningRightPanel({ onRunCommand }: GsdPlanningRightPanelPro
           </div>
         </div>
 
-        {/* Next Actions Section */}
-        {nextActions.length > 0 && (
-          <>
-            <div className="border-t border-border/50" />
-            <div className="flex-shrink-0 bg-muted/20">
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-border/30">
-                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Next Actions ({nextActions.length})
-                </span>
-              </div>
-              <div className="max-h-[200px] overflow-y-auto">
-                <div className="p-2 space-y-1">
-                  {nextActions.map((action, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleActionClick(action)}
-                      className={cn(
-                        "w-full flex items-start gap-2 px-2 py-1.5 rounded text-left",
-                        "hover:bg-accent/50 transition-colors",
-                        "group"
-                      )}
-                    >
-                      {action.hasCommand ? (
-                        <Play className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0 fill-primary/20" />
-                      ) : action.priority === "high" ? (
-                        <Circle className="h-3.5 w-3.5 text-red-500 mt-0.5 flex-shrink-0 fill-red-500/20" />
-                      ) : action.priority === "medium" ? (
-                        <Circle className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0 fill-amber-500/20" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate group-hover:text-foreground">
-                          {action.title}
-                        </p>
-                        {action.hasCommand ? (
-                          <p className="text-[10px] text-primary truncate font-mono">
-                            {action.file}
-                          </p>
-                        ) : (
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {action.file}
-                          </p>
-                        )}
-                      </div>
-                      <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0 mt-0.5" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+        {/* Tabbed Bottom Section */}
+        <GsdPanelTabs
+          cwdPath={cwdPath}
+          nextActions={nextActions}
+          onActionClick={handleActionClick}
+          onRunCommand={onRunCommand}
+          onFileClick={handleFileClick}
+        />
       </div>
 
       {/* Document Dialog */}
@@ -491,4 +450,483 @@ function sortFiles(files: PlanningFile[]): PlanningFile[] {
     }
     return file
   })
+}
+
+// ============================================
+// Tabbed Bottom Section
+// ============================================
+
+const TAB_CONFIG: Array<{ id: GsdPanelTab; label: string; icon: typeof Sparkles }> = [
+  { id: "next", label: "Next", icon: Sparkles },
+  { id: "plan", label: "Plan", icon: ListChecks },
+  { id: "phase", label: "Phase", icon: Layers },
+  { id: "verify", label: "Verify", icon: ShieldCheck },
+]
+
+interface GsdPanelTabsProps {
+  cwdPath: string
+  nextActions: NextAction[]
+  onActionClick: (action: NextAction) => void
+  onRunCommand?: (command: string) => void
+  onFileClick: (path: string) => void
+}
+
+function GsdPanelTabs({ cwdPath, nextActions, onActionClick, onRunCommand, onFileClick }: GsdPanelTabsProps) {
+  const [activeTab, setActiveTab] = useAtom(gsdPanelActiveTabAtom)
+
+  return (
+    <>
+      <div className="border-t border-border/50" />
+      <div className="flex-shrink-0 bg-muted/20 flex flex-col min-h-0">
+        {/* Tab Bar */}
+        <div className="flex items-center border-b border-border/30">
+          {TAB_CONFIG.map((tab) => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium transition-colors",
+                  "hover:text-foreground",
+                  isActive
+                    ? "text-foreground border-b-2 border-primary"
+                    : "text-muted-foreground"
+                )}
+              >
+                <Icon className="h-3 w-3" />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Tab Content */}
+        <div className="max-h-[250px] overflow-y-auto">
+          {activeTab === "next" && (
+            <NextTabContent actions={nextActions} onActionClick={onActionClick} />
+          )}
+          {activeTab === "plan" && (
+            <PlanTabContent cwdPath={cwdPath} onRunCommand={onRunCommand} onFileClick={onFileClick} />
+          )}
+          {activeTab === "phase" && (
+            <PhaseTabContent cwdPath={cwdPath} onRunCommand={onRunCommand} />
+          )}
+          {activeTab === "verify" && (
+            <VerifyTabContent cwdPath={cwdPath} onRunCommand={onRunCommand} onFileClick={onFileClick} />
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ============================================
+// Next Tab - Suggested next actions
+// ============================================
+
+function NextTabContent({
+  actions,
+  onActionClick,
+}: {
+  actions: NextAction[]
+  onActionClick: (action: NextAction) => void
+}) {
+  if (actions.length === 0) {
+    return (
+      <div className="p-3 text-center text-muted-foreground">
+        <Sparkles className="h-5 w-5 mx-auto mb-1.5 opacity-30" />
+        <p className="text-xs">No next actions found</p>
+        <p className="text-[10px] mt-0.5 opacity-70">Actions are parsed from STATE.md</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-2 space-y-1">
+      {actions.map((action, index) => (
+        <button
+          key={index}
+          onClick={() => onActionClick(action)}
+          className={cn(
+            "w-full flex items-start gap-2 px-2 py-1.5 rounded text-left",
+            "hover:bg-accent/50 transition-colors",
+            "group"
+          )}
+        >
+          {action.hasCommand ? (
+            <Play className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0 fill-primary/20" />
+          ) : action.priority === "high" ? (
+            <Circle className="h-3.5 w-3.5 text-red-500 mt-0.5 flex-shrink-0 fill-red-500/20" />
+          ) : action.priority === "medium" ? (
+            <Circle className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0 fill-amber-500/20" />
+          ) : (
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate group-hover:text-foreground">
+              {action.title}
+            </p>
+            {action.hasCommand ? (
+              <p className="text-[10px] text-primary truncate font-mono">
+                {action.file}
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground truncate">
+                {action.file}
+              </p>
+            )}
+          </div>
+          <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0 mt-0.5" />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ============================================
+// Plan Tab - Incomplete plans
+// ============================================
+
+function PlanTabContent({
+  cwdPath,
+  onRunCommand,
+  onFileClick,
+}: {
+  cwdPath: string
+  onRunCommand?: (command: string) => void
+  onFileClick: (path: string) => void
+}) {
+  const { data, isLoading } = trpc.gsd.getIncompletePlans.useQuery(
+    { projectPath: cwdPath },
+    { enabled: !!cwdPath }
+  )
+
+  if (isLoading) {
+    return (
+      <div className="p-3 flex justify-center">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  const plans = data?.plans || []
+
+  if (plans.length === 0) {
+    return (
+      <div className="p-3 text-center text-muted-foreground">
+        <ListChecks className="h-5 w-5 mx-auto mb-1.5 opacity-30" />
+        <p className="text-xs">No incomplete plans</p>
+        <p className="text-[10px] mt-0.5 opacity-70">All plans are complete or none exist</p>
+        {onRunCommand && (
+          <button
+            onClick={() => onRunCommand("/gsd:plan-phase")}
+            className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+          >
+            <Plus className="h-3 w-3" />
+            Create a plan
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-2 space-y-1">
+      {plans.map((plan) => (
+        <button
+          key={`${plan.phaseNumber}-${plan.planNumber}`}
+          onClick={() => {
+            // Try to open the plan file relative to .planning/
+            const relPath = plan.planPath.split(".planning/")[1]
+            if (relPath) onFileClick(relPath)
+          }}
+          className={cn(
+            "w-full flex items-start gap-2 px-2 py-1.5 rounded text-left",
+            "hover:bg-accent/50 transition-colors group"
+          )}
+        >
+          <ListChecks className="h-3.5 w-3.5 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate group-hover:text-foreground">
+              Phase {plan.phaseNumber} / Plan {plan.planNumber}
+            </p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {plan.tasks.length} task{plan.tasks.length !== 1 ? "s" : ""}
+              {plan.mustHaves.length > 0 && ` · ${plan.mustHaves.length} must-have${plan.mustHaves.length !== 1 ? "s" : ""}`}
+            </p>
+          </div>
+          <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0 mt-0.5" />
+        </button>
+      ))}
+
+      {/* Quick actions */}
+      {onRunCommand && (
+        <div className="flex items-center gap-1 pt-1 border-t border-border/20 mt-1">
+          <button
+            onClick={() => onRunCommand("/gsd:plan-phase")}
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+          >
+            <Plus className="h-3 w-3" />
+            Add
+          </button>
+          <button
+            onClick={() => onRunCommand("/gsd:update-roadmap")}
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Update
+          </button>
+          <button
+            onClick={() => onRunCommand("/gsd:quick")}
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+          >
+            <Zap className="h-3 w-3" />
+            Quick
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// Phase Tab - Incomplete phases
+// ============================================
+
+function PhaseTabContent({
+  cwdPath,
+  onRunCommand,
+}: {
+  cwdPath: string
+  onRunCommand?: (command: string) => void
+}) {
+  const { data, isLoading } = trpc.gsd.getRoadmapPhases.useQuery(
+    { projectPath: cwdPath },
+    { enabled: !!cwdPath }
+  )
+
+  if (isLoading) {
+    return (
+      <div className="p-3 flex justify-center">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  const phases = data?.phases || []
+  const incompletePhases = phases.filter(
+    (p) => p.status === "in_progress" || p.status === "not_started"
+  )
+
+  if (incompletePhases.length === 0) {
+    return (
+      <div className="p-3 text-center text-muted-foreground">
+        <Layers className="h-5 w-5 mx-auto mb-1.5 opacity-30" />
+        <p className="text-xs">
+          {phases.length === 0 ? "No phases found" : "All phases complete"}
+        </p>
+        <p className="text-[10px] mt-0.5 opacity-70">
+          {phases.length === 0 ? "Create a ROADMAP.md in .planning/" : `${phases.length} phase${phases.length !== 1 ? "s" : ""} total`}
+        </p>
+        {onRunCommand && (
+          <button
+            onClick={() => onRunCommand("/gsd:init")}
+            className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+          >
+            <Plus className="h-3 w-3" />
+            Initialize GSD
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-2 space-y-1">
+      {incompletePhases.map((phase) => (
+        <div
+          key={phase.phaseNumber}
+          className={cn(
+            "flex items-start gap-2 px-2 py-1.5 rounded",
+            "group"
+          )}
+        >
+          {phase.status === "in_progress" ? (
+            <div className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+          ) : (
+            <Circle className="h-3.5 w-3.5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate">
+              <span className="text-muted-foreground">P{phase.phaseNumber}</span>{" "}
+              {phase.phaseName}
+            </p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {phase.description}
+            </p>
+            {phase.plansList.length > 0 && (
+              <p className="text-[10px] text-muted-foreground/70">
+                {phase.plansList.length} plan{phase.plansList.length !== 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
+          {onRunCommand && phase.status === "not_started" && (
+            <button
+              onClick={() => onRunCommand(`/gsd:plan-phase ${phase.phaseNumber}`)}
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-accent/50 transition-all"
+              title="Plan this phase"
+            >
+              <Play className="h-3 w-3 text-primary" />
+            </button>
+          )}
+          {onRunCommand && phase.status === "in_progress" && (
+            <button
+              onClick={() => onRunCommand(`/gsd:execute-phase ${phase.phaseNumber}`)}
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-accent/50 transition-all"
+              title="Execute this phase"
+            >
+              <Zap className="h-3 w-3 text-amber-500" />
+            </button>
+          )}
+        </div>
+      ))}
+
+      {/* Quick actions */}
+      {onRunCommand && (
+        <div className="flex items-center gap-1 pt-1 border-t border-border/20 mt-1">
+          <button
+            onClick={() => onRunCommand("/gsd:init")}
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+          >
+            <Plus className="h-3 w-3" />
+            Add
+          </button>
+          <button
+            onClick={() => onRunCommand("/gsd:update-roadmap")}
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Update
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// Verify Tab - Verification state
+// ============================================
+
+const VERIFY_STATUS_CONFIG = {
+  passed: { icon: CheckCircle, color: "text-green-500", label: "Passed" },
+  gaps_found: { icon: AlertTriangle, color: "text-amber-500", label: "Gaps Found" },
+  human_needed: { icon: HelpCircle, color: "text-blue-500", label: "Human Needed" },
+  not_verified: { icon: XCircle, color: "text-muted-foreground/50", label: "Not Verified" },
+} as const
+
+function VerifyTabContent({
+  cwdPath,
+  onRunCommand,
+  onFileClick,
+}: {
+  cwdPath: string
+  onRunCommand?: (command: string) => void
+  onFileClick: (path: string) => void
+}) {
+  const { data, isLoading } = trpc.gsd.getVerificationStatus.useQuery(
+    { projectPath: cwdPath },
+    { enabled: !!cwdPath }
+  )
+
+  if (isLoading) {
+    return (
+      <div className="p-3 flex justify-center">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  const verifications = data?.verifications || []
+
+  if (verifications.length === 0) {
+    return (
+      <div className="p-3 text-center text-muted-foreground">
+        <ShieldCheck className="h-5 w-5 mx-auto mb-1.5 opacity-30" />
+        <p className="text-xs">No phases to verify</p>
+        <p className="text-[10px] mt-0.5 opacity-70">Complete a phase to enable verification</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-2 space-y-1">
+      {verifications.map((v) => {
+        const config = VERIFY_STATUS_CONFIG[v.status]
+        const StatusIcon = config.icon
+        return (
+          <div
+            key={v.phaseNumber}
+            className="group"
+          >
+            <div className="flex items-start gap-2 px-2 py-1.5 rounded">
+              <StatusIcon className={cn("h-3.5 w-3.5 mt-0.5 flex-shrink-0", config.color)} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-medium truncate">
+                    <span className="text-muted-foreground">P{v.phaseNumber}</span>{" "}
+                    {v.phaseName}
+                  </p>
+                  <span className={cn(
+                    "text-[9px] px-1 py-0.5 rounded-sm font-medium flex-shrink-0",
+                    v.status === "passed" && "bg-green-500/10 text-green-500",
+                    v.status === "gaps_found" && "bg-amber-500/10 text-amber-500",
+                    v.status === "human_needed" && "bg-blue-500/10 text-blue-500",
+                    v.status === "not_verified" && "bg-muted text-muted-foreground",
+                  )}>
+                    {config.label}
+                  </span>
+                </div>
+                {v.gaps.length > 0 && (
+                  <p className="text-[10px] text-amber-500 truncate">
+                    {v.gaps.length} gap{v.gaps.length !== 1 ? "s" : ""} remaining
+                  </p>
+                )}
+              </div>
+              {v.verificationPath && (
+                <button
+                  onClick={() => onFileClick(v.verificationPath!)}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-accent/50 transition-all flex-shrink-0"
+                  title="View verification"
+                >
+                  <FileText className="h-3 w-3 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+
+            {/* Commands for this phase */}
+            {v.commands.length > 0 && onRunCommand && (
+              <div className="flex flex-wrap gap-1 px-2 pb-1 ml-5">
+                {v.commands.map((cmd, i) => (
+                  <button
+                    key={i}
+                    onClick={() => onRunCommand(cmd)}
+                    className={cn(
+                      "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-mono",
+                      "bg-primary/5 text-primary hover:bg-primary/10 transition-colors"
+                    )}
+                  >
+                    <Play className="h-2.5 w-2.5 fill-primary/20" />
+                    {cmd.replace("/gsd:", "")}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
