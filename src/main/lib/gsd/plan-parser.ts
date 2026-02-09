@@ -26,14 +26,36 @@ export interface GsdPlan {
 }
 
 /**
- * Parse YAML frontmatter from markdown content
+ * Parse YAML frontmatter from markdown content (standard `---` delimited)
  */
 function parseFrontmatter(content: string): Record<string, any> {
   const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/)
   if (!frontmatterMatch) return {}
 
-  const frontmatter: Record<string, any> = {}
-  const lines = frontmatterMatch[1].split("\n")
+  return parseYamlKeyValues(frontmatterMatch[1])
+}
+
+/**
+ * Parse frontmatter from a YAML code block within the document
+ * Handles format like:
+ * ```yaml
+ * wave: 1
+ * autonomous: true
+ * ```
+ */
+function parseFrontmatterFromCodeBlock(content: string): Record<string, any> {
+  const codeBlockMatch = content.match(/```ya?ml\s*\n([\s\S]*?)\n```/)
+  if (!codeBlockMatch) return {}
+
+  return parseYamlKeyValues(codeBlockMatch[1])
+}
+
+/**
+ * Parse simple YAML key: value pairs from a string
+ */
+function parseYamlKeyValues(yamlContent: string): Record<string, any> {
+  const result: Record<string, any> = {}
+  const lines = yamlContent.split("\n")
 
   for (const line of lines) {
     const match = line.match(/^(\w+):\s*(.+)$/)
@@ -48,14 +70,14 @@ function parseFrontmatter(content: string): Record<string, any> {
       else if (/^\d+$/.test(value)) value = parseInt(value, 10)
       // Parse arrays
       else if (value.startsWith("[") && value.endsWith("]")) {
-        value = value.slice(1, -1).split(",").map(v => v.trim())
+        value = value.slice(1, -1).split(",").map((v: string) => v.trim())
       }
 
-      frontmatter[key] = value
+      result[key] = value
     }
   }
 
-  return frontmatter
+  return result
 }
 
 /**
@@ -97,20 +119,28 @@ function parseTasks(content: string): GsdTask[] {
 
 /**
  * Parse must_haves section from PLAN.md content
+ * Supports headings: "must_haves", "Must-Haves", "Goal-Backward Must-Haves"
  */
 function parseMustHaves(content: string): string[] {
   const mustHaves: string[] = []
 
-  // Look for must_haves section
-  const mustHavesMatch = content.match(/##\s*must_haves\s*\n([\s\S]*?)(?=\n##|$)/i)
+  // Look for must_haves section (multiple heading variants)
+  const mustHavesMatch = content.match(/##\s*(?:goal-backward\s+)?must[_-]haves?\s*\n([\s\S]*?)(?=\n---|\n##|$)/i)
   if (mustHavesMatch) {
     const mustHavesContent = mustHavesMatch[1]
     const lines = mustHavesContent.split("\n")
 
     for (const line of lines) {
-      const itemMatch = line.match(/^[-*]\s*\[[ x]\]\s*(.+)/)
-      if (itemMatch) {
-        mustHaves.push(itemMatch[1].trim())
+      // Match checkbox items: `- [ ] text` or `- [x] text`
+      const checkboxMatch = line.match(/^[-*]\s*\[[ x]\]\s*(.+)/)
+      if (checkboxMatch) {
+        mustHaves.push(checkboxMatch[1].trim())
+        continue
+      }
+      // Also match plain list items: `- text`
+      const plainMatch = line.match(/^[-*]\s+(.+)/)
+      if (plainMatch) {
+        mustHaves.push(plainMatch[1].trim())
       }
     }
   }
@@ -119,10 +149,20 @@ function parseMustHaves(content: string): string[] {
 }
 
 /**
+ * Normalize a phase number for comparison (strip leading zeros from each segment)
+ * "01" → "1", "02.1" → "2.1", "1" → "1"
+ */
+function normalizePhaseNumber(num: string): string {
+  return num.split(".").map(s => String(parseInt(s, 10))).join(".")
+}
+
+/**
  * Find phase directory in .planning/phases/
+ * Handles both zero-padded ("01") and unpadded ("1") phase numbers
  */
 async function findPhaseDirectory(projectPath: string, phaseNumber: string): Promise<string | null> {
   const phasesDir = path.join(projectPath, ".planning", "phases")
+  const normalizedTarget = normalizePhaseNumber(phaseNumber)
 
   try {
     const entries = await fs.readdir(phasesDir, { withFileTypes: true })
@@ -133,7 +173,7 @@ async function findPhaseDirectory(projectPath: string, phaseNumber: string): Pro
 
       // Match phase numbers like "01", "02", "02.1"
       const match = entry.name.match(/^([\d.]+)/)
-      if (match && match[1] === phaseNumber) {
+      if (match && normalizePhaseNumber(match[1]) === normalizedTarget) {
         return path.join(phasesDir, entry.name)
       }
     }
@@ -145,7 +185,11 @@ async function findPhaseDirectory(projectPath: string, phaseNumber: string): Pro
 }
 
 /**
- * Parse all PLAN.md files for a given phase
+ * Parse all plan files for a given phase
+ * Supports multiple naming conventions:
+ *   - `*-PLAN.md` (e.g., `01-02-PLAN.md`)
+ *   - `NN-name.md` (e.g., `01-cloud-models-ui.md`)
+ *   - Any `.md` file in the phase directory
  * @param projectPath - Root path of the project
  * @param phaseNumber - Phase number (e.g., "01", "02.1")
  * @returns Array of parsed plan files
@@ -162,19 +206,36 @@ export async function parsePhasePlans(
     return plans
   }
 
-  // Find all PLAN.md files
-  const planFiles = await glob(`${phaseDir}/*-PLAN.md`)
+  // First try specific *-PLAN.md pattern
+  let planFiles = await glob(`${phaseDir}/*-PLAN.md`)
+
+  // If no *-PLAN.md files found, fall back to all .md files in the directory
+  // (excluding VERIFICATION.md, RESEARCH.md-like files that aren't plans)
+  if (planFiles.length === 0) {
+    const allMdFiles = await glob(`${phaseDir}/*.md`)
+    planFiles = allMdFiles.filter((f) => {
+      const name = path.basename(f).toLowerCase()
+      // Exclude known non-plan files
+      if (name === "verification.md") return false
+      // Include files that start with a number (plan convention) or contain "plan"
+      return /^\d+/.test(name) || name.includes("plan")
+    })
+  }
 
   for (const planPath of planFiles) {
     try {
       const content = await fs.readFile(planPath, "utf-8")
 
-      // Parse frontmatter
-      const frontmatter = parseFrontmatter(content)
+      // Parse frontmatter (standard YAML or embedded in code block)
+      let frontmatter = parseFrontmatter(content)
+      if (Object.keys(frontmatter).length === 0) {
+        frontmatter = parseFrontmatterFromCodeBlock(content)
+      }
 
-      // Extract plan number from filename (e.g., "01-02-PLAN.md" → "02")
+      // Extract plan number from filename
       const filename = path.basename(planPath)
-      const planNumMatch = filename.match(/\d+-([\d.]+)-PLAN\.md/)
+      // Try: "01-02-PLAN.md" → "02", or "01-name.md" → "01", or "02-name.md" → "02"
+      const planNumMatch = filename.match(/\d+-([\d.]+)-PLAN\.md/) || filename.match(/^([\d.]+)/)
       const planNumber = planNumMatch?.[1] || "01"
 
       // Parse tasks

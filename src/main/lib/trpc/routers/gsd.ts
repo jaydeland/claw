@@ -825,15 +825,19 @@ export const gsdRouter = router({
         const phases = await parseRoadmap(input.projectPath)
         const phasesDir = path.join(input.projectPath, ".planning", "phases")
 
+        // Normalize phase numbers for comparison (strip leading zeros)
+        const normalizeNum = (n: string) => n.split(".").map(s => String(parseInt(s, 10))).join(".")
+
         for (const phase of phases) {
           // Find the phase directory
           let phaseDir: string | null = null
+          const normalizedTarget = normalizeNum(phase.phaseNumber)
           try {
             const entries = await fs.readdir(phasesDir, { withFileTypes: true })
             for (const entry of entries) {
               if (!entry.isDirectory()) continue
               const match = entry.name.match(/^([\d.]+)/)
-              if (match && match[1] === phase.phaseNumber) {
+              if (match && normalizeNum(match[1]) === normalizedTarget) {
                 phaseDir = path.join(phasesDir, entry.name)
                 break
               }
