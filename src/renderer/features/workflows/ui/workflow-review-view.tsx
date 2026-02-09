@@ -277,7 +277,7 @@ If there are no issues, confirm the file is correct and ask if I'd like suggesti
                     {issuesSummary}
                   </span>
                   <span className="text-muted-foreground/50">•</span>
-                  <span>Opus 4.5</span>
+                  <span>Opus</span>
                 </div>
               </div>
             </div>
@@ -374,7 +374,7 @@ If there are no issues, confirm the file is correct and ask if I'd like suggesti
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary">•</span>
-              <span>Use Opus 4.5 for the most comprehensive analysis</span>
+              <span>Use Opus for the most comprehensive analysis</span>
             </li>
           </ul>
         </div>

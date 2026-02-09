@@ -147,6 +147,8 @@ export const claudeSettingsRouter = router({
       bedrockHaikuModel: s.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
       maxMcpOutputTokens: s.maxMcpOutputTokens ?? 48000, // Safe limit for Bedrock
       maxThinkingTokens: s.maxThinkingTokens ?? 15000, // Total must not exceed 64k
+      // Experimental features
+      enableAgentTeams: s.enableAgentTeams ?? false,
       // AWS connection method
       bedrockConnectionMethod: (s.bedrockConnectionMethod || "profile") as "sso" | "profile",
       awsProfileName: s.awsProfileName || null,
@@ -177,6 +179,8 @@ export const claudeSettingsRouter = router({
         bedrockHaikuModel: z.string().optional(),
         maxMcpOutputTokens: z.number().optional(),
         maxThinkingTokens: z.number().optional(),
+        // Experimental features
+        enableAgentTeams: z.boolean().optional(),
         // AWS connection method
         bedrockConnectionMethod: z.enum(["sso", "profile"]).optional(),
         awsProfileName: z.string().nullable().optional(),
@@ -257,6 +261,10 @@ export const claudeSettingsRouter = router({
             ...(input.maxThinkingTokens !== undefined && {
               maxThinkingTokens: input.maxThinkingTokens,
             }),
+            // Experimental features
+            ...(input.enableAgentTeams !== undefined && {
+              enableAgentTeams: input.enableAgentTeams,
+            }),
             // AWS connection method
             ...(input.bedrockConnectionMethod !== undefined && {
               bedrockConnectionMethod: input.bedrockConnectionMethod,
@@ -289,6 +297,8 @@ export const claudeSettingsRouter = router({
             bedrockHaikuModel: input.bedrockHaikuModel ?? "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
             maxMcpOutputTokens: input.maxMcpOutputTokens ?? 200000,
             maxThinkingTokens: input.maxThinkingTokens ?? 1000000,
+            // Experimental features
+            enableAgentTeams: input.enableAgentTeams ?? false,
             // AWS connection method
             bedrockConnectionMethod: input.bedrockConnectionMethod ?? "profile",
             awsProfileName: input.awsProfileName ?? null,

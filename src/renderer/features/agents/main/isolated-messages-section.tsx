@@ -4,6 +4,7 @@ import { memo } from "react"
 import { useAtomValue } from "jotai"
 import { userMessageIdsAtom, currentSubChatIdAtom } from "../stores/message-store"
 import { IsolatedMessageGroup } from "./isolated-message-group"
+import { VirtualizedMessageGroup } from "./virtualized-message-group"
 
 // ============================================================================
 // ISOLATED MESSAGES SECTION (LAYER 3)
@@ -100,21 +101,25 @@ export const IsolatedMessagesSection = memo(function IsolatedMessagesSection({
 
   return (
     <>
-      {userMsgIds.map((userMsgId) => (
-        <IsolatedMessageGroup
+      {userMsgIds.map((userMsgId, index) => (
+        <VirtualizedMessageGroup
           key={userMsgId}
-          userMsgId={userMsgId}
-          subChatId={subChatId}
-          isMobile={isMobile}
-          sandboxSetupStatus={sandboxSetupStatus}
-          stickyTopClass={stickyTopClass}
-          sandboxSetupError={sandboxSetupError}
-          onRetrySetup={onRetrySetup}
-          UserBubbleComponent={UserBubbleComponent}
-          ToolCallComponent={ToolCallComponent}
-          MessageGroupWrapper={MessageGroupWrapper}
-          toolRegistry={toolRegistry}
-        />
+          alwaysMounted={index >= userMsgIds.length - 3}
+        >
+          <IsolatedMessageGroup
+            userMsgId={userMsgId}
+            subChatId={subChatId}
+            isMobile={isMobile}
+            sandboxSetupStatus={sandboxSetupStatus}
+            stickyTopClass={stickyTopClass}
+            sandboxSetupError={sandboxSetupError}
+            onRetrySetup={onRetrySetup}
+            UserBubbleComponent={UserBubbleComponent}
+            ToolCallComponent={ToolCallComponent}
+            MessageGroupWrapper={MessageGroupWrapper}
+            toolRegistry={toolRegistry}
+          />
+        </VirtualizedMessageGroup>
       ))}
     </>
   )

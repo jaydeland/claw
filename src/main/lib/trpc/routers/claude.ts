@@ -423,40 +423,32 @@ export const claudeRouter = router({
       }
     }
 
-    // Available models (from env.ts defaults)
+    // Available models (simplified - SDK resolves actual versions)
     const availableModels = [
       {
-        id: 'opus-4-6-team',
-        name: 'Claude Opus 4.6 Team',
+        id: 'opus-team',
+        name: 'Claude Opus Team',
         description: 'Team mode with parallel sub-agents for complex tasks',
-        modelId: 'claude-opus-4-6-20260205',
-        badge: 'TEAM',
+        modelId: 'opus',
       },
       {
-        id: 'opus-4-6',
-        name: 'Claude Opus 4.6',
-        description: 'Latest and most capable model (Binary 2.1.32+)',
-        modelId: 'claude-opus-4-6-20260205',
-        badge: 'NEW',
-      },
-      {
-        id: 'opus-4-5',
-        name: 'Claude Opus 4.5',
+        id: 'opus',
+        name: 'Claude Opus',
         description: 'Most capable model for complex tasks',
-        modelId: 'claude-opus-4-5-20251101',
+        modelId: 'opus',
       },
       {
-        id: 'sonnet-4-5',
-        name: 'Claude Sonnet 4.5',
+        id: 'sonnet',
+        name: 'Claude Sonnet',
         description: 'Balanced performance and speed with 1M context',
-        modelId: 'claude-sonnet-4-5-20250929',
+        modelId: 'sonnet',
         contextWindow: '1M',
       },
       {
-        id: 'haiku-4-5',
-        name: 'Claude Haiku 4.5',
+        id: 'haiku',
+        name: 'Claude Haiku',
         description: 'Fastest model for quick tasks with 1M context',
-        modelId: 'claude-haiku-4-5-20251001',
+        modelId: 'haiku',
         contextWindow: '1M',
       },
     ]
@@ -907,10 +899,14 @@ export const claudeRouter = router({
 
             const resolvedModel = finalCustomConfig?.model || input.model
 
-            // Check if this is an Opus 4.6 Team request (from UI selection)
+            // Check if this is an Opus Team request (from UI selection)
             // The UI passes the original model ID before mapping, so we check input.model
-            const isOpus46Team = input.model === "opus-4-6-team" ||
-              (resolvedModel && resolvedModel.includes("opus-4-6") && input.model?.includes("team"))
+            const isOpusTeam = input.model === "opus-team" ||
+              (input.model?.includes("team") && resolvedModel === "opus")
+
+            // Agent teams is always enabled - set team mode metadata so the UI
+            // uses AgentTeamGroup to display parallel Task tool calls
+            metadata.isTeamMode = true
 
             // Filter MCP servers: skip ONLY non-working servers (failed, needs-auth)
             // Pass working/unknown servers in options so Claude can see them
@@ -937,27 +933,38 @@ export const claudeRouter = router({
               }
             }
 
-            // System prompt config - use team mode for Opus 4.6 Team
-            const systemPromptConfig = isOpus46Team
+            // System prompt config - use team mode for Opus Team
+            const systemPromptConfig = isOpusTeam
               ? {
                   type: "custom" as const,
-                  custom: `You are Claude, operating in Team Mode. You have access to specialized sub-agents that can work in parallel on different aspects of tasks.
+                  custom: `You are Claude, operating as the lead of an Agent Team. You coordinate multiple independent teammates that work in parallel, communicate with each other, and share a task list.
 
-TEAM MODE INSTRUCTIONS:
-- You are the lead agent coordinating a team of specialized sub-agents
-- Use the Task tool to delegate work to sub-agents when tasks can be parallelized
-- Launch multiple agents simultaneously for independent tasks to maximize efficiency
-- Coordinate results from sub-agents to provide comprehensive solutions
-- When facing complex multi-step problems, break them down and assign to appropriate sub-agents
-- Sub-agents have access to the same tools as you (Bash, Read, Write, Edit, Grep, Glob, etc.)
+TEAM LEAD INSTRUCTIONS:
+- Create an agent team when the user's task benefits from parallel work
+- Spawn teammates with distinct roles (e.g., one on architecture, one on implementation, one on testing)
+- Break work into a shared task list that teammates can claim and complete independently
+- Teammates are full Claude Code sessions with their own context windows — they can explore, edit, run commands, and message each other directly
+- Synthesize findings from teammates into a coherent response
 
-Available sub-agent types you can delegate to:
-- Bash: For command execution, git operations, and terminal tasks
-- Explore: For codebase exploration, file searching, and code understanding
-- Plan: For designing implementation strategies and architectural planning
-- general-purpose: For complex multi-step research and execution tasks
+WHEN TO CREATE A TEAM:
+- Research and review: teammates investigate different aspects simultaneously
+- New features: teammates each own a separate module or layer (frontend, backend, tests)
+- Debugging: teammates test competing hypotheses in parallel and challenge each other's findings
+- Cross-layer changes: changes spanning frontend, backend, and tests, each owned by a different teammate
 
-IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independent tasks, launch them simultaneously in a single message with multiple Task tool calls.`,
+TEAM COORDINATION:
+- Give each teammate a clear role and enough context in their spawn prompt
+- Size tasks so each teammate can work independently without blocking others
+- Avoid assigning the same files to multiple teammates
+- Wait for teammates to complete before synthesizing results
+- Use the task list to track progress across the team
+
+WHEN NOT TO CREATE A TEAM:
+- Simple, single-file changes
+- Sequential tasks where each step depends on the previous
+- Tasks that would be faster done directly
+
+IMPORTANT: For complex tasks with 2+ independent work streams, proactively create an agent team rather than doing everything yourself. Parallel teammates are more effective than sequential work for research, review, and multi-module changes.`,
                 }
               : {
                   type: "preset" as const,
@@ -1081,7 +1088,9 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                   }
                 },
                 stderr: (data: string) => {
-                  stderrLines.push(data)
+                  if (stderrLines.length < 200) {
+                    stderrLines.push(data)
+                  }
                   console.error("[claude stderr]", data)
                 },
                 // Use bundled binary
@@ -1153,9 +1162,11 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                   // Agent team events (when experimental flag enabled)
                   async TeammateIdle({ teammate_name }: { teammate_name: string }) {
                     console.log(`[CLAUDE] TeammateIdle: ${teammate_name}`)
+                    safeEmit({ type: "teammate-idle", teammateName: teammate_name } as UIMessageChunk)
                   },
                   async TaskCompleted({ task_id, task_subject }: { task_id: string; task_subject: string }) {
                     console.log(`[CLAUDE] TaskCompleted: ${task_id} - ${task_subject}`)
+                    safeEmit({ type: "task-completed", taskId: task_id, taskSubject: task_subject } as UIMessageChunk)
                     const mainWindow = BrowserWindow.getAllWindows()[0]
                     if (mainWindow) {
                       mainWindow.webContents.send('claude-notification', {
@@ -1377,15 +1388,6 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                   }
 
                   // Accumulate based on chunk type
-                  // Log ALL chunk types for debugging
-                  const chunkAny = chunk as any
-                  if (chunkAny.toolName === "Bash" || chunk.type.includes("background")) {
-                    const path = require('path')
-                    const { app } = require('electron')
-                    const logPath = path.join(app.getPath('userData'), 'claw-debug.log')
-                    require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] Chunk type: ${chunk.type}, toolName: ${chunkAny.toolName || 'none'}, toolCallId: ${chunkAny.toolCallId || 'none'}`)
-                  }
-
                   switch (chunk.type) {
                     case "text-delta":
                       currentText += chunk.delta
@@ -1415,19 +1417,11 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                       })
                       break
                     case "tool-output-available":
-                      // Debug logging to file for visibility
-                      const path = require('path')
-                      const { app } = require('electron')
-                      const logPath = path.join(app.getPath('userData'), 'claw-debug.log')
-                      require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] Tool output available - toolCallId: ${chunk.toolCallId}, toolName: ${(chunk as any).toolName}`)
-
                       const toolPart = parts.find(
                         (p) =>
                           p.type?.startsWith("tool-") &&
                           p.toolCallId === chunk.toolCallId,
                       )
-
-                      require('fs').appendFileSync(logPath, `\n[${new Date().toISOString()}] Found toolPart: ${!!toolPart}, type: ${toolPart?.type}, hasOutput: ${!!chunk.output}`)
 
                       if (toolPart) {
                         toolPart.result = chunk.output
@@ -1918,6 +1912,11 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
                 .run()
             }
 
+            // Release accumulated streaming data from memory
+            parts.length = 0
+            messagesToSave.length = 0
+            stderrLines.length = 0
+
             // Update parent chat timestamp
             db.update(chats)
               .set({ updatedAt: new Date() })
@@ -1940,9 +1939,8 @@ IMPORTANT: Proactively use parallel agent execution. If you identify 2+ independ
             safeEmit({ type: "finish" } as UIMessageChunk)
             safeComplete()
           } finally {
-            // Clean up session from registry
-            removeSession(input.subChatId)
-            console.log(`[CLAUDE] Cleaned up session for subChat ${input.subChatId}`)
+            // Session cleanup happens in unsubscribe handler below
+            // This ensures messages are saved before cleanup to avoid race conditions
           }
         })()
 

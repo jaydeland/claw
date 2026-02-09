@@ -251,6 +251,16 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 })
               }
 
+              // Handle agent team events - show toast notifications
+              if (chunk.type === "teammate-idle") {
+                console.log(`[AgentTeams] Teammate idle: ${chunk.teammateName}`)
+                toast.info(`Teammate ${chunk.teammateName} is idle`, { duration: 3000 })
+              }
+              if (chunk.type === "task-completed") {
+                console.log(`[AgentTeams] Task completed: ${chunk.taskSubject}`)
+                toast.success(`Team task completed: ${chunk.taskSubject}`, { duration: 5000 })
+              }
+
               // Handle message-metadata - store token info for Session Context display
               // This metadata arrives before we know the AI SDK's message ID, so we store it
               // as "pending" and associate it with the message during sync

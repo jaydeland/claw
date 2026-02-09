@@ -1,6 +1,7 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 import { messageIdsAtom, messageAtomFamily } from "../agents/stores/message-store"
+import { appStore } from "../../lib/jotai-store"
 
 // Display mode for session flow - matches changes/diff view pattern
 export const sessionFlowDisplayModeAtom = atomWithStorage<"side-peek" | "center-peek" | "full-page">(
@@ -70,6 +71,7 @@ export interface ExtractedTodos {
 
 // Derive current todos from messages
 // Finds the latest TodoWrite tool call and extracts its todos
+// Optimized: Only recomputes when messageIds change, not when individual messages stream
 export const sessionFlowTodosAtom = atom<ExtractedTodos>((get) => {
   const messageIds = get(messageIdsAtom)
 
@@ -78,7 +80,9 @@ export const sessionFlowTodosAtom = atom<ExtractedTodos>((get) => {
     const msgId = messageIds[i]
     if (!msgId) continue
 
-    const message = get(messageAtomFamily(msgId))
+    // Use appStore.get() to avoid subscribing to this message atom
+    // This means we only recompute when messageIds changes, not on every text stream
+    const message = appStore.get(messageAtomFamily(msgId))
     if (!message || !message.parts) continue
 
     // Search parts backwards to find the most recent TodoWrite in this message
@@ -164,6 +168,7 @@ export const backgroundTaskOutputDialogOpenAtom = atom<boolean>(false)
 
 // Derive background tasks from messages
 // Finds all Bash tool calls with run_in_background: true
+// Optimized: Only recomputes when messageIds change, not when individual messages stream
 export const sessionFlowBackgroundTasksAtom = atom<SessionBackgroundTask[]>((get) => {
   const messageIds = get(messageIdsAtom)
   const tasks: SessionBackgroundTask[] = []
@@ -173,7 +178,8 @@ export const sessionFlowBackgroundTasksAtom = atom<SessionBackgroundTask[]>((get
     const msgId = messageIds[i]
     if (!msgId) continue
 
-    const message = get(messageAtomFamily(msgId))
+    // Use appStore.get() to avoid subscribing to this message atom
+    const message = appStore.get(messageAtomFamily(msgId))
     if (!message || !message.parts) continue
 
     // Search all parts for Bash tools with run_in_background: true
@@ -236,6 +242,7 @@ function getNestedToolStatus(part: any): "pending" | "completed" | "error" {
 
 // Derive sub-agents from messages
 // Finds all Task tool calls in the current session and their nested tool usage
+// Optimized: Only recomputes when messageIds change, not when individual messages stream
 export const sessionFlowSubAgentsAtom = atom<SessionSubAgent[]>((get) => {
   const messageIds = get(messageIdsAtom)
   const subAgents: SessionSubAgent[] = []
@@ -250,7 +257,8 @@ export const sessionFlowSubAgentsAtom = atom<SessionSubAgent[]>((get) => {
     const msgId = messageIds[i]
     if (!msgId) continue
 
-    const message = get(messageAtomFamily(msgId))
+    // Use appStore.get() to avoid subscribing to this message atom
+    const message = appStore.get(messageAtomFamily(msgId))
     if (!message || !message.parts) continue
 
     for (const part of message.parts) {
@@ -276,7 +284,8 @@ export const sessionFlowSubAgentsAtom = atom<SessionSubAgent[]>((get) => {
     const msgId = messageIds[i]
     if (!msgId) continue
 
-    const message = get(messageAtomFamily(msgId))
+    // Use appStore.get() to avoid subscribing to this message atom
+    const message = appStore.get(messageAtomFamily(msgId))
     if (!message || !message.parts) continue
 
     // First pass: find all Task tool IDs in this message

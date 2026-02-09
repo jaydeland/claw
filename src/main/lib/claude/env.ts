@@ -550,11 +550,8 @@ export function buildClaudeEnv(options?: {
     }
   }
 
-  // 9. Experimental features (from settings)
-  if (settings?.enableAgentTeams) {
-    env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
-    console.log("[claude-env] Agent teams enabled (experimental)")
-  }
+  // 9. Agent teams - always enabled
+  env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
 
   // 10. Mark as SDK entry
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts"

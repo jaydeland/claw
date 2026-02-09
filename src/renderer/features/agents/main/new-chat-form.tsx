@@ -1438,14 +1438,7 @@ export function NewChatForm({
                           >
                             <ClaudeCodeIcon className="h-3.5 w-3.5" />
                             <span>
-                              {hasCustomClaudeConfig ? (
-                                "Custom Model"
-                              ) : (
-                                <>
-                                  {selectedModel?.name}{" "}
-                                  <span className="text-muted-foreground">4.5</span>
-                                </>
-                              )}
+                              {hasCustomClaudeConfig ? "Custom Model" : selectedModel?.name}
                             </span>
                             <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                           </button>
@@ -1464,10 +1457,7 @@ export function NewChatForm({
                               >
                                 <div className="flex items-center gap-1.5">
                                   <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  <span>
-                                    {model.name}{" "}
-                                    <span className="text-muted-foreground">4.5</span>
-                                  </span>
+                                  <span>{model.name}</span>
                                 </div>
                                 {isSelected && (
                                   <CheckIcon className="h-3.5 w-3.5 shrink-0" />

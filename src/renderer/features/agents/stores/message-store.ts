@@ -3,6 +3,7 @@
 import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
 import { appStore } from "../../../lib/jotai-store"
+import { clearMessageStateCacheEntries } from "../main/assistant-message-item"
 
 // Types
 export interface MessagePart {
@@ -160,6 +161,20 @@ export const isMessageStreamingAtomFamily = atomFamily((messageId: string) =>
 // This way, a text part only re-renders when ITS text changes, not when
 // other parts of the same message change.
 
+// Safety cap for module-level caches: evict oldest 25% when limit is reached
+const MAX_GLOBAL_CACHE_SIZE = 2000
+function cappedSet<K, V>(map: Map<K, V>, key: K, value: V) {
+  if (map.size >= MAX_GLOBAL_CACHE_SIZE && !map.has(key)) {
+    const deleteCount = Math.floor(MAX_GLOBAL_CACHE_SIZE * 0.25)
+    let i = 0
+    for (const k of map.keys()) {
+      if (i++ >= deleteCount) break
+      map.delete(k)
+    }
+  }
+  map.set(key, value)
+}
+
 // Cache for text part content to return stable references
 const textPartCache = new Map<string, string>()
 
@@ -180,7 +195,7 @@ export const textPartAtomFamily = atomFamily((key: string) => {
       return cached
     }
 
-    textPartCache.set(key, text)
+    cappedSet(textPartCache, key, text)
     return text
   })
 })
@@ -278,7 +293,7 @@ export const messageStructureAtomFamily = atomFamily((messageId: string) =>
       }
     }
 
-    messageStructureCache.set(messageId, newStructure)
+    cappedSet(messageStructureCache, messageId, newStructure)
     return newStructure
   })
 )
@@ -773,16 +788,41 @@ export const syncMessagesAtom = atom(
 // CLEANUP - For clearing store when switching chats
 // ============================================================================
 
-// Clear all caches for a specific subChat (call when unmounting/switching)
+// Clear all caches for a specific subChat (call when tab is fully closed)
+// When a tab is removed from openSubChats, we can safely release all its memory
+// since keep-alive only applies to currently open tabs (MAX_MOUNTED_TABS = 5)
 export function clearSubChatCaches(subChatId: string) {
-  // Clear per-chat caches
+  // Clear per-chat caches and release atomFamily atoms
   const activeIds = activeMessageIdsByChat.get(subChatId)
   if (activeIds) {
+    // Clear external messageStateCache entries for these messages
+    clearMessageStateCacheEntries(activeIds)
+
     for (const id of activeIds) {
-      // NOTE: Don't remove messageAtomFamily atoms - keep-alive tabs need them to persist
-      // Only clear the per-chat tracking caches
       previousMessageState.delete(`${subChatId}:${id}`)
       assistantIdsCacheByChat.delete(`${subChatId}:${id}`)
+
+      // Release atomFamily atoms for this message
+      messageAtomFamily.remove(id)
+      messageStructureAtomFamily.remove(id)
+      isLastMessageAtomFamily.remove(id)
+      isMessageStreamingAtomFamily.remove(id)
+      isLastUserMessageAtomFamily.remove(id)
+      assistantIdsForUserMsgAtomFamily.remove(id)
+
+      // Release metadata atom
+      messageMetadataAtomFamily.remove(`${subChatId}:${id}`)
+
+      // Release textPart atoms and cache entries for this message
+      for (const key of textPartCache.keys()) {
+        if (key.startsWith(`${id}:`)) {
+          textPartAtomFamily.remove(key)
+          textPartCache.delete(key)
+        }
+      }
+
+      // Release messageStructureCache entry
+      messageStructureCache.delete(id)
     }
     activeMessageIdsByChat.delete(subChatId)
   }
@@ -792,9 +832,6 @@ export function clearSubChatCaches(subChatId: string) {
   messageGroupsCacheByChat.delete(subChatId)
   lastAssistantCacheByChat.delete(subChatId)
   tokenDataCacheByChat.delete(subChatId)
-
-  // NOTE: Don't clear global atoms (messageIdsAtom, messageRolesAtom, currentSubChatIdAtom)
-  // or messageAtomFamily entries - they are shared/reused by keep-alive tabs
 }
 
 // Clear all caches (call on app reset/logout)

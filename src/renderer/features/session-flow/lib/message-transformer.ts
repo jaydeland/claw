@@ -6,6 +6,7 @@ import type {
   ToolCallNodeData,
   AgentSpawnNodeData,
   BackgroundTaskNodeData,
+  TeamGroupNodeData,
 } from "../components/session-flow-nodes"
 
 // Layout constants
@@ -150,8 +151,8 @@ export function transformMessagesToFlow(
 
       // Create assistant response node
       const responseNodeId = `response-${message.id}`
-      // Extract token data from message metadata (flat structure from transform.ts)
-      const metadata = message.metadata as { inputTokens?: number; outputTokens?: number } | undefined
+      // Extract token data and team mode from message metadata (flat structure from transform.ts)
+      const metadata = message.metadata as { inputTokens?: number; outputTokens?: number; isTeamMode?: boolean } | undefined
 
       // Debug logging to trace token data
       if (metadata) {
@@ -291,12 +292,62 @@ export function transformMessagesToFlow(
       }
 
       // Second pass (part 2): create nodes for individual tools
-      for (const { partIndex, part, toolName } of individualTools) {
-        const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
-        const state = getToolState(part)
+      // Separate Task tools from other individual tools for team grouping
+      const taskTools = individualTools.filter((t) => t.toolName === "Task")
+      const otherIndividualTools = individualTools.filter((t) => t.toolName !== "Task")
 
-        // Task agent spawn
-        if (toolName === "Task") {
+      // Group Task tools into team when in team mode (via metadata) and has multiple tasks
+      // This properly distinguishes team mode parallel agents from regular sub-agents
+      if (metadata?.isTeamMode && taskTools.length >= 2) {
+        // Create a team group node containing all Task agents
+        const teamNodeId = `team-${message.id}`
+        const agents = taskTools.map(({ partIndex, part }) => {
+          const state = getToolState(part)
+          return {
+            agentId: part.toolCallId || "",
+            description: truncateText(part.input?.description || part.input?.prompt, 20),
+            status: state === "error" ? "error" : state === "result" ? "completed" : "running",
+            partIndex,
+          }
+        })
+
+        // Calculate height based on number of agents (each agent row ~24px + header ~28px + padding ~8px)
+        const teamNodeHeight = 28 + (agents.length * 24) + 8
+
+        nodes.push({
+          id: teamNodeId,
+          type: "teamGroup",
+          position: { x: X_BRANCH, y: branchY },
+          data: {
+            agents,
+            messageId: message.id,
+            onAgentClick: (partIndex: number) => options.onNodeClick(message.id, partIndex),
+          } as TeamGroupNodeData,
+        })
+
+        // Connect team to response node
+        const hasAnyRunning = agents.some((a) => a.status === "running")
+        edges.push({
+          id: `${responseNodeId}-${teamNodeId}`,
+          source: responseNodeId,
+          sourceHandle: "tools",
+          target: teamNodeId,
+          animated: hasAnyRunning,
+          style: {
+            stroke: "#a855f7", // purple for team
+            strokeWidth: 2,
+          },
+        })
+
+        // Adjust branchY based on team node height
+        branchY += Math.max(Y_BRANCH_SPACING, teamNodeHeight)
+        branchIndex++
+      } else {
+        // Single Task or no Tasks - render individually
+        for (const { partIndex, part, toolName } of taskTools) {
+          const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
+          const state = getToolState(part)
+
           nodes.push({
             id: toolNodeId,
             type: "agentSpawn",
@@ -308,23 +359,42 @@ export function transformMessagesToFlow(
               onClick: () => options.onNodeClick(message.id, partIndex),
             } as AgentSpawnNodeData,
           })
-        } else {
-          // Other individual tools (AskUserQuestion)
-          nodes.push({
-            id: toolNodeId,
-            type: "toolCall",
-            position: { x: X_BRANCH, y: branchY },
-            data: {
-              toolCallId: part.toolCallId || "",
-              toolName,
-              state,
-              isMcpTool: isMcpTool(part.type),
-              onClick: () => options.onNodeClick(message.id, partIndex),
-            } as ToolCallNodeData,
-          })
-        }
 
-        // Connect tool to response node
+          edges.push({
+            id: `${responseNodeId}-${toolNodeId}`,
+            source: responseNodeId,
+            sourceHandle: "tools",
+            target: toolNodeId,
+            animated: state === "call",
+            style: {
+              stroke: state === "error" ? "#ef4444" : "#ec4899",
+              strokeWidth: 1.5,
+            },
+          })
+
+          branchY += Y_BRANCH_SPACING
+          branchIndex++
+        }
+      }
+
+      // Process other individual tools (AskUserQuestion, etc.)
+      for (const { partIndex, part, toolName } of otherIndividualTools) {
+        const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
+        const state = getToolState(part)
+
+        nodes.push({
+          id: toolNodeId,
+          type: "toolCall",
+          position: { x: X_BRANCH, y: branchY },
+          data: {
+            toolCallId: part.toolCallId || "",
+            toolName,
+            state,
+            isMcpTool: isMcpTool(part.type),
+            onClick: () => options.onNodeClick(message.id, partIndex),
+          } as ToolCallNodeData,
+        })
+
         edges.push({
           id: `${responseNodeId}-${toolNodeId}`,
           source: responseNodeId,

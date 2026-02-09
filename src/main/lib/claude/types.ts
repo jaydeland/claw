@@ -52,6 +52,9 @@ export type UIMessageChunk =
       }>
     }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
+  // Agent team events (experimental)
+  | { type: "teammate-idle"; teammateName: string }
+  | { type: "task-completed"; taskId: string; taskSubject: string }
   // System tools (rendered like regular tools)
   | {
       type: "system-Compact"

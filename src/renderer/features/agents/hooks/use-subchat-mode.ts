@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { clearSubChatCaches } from "../stores/message-store"
 import type { AgentMode } from "../atoms"
@@ -36,9 +36,34 @@ export function useSubChatMode(config: SubChatModeConfig | LegacySubChatModeConf
   const mode: AgentMode = isLegacy
     ? (config as LegacySubChatModeConfig).isPlanMode ? "plan" : "agent"
     : (config as SubChatModeConfig).mode
-  const setMode = isLegacy
-    ? (newMode: AgentMode) => (config as LegacySubChatModeConfig).setIsPlanMode(newMode === "plan")
+
+  // CRITICAL: Use a ref for the raw setter to avoid creating a new function reference
+  // on every render. Previously, the legacy wrapper `(newMode) => setIsPlanMode(newMode === "plan")`
+  // was a new function each render, causing the useEffect cleanup to fire every render,
+  // which called clearSubChatCaches() and removed all message atoms - making messages disappear.
+  const rawSetterRef = useRef(
+    isLegacy
+      ? (config as LegacySubChatModeConfig).setIsPlanMode
+      : (config as SubChatModeConfig).setMode
+  )
+  rawSetterRef.current = isLegacy
+    ? (config as LegacySubChatModeConfig).setIsPlanMode
     : (config as SubChatModeConfig).setMode
+
+  // Stable setMode function that never changes reference
+  const setMode = useCallback((newMode: AgentMode) => {
+    const setter = rawSetterRef.current
+    if (typeof setter === "function") {
+      if (isLegacy) {
+        // Legacy interface: setIsPlanMode(boolean)
+        ;(setter as (value: boolean) => void)(newMode === "plan")
+      } else {
+        // New interface: setMode(AgentMode)
+        ;(setter as (value: AgentMode) => void)(newMode)
+      }
+    }
+  }, [isLegacy])
+
   const updateSubChatModeMutation = config.updateSubChatModeMutation
 
   // Track last initialized sub-chat to prevent re-initialization
@@ -63,7 +88,7 @@ export function useSubChatMode(config: SubChatModeConfig | LegacySubChatModeConf
       lastInitializedRef.current = subChatId
     }
 
-    // 2. Cleanup message caches on unmount
+    // 2. Cleanup message caches on unmount (or when subChatId changes)
     return () => {
       clearSubChatCaches(subChatId)
     }

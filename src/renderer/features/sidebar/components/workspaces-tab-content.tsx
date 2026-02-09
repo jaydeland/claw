@@ -25,6 +25,7 @@ import {
   selectedAgentChatIdAtom,
   expandedWorkspaceIdsAtom,
   selectedDraftIdAtom,
+  cleanupChatLocalStorage,
 } from "../../agents/atoms"
 import { ChatStatusBadge } from "./chat-status-badge"
 import { useChatStatuses } from "../hooks/use-chat-status"
@@ -103,17 +104,19 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
   // Archive mutation
   const archiveMutation = trpc.chats.archive.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       utils.chats.list.invalidate()
       setSelectedChatId(null)
+      cleanupChatLocalStorage(variables.id)
     },
   })
 
   // Delete mutation
   const deleteMutation = trpc.chats.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       utils.chats.list.invalidate()
       setSelectedChatId(null)
+      cleanupChatLocalStorage(variables.id)
     },
   })
 

@@ -22,6 +22,7 @@ import {
   Clock,
   Loader2,
   Plug,
+  Users,
 } from "lucide-react"
 import {
   Tooltip,
@@ -96,6 +97,17 @@ export interface BackgroundTaskNodeData {
   description?: string
   status: "running" | "completed" | "failed" | "unknown"
   onClick: () => void
+}
+
+export interface TeamGroupNodeData {
+  agents: Array<{
+    agentId: string
+    description: string
+    status: "running" | "completed" | "error"
+    partIndex: number
+  }>
+  messageId: string
+  onAgentClick: (partIndex: number) => void
 }
 
 /**
@@ -519,6 +531,87 @@ export const BackgroundTaskNode = memo(function BackgroundTaskNode({
   )
 })
 
+// Team Group Node - Purple container for parallel sub-agents (team mode)
+export const TeamGroupNode = memo(function TeamGroupNode({
+  data,
+}: NodeProps<TeamGroupNodeData>) {
+  const completedCount = data.agents.filter((a) => a.status === "completed").length
+  const hasAnyRunning = data.agents.some((a) => a.status === "running")
+  const hasAnyError = data.agents.some((a) => a.status === "error")
+
+  const bgColor = hasAnyError
+    ? "bg-red-500/10 border-red-500/50"
+    : hasAnyRunning
+      ? "bg-purple-500/20 border-purple-500/50"
+      : "bg-green-500/10 border-green-500/50"
+
+  const headerColor = hasAnyError
+    ? "text-red-400"
+    : hasAnyRunning
+      ? "text-purple-400"
+      : "text-green-400"
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={`px-2 py-1.5 shadow-md rounded-lg ${bgColor} border-2 border-dashed min-w-[130px] max-w-[160px]`}
+        >
+          <Handle type="target" position={Position.Left} className="!bg-purple-600" />
+          {/* Header */}
+          <div className={`flex items-center gap-1.5 mb-1.5 ${headerColor}`}>
+            <Users className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="text-[10px] font-semibold">
+              {hasAnyRunning ? "Running Team" : "Team"}
+            </span>
+            <span className="text-[9px] opacity-70 ml-auto">
+              {completedCount}/{data.agents.length}
+            </span>
+          </div>
+          {/* Agent list */}
+          <div className="space-y-1">
+            {data.agents.map((agent, idx) => {
+              const agentBg =
+                agent.status === "completed"
+                  ? "bg-green-500 hover:bg-green-600"
+                  : agent.status === "error"
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-amber-500 hover:bg-amber-600"
+
+              return (
+                <div
+                  key={agent.agentId || idx}
+                  className={`px-1.5 py-1 rounded text-white text-[9px] font-mono truncate cursor-pointer transition-colors ${agentBg}`}
+                  onClick={() => data.onAgentClick(agent.partIndex)}
+                >
+                  <div className="flex items-center gap-1">
+                    <Bot className="h-2.5 w-2.5 flex-shrink-0" />
+                    <span className="truncate">{agent.description || "Agent"}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-sm">
+        <div className="text-xs">
+          <div className="font-semibold mb-1 flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5 text-purple-400" />
+            Team ({data.agents.length} agents)
+          </div>
+          <div className="text-muted-foreground">
+            Completed: {completedCount}/{data.agents.length}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-1 italic">
+            Click an agent to navigate
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  )
+})
+
 // Export node types for ReactFlow
 export const sessionFlowNodeTypes = {
   userMessage: UserMessageNode,
@@ -526,4 +619,5 @@ export const sessionFlowNodeTypes = {
   toolCall: ToolCallNode,
   agentSpawn: AgentSpawnNode,
   backgroundTask: BackgroundTaskNode,
+  teamGroup: TeamGroupNode,
 }
