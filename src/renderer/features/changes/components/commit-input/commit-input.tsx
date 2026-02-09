@@ -40,13 +40,14 @@ export function CommitInput({
 
 	// Use atomic commit when we have selected files (safer, single operation)
 	const atomicCommitMutation = trpc.changes.atomicCommit.useMutation({
-		onSuccess: () => {
+		onSuccess: async () => {
 			setSummary("");
 			setDescription("");
-			// Invalidate queries to force fresh fetches
-			utils.changes.getStatus.invalidate();
-			utils.changes.getSyncStatus.invalidate();
-			utils.changes.getGitHubStatus.invalidate();
+			// Refetch queries immediately to update UI
+			// Use refetch instead of invalidate to force immediate fetch
+			await utils.changes.getStatus.refetch();
+			await utils.changes.getSyncStatus.refetch();
+			await utils.changes.getGitHubStatus.refetch();
 			onRefresh();
 			onCommitSuccess?.();
 		},
@@ -58,12 +59,13 @@ export function CommitInput({
 
 	// Fallback to regular commit for staged changes
 	const commitMutation = trpc.changes.commit.useMutation({
-		onSuccess: () => {
+		onSuccess: async () => {
 			setSummary("");
 			setDescription("");
-			utils.changes.getStatus.invalidate();
-			utils.changes.getSyncStatus.invalidate();
-			utils.changes.getGitHubStatus.invalidate();
+			// Refetch queries immediately to update UI
+			await utils.changes.getStatus.refetch();
+			await utils.changes.getSyncStatus.refetch();
+			await utils.changes.getGitHubStatus.refetch();
 			onRefresh();
 			onCommitSuccess?.();
 		},

@@ -183,51 +183,56 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const isDefaultBranch = currentBranch === branchData?.defaultBranch;
 
 	const fetchMutation = trpc.changes.fetch.useMutation({
-		onSuccess: () => {
+		onSuccess: async () => {
 			setLastFetchTime(new Date());
 			refetchBranches();
-			utils.changes.getStatus.invalidate();
-			utils.changes.getSyncStatus.invalidate();
-			utils.changes.getGitHubStatus.invalidate();
+			// Refetch queries immediately to update UI
+			await utils.changes.getStatus.refetch();
+			await utils.changes.getSyncStatus.refetch();
+			await utils.changes.getGitHubStatus.refetch();
 			onRefresh?.();
 		},
 	});
 
 	const pushMutation = trpc.changes.push.useMutation({
-		onSuccess: () => {
-			utils.changes.getStatus.invalidate();
-			utils.changes.getSyncStatus.invalidate();
-			utils.changes.getGitHubStatus.invalidate();
+		onSuccess: async () => {
+			// Refetch queries immediately to update UI
+			await utils.changes.getStatus.refetch();
+			await utils.changes.getSyncStatus.refetch();
+			await utils.changes.getGitHubStatus.refetch();
 			onRefresh?.();
 		},
 		onError: (error) => toast.error(`Push failed: ${error.message}`),
 	});
 
 	const pullMutation = trpc.changes.pull.useMutation({
-		onSuccess: () => {
-			utils.changes.getStatus.invalidate();
-			utils.changes.getSyncStatus.invalidate();
-			utils.changes.getGitHubStatus.invalidate();
+		onSuccess: async () => {
+			// Refetch queries immediately to update UI
+			await utils.changes.getStatus.refetch();
+			await utils.changes.getSyncStatus.refetch();
+			await utils.changes.getGitHubStatus.refetch();
 			onRefresh?.();
 		},
 		onError: (error) => toast.error(`Pull failed: ${error.message}`),
 	});
 
 	const forcePushMutation = trpc.changes.forcePush.useMutation({
-		onSuccess: () => {
-			utils.changes.getStatus.invalidate();
-			utils.changes.getSyncStatus.invalidate();
-			utils.changes.getGitHubStatus.invalidate();
+		onSuccess: async () => {
+			// Refetch queries immediately to update UI
+			await utils.changes.getStatus.refetch();
+			await utils.changes.getSyncStatus.refetch();
+			await utils.changes.getGitHubStatus.refetch();
 			onRefresh?.();
 		},
 		onError: (error: { message: string }) => toast.error(`Force push failed: ${error.message}`),
 	});
 
 	const mergeFromDefaultMutation = trpc.changes.mergeFromDefault.useMutation({
-		onSuccess: () => {
-			utils.changes.getStatus.invalidate();
-			utils.changes.getSyncStatus.invalidate();
-			utils.changes.getGitHubStatus.invalidate();
+		onSuccess: async () => {
+			// Refetch queries immediately to update UI
+			await utils.changes.getStatus.refetch();
+			await utils.changes.getSyncStatus.refetch();
+			await utils.changes.getGitHubStatus.refetch();
 			onRefresh?.();
 		},
 		onError: (error: { message: string }) => toast.error(`Merge failed: ${error.message}`),
