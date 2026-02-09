@@ -746,8 +746,22 @@ export const viewingHistoryChatIdAtom = atom<string | null>(null)
 // ============================================
 
 /**
+ * Display mode for GSD planning panel
+ * "side-peek" = sidebar panel (persisted open state)
+ * "center-peek" = dialog/modal (runtime open state only)
+ * "full-page" = fullscreen view (runtime open state only)
+ */
+export const gsdDisplayModeAtom = atomWithStorage<"side-peek" | "center-peek" | "full-page">(
+  "agents:gsdDisplayMode",
+  "side-peek",
+  undefined,
+  { getOnInit: true },
+)
+
+/**
  * GSD planning sidebar open state (right sidebar in chat view)
  * Controls visibility of the GSD planning sidebar that shows STATE.md data
+ * Used for "side-peek" mode (persisted)
  */
 export const gsdChatSidebarOpenAtom = atomWithStorage<boolean>(
   "agents:gsdChatSidebarOpen",
@@ -757,7 +771,24 @@ export const gsdChatSidebarOpenAtom = atomWithStorage<boolean>(
 )
 
 /**
+ * Runtime-only open state for GSD dialog and fullscreen modes
+ * Not persisted - dialogs should not auto-open on page load
+ */
+export const gsdChatSidebarOpenRuntimeAtom = atom<boolean>(false)
+
+/**
  * Currently selected GSD document for viewing in dialog
  * null = no document selected
  */
 export const selectedGsdDocumentAtom = atom<string | null>(null)
+
+/**
+ * GSD sidebar width for resizable sidebar (persisted)
+ * Default width is 400px
+ */
+export const gsdSidebarWidthAtom = atomWithStorage<number>(
+  "agents:gsdSidebarWidth",
+  400,
+  undefined,
+  { getOnInit: true },
+)

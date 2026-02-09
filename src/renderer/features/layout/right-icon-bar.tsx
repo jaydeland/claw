@@ -2,7 +2,7 @@
 
 import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check, FileStack } from "lucide-react"
+import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check, FileStack, Rocket } from "lucide-react"
 import { IconSidePeek, IconCenterPeek, IconFullPage } from "../../components/ui/icons"
 import {
   Tooltip,
@@ -16,7 +16,15 @@ import {
   DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu"
 import { cn } from "../../lib/utils"
-import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily, diffViewDisplayModeAtom, type DiffViewDisplayMode } from "../agents/atoms"
+import {
+  selectedAgentChatIdAtom,
+  diffSidebarOpenAtomFamily,
+  diffViewDisplayModeAtom,
+  type DiffViewDisplayMode,
+  gsdChatSidebarOpenAtom,
+  gsdDisplayModeAtom,
+  gsdChatSidebarOpenRuntimeAtom,
+} from "../agents/atoms"
 import {
   sessionFlowDisplayModeAtom,
   sessionFlowSidebarOpenAtom,
@@ -141,6 +149,11 @@ export function RightIconBar({ className }: RightIconBarProps) {
   // Workflow panel state - global (for mutual exclusivity with Session Flow)
   const [workflowPanelOpen, setWorkflowPanelOpen] = useAtom(workflowPanelOpenAtom)
 
+  // GSD display mode and state
+  const [gsdDisplayMode, setGsdDisplayMode] = useAtom(gsdDisplayModeAtom)
+  const [isGsdOpen, setIsGsdOpen] = useAtom(gsdChatSidebarOpenAtom)
+  const [gsdRuntimeOpen, setGsdRuntimeOpen] = useAtom(gsdChatSidebarOpenRuntimeAtom)
+
   // Determine which session flow open state to use based on display mode
   const effectiveSessionFlowOpen = sessionFlowDisplayMode === "side-peek"
     ? isSessionFlowOpen
@@ -150,6 +163,9 @@ export function RightIconBar({ className }: RightIconBarProps) {
   const effectiveLoadedContextOpen = loadedContextDisplayMode === "side-peek"
     ? isLoadedContextOpen
     : loadedContextRuntimeOpen
+
+  // Determine which GSD open state to use based on display mode
+  const effectiveGsdOpen = gsdDisplayMode === "side-peek" ? isGsdOpen : gsdRuntimeOpen
 
   // Auto-close Changes panel when switching to non-git repos
   useEffect(() => {
@@ -164,6 +180,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
     if (!isDiffOpen) {
       setIsSessionFlowOpen(false)
       setIsLoadedContextOpen(false)
+      setIsGsdOpen(false)
     }
     setIsDiffOpen(!isDiffOpen)
   }
@@ -181,6 +198,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
         setWorkflowPanelOpen(null)
       }
       setIsLoadedContextOpen(false)
+      setIsGsdOpen(false)
     }
 
     // Toggle the appropriate state based on display mode
@@ -201,6 +219,7 @@ export function RightIconBar({ className }: RightIconBarProps) {
         setIsDiffOpen(false)
       }
       setIsSessionFlowOpen(false)
+      setIsGsdOpen(false)
       if (workflowPanelOpen !== null) {
         setWorkflowPanelOpen(null)
       }
@@ -211,6 +230,30 @@ export function RightIconBar({ className }: RightIconBarProps) {
       setIsLoadedContextOpen(!isLoadedContextOpen)
     } else {
       setLoadedContextRuntimeOpen(!loadedContextRuntimeOpen)
+    }
+  }
+
+  const handleGsdClick = () => {
+    // Toggle GSD based on display mode
+    const currentlyOpen = effectiveGsdOpen
+
+    if (!currentlyOpen) {
+      // Close other panels when opening GSD
+      if (selectedChatId) {
+        setIsDiffOpen(false)
+      }
+      setIsSessionFlowOpen(false)
+      setIsLoadedContextOpen(false)
+      if (workflowPanelOpen !== null) {
+        setWorkflowPanelOpen(null)
+      }
+    }
+
+    // Toggle the appropriate state based on display mode
+    if (gsdDisplayMode === "side-peek") {
+      setIsGsdOpen(!isGsdOpen)
+    } else {
+      setGsdRuntimeOpen(!gsdRuntimeOpen)
     }
   }
 
@@ -350,6 +393,41 @@ export function RightIconBar({ className }: RightIconBarProps) {
           </TooltipTrigger>
           <TooltipContent side="left">
             Session Context
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* GSD Planning Button - always show when chat is selected */}
+      {selectedChatId && (
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleGsdClick}
+              className={cn(
+                "flex items-center rounded-md transition-all duration-150 ease-out h-8",
+                isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
+                effectiveGsdOpen
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
+              )}
+              aria-label="GSD Planning"
+              aria-pressed={effectiveGsdOpen}
+            >
+              <Rocket className="h-4 w-4 flex-shrink-0" />
+              {isExpanded && (
+                <>
+                  <span className="text-sm flex-1 text-left">GSD Planning</span>
+                  <LayoutModeSelector
+                    mode={gsdDisplayMode}
+                    onModeChange={setGsdDisplayMode}
+                  />
+                </>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            GSD Planning
           </TooltipContent>
         </Tooltip>
       )}

@@ -97,9 +97,6 @@ import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
-import { gsdChatSidebarOpenAtom, selectedGsdDocumentAtom } from "../atoms"
-import { GsdChatSidebar } from "../components/gsd-chat-sidebar"
-import { GsdDocumentDialog } from "../components/gsd-document-dialog"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
 import {
   sessionFlowSidebarOpenAtom,
@@ -111,6 +108,8 @@ import { SessionFlowRenderer } from "../../session-flow/ui/session-flow-renderer
 import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
 import { LoadedContextRenderer } from "../../loaded-context/ui/loaded-context-renderer"
 import { FileContentDialog } from "../ui/file-content-dialog"
+import { selectedGsdDocumentAtom } from "../atoms"
+import { GsdRenderer } from "../components/gsd-renderer"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -1866,6 +1865,8 @@ const ChatViewInner = memo(function ChatViewInner({
   onRestoreWorkspace,
   existingPrUrl,
   isActive = true,
+  pendingGsdCommand,
+  onGsdCommandExecuted,
 }: {
   chat: Chat<any>
   subChatId: string
@@ -1888,6 +1889,8 @@ const ChatViewInner = memo(function ChatViewInner({
   onRestoreWorkspace?: () => void
   existingPrUrl?: string | null
   isActive?: boolean
+  pendingGsdCommand?: string | null
+  onGsdCommandExecuted?: () => void
 }) {
   const hasTriggeredRenameRef = useRef(false)
   const hasTriggeredAutoGenerateRef = useRef(false)
@@ -2090,8 +2093,7 @@ const ChatViewInner = memo(function ChatViewInner({
   const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
   const [, setSessionFlowBottomTab] = useAtom(sessionFlowBottomTabAtom)
 
-  // GSD Chat Sidebar state
-  const [isGsdSidebarOpen, setIsGsdSidebarOpen] = useAtom(gsdChatSidebarOpenAtom)
+  // GSD Document viewer state (for viewing planning docs)
   const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocumentAtom)
 
   // Tasks panel visibility (deprecated - now uses session flow Tasks tab)
@@ -3218,16 +3220,17 @@ const ChatViewInner = memo(function ChatViewInner({
     addToQueue,
   ])
 
-  // Handler for GSD sidebar commands - auto-sends the command to chat
-  const handleRunGsdCommand = useCallback(
-    (command: string) => {
+  // Effect to handle GSD commands from outer scope
+  useEffect(() => {
+    if (pendingGsdCommand && onGsdCommandExecuted) {
       // Set the command in editor
-      editorRef.current?.setValue(command)
+      editorRef.current?.setValue(pendingGsdCommand)
       // Trigger send immediately (no user input needed)
       setTimeout(() => handleSend(), 0)
-    },
-    [handleSend],
-  )
+      // Clear the pending command
+      onGsdCommandExecuted()
+    }
+  }, [pendingGsdCommand, onGsdCommandExecuted, handleSend])
 
   // Queue handlers for sending queued messages
   const handleSendFromQueue = useCallback(async (itemId: string) => {
@@ -3796,17 +3799,6 @@ const ChatViewInner = memo(function ChatViewInner({
     </SearchHighlightProvider>
 
       {/* Tasks Panel moved to Session Flow as a tab */}
-
-      {/* GSD Planning Sidebar - shows when enabled and project has .planning docs */}
-      {isGsdSidebarOpen && (
-        <>
-          <div className="w-px bg-border flex-shrink-0" />
-          <GsdChatSidebar
-            onRunCommand={handleRunGsdCommand}
-            onViewDocument={(path) => setSelectedGsdDoc(path)}
-          />
-        </>
-      )}
     </TextSelectionProvider>
   )
 })
@@ -3871,8 +3863,7 @@ export function ChatView({
   const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
     sessionFlowSidebarOpenAtom,
   )
-  // GSD Chat Sidebar state
-  const [isGsdSidebarOpen, setIsGsdSidebarOpen] = useAtom(gsdChatSidebarOpenAtom)
+  // GSD Document viewer state (for viewing planning docs)
   const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocumentAtom)
   const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)
   const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
@@ -3901,6 +3892,18 @@ export function ChatView({
       return newVal
     })
   }, [])
+
+  // Atom for GSD command queue (allows outer scope to send commands to inner ChatViewInner)
+  const [pendingGsdCommand, setPendingGsdCommand] = useState<string | null>(null)
+
+  // Handler for GSD sidebar commands - queues the command for ChatViewInner to execute
+  const handleRunGsdCommand = useCallback(
+    (command: string) => {
+      setPendingGsdCommand(command)
+    },
+    [],
+  )
+
   // Store raw diff content to pass to AgentDiffView (avoids double fetch)
   const [diffContent, setDiffContent] = useState<string | null>(null)
   // Store pre-parsed file diffs (avoids double parsing in AgentDiffView)
@@ -5729,35 +5732,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                       </span>
                     </PreviewSetupHoverCard>
                   ))}
-                {/* GSD Planning Sidebar Toggle - shows when project has .planning docs */}
-                {!isMobileFullscreen && originalProjectPath && (
-                  <Tooltip delayDuration={500}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setIsGsdSidebarOpen(!isGsdSidebarOpen)}
-                        className={cn(
-                          "h-6 w-6 p-0 hover:bg-foreground/10 transition-colors flex-shrink-0 rounded-md ml-2",
-                          isGsdSidebarOpen
-                            ? "text-primary bg-primary/10"
-                            : "text-foreground",
-                        )}
-                        aria-label={
-                          isGsdSidebarOpen ? "Close GSD sidebar" : "Open GSD sidebar"
-                        }
-                      >
-                        <Rocket className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {isGsdSidebarOpen ? "Close GSD sidebar" : "Open GSD sidebar"}
-                      <Kbd className="ml-1">⌘⇧G</Kbd>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                {/* Terminal and Session Flow buttons moved to right icon bar */}
+                {/* Terminal, Session Flow, and GSD buttons moved to right icon bar */}
                 {/* Restore Button - shows when viewing archived workspace (desktop only) */}
                 {!isMobileFullscreen && isArchived && (
                   <Tooltip delayDuration={500}>
@@ -5836,6 +5811,8 @@ Make sure to preserve all functionality from both branches when resolving confli
                       onRestoreWorkspace={handleRestoreWorkspace}
                       existingPrUrl={agentChat?.prUrl}
                       isActive={isActive}
+                      pendingGsdCommand={pendingGsdCommand}
+                      onGsdCommandExecuted={() => setPendingGsdCommand(null)}
                     />
                   </div>
                 )
@@ -6064,20 +6041,18 @@ Make sure to preserve all functionality from both branches when resolving confli
         {/* Loaded Context - unified renderer supporting side-peek, center-peek, and full-page modes */}
         <LoadedContextRenderer projectPath={worktreePath || originalProjectPath} />
 
+        {/* GSD Planning - unified renderer supporting side-peek, center-peek, and full-page modes */}
+        <GsdRenderer
+          onRunCommand={handleRunGsdCommand}
+          onViewDocument={(path) => setSelectedGsdDoc(path)}
+        />
+
         {/* Sub-agent output dialog - rendered here to stay mounted */}
         {/* This must be outside SessionFlowRenderer to prevent unmount issues when sidebar closes */}
         <SubAgentOutputDialog chatId={chatId} />
 
         {/* File content dialog - for viewing file contents from Read tool */}
         <FileContentDialog chatId={chatId} />
-
-        {/* GSD Document Viewer Dialog */}
-        <GsdDocumentDialog
-          isOpen={selectedGsdDoc !== null}
-          documentPath={selectedGsdDoc}
-          projectPath={originalProjectPath || worktreePath || null}
-          onClose={() => setSelectedGsdDoc(null)}
-        />
       </div>
     </div>
   )
