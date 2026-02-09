@@ -95,8 +95,8 @@ export function OllamaOnboardingPage() {
       </button>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 pt-10">
-        <div className="w-full max-w-[440px] space-y-6">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 pt-10 overflow-y-auto">
+        <div className="w-full max-w-[440px] space-y-6 py-8">
           {/* Header */}
           <div className="text-center space-y-4">
             <Logo className="w-10 h-10 mx-auto" />
