@@ -26,12 +26,10 @@ export function VirtualizedMessageGroup({
   const [isVisible, setIsVisible] = useState(true)
   const [measuredHeight, setMeasuredHeight] = useState<number | null>(null)
 
-  // If alwaysMounted, always render children
-  if (alwaysMounted) {
-    return <div ref={wrapperRef}>{children}</div>
-  }
-
+  // Set up observers - must be before any conditional returns (Rules of Hooks)
   useEffect(() => {
+    // Skip observer setup if alwaysMounted (no virtualization needed)
+    if (alwaysMounted) return
     const wrapper = wrapperRef.current
     if (!wrapper) return
 
@@ -65,13 +63,15 @@ export function VirtualizedMessageGroup({
       intersectionObserver.disconnect()
       resizeObserver.disconnect()
     }
-  }, [])
+  }, [alwaysMounted])
 
-  // If not visible and we have a measured height, render placeholder
-  if (!isVisible && measuredHeight !== null) {
+  // Render logic:
+  // 1. If alwaysMounted: always render children (no virtualization)
+  // 2. If not visible and have measured height: render placeholder to preserve scroll position
+  // 3. Otherwise: render children
+  if (!alwaysMounted && !isVisible && measuredHeight !== null) {
     return <div ref={wrapperRef} style={{ height: measuredHeight }} />
   }
 
-  // Render children (first render, or when visible)
   return <div ref={wrapperRef}>{children}</div>
 }
