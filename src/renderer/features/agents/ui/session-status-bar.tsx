@@ -39,7 +39,7 @@ import type { AgentQueueItem } from "../lib/queue-utils"
 import { RenderFileMentions } from "../mentions/render-file-mentions"
 
 // Section types - now includes queue
-type SectionType = 'queue' | 'changes' | 'tasks' | 'agents' | 'todos' | null
+type SectionType = 'queue' | 'changes' | 'agents' | 'todos' | null
 
 // Persistent expanded section atom - only one section can be expanded at a time
 const statusBarSectionAtom = atomWithStorage<SectionType>(
@@ -582,12 +582,6 @@ export const SessionStatusBar = memo(function SessionStatusBar({
             onClick={() => handleSectionClick('changes')}
           />
           <SectionButton
-            label="Tasks"
-            count={tasksTotal}
-            isActive={expandedSection === 'tasks'}
-            onClick={() => handleSectionClick('tasks')}
-          />
-          <SectionButton
             label="Agents"
             count={agentsTotal}
             countDisplay={`${agentsRunning}/${agentsComplete}`}
@@ -707,50 +701,6 @@ export const SessionStatusBar = memo(function SessionStatusBar({
                 )
               })}
 
-              {/* Tasks list */}
-              {expandedSection === 'tasks' && tasks?.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => handleTaskClick(task)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      handleTaskClick(task)
-                    }
-                  }}
-                >
-                  <TaskStatusIcon status={task.status} />
-                  <span className="truncate flex-1 font-mono text-[11px]">
-                    {task.command || `Task ${task.id.slice(0, 8)}`}
-                  </span>
-                  <span className={cn(
-                    "text-[10px] capitalize px-1.5 py-0.5 rounded",
-                    task.status === "running" && "bg-primary/10 text-primary",
-                    task.status === "completed" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
-                    task.status === "failed" && "bg-destructive/10 text-destructive"
-                  )}>
-                    {task.status}
-                  </span>
-                  {task.status === "running" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        killMutation.mutate({ taskId: task.id })
-                      }}
-                      title="Stop task"
-                    >
-                      <Square className="h-2.5 w-2.5" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-
               {/* Agents list */}
               {expandedSection === 'agents' && subAgents.map((agent) => (
                 <div
@@ -816,9 +766,6 @@ export const SessionStatusBar = memo(function SessionStatusBar({
               )}
               {expandedSection === 'changes' && uncommittedFiles.length === 0 && (
                 <div className="px-3 py-2 text-xs text-muted-foreground">No uncommitted changes</div>
-              )}
-              {expandedSection === 'tasks' && (!tasks || tasks.length === 0) && (
-                <div className="px-3 py-2 text-xs text-muted-foreground">No background tasks</div>
               )}
               {expandedSection === 'agents' && subAgents.length === 0 && (
                 <div className="px-3 py-2 text-xs text-muted-foreground">No sub-agents</div>

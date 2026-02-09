@@ -57,10 +57,11 @@ const CLAUDE_MODELS = [
 
 // Fallback models if API fetch fails
 const OLLAMA_FALLBACK_MODELS = [
-  { id: "qwen3-coder", name: "Qwen 3 Coder", description: "Strong coding performance" },
+  { id: "kimi-k2.5", name: "Kimi K2.5", description: "Strong reasoning and coding" },
+  { id: "deepseek-v3.2", name: "DeepSeek V3.2", description: "General purpose" },
   { id: "glm-4.7", name: "GLM 4.7", description: "General purpose" },
-  { id: "gpt-oss:20b", name: "GPT-OSS 20B", description: "20B parameter model" },
   { id: "gpt-oss:120b", name: "GPT-OSS 120B", description: "120B parameter model" },
+  { id: "qwen3-coder", name: "Qwen 3 Coder", description: "Strong coding performance" },
 ]
 
 const BEDROCK_MODELS = [
