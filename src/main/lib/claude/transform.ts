@@ -550,6 +550,7 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
       let outputTokens: number | undefined = msg.usage?.output_tokens ?? (msg.usage as any)?.outputTokens
 
       // Always try modelUsage if it exists - it often has more accurate data
+      let contextWindow: number | undefined
       if (msg.modelUsage && Object.keys(msg.modelUsage).length > 0) {
         let totalInput = 0
         let totalOutput = 0
@@ -558,6 +559,10 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
           if (modelStats) {
             totalInput += modelStats.inputTokens ?? 0
             totalOutput += modelStats.outputTokens ?? 0
+            // Capture context window from the first model (all models in a turn should have same window)
+            if (contextWindow === undefined && modelStats.contextWindow) {
+              contextWindow = modelStats.contextWindow
+            }
           }
         }
         // Use modelUsage values if they're non-zero, or if usage values are missing/zero
@@ -595,6 +600,8 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
         finalTextId: lastTextId || undefined,
         // Why the model stopped (end_turn, max_tokens, tool_use, etc.)
         stopReason: msg.stop_reason ?? null,
+        // Context window size from model (e.g., 200000 for kimi-k2.5)
+        contextWindow,
       }
       yield { type: "message-metadata", messageMetadata: metadata }
       yield { type: "finish-step" }

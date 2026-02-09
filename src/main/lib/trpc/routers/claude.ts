@@ -897,7 +897,9 @@ export const claudeRouter = router({
               console.log(`[claude] Custom config: ${JSON.stringify(redactedConfig)}`)
             }
 
-            const resolvedModel = finalCustomConfig?.model || input.model
+            // For Ollama/custom API: prioritize UI-selected model over stored config model
+            // This allows users to switch models per-chat from the dropdown
+            const resolvedModel = input.model || finalCustomConfig?.model
 
             // Check if this is an Opus Team request (from UI selection)
             // The UI passes the original model ID before mapping, so we check input.model

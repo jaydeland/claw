@@ -104,4 +104,5 @@ export type MessageMetadata = {
   resultSubtype?: string
   finalTextId?: string
   stopReason?: string | null // Why the model stopped (end_turn, max_tokens, tool_use, etc.)
+  contextWindow?: number // Context window size from model (e.g., 200000 for kimi-k2.5)
 }

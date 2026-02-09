@@ -90,6 +90,7 @@ export interface StoredMessageMetadata {
   resultSubtype?: string
   finalTextId?: string
   sdkMessageUuid?: string
+  contextWindow?: number // Context window size from model (e.g., 200000 for kimi-k2.5)
 }
 
 // Atom family keyed by "subChatId:messageId"
