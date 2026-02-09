@@ -335,6 +335,10 @@ export async function queryBackgroundSession(
 
       // Collect text content
       if (msgAny.type === "assistant" && msgAny.message?.content) {
+        if (!Array.isArray(msgAny.message.content)) {
+          console.warn("[BackgroundSession] Expected content to be array, got:", typeof msgAny.message.content)
+          continue
+        }
         for (const block of msgAny.message.content) {
           if (block.type === "text") {
             responseText += block.text
@@ -703,6 +707,10 @@ Start by reading the file.`
 
       // Collect text response
       if (msgAny.type === "assistant" && msgAny.message?.content) {
+        if (!Array.isArray(msgAny.message.content)) {
+          console.warn("[BackgroundSession] Expected content to be array, got:", typeof msgAny.message.content)
+          continue
+        }
         for (const block of msgAny.message.content) {
           if (block.type === "text") {
             responseText += block.text

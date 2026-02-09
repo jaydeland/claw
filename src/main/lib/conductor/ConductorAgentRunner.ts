@@ -1022,9 +1022,13 @@ class ConductorAgentRunner extends EventEmitter {
       // Extract text content from message
       let textContent = ""
       if (msg.message?.content) {
-        for (const block of msg.message.content) {
-          if (block.type === "text" && block.text) {
-            textContent += block.text
+        if (!Array.isArray(msg.message.content)) {
+          console.warn("[ConductorAgentRunner] Expected content to be array, got:", typeof msg.message.content)
+        } else {
+          for (const block of msg.message.content) {
+            if (block.type === "text" && block.text) {
+              textContent += block.text
+            }
           }
         }
       }
@@ -1062,8 +1066,11 @@ class ConductorAgentRunner extends EventEmitter {
 
       // Track tool calls and log them
       if (msg.message?.content) {
-        for (const block of msg.message.content) {
-          if (block.type === "tool_use") {
+        if (!Array.isArray(msg.message.content)) {
+          console.warn("[ConductorAgentRunner] Expected content to be array, got:", typeof msg.message.content)
+        } else {
+          for (const block of msg.message.content) {
+            if (block.type === "tool_use") {
             // Update metrics
             const session = this.activeSessions.get(jobId)
             if (session) {
@@ -1094,6 +1101,7 @@ class ConductorAgentRunner extends EventEmitter {
               await this.checkFrequencyBasedCheckpoint(jobId, sessionId)
             }
           }
+        }
         }
       }
     } catch (error) {
