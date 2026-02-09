@@ -59,26 +59,26 @@ export function TrafficLights({
       onMouseLeave={handleMouseLeave}
       data-sidebar-content
     >
-      {/* Muted traffic lights - fade out on hover as native buttons appear */}
+      {/* Muted traffic lights - always visible for alignment debugging */}
       <div className="flex items-center gap-2" data-sidebar-content>
         <div
           className={cn(
             "w-3 h-3 rounded-full border transition-opacity duration-75",
-            isHovered ? "opacity-0 border-transparent" : "opacity-100 border-foreground/20"
+            "opacity-100 border-foreground/30"
           )}
           aria-hidden="true"
         />
         <div
           className={cn(
             "w-3 h-3 rounded-full border transition-opacity duration-75",
-            isHovered ? "opacity-0 border-transparent" : "opacity-100 border-foreground/20"
+            "opacity-100 border-foreground/30"
           )}
           aria-hidden="true"
         />
         <div
           className={cn(
             "w-3 h-3 rounded-full border transition-opacity duration-75",
-            isHovered ? "opacity-0 border-transparent" : "opacity-100 border-foreground/20"
+            "opacity-100 border-foreground/30"
           )}
           aria-hidden="true"
         />
