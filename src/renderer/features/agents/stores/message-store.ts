@@ -582,6 +582,77 @@ export const messageTokenDataAtom = atom((get) => {
 })
 
 // ============================================================================
+// SESSION TOTALS - For Session Context panel
+// ============================================================================
+// Aggregates cost, tokens, and context window across all messages in session
+// Used by loaded-context-panel to display session summary
+// ============================================================================
+
+export interface SessionTotals {
+  totalCost: number
+  totalInput: number
+  totalOutput: number
+  totalTokens: number
+  contextWindow: number
+  percentUsed: number
+}
+
+const sessionTotalsCacheByChat = new Map<string, SessionTotals>()
+
+export const sessionTotalsAtom = atom((get) => {
+  const ids = get(messageIdsAtom)
+  const subChatId = get(currentSubChatIdAtom)
+
+  // Get the last message metadata to check for updates
+  const lastId = ids[ids.length - 1]
+  const lastMetadataKey = lastId ? `${subChatId}:${lastId}` : null
+  const lastMetadata = lastMetadataKey ? get(messageMetadataAtomFamily(lastMetadataKey)) : null
+
+  const cached = sessionTotalsCacheByChat.get(subChatId)
+
+  // Simple cache invalidation: if message count changed or last metadata changed, recalculate
+  // We use lastMetadata as a proxy for "something changed in the latest message"
+  if (cached && cached.messageCount === ids.length) {
+    return cached
+  }
+
+  let totalCost = 0
+  let totalInput = 0
+  let totalOutput = 0
+  let contextWindow = 0
+
+  for (const id of ids) {
+    const metadataKey = `${subChatId}:${id}`
+    const metadata = get(messageMetadataAtomFamily(metadataKey))
+    if (metadata) {
+      totalCost += metadata.totalCostUsd || 0
+      totalInput += metadata.inputTokens || 0
+      totalOutput += metadata.outputTokens || 0
+      // Use the most recent context window (models can change mid-session)
+      if (metadata.contextWindow) {
+        contextWindow = metadata.contextWindow
+      }
+    }
+  }
+
+  const totalTokens = totalInput + totalOutput
+  const percentUsed = contextWindow > 0 ? (totalTokens / contextWindow) * 100 : 0
+
+  const newTotals: SessionTotals & { messageCount: number } = {
+    totalCost,
+    totalInput,
+    totalOutput,
+    totalTokens,
+    contextWindow,
+    percentUsed,
+    messageCount: ids.length,
+  }
+
+  sessionTotalsCacheByChat.set(subChatId, newTotals)
+  return newTotals
+})
+
+// ============================================================================
 // SYNC WITH STATUS - Main sync function
 // ============================================================================
 // This is called from useChat to sync messages to the store.
