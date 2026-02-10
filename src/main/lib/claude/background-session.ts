@@ -566,6 +566,294 @@ export async function closeBackgroundSession(): Promise<void> {
 }
 
 /**
+ * Active Task tracking for background operations
+ */
+const activeTasks = new Map<string, {
+  abortController: AbortController
+  startTime: Date
+  prompt: string
+  type: string
+}>()
+
+/**
+ * Execute a Task tool via the background session to spawn a subagent
+ *
+ * This allows spawning parallel subagents for complex operations like codebase analysis.
+ * Each task runs independently and can be monitored via its taskCallId.
+ *
+ * @param prompt - The prompt/instructions for the subagent
+ * @param options - Task configuration options
+ * @returns Task info with callId for tracking
+ */
+export async function executeBackgroundTask(
+  prompt: string,
+  options?: {
+    model?: "sonnet" | "haiku"
+    subagentType?: string
+    timeout?: number
+    signal?: AbortSignal
+  }
+): Promise<{ success: boolean; callId?: string; error?: string }> {
+  if (sessionState.status !== "ready") {
+    return {
+      success: false,
+      error: `Background session not ready (status: ${sessionState.status})`,
+    }
+  }
+
+  try {
+    const claudeQuery = await getClaudeQuery()
+    const claudeCodeToken = getClaudeCodeToken()
+    const claudeEnv = buildClaudeEnv()
+
+    const finalEnv: Record<string, string> = {
+      ...claudeEnv,
+      ...(claudeCodeToken && {
+        CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
+      }),
+      ...(backgroundConfigDir && {
+        CLAUDE_CONFIG_DIR: backgroundConfigDir,
+      }),
+    }
+
+    const claudeBinaryPath = getBundledClaudeBinaryPath()
+    const model = options?.model || "sonnet"
+
+    // Create abort controller for this task
+    const taskAbortController = new AbortController()
+    const callId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+
+    // Track the task
+    activeTasks.set(callId, {
+      abortController: taskAbortController,
+      startTime: new Date(),
+      prompt,
+      type: options?.subagentType || "general",
+    })
+
+    // Link external abort signal if provided
+    if (options?.signal) {
+      options.signal.addEventListener("abort", () => {
+        taskAbortController.abort()
+        activeTasks.delete(callId)
+      })
+    }
+
+    // Build the Task tool invocation
+    const taskPrompt = `Use the Task tool to spawn a subagent for this work:
+
+${prompt}
+
+Use subagent type: ${options?.subagentType || "general"}
+
+After the task completes, return ONLY a JSON object with:
+{
+  "success": true|false,
+  "result": <the subagent's output>,
+  "error": <error message if any>
+}`
+
+    const queryOptions = {
+      prompt: taskPrompt,
+      options: {
+        abortController: taskAbortController,
+        cwd: app.getPath("userData"),
+        systemPrompt: {
+          type: "preset" as const,
+          preset: "claude_code" as const,
+        },
+        env: finalEnv,
+        permissionMode: "bypassPermissions" as const,
+        allowDangerouslySkipPermissions: true,
+        pathToClaudeCodeExecutable: claudeBinaryPath,
+        ...(sessionState.sessionId && {
+          resume: sessionState.sessionId,
+          continue: true,
+        }),
+        model,
+        persistSession: false,
+      },
+    }
+
+    // Execute the task (non-blocking, we track via the callId)
+    // The task runs in the background and we poll for results
+    const stream = claudeQuery(queryOptions)
+
+    // Start processing the stream in the background
+    processTaskStream(callId, stream)
+
+    sessionState.requestCount++
+    sessionState.lastUsedTime = new Date()
+
+    return { success: true, callId }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error("[background-session] Task execution failed:", errorMessage)
+    return { success: false, error: errorMessage }
+  }
+}
+
+/**
+ * Process a task stream in the background
+ * Collects results and stores them for retrieval
+ */
+async function processTaskStream(
+  callId: string,
+  stream: AsyncIterable<unknown>
+): Promise<void> {
+  let responseText = ""
+  let toolOutput: string | null = null
+
+  try {
+    for await (const msg of stream) {
+      const msgAny = msg as any
+
+      // Update sessionId
+      if (msgAny.session_id) {
+        sessionState.sessionId = msgAny.session_id
+      }
+
+      // Check for task completion with output
+      if (msgAny.type === "tool_output" && msgAny.tool_name === "Task") {
+        toolOutput = msgAny.output || msgAny.result
+      }
+
+      // Collect text content
+      if (msgAny.type === "assistant" && msgAny.message?.content) {
+        if (Array.isArray(msgAny.message.content)) {
+          for (const block of msgAny.message.content) {
+            if (block.type === "text") {
+              responseText += block.text
+            }
+          }
+        }
+      }
+
+      // Check for result message
+      if (msgAny.type === "result") {
+        if (msgAny.result) {
+          responseText = msgAny.result
+        }
+        break
+      }
+    }
+
+    // Store the final result
+    const task = activeTasks.get(callId)
+    if (task) {
+      // Parse JSON result if present
+      let parsedResult: any = null
+      try {
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          parsedResult = JSON.parse(jsonMatch[0])
+        }
+      } catch {
+        // Not valid JSON, store as text
+      }
+
+      // Store result for retrieval
+      taskResults.set(callId, {
+        text: responseText,
+        parsed: parsedResult,
+        toolOutput: toolOutput || undefined,
+        completedAt: new Date(),
+        success: true,
+      })
+    }
+
+    console.log(`[background-session] Task ${callId.slice(0, 16)}... completed`)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error(`[background-session] Task ${callId} failed:`, errorMessage)
+
+    taskResults.set(callId, {
+      text: responseText,
+      completedAt: new Date(),
+      success: false,
+      error: errorMessage,
+    })
+  } finally {
+    activeTasks.delete(callId)
+  }
+}
+
+/**
+ * Stored task results for retrieval
+ */
+const taskResults = new Map<string, {
+  text: string
+  parsed?: any
+  toolOutput?: string
+  completedAt: Date
+  success: boolean
+  error?: string
+}>()
+
+/**
+ * Get the result of a completed background task
+ *
+ * @param callId - The task call ID from executeBackgroundTask
+ * @returns The task result if completed, null if still running
+ */
+export function getBackgroundTaskResult(
+  callId: string
+): {
+  text: string
+  parsed?: any
+  toolOutput?: string
+  completedAt: Date
+  success: boolean
+  error?: string
+} | null {
+  return taskResults.get(callId) || null
+}
+
+/**
+ * Check if a background task is still running
+ *
+ * @param callId - The task call ID
+ * @returns true if the task is still active
+ */
+export function isBackgroundTaskRunning(callId: string): boolean {
+  return activeTasks.has(callId)
+}
+
+/**
+ * Cancel a running background task
+ *
+ * @param callId - The task call ID
+ * @returns true if the task was cancelled
+ */
+export function cancelBackgroundTask(callId: string): boolean {
+  const task = activeTasks.get(callId)
+  if (task) {
+    task.abortController.abort()
+    activeTasks.delete(callId)
+    return true
+  }
+  return false
+}
+
+/**
+ * Get list of active background tasks
+ */
+export function getActiveBackgroundTasks(): Array<{
+  callId: string
+  startTime: Date
+  type: string
+  duration: number
+}> {
+  const now = Date.now()
+  return Array.from(activeTasks.entries()).map(([callId, task]) => ({
+    callId,
+    startTime: task.startTime,
+    type: task.type,
+    duration: now - task.startTime.getTime(),
+  }))
+}
+
+/**
  * Reset the background session (for debugging/testing)
  *
  * Closes the current session and resets state to allow re-initialization.
@@ -582,6 +870,14 @@ export async function resetBackgroundSession(): Promise<void> {
     errorMessage: null,
     initTime: null,
   }
+
+  // Clear all active tasks and results
+  for (const [callId, task] of activeTasks) {
+    task.abortController.abort()
+    console.log(`[background-session] Cancelled task ${callId} during reset`)
+  }
+  activeTasks.clear()
+  taskResults.clear()
 
   backgroundConfigDir = null
   console.log("[background-session] Reset complete")

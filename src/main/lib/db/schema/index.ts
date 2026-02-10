@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core"
 import { relations } from "drizzle-orm"
 import { createId } from "../utils"
 
@@ -282,6 +282,88 @@ export const devspaceStartedProcesses = sqliteTable("devspace_started_processes"
 // Re-export conductor tables from separate file
 export * from "./conductor"
 
+// ============ ANALYSIS DIAGRAMS ============
+// Stores generated React Flow diagram data for project analysis
+// Types: "codeflow" | "db" | "architecture" | "build"
+export const analysisDiagrams = sqliteTable("analysis_diagrams", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // "codeflow" | "db" | "architecture" | "build"
+  status: text("status").notNull().default("pending"), // "pending" | "generating" | "complete" | "error"
+  // React Flow data stored as JSON
+  nodes: text("nodes").notNull().default("[]"), // JSON array of React Flow nodes
+  edges: text("edges").notNull().default("[]"), // JSON array of React Flow edges
+  viewport: text("viewport"), // JSON { x, y, zoom } for saved viewport position
+  // Analysis metadata
+  summary: text("summary"), // Human-readable summary of the analysis
+  stats: text("stats").notNull().default("{}"), // JSON { fileCount, lineCount, etc. }
+  errorMessage: text("error_message"), // Error details if generation failed
+  // Source tracking for updates
+  lastCommitHash: text("last_commit_hash"), // Git commit hash when diagram was generated
+  fileHash: text("file_hash"), // Hash of analyzed files for change detection
+  // Timestamps
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+}, (table) => ({
+  // Indexes for common query patterns
+  projectIdIdx: index("analysis_diagrams_project_id_idx").on(table.projectId),
+  typeIdx: index("analysis_diagrams_type_idx").on(table.type),
+  projectTypeIdx: index("analysis_diagrams_project_type_idx").on(table.projectId, table.type),
+  statusIdx: index("analysis_diagrams_status_idx").on(table.status),
+}))
+
+export const analysisDiagramsRelations = relations(analysisDiagrams, ({ one }) => ({
+  project: one(projects, {
+    fields: [analysisDiagrams.projectId],
+    references: [projects.id],
+  }),
+}))
+
+// Analysis job tracking - tracks in-progress analysis tasks
+export const analysisJobs = sqliteTable("analysis_jobs", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  diagramId: text("diagram_id")
+    .notNull()
+    .references(() => analysisDiagrams.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // "codeflow" | "db" | "architecture" | "build"
+  status: text("status").notNull().default("running"), // "running" | "completed" | "failed"
+  taskCallId: text("task_call_id"), // Tool call ID from Task tool for tracking
+  log: text("log").notNull().default("[]"), // JSON array of log entries
+  errorMessage: text("error_message"),
+  startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+}, (table) => ({
+  projectIdIdx: index("analysis_jobs_project_id_idx").on(table.projectId),
+  diagramIdIdx: index("analysis_jobs_diagram_id_idx").on(table.diagramId),
+  statusIdx: index("analysis_jobs_status_idx").on(table.status),
+}))
+
+export const analysisJobsRelations = relations(analysisJobs, ({ one }) => ({
+  project: one(projects, {
+    fields: [analysisJobs.projectId],
+    references: [projects.id],
+  }),
+  diagram: one(analysisDiagrams, {
+    fields: [analysisJobs.diagramId],
+    references: [analysisDiagrams.id],
+  }),
+}))
+
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
 
@@ -309,3 +391,9 @@ export type DevspaceStartedProcess = typeof devspaceStartedProcesses.$inferSelec
 export type NewDevspaceStartedProcess = typeof devspaceStartedProcesses.$inferInsert
 export type McpToolCache = typeof mcpToolCache.$inferSelect
 export type NewMcpToolCache = typeof mcpToolCache.$inferInsert
+
+// Analysis diagram types
+export type AnalysisDiagram = typeof analysisDiagrams.$inferSelect
+export type NewAnalysisDiagram = typeof analysisDiagrams.$inferInsert
+export type AnalysisJob = typeof analysisJobs.$inferSelect
+export type NewAnalysisJob = typeof analysisJobs.$inferInsert
