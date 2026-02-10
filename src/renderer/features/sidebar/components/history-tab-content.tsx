@@ -133,7 +133,7 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
                   className={cn(
                     "h-4 w-4 flex-shrink-0 transition-colors duration-75",
                     isSelected
-                      ? "text-foreground"
+                      ? "text-primary"
                       : "text-muted-foreground",
                   )}
                 />
@@ -143,7 +143,7 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
                 className={cn(
                   "h-4 w-4 flex-shrink-0 transition-colors duration-75",
                   isSelected
-                    ? "text-foreground"
+                    ? "text-primary"
                     : "text-muted-foreground",
                 )}
               />

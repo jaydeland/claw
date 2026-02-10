@@ -135,7 +135,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
                   isCollapsed && isIconBarExpanded ? "w-full justify-start px-3 gap-3" : "justify-center",
                   isCollapsed && !isIconBarExpanded && "w-8",
                   isActive
-                    ? "bg-foreground/10 text-foreground"
+                    ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
                 )}
                 aria-label={tab.label}

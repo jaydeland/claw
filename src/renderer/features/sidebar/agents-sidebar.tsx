@@ -166,7 +166,7 @@ const ChatIcon = React.memo(function ChatIcon({
       <GitHubLogo
         className={cn(
           "h-4 w-4 flex-shrink-0 transition-colors",
-          isSelected ? "text-foreground" : "text-muted-foreground",
+          isSelected ? "text-primary" : "text-muted-foreground",
         )}
       />
     )
