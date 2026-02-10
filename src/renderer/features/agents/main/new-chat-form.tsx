@@ -370,8 +370,8 @@ export function NewChatForm({
     if (lastMatch) return lastMatch
 
     // For Ollama, use the configured default model
-    if (activeProvider === "ollama" && customConfig.model) {
-      const defaultMatch = availableModels.models.find((m) => m.id === customConfig.model)
+    if (activeProvider === "ollama" && customClaudeConfig.model) {
+      const defaultMatch = availableModels.models.find((m) => m.id === customClaudeConfig.model)
       if (defaultMatch) return defaultMatch
     }
 
