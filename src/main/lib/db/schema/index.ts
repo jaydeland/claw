@@ -278,9 +278,6 @@ export const devspaceStartedProcesses = sqliteTable("devspace_started_processes"
   ),
 })
 
-// ============ CONDUCTOR ============
-// Re-export conductor tables from separate file
-export * from "./conductor"
 
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"

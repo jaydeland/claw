@@ -2,7 +2,6 @@ import { useAtom } from "jotai"
 import { useState, useEffect } from "react"
 import {
   historyEnabledAtom,
-  conductorEnabledAtom,
 } from "../../../lib/atoms"
 import { Switch } from "../../ui/switch"
 
@@ -26,7 +25,6 @@ function useIsNarrowScreen(): boolean {
 export function AgentsBetaTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [historyEnabled, setHistoryEnabled] = useAtom(historyEnabledAtom)
-  const [conductorEnabled, setConductorEnabled] = useAtom(conductorEnabledAtom)
 
   return (
     <div className="p-6 space-y-6">
@@ -56,22 +54,6 @@ export function AgentsBetaTab() {
             <Switch
               checked={historyEnabled}
               onCheckedChange={setHistoryEnabled}
-            />
-          </div>
-
-          {/* Conductor Toggle */}
-          <div className="flex items-start justify-between pt-4 border-t border-border">
-            <div className="flex flex-col space-y-1">
-              <span className="text-sm font-medium text-foreground">
-                Conductor
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Enable job management and GSD framework integration.
-              </span>
-            </div>
-            <Switch
-              checked={conductorEnabled}
-              onCheckedChange={setConductorEnabled}
             />
           </div>
 

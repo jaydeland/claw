@@ -37,7 +37,6 @@ import {
   McpsTabContent,
   TerminalTabContent,
 } from "../sidebar/components"
-import { ConductorSidebar } from "../conductor/ui/conductor-sidebar"
 import { RightIconBar } from "./right-icon-bar"
 import { Button } from "../../components/ui/button"
 import { SettingsIcon } from "../../components/ui/icons"
@@ -293,8 +292,6 @@ export function AgentsLayout() {
                 <SkillsTabContent className="h-full" />
               ) : selectedSidebarTab === "mcps" ? (
                 <McpsTabContent className="h-full" />
-              ) : selectedSidebarTab === "conductor" ? (
-                <ConductorSidebar className="h-full" />
               ) : null}
             </div>
           )}

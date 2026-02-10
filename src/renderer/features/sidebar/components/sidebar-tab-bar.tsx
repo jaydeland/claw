@@ -13,7 +13,6 @@ import {
   ChevronsRight,
   FolderOpen,
   Rocket,
-  Network,
 } from "lucide-react"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
 import {
@@ -27,7 +26,6 @@ import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { selectedGsdCategoryAtom } from "../../gsd/atoms"
-import { conductorEnabledAtom } from "../../../lib/atoms"
 
 interface TabItem {
   id: SidebarTab
@@ -41,7 +39,6 @@ const tabs: TabItem[] = [
   { id: "clusters", label: "Clusters", icon: Server },
   { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
   { id: "commands", label: "Commands", icon: Terminal },
-  { id: "conductor", label: "Conductor", icon: Network },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
@@ -57,19 +54,12 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
   const [selectedTab, setSelectedTab] = useAtom(selectedSidebarTabAtom)
   const [isContentCollapsed, setIsContentCollapsed] = useAtom(sidebarContentCollapsedAtom)
   const [isIconBarExpanded, setIsIconBarExpanded] = React.useState(false)
-  const [conductorEnabled] = useAtom(conductorEnabledAtom)
 
   // Category atoms that control main content view - need to clear when switching tabs
   const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const setMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const setGsdCategory = useSetAtom(selectedGsdCategoryAtom)
-
-  // Filter tabs based on beta flags
-  const visibleTabs = tabs.filter(tab => {
-    if (tab.id === "conductor") return conductorEnabled
-    return true
-  })
 
   const handleTabClick = (tabId: SidebarTab) => {
     if (selectedTab === tabId) {
@@ -129,7 +119,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
         </Tooltip>
       )}
 
-      {visibleTabs.map((tab) => {
+      {tabs.map((tab) => {
         const Icon = tab.icon
         const isActive = selectedTab === tab.id
 
