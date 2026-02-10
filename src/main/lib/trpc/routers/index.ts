@@ -22,6 +22,7 @@ import { settingsExportRouter } from "./settings-export"
 import { gsdRouter } from "./gsd"
 import { devspaceRouter } from "./devspace"
 import { loadedContextRouter } from "./loaded-context"
+import { analyzerRouter } from "./analyzer"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -54,6 +55,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     gsd: gsdRouter,
     devspace: devspaceRouter,
     loadedContext: loadedContextRouter,
+    analyzer: analyzerRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

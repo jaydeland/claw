@@ -112,6 +112,7 @@ import { gsdChatSidebarOpenAtom, selectedGsdDocumentAtom } from "../atoms"
 import { GsdChatSidebar } from "../components/gsd-chat-sidebar"
 import { GsdDocumentDialog } from "../components/gsd-document-dialog"
 import { GsdRenderer } from "../components/gsd-renderer"
+import { AnalyzeRenderer } from "../../analyze/ui/analyze-renderer"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -6045,6 +6046,9 @@ Make sure to preserve all functionality from both branches when resolving confli
           onRunCommand={handleRunGsdCommand}
           onViewDocument={(path) => setSelectedGsdDoc(path)}
         />
+
+        {/* Analyze - unified renderer supporting side-peek, center-peek, and full-page modes */}
+        <AnalyzeRenderer projectId={chatData?.projectId || ""} />
 
         {/* Sub-agent output dialog - rendered here to stay mounted */}
         {/* This must be outside SessionFlowRenderer to prevent unmount issues when sidebar closes */}
