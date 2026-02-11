@@ -1396,4 +1396,270 @@ export const mcpRouter = router({
         }
       }
     }),
+
+  // ============ SERVER CRUD OPERATIONS ============
+
+  /**
+   * Add a new MCP server to a config file
+   * Creates the config file if it doesn't exist
+   */
+  addServer: publicProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/, "Server name must only contain letters, numbers, underscores, and hyphens"),
+        config: z.object({
+          command: z.string().optional(),
+          args: z.array(z.string()).optional(),
+          env: z.record(z.string(), z.string()).optional(),
+          disabled: z.boolean().optional(),
+          autoApprove: z.array(z.string()).optional(),
+          type: z.enum(["http", "sse"]).optional(),
+          url: z.string().url().optional(),
+          headers: z.record(z.string(), z.string()).optional(),
+        }),
+        configFile: z.enum(["project", "user"]).default("user"),
+        projectPath: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Validate config based on type
+        if (input.config.type === "http" || input.config.type === "sse") {
+          if (!input.config.url) {
+            throw new Error("URL is required for HTTP/SSE servers")
+          }
+        } else {
+          if (!input.config.command) {
+            throw new Error("Command is required for stdio servers")
+          }
+        }
+
+        // Determine config file path
+        const configPath = input.configFile === "project" && input.projectPath
+          ? path.join(input.projectPath, ".claude", "mcp.json")
+          : path.join(os.homedir(), ".claude", "mcp.json")
+
+        // Check if server name already exists in consolidated config
+        const consolidated = await getConsolidatedConfig(input.projectPath)
+        if (consolidated.mergedServers[input.name]) {
+          throw new Error(`Server "${input.name}" already exists. Use a different name or edit the existing server.`)
+        }
+
+        // Read existing config or create new one
+        let config: McpConfigFile = { mcpServers: {} }
+        try {
+          const content = await fs.readFile(configPath, "utf-8")
+          config = JSON.parse(content) as McpConfigFile
+          if (!config.mcpServers) {
+            config.mcpServers = {}
+          }
+        } catch {
+          // File doesn't exist, create directory structure
+          await fs.mkdir(path.dirname(configPath), { recursive: true })
+          config = { mcpServers: {} }
+        }
+
+        // Add the new server
+        config.mcpServers[input.name] = input.config
+
+        // Write back to file
+        await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8")
+
+        console.log(`[mcp] Added server "${input.name}" to ${configPath}`)
+
+        return {
+          success: true,
+          serverName: input.name,
+          configPath,
+          source: input.configFile,
+        }
+      } catch (error) {
+        console.error("[mcp] Failed to add server:", error)
+        throw error
+      }
+    }),
+
+  /**
+   * Update an existing MCP server's configuration
+   */
+  updateServer: publicProcedure
+    .input(
+      z.object({
+        serverId: z.string(),
+        config: z.object({
+          command: z.string().optional(),
+          args: z.array(z.string()).optional(),
+          env: z.record(z.string(), z.string()).optional(),
+          disabled: z.boolean().optional(),
+          autoApprove: z.array(z.string()).optional(),
+          type: z.enum(["http", "sse"]).optional(),
+          url: z.string().url().optional(),
+          headers: z.record(z.string(), z.string()).optional(),
+        }),
+        projectPath: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Find which config file has this server
+        const consolidated = await getConsolidatedConfig(input.projectPath)
+        const source = consolidated.serverSources[input.serverId]
+
+        if (!source) {
+          throw new Error(`Server "${input.serverId}" not found in any config file`)
+        }
+
+        const configPath = source.path
+
+        // Read existing config
+        const content = await fs.readFile(configPath, "utf-8")
+        const config = JSON.parse(content) as McpConfigFile
+
+        if (!config.mcpServers?.[input.serverId]) {
+          throw new Error(`Server "${input.serverId}" not found in ${source.type} config`)
+        }
+
+        // Update the server config (merge with existing)
+        config.mcpServers[input.serverId] = {
+          ...config.mcpServers[input.serverId],
+          ...input.config,
+        }
+
+        // Write back to file
+        await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8")
+
+        console.log(`[mcp] Updated server "${input.serverId}" in ${configPath}`)
+
+        return {
+          success: true,
+          serverName: input.serverId,
+          configPath,
+          source: source.type,
+        }
+      } catch (error) {
+        console.error("[mcp] Failed to update server:", error)
+        throw error
+      }
+    }),
+
+  /**
+   * Delete an MCP server from its config file
+   */
+  deleteServer: publicProcedure
+    .input(
+      z.object({
+        serverId: z.string(),
+        projectPath: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Find which config file has this server
+        const consolidated = await getConsolidatedConfig(input.projectPath)
+        const source = consolidated.serverSources[input.serverId]
+
+        if (!source) {
+          throw new Error(`Server "${input.serverId}" not found in any config file`)
+        }
+
+        // Prevent deleting from built-in sources (project/user should be allowed)
+        const configPath = source.path
+
+        // Read existing config
+        const content = await fs.readFile(configPath, "utf-8")
+        const config = JSON.parse(content) as McpConfigFile
+
+        if (!config.mcpServers?.[input.serverId]) {
+          throw new Error(`Server "${input.serverId}" not found in ${source.type} config`)
+        }
+
+        // Remove the server
+        delete config.mcpServers[input.serverId]
+
+        // Write back to file
+        await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8")
+
+        // Also delete stored credentials
+        try {
+          const db = getDatabase()
+          db.delete(mcpCredentials).where(eq(mcpCredentials.id, input.serverId)).run()
+        } catch {
+          // Ignore errors when deleting credentials
+        }
+
+        console.log(`[mcp] Deleted server "${input.serverId}" from ${configPath}`)
+
+        return {
+          success: true,
+          serverName: input.serverId,
+          configPath,
+          source: source.type,
+        }
+      } catch (error) {
+        console.error("[mcp] Failed to delete server:", error)
+        throw error
+      }
+    }),
+
+  /**
+   * Test if an MCP server configuration is valid and can connect
+   * This spawns the process or connects to the URL and attempts a handshake
+   */
+  testServerConnection: publicProcedure
+    .input(
+      z.object({
+        config: z.object({
+          command: z.string().optional(),
+          args: z.array(z.string()).optional(),
+          env: z.record(z.string(), z.string()).optional(),
+          disabled: z.boolean().optional(),
+          autoApprove: z.array(z.string()).optional(),
+          type: z.enum(["http", "sse"]).optional(),
+          url: z.string().url().optional(),
+          headers: z.record(z.string(), z.string()).optional(),
+        }),
+        timeout: z.number().min(5000).max(60000).default(15000),
+      })
+    )
+    .query(async ({ input }): Promise<{
+      success: boolean
+      tools?: McpTool[]
+      error?: string
+      duration?: number
+    }> => {
+      const startTime = Date.now()
+
+      try {
+        // Validate config based on type
+        if (input.config.type === "http" || input.config.type === "sse") {
+          if (!input.config.url) {
+            return { success: false, error: "URL is required for HTTP/SSE servers" }
+          }
+        } else {
+          if (!input.config.command) {
+            return { success: false, error: "Command is required for stdio servers" }
+          }
+        }
+
+        // Query tools from the server (this tests the connection)
+        const tools = await queryMcpServerTools(input.config, { timeout: input.timeout })
+
+        const duration = Date.now() - startTime
+
+        return {
+          success: true,
+          tools,
+          duration,
+        }
+      } catch (error) {
+        const duration = Date.now() - startTime
+        console.error("[mcp] Connection test failed:", error)
+
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          duration,
+        }
+      }
+    }),
 })
