@@ -6,7 +6,7 @@
  * Task tool invocation with a specialized subagent.
  */
 
-import { trpc } from "../../../lib/trpc"
+import { trpcClient } from "../../../lib/trpc"
 import type { AnalysisType } from "../../../../main/lib/trpc/routers/analyzer"
 
 export interface AnalysisTask {
@@ -46,12 +46,11 @@ export interface AnalysisResult {
 export async function startAnalysisTask(
   projectId: string,
   type: AnalysisType,
-  projectPath: string,
-  utils: ReturnType<typeof trpc.useUtils>
+  projectPath: string
 ): Promise<AnalysisTask | null> {
   try {
     // Get or create the diagram
-    const diagram = await utils.client.analyzer.getOrCreate.mutate({
+    const diagram = await trpcClient.analyzer.getOrCreate.mutate({
       projectId,
       type,
     })
@@ -61,10 +60,10 @@ export async function startAnalysisTask(
     }
 
     // Get the prompt for this analysis type
-    const { prompt } = await utils.client.analyzer.getPrompt.query({ type })
+    const { prompt } = await trpcClient.analyzer.getPrompt.query({ type })
 
     // Create the analysis job
-    const job = await utils.client.analyzer.jobs.create.mutate({
+    const job = await trpcClient.analyzer.jobs.create.mutate({
       projectId,
       diagramId: diagram.id,
       type,
@@ -146,13 +145,12 @@ export function parseAnalysisResponse(responseText: string): AnalysisResult | nu
  */
 export async function saveAnalysisResults(
   diagramId: string,
-  result: AnalysisResult,
-  utils: ReturnType<typeof trpc.useUtils>
+  result: AnalysisResult
 ): Promise<boolean> {
   try {
     if (!result.success) {
       // Update status to error
-      await utils.client.analyzer.updateStatus.mutate({
+      await trpcClient.analyzer.updateStatus.mutate({
         id: diagramId,
         status: "error",
         errorMessage: result.error || "Unknown error",
@@ -161,7 +159,7 @@ export async function saveAnalysisResults(
     }
 
     // Update diagram with results
-    await utils.client.analyzer.update.mutate({
+    await trpcClient.analyzer.update.mutate({
       id: diagramId,
       nodes: result.nodes,
       edges: result.edges,
@@ -170,7 +168,7 @@ export async function saveAnalysisResults(
     })
 
     // Update status to complete
-    await utils.client.analyzer.updateStatus.mutate({
+    await trpcClient.analyzer.updateStatus.mutate({
       id: diagramId,
       status: "complete",
     })
@@ -187,14 +185,13 @@ export async function saveAnalysisResults(
  */
 export async function generateAllAnalyses(
   projectId: string,
-  projectPath: string,
-  utils: ReturnType<typeof trpc.useUtils>
+  projectPath: string
 ): Promise<AnalysisTask[]> {
   const types: AnalysisType[] = ["codeflow", "db", "architecture", "build"]
 
   // Start all analysis tasks in parallel
   const tasks = await Promise.all(
-    types.map((type) => startAnalysisTask(projectId, type, projectPath, utils))
+    types.map((type) => startAnalysisTask(projectId, type, projectPath))
   )
 
   return tasks.filter((t): t is AnalysisTask => t !== null)

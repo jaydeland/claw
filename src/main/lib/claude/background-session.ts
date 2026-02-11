@@ -616,6 +616,14 @@ export async function executeBackgroundTask(
       }),
     }
 
+    // Clear Bedrock model env vars when not using Bedrock
+    // These can confuse the binary when using OAuth/API key mode
+    if (!finalEnv.CLAUDE_CODE_USE_BEDROCK) {
+      delete finalEnv.ANTHROPIC_DEFAULT_OPUS_MODEL
+      delete finalEnv.ANTHROPIC_DEFAULT_SONNET_MODEL
+      delete finalEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL
+    }
+
     const claudeBinaryPath = getBundledClaudeBinaryPath()
     const model = options?.model || "sonnet"
 
@@ -666,10 +674,7 @@ After the task completes, return ONLY a JSON object with:
         permissionMode: "bypassPermissions" as const,
         allowDangerouslySkipPermissions: true,
         pathToClaudeCodeExecutable: claudeBinaryPath,
-        ...(sessionState.sessionId && {
-          resume: sessionState.sessionId,
-          continue: true,
-        }),
+        // Don't resume for task execution - tasks run independently
         model,
         persistSession: false,
       },
@@ -734,6 +739,10 @@ async function processTaskStream(
         if (msgAny.result) {
           responseText = msgAny.result
         }
+        // Log errors if any
+        if (msgAny.is_error && msgAny.errors?.length > 0) {
+          console.error(`[background-session] Task ${callId} errors:`, msgAny.errors)
+        }
         break
       }
     }
@@ -762,7 +771,7 @@ async function processTaskStream(
       })
     }
 
-    console.log(`[background-session] Task ${callId.slice(0, 16)}... completed`)
+    console.log(`[background-session] Task ${callId.slice(0, 16)}... completed (text: ${responseText.length} chars, toolOutput: ${toolOutput ? 'yes' : 'no'})`)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error(`[background-session] Task ${callId} failed:`, errorMessage)

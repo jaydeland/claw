@@ -22,10 +22,12 @@ import {
   getBackgroundSessionState,
   initBackgroundSession,
 } from "../claude/background-session"
-import type { AnalysisType, FlowNode, FlowEdge } from "../trpc/routers/analyzer"
+import type { AnalysisType, FlowNode, FlowEdge, AnalysisProgressUpdate, AnalysisResult } from "./types"
+import { parseAnalysisResult } from "./analysis-parser"
 
 // Re-export types for convenience
-export type { AnalysisType, FlowNode, FlowEdge }
+export type { AnalysisType, FlowNode, FlowEdge, AnalysisProgressUpdate, AnalysisResult }
+export { parseAnalysisResult }
 
 // Analysis prompts (mirrored from analyzer router)
 const ANALYSIS_PROMPTS: Record<AnalysisType, string> = {
@@ -223,24 +225,6 @@ const activeAnalyses = new Map<string, ActiveAnalysis>()
 // Progress callbacks
 const progressCallbacks = new Set<(update: AnalysisProgressUpdate) => void>()
 
-export interface AnalysisProgressUpdate {
-  jobId: string
-  diagramId: string
-  type: AnalysisType
-  status: "started" | "running" | "completed" | "failed"
-  progress?: number
-  message?: string
-  result?: AnalysisResult
-  error?: string
-}
-
-export interface AnalysisResult {
-  nodes: FlowNode[]
-  edges: FlowEdge[]
-  summary?: string
-  stats?: Record<string, unknown>
-}
-
 /**
  * Subscribe to analysis progress updates
  */
@@ -365,7 +349,7 @@ Instructions:
 
     // Execute via background task
     const taskResult = await executeBackgroundTask(prompt, {
-      model: "sonnet",
+      model: "haiku", // Use haiku for analysis - more widely available
       subagentType: "explore",
       timeout: 300000, // 5 minutes
     })
@@ -494,66 +478,6 @@ async function pollForResults(
 
   // Start polling
   setTimeout(poll, pollInterval)
-}
-
-/**
- * Parse the analysis result from the background task output
- */
-function parseAnalysisResult(responseText: string, toolOutput?: string): AnalysisResult | null {
-  try {
-    // Try tool output first (cleaner result from Task tool)
-    if (toolOutput) {
-      try {
-        const parsed = JSON.parse(toolOutput)
-        if (parsed.nodes && parsed.edges) {
-          return {
-            nodes: parsed.nodes,
-            edges: parsed.edges,
-            summary: parsed.summary,
-            stats: parsed.stats,
-          }
-        }
-      } catch {
-        // Tool output wasn't valid JSON, try extracting from it
-      }
-    }
-
-    // Extract JSON from response text
-    let jsonText = responseText
-
-    // Try to extract from markdown code block
-    const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (codeBlockMatch) {
-      jsonText = codeBlockMatch[1]
-    }
-
-    // Try to find JSON object
-    const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      jsonText = jsonMatch[0]
-    }
-
-    const data = JSON.parse(jsonText)
-
-    // Validate
-    if (!data.nodes || !Array.isArray(data.nodes)) {
-      throw new Error("Missing or invalid 'nodes' array")
-    }
-    if (!data.edges || !Array.isArray(data.edges)) {
-      throw new Error("Missing or invalid 'edges' array")
-    }
-
-    return {
-      nodes: data.nodes,
-      edges: data.edges,
-      summary: data.summary,
-      stats: data.stats,
-    }
-  } catch (error) {
-    console.error("[BackgroundAnalysis] Failed to parse result:", error)
-    console.error("[BackgroundAnalysis] Raw text:", responseText.slice(0, 500))
-    return null
-  }
 }
 
 /**

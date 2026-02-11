@@ -16,7 +16,7 @@ import ReactFlow, {
   Panel,
 } from "reactflow"
 import "reactflow/dist/style.css"
-import { Loader2, AlertCircle, RefreshCw, Maximize2, Minimize2, Play } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw, Maximize2, Minimize2, Play, X } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../../components/ui/tooltip"
 import { trpc } from "../../../lib/trpc"
@@ -105,6 +105,7 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
   const [needsRefresh, setNeedsRefresh] = useAtom(needsRefreshAtom)
   const [refreshReason, setRefreshReason] = useAtom(refreshReasonAtom)
   const selectedNode = useAtomValue(selectedNodeAtom)
+  const setSelectedNode = useSetAtom(selectedNodeAtom)
   const bottomTab = useAtomValue(analyzeBottomTabAtom)
   const [sidebarWidth, setSidebarWidth] = useAtom(analyzeSidebarWidthAtom)
 
@@ -207,6 +208,10 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
     await generateAll()
   }, [generateAll])
 
+  const handleSkip = useCallback(async () => {
+    await cancelAnalysis()
+  }, [cancelAnalysis])
+
   // Handle refresh check
   const handleCheckRefresh = useCallback(() => {
     if (!diagram?.id) return
@@ -282,17 +287,17 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={handleGenerate}
-                  disabled={isGenerating}
+                  onClick={isGenerating ? handleSkip : handleGenerate}
+                  className={isGenerating ? "text-destructive hover:text-destructive" : ""}
                 >
                   {isGenerating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <X className="h-4 w-4" />
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{isGenerating ? "Generating..." : "Regenerate analysis"}</TooltipContent>
+              <TooltipContent>{isGenerating ? "Skip/Cancel analysis" : "Regenerate analysis"}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>

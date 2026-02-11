@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { useCallback, useEffect } from "react"
+import { useCallback } from "react"
 import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
 import { trpc } from "../../../lib/trpc"
 import { selectedProjectAtom } from "../../agents/atoms"
@@ -21,28 +21,22 @@ export function AnalyzeSidebar() {
   const setRuntimeOpen = useSetAtom(analyzeSidebarOpenRuntimeAtom)
   const effectiveOpen = useAtomValue(effectiveAnalyzeOpenAtom)
 
-  // Subscribe to diagram updates
+  // tRPC utils for cache invalidation
   const utils = trpc.useUtils()
 
-  useEffect(() => {
-    if (!selectedProject?.id) return
-
-    const subscription = utils.analyzer.subscribe.subscribe(
-      { projectId: selectedProject.id },
-      {
-        onData: (update) => {
-          console.log("[Analyze] Diagram update:", update)
-          // Invalidate queries to refresh data
-          utils.analyzer.list.invalidate({ projectId: selectedProject.id })
-          utils.analyzer.get.invalidate({ projectId: selectedProject.id, type: update.diagram.type as any })
-        },
-      }
-    )
-
-    return () => {
-      subscription.unsubscribe()
+  // Subscribe to diagram updates using proper tRPC subscription hook
+  trpc.analyzer.subscribe.useSubscription(
+    { projectId: selectedProject?.id ?? "" },
+    {
+      enabled: !!selectedProject?.id,
+      onData: (update) => {
+        console.log("[Analyze] Diagram update:", update)
+        // Invalidate queries to refresh data
+        utils.analyzer.list.invalidate({ projectId: selectedProject.id })
+        utils.analyzer.get.invalidate({ projectId: selectedProject.id, type: update.diagram.type as any })
+      },
     }
-  }, [selectedProject?.id, utils])
+  )
 
   const closeSidebar = useCallback(() => {
     if (displayMode === "side-peek") {

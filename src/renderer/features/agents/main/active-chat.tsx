@@ -6048,7 +6048,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         />
 
         {/* Analyze - unified renderer supporting side-peek, center-peek, and full-page modes */}
-        <AnalyzeRenderer projectId={chatData?.projectId || ""} />
+        <AnalyzeRenderer projectId={projectId ?? ""} />
 
         {/* Sub-agent output dialog - rendered here to stay mounted */}
         {/* This must be outside SessionFlowRenderer to prevent unmount issues when sidebar closes */}

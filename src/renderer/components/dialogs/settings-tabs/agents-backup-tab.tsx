@@ -1,6 +1,6 @@
 "use client"
 
-import { trpc } from "../../../lib/trpc"
+import { trpc, trpcClient } from "../../../lib/trpc"
 import { useState, useRef } from "react"
 import { Button } from "../../ui/button"
 import { toast } from "sonner"
@@ -87,7 +87,7 @@ export function AgentsBackupTab() {
     setIsExporting(true)
     try {
       // Fetch export data directly using tRPC client
-      const data = await utils.client.settingsExport.exportSettings.query({
+      const data = await trpcClient.settingsExport.exportSettings.query({
         uiPreferences: getLocalStoragePreferences(),
       })
 
@@ -127,7 +127,7 @@ export function AgentsBackupTab() {
     // Read and validate file
     try {
       const content = await file.text()
-      const validation = await utils.client.settingsExport.validateImportFile.query({
+      const validation = await trpcClient.settingsExport.validateImportFile.query({
         jsonContent: content,
       })
 

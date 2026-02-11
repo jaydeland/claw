@@ -1293,9 +1293,9 @@ export function AgentsSubChatsSidebar({
                                         {hasPendingQuestion ? (
                                           <QuestionIcon className="w-4 h-4 text-blue-500" />
                                         ) : mode === "plan" ? (
-                                          <PlanIcon className="w-4 h-4 text-muted-foreground" />
+                                          <PlanIcon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
                                         ) : (
-                                          <AgentIcon className="w-4 h-4 text-muted-foreground" />
+                                          <AgentIcon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
                                         )}
                                       </div>
                                       {/* Badge in bottom-right corner - hidden in multi-select mode and when pending question */}
@@ -1566,9 +1566,9 @@ export function AgentsSubChatsSidebar({
                                         {hasPendingQuestion ? (
                                           <QuestionIcon className="w-4 h-4 text-blue-500" />
                                         ) : mode === "plan" ? (
-                                          <PlanIcon className="w-4 h-4 text-muted-foreground" />
+                                          <PlanIcon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
                                         ) : (
-                                          <AgentIcon className="w-4 h-4 text-muted-foreground" />
+                                          <AgentIcon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
                                         )}
                                       </div>
                                       {/* Badge - hidden in multi-select mode and when pending question */}

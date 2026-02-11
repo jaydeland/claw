@@ -12,10 +12,10 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "electron-builder --dir",
-    "package:mac": "electron-builder --mac",
-    "package:win": "electron-builder --win",
-    "package:linux": "electron-builder --linux",
+    "package": "ELECTRON_BUILDER=1 electron-builder --dir",
+    "package:mac": "ELECTRON_BUILDER=1 electron-builder --mac",
+    "package:win": "ELECTRON_BUILDER=1 electron-builder --win",
+    "package:linux": "ELECTRON_BUILDER=1 electron-builder --linux",
     "dist": "electron-builder",
     "dist:manifest": "node scripts/generate-update-manifest.mjs",
     "dist:cask": "node scripts/generate-homebrew-cask.mjs",
@@ -34,7 +34,8 @@
     "gsd:fetch": "node scripts/fetch-gsd.mjs",
     "gsd:fetch:force": "node scripts/fetch-gsd.mjs --force",
     "ts:check": "tsgo --noEmit",
-    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit',env:{...process.env,PYTHON:'/usr/bin/python3'}})}\""
+    "rebuild": "electron-rebuild -f -w better-sqlite3,node-pty",
+    "postinstall": "node -e \"if(!process.env.VERCEL && !process.env.ELECTRON_BUILDER){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit',env:{...process.env,PYTHON:'/usr/bin/python3'}})}\""
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",

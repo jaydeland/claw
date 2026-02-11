@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useRef } from "react"
 import { useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import type { AnalysisType } from "../../../../main/lib/trpc/routers/analyzer"
@@ -43,8 +43,13 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
   const utils = trpc.useUtils()
   const activeJobIdsRef = useRef<Set<string>>(new Set())
 
+  // Mutations for generating analysis
+  const generateViaBackgroundMutation = trpc.analyzer.generateViaBackground.useMutation()
+  const generateAllViaBackgroundMutation = trpc.analyzer.generateAllViaBackground.useMutation()
+  const cancelBackgroundMutation = trpc.analyzer.cancelBackground.useMutation()
+
   // Subscribe to background progress updates
-  const progressSubscription = utils.analyzer.subscribeBackgroundProgress.useSubscription(undefined, {
+  const progressSubscription = trpc.analyzer.subscribeBackgroundProgress.useSubscription(undefined, {
     onData: (update: AnalysisProgressUpdate) => {
       // Only handle updates for our project
       if (!update.jobId) return
@@ -95,7 +100,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
   })
 
   // Subscribe to diagram updates
-  const diagramSubscription = utils.analyzer.subscribe.useSubscription(
+  const diagramSubscription = trpc.analyzer.subscribe.useSubscription(
     { projectId },
     {
       onData: (update) => {
@@ -124,7 +129,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
 
       try {
         // Call the background analysis mutation
-        const result = await utils.client.analyzer.generateViaBackground.mutate({
+        const result = await generateViaBackgroundMutation.mutateAsync({
           projectId,
           projectPath,
           type,
@@ -163,7 +168,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
         return null
       }
     },
-    [projectId, projectPath, utils, setIsGenerating, setIsLoading, setError, setActiveJobs]
+    [projectId, projectPath, utils, setIsGenerating, setIsLoading, setError, setActiveJobs, generateViaBackgroundMutation]
   )
 
   /**
@@ -181,7 +186,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
 
     try {
       // Call the background all-analysis mutation
-      const results = await utils.client.analyzer.generateAllViaBackground.mutate({
+      const results = await generateAllViaBackgroundMutation.mutateAsync({
         projectId,
         projectPath,
       })
@@ -229,7 +234,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
       setIsLoading(false)
       return null
     }
-  }, [projectId, projectPath, utils, setIsGenerating, setIsLoading, setError, setActiveJobs])
+  }, [projectId, projectPath, utils, setIsGenerating, setIsLoading, setError, setActiveJobs, generateAllViaBackgroundMutation])
 
   /**
    * Cancel an ongoing analysis
@@ -237,7 +242,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
   const cancelAnalysis = useCallback(
     async (jobId: string) => {
       try {
-        await utils.client.analyzer.cancelBackground.mutate({ jobId })
+        await cancelBackgroundMutation.mutateAsync({ jobId })
 
         activeJobIdsRef.current.delete(jobId)
 
@@ -256,7 +261,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
         console.error("[useAnalysisService] Failed to cancel analysis:", err)
       }
     },
-    [utils, setActiveJobs, setIsGenerating, setIsLoading]
+    [utils, setActiveJobs, setIsGenerating, setIsLoading, cancelBackgroundMutation]
   )
 
   /**
@@ -271,14 +276,6 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
     setIsGenerating(false)
     setIsLoading(false)
   }, [cancelAnalysis, setIsGenerating, setIsLoading])
-
-  // Cleanup subscriptions on unmount
-  useEffect(() => {
-    return () => {
-      progressSubscription.unsubscribe()
-      diagramSubscription.unsubscribe()
-    }
-  }, [progressSubscription, diagramSubscription])
 
   return {
     generateAnalysis,
