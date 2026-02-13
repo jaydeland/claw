@@ -151,6 +151,7 @@ import {
   showTasksPanelAtom,
   subChatFilesAtom,
   undoStackAtom,
+  viewedFilesAtomFamily,
   type SelectedCommit
 } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
@@ -1486,6 +1487,7 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
 // ============================================================================
 
 interface DiffStateProviderProps {
+  chatId: string
   isDiffSidebarOpen: boolean
   parsedFileDiffs: ParsedDiffFile[] | null
   isDiffSidebarNarrow: boolean
@@ -1499,6 +1501,7 @@ interface DiffStateProviderProps {
 }
 
 const DiffStateProvider = memo(function DiffStateProvider({
+  chatId,
   isDiffSidebarOpen,
   parsedFileDiffs,
   isDiffSidebarNarrow,
@@ -1522,6 +1525,7 @@ const DiffStateProvider = memo(function DiffStateProvider({
   const [, setFilteredDiffFiles] = useAtom(filteredDiffFilesAtom)
   const [filteredSubChatId, setFilteredSubChatId] = useAtom(filteredSubChatIdAtom)
   const isChangesPanelCollapsed = useAtomValue(agentsChangesPanelCollapsedAtom)
+  const setViewedFiles = useSetAtom(viewedFilesAtomFamily(chatId))
 
   // Auto-select first file when diff sidebar opens - use useLayoutEffect for synchronous update
   // This prevents the initial render from showing all 11 files before filter kicks in
@@ -1571,6 +1575,7 @@ const DiffStateProvider = memo(function DiffStateProvider({
     setParsedFileDiffs(null)
     setDiffContent(null)
     setPrefetchedFileContents({})
+    setViewedFiles({})
     setDiffStats({
       fileCount: 0,
       additions: 0,
@@ -1581,7 +1586,7 @@ const DiffStateProvider = memo(function DiffStateProvider({
     setTimeout(() => {
       fetchDiffStats()
     }, 500)
-  }, [setSelectedFilePath, setFilteredDiffFiles, setParsedFileDiffs, setDiffContent, setPrefetchedFileContents, setDiffStats, fetchDiffStats])
+  }, [setSelectedFilePath, setFilteredDiffFiles, setParsedFileDiffs, setDiffContent, setPrefetchedFileContents, setViewedFiles, setDiffStats, fetchDiffStats])
 
   const handleCloseDiff = useCallback(() => {
     // Use flushSync to reset activeTab synchronously before closing.
@@ -3896,7 +3901,7 @@ export function ChatView({
       }
       return newVal
     })
-  }, [])
+  }, [diffStats, setDiffStatsRaw])
 
   // Atom for GSD command queue (allows outer scope to send commands to inner ChatViewInner)
   const [pendingGsdCommand, setPendingGsdCommand] = useState<string | null>(null)
@@ -5900,6 +5905,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         {/* Wrapped in DiffStateProvider to isolate diff state and prevent ChatView re-renders */}
         {canOpenDiff && !isMobileFullscreen && (
           <DiffStateProvider
+            chatId={chatId}
             isDiffSidebarOpen={isDiffSidebarOpen}
             parsedFileDiffs={parsedFileDiffs}
             isDiffSidebarNarrow={isDiffSidebarNarrow}
