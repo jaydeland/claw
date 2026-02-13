@@ -14,7 +14,7 @@ import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, Sparkles, FormInput } from "lucide-react"
+import { Loader2, Plus, Trash2, Sparkles } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { McpConfigChat } from "./mcp-config-chat"
 
@@ -35,8 +35,6 @@ interface McpServerDialogProps {
   }
 }
 
-type InputMode = "form" | "ai"
-
 export function McpServerDialog({
   open,
   onOpenChange,
@@ -45,9 +43,6 @@ export function McpServerDialog({
   serverConfig,
 }: McpServerDialogProps) {
   const utils = trpc.useUtils()
-
-  // Mode toggle (only for add mode)
-  const [inputMode, setInputMode] = useState<InputMode>("form")
 
   // AI generated config state
   const [aiGeneratedConfig, setAiGeneratedConfig] = useState<{
@@ -74,7 +69,6 @@ export function McpServerDialog({
     if (open) {
       // Reset AI mode
       setAiGeneratedConfig(null)
-      setInputMode("form")
 
       if (mode === "edit" && serverConfig) {
         setName(serverId || "")
@@ -125,23 +119,29 @@ export function McpServerDialog({
   const handleUseGenerated = () => {
     if (!aiGeneratedConfig) return
 
-    // Populate form with generated config
-    setName(aiGeneratedConfig.name)
-    setCommand(aiGeneratedConfig.command || "")
-    setArgs(aiGeneratedConfig.args?.length ? aiGeneratedConfig.args : [""])
-    setEnvVars(
-      Object.entries(aiGeneratedConfig.env || {}).map(([key, value]) => ({
-        key,
-        value: value || "",
-      }))
-    )
-    const type = aiGeneratedConfig.type || "stdio"
-    setServerType(type)
-    setUrl(aiGeneratedConfig.url || "")
+    const config: any = {
+      disabled: false,
+    }
 
-    // Switch to form mode for review
-    setInputMode("form")
-    toast.info("Review the configuration and click Add Server when ready")
+    const type = aiGeneratedConfig.type || "stdio"
+    if (type === "stdio") {
+      config.command = aiGeneratedConfig.command || ""
+      config.args = aiGeneratedConfig.args?.filter((a) => a.trim()) || []
+    } else {
+      config.type = type
+      config.url = aiGeneratedConfig.url || ""
+    }
+
+    if (aiGeneratedConfig.env && Object.keys(aiGeneratedConfig.env).length > 0) {
+      config.env = aiGeneratedConfig.env
+    }
+
+    // Auto-submit the generated config
+    addMutation.mutate({
+      name: aiGeneratedConfig.name.trim(),
+      config,
+      configFile: "user",
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -229,7 +229,7 @@ export function McpServerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
         "max-h-[80vh] overflow-y-auto",
-        inputMode === "ai" && mode === "add" ? "max-w-2xl" : "max-w-lg"
+        mode === "add" ? "max-w-2xl" : "max-w-lg"
       )}>
         <DialogHeader>
           <DialogTitle>{mode === "add" ? "Add MCP Server" : "Edit MCP Server"}</DialogTitle>
@@ -240,49 +240,16 @@ export function McpServerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Mode Toggle - only show in add mode */}
-        {mode === "add" && (
-          <div className="flex gap-2 p-1 bg-muted rounded-lg">
-            <button
-              type="button"
-              onClick={() => setInputMode("form")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-md transition-colors",
-                inputMode === "form"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <FormInput className="h-4 w-4" />
-              Form
-            </button>
-            <button
-              type="button"
-              onClick={() => setInputMode("ai")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-md transition-colors",
-                inputMode === "ai"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Sparkles className="h-4 w-4" />
-              AI Assist
-            </button>
-          </div>
-        )}
-
-        {inputMode === "ai" && mode === "add" ? (
+        {mode === "add" ? (
           /* AI Mode - Chat Interface */
           <McpConfigChat
             onConfigGenerated={(config) => {
               setAiGeneratedConfig(config)
               handleUseGenerated()
             }}
-            onCancel={() => setInputMode("form")}
+            onCancel={() => onOpenChange(false)}
           />
         ) : (
-          /* Form Mode */
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Server Name */}
             <div className="space-y-2">

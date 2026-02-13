@@ -78,21 +78,14 @@ export const transientChatRouter = router({
         .returning()
         .get()
 
-      // Create initial user message
-      const userMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        parts: [{ type: "text", text: input.prompt }],
-      }
-
-      // Create sub-chat with the prompt as first message
+      // Create sub-chat with empty messages (SDK will populate on first request)
       const subChat = db
         .insert(subChats)
         .values({
           chatId: chat.id,
           mode: input.mode,
           model: input.model || "sonnet",
-          messages: JSON.stringify([userMessage]),
+          messages: JSON.stringify([]),
         })
         .returning()
         .get()
@@ -180,7 +173,7 @@ export const transientChatRouter = router({
 
             const existingMessages = JSON.parse(existing.messages || "[]")
 
-            // Add user message if not duplicate
+            // Add user message if not duplicate and not an internal auto-start signal
             const lastMsg = existingMessages[existingMessages.length - 1]
             const isDuplicate =
               lastMsg?.role === "user" &&
@@ -427,10 +420,10 @@ For HTTP/SSE servers:
 Welcome the user and ask what MCP server they'd like to add, presenting the options from Step 1.`
 
             // Check if we have an existing session to resume
-            const existingSessionId = existing?.sessionId
+            let existingSessionId = existing?.sessionId
             console.log(`[transient-chat] Session: ${existingSessionId ? "resuming " + existingSessionId : "creating new"}`)
 
-            const queryOptions = {
+            const buildQueryOptions = (sessionId?: string | null) => ({
               prompt: input.prompt,
               options: {
                 abortController,
@@ -444,17 +437,18 @@ Welcome the user and ask what MCP server they'd like to add, presenting the opti
                 allowDangerouslySkipPermissions: true,
                 pathToClaudeCodeExecutable: claudeBinaryPath,
                 ...(useExplicitModel && { model: input.model || "sonnet" }),
-                persistSession: false,
                 // Resume session if we have one, otherwise start fresh
-                ...(existingSessionId && {
-                  resume: existingSessionId,
+                ...(sessionId && {
+                  resume: sessionId,
                   continue: true,
                 }),
               },
-            }
+            })
 
-            const stream = claudeQuery(queryOptions)
+            let stream = claudeQuery(buildQueryOptions(existingSessionId))
+            let isRetry = false
             const parts: any[] = []
+            let streamError: Error | null = null
             let currentText = ""
             let currentSessionId: string | null = null
 
@@ -479,11 +473,34 @@ Welcome the user and ask what MCP server they'd like to add, presenting the opti
 
               // Transform and emit chunks
               const chunks = transform(msg)
-              if (chunks.length > 0) {
-                console.log(`[transient-chat] Emitting ${chunks.length} chunks`)
-                for (const chunk of chunks) {
+              const chunkList = [...chunks] // Convert generator to array
+              console.log(`[transient-chat] Raw chunks:`, chunkList.map(c => c.type))
+
+              // Check for session-not-found error in transformed chunks
+              // This must happen BEFORE emitting to prevent showing the error to the user
+              for (const chunk of chunkList) {
+                if (chunk.type === "error" && chunk.errorText) {
+                  const errorText = chunk.errorText.toLowerCase()
+                  if (errorText.includes("no conversation found with session id") && existingSessionId && !isRetry) {
+                    console.log(`[transient-chat] Session ${existingSessionId} not found in transformed chunk, will retry without resume`)
+                    streamError = new Error(chunk.errorText)
+                    break
+                  }
+                }
+              }
+              if (streamError) {
+                break
+              }
+
+              if (chunkList.length > 0) {
+                console.log(`[transient-chat] Emitting ${chunkList.length} chunks`)
+                for (const chunk of chunkList) {
+                  console.log(`[transient-chat] Chunk type: ${chunk.type}`, chunk)
                   if (chunk.type === "text" && chunk.text) {
                     currentText += chunk.text
+                  }
+                  if (chunk.type === "text-delta" && chunk.delta) {
+                    currentText += chunk.delta
                   }
                   safeEmit(chunk)
                 }
@@ -493,6 +510,84 @@ Welcome the user and ask what MCP server they'd like to add, presenting the opti
               if (msgAny.type === "result") {
                 console.log(`[transient-chat] Got result message, ending stream`)
                 break
+              }
+            }
+
+            // Handle stale session - retry without resume if we got a session not found error
+            if (streamError && streamError.message.toLowerCase().includes("no conversation found with session id") && existingSessionId && !isRetry) {
+              console.log(`[transient-chat] Retrying without stale session ID ${existingSessionId}`)
+
+              // Clear the stale session ID from database
+              db.update(subChats)
+                .set({
+                  sessionId: null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(subChats.id, input.subChatId))
+                .run()
+
+              // Create new abort controller for retry
+              const retryAbortController = new AbortController()
+              registerSession({
+                subChatId: input.subChatId,
+                chatId: input.chatId,
+                abortController: retryAbortController,
+                query: null,
+                sessionId: null,
+                streamId,
+                startedAt: Date.now(),
+              })
+
+              // Restart stream without session resume
+              stream = claudeQuery(buildQueryOptions(null))
+              isRetry = true
+              streamError = null
+              chunkCount = 0
+              currentText = ""
+
+              // Process retry stream
+              for await (const msg of stream) {
+                const msgAny = msg as any
+                chunkCount++
+
+                // Debug logging for first few messages
+                if (chunkCount <= 5) {
+                  console.log(`[transient-chat] Retry message ${chunkCount}:`, {
+                    type: msgAny.type,
+                    subtype: msgAny.subtype,
+                    hasMessage: !!msgAny.message,
+                    hasContent: !!msgAny.message?.content,
+                  })
+                }
+
+                // Track session ID
+                if (msgAny.session_id) {
+                  currentSessionId = msgAny.session_id
+                }
+
+                // Transform and emit chunks
+                const chunks = transform(msg)
+                const chunkList = [...chunks]
+                console.log(`[transient-chat] Retry raw chunks:`, chunkList.map(c => c.type))
+                if (chunkList.length > 0) {
+                  console.log(`[transient-chat] Retry emitting ${chunkList.length} chunks`)
+                  for (const chunk of chunkList) {
+                    console.log(`[transient-chat] Retry chunk type: ${chunk.type}`, chunk)
+                    if (chunk.type === "text" && chunk.text) {
+                      currentText += chunk.text
+                    }
+                    if (chunk.type === "text-delta" && chunk.delta) {
+                      currentText += chunk.delta
+                    }
+                    safeEmit(chunk)
+                  }
+                }
+
+                // Check for result to end stream
+                if (msgAny.type === "result") {
+                  console.log(`[transient-chat] Retry got result message, ending stream`)
+                  break
+                }
               }
             }
 
