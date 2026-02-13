@@ -7,6 +7,7 @@ import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
 import { Loader2, Send, Sparkles, Check, AlertCircle, Wand2 } from "lucide-react"
 import { cn } from "../../../lib/utils"
+import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
 
 interface Message {
   id: string
@@ -28,9 +29,10 @@ interface GeneratedConfig {
 interface McpConfigChatProps {
   onConfigGenerated: (config: GeneratedConfig) => void
   onCancel: () => void
+  targetConfigPath?: string | null
 }
 
-export function McpConfigChat({ onConfigGenerated, onCancel }: McpConfigChatProps) {
+export function McpConfigChat({ onConfigGenerated, onCancel, targetConfigPath }: McpConfigChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -85,7 +87,11 @@ export function McpConfigChat({ onConfigGenerated, onCancel }: McpConfigChatProp
       }
 
       // Create session with a starter message to trigger the AI greeting
-      const newSession = await createSession("Hello, I'd like to add an MCP server")
+      // Include context about which config file we're targeting
+      const starterPrompt = targetConfigPath
+        ? `Hello, I'd like to add an MCP server to the config file at: ${targetConfigPath}`
+        : "Hello, I'd like to add an MCP server"
+      const newSession = await createSession(starterPrompt, targetConfigPath)
       if (!newSession) {
         console.error("[McpConfigChat] Failed to create session")
         return
@@ -185,12 +191,17 @@ export function McpConfigChat({ onConfigGenerated, onCancel }: McpConfigChatProp
 
   const [error, setError] = useState<string | null>(null)
 
-  const createSession = async (prompt: string) => {
+  const createSession = async (prompt: string, configPath?: string) => {
     setIsCreatingSession(true)
     setError(null)
     try {
+      // Include config file context in the prompt if provided
+      const enhancedPrompt = configPath
+        ? `${prompt}\n\nContext: You are helping configure an MCP server that will be added to the config file at: ${configPath}. Please suggest appropriate server configurations that would fit well in this file.`
+        : prompt
+
       const result = await utils.client.transientChat.create.mutate({
-        prompt,
+        prompt: enhancedPrompt,
         mode: "agent",
       })
       setSession(result)
@@ -413,7 +424,7 @@ export function McpConfigChat({ onConfigGenerated, onCancel }: McpConfigChatProp
       {/* Messages */}
       <div
         className={cn(
-          "flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px] max-h-[400px]",
+          "flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px]",
           isComplete && "opacity-60 grayscale"
         )}
       >
@@ -461,7 +472,11 @@ export function McpConfigChat({ onConfigGenerated, onCancel }: McpConfigChatProp
                   : "bg-muted border"
               )}
             >
-              <div className="whitespace-pre-wrap">{message.content}</div>
+              {message.role === "assistant" ? (
+                <MemoizedMarkdown content={message.content} id={message.id} size="sm" />
+              ) : (
+                <div className="whitespace-pre-wrap">{message.content}</div>
+              )}
               {message.isStreaming && (
                 <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
               )}
@@ -534,7 +549,9 @@ export function McpConfigChat({ onConfigGenerated, onCancel }: McpConfigChatProp
               Configuration complete
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              The MCP server has been added to ~/.claude/mcp.json
+              {targetConfigPath
+                ? `The MCP server will be added to: ${targetConfigPath}`
+                : "The MCP server will be added to the default config file"}
             </p>
             <Button
               variant="outline"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom } from "jotai"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { trpc } from "../../../lib/trpc"
 import {
   activeProviderAtom,
@@ -425,7 +425,9 @@ function AWSBedrockProvider() {
 // Ollama Provider
 // ============================================
 
-const OLLAMA_MODELS = [
+// Fallback models if API fetch fails
+const OLLAMA_FALLBACK_MODELS = [
+  { id: "glm-5", name: "GLM 5", description: "Latest GLM model" },
   { id: "kimi-k2.5:cloud", name: "Kimi K2.5 Cloud", description: "Cloud-based Kimi model" },
   { id: "qwen3-coder", name: "Qwen 3 Coder", description: "Strong coding performance" },
   { id: "glm-4.7", name: "GLM 4.7", description: "General purpose" },
@@ -469,6 +471,31 @@ function OllamaProvider() {
     setToken(storedConfig.token)
     setOllamaApiKey(storedConfig.ollamaApiKey || "")
   }, [storedConfig])
+
+  // Fetch Ollama models dynamically
+  const { data: ollamaModelsData, isLoading: isLoadingModels } = trpc.claude.getOllamaModels.useQuery(
+    {
+      baseUrl: baseUrl || "http://localhost:11434",
+      apiKey: ollamaApiKey,
+    },
+    {
+      enabled: ollamaMode !== null, // Only fetch when mode is selected
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    }
+  )
+
+  // Get model options from API or use fallback
+  const modelOptions = useMemo(() => {
+    if (ollamaModelsData?.success && ollamaModelsData.models.length > 0) {
+      return ollamaModelsData.models.map((m) => ({
+        id: m.id,
+        name: m.name,
+        description: m.description || 'Ollama model',
+      }))
+    }
+    // Fallback to hardcoded list if API fails
+    return OLLAMA_FALLBACK_MODELS
+  }, [ollamaModelsData])
 
   const applyOllamaPreset = (mode: OllamaMode) => {
     setOllamaMode(mode)
@@ -545,17 +572,23 @@ function OllamaProvider() {
             <Label className="text-sm font-medium">Model</Label>
             <Select value={model} onValueChange={setModel}>
               <SelectTrigger>
-                <SelectValue placeholder="Select a model..." />
+                <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select a model..."} />
               </SelectTrigger>
               <SelectContent>
-                {OLLAMA_MODELS.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{m.name}</span>
-                      <span className="text-xs text-muted-foreground">{m.description}</span>
-                    </div>
+                {isLoadingModels ? (
+                  <SelectItem value="_loading" disabled>
+                    Loading models...
                   </SelectItem>
-                ))}
+                ) : (
+                  modelOptions.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{m.name}</span>
+                        <span className="text-xs text-muted-foreground">{m.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>

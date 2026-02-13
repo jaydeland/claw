@@ -228,8 +228,7 @@ export function McpServerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
-        "max-h-[80vh] overflow-y-auto",
-        mode === "add" ? "max-w-2xl" : "max-w-lg"
+        mode === "add" ? "max-w-6xl max-h-[85vh] overflow-hidden" : "max-w-lg"
       )}>
         <DialogHeader>
           <DialogTitle>{mode === "add" ? "Add MCP Server" : "Edit MCP Server"}</DialogTitle>

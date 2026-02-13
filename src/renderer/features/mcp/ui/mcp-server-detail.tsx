@@ -19,6 +19,7 @@ import {
   Globe,
   Trash2,
   Edit,
+  FileJson,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -185,6 +186,24 @@ export function McpServerDetail() {
             onCheckedChange={handleToggleEnabled}
             disabled={toggleMutation.isPending}
           />
+        </div>
+      </div>
+
+      {/* Config File Source */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <FileJson className="h-4 w-4" />
+          Config File
+        </div>
+        <div className="bg-muted/50 rounded-lg p-3">
+          <code className="text-xs break-all select-text cursor-text text-muted-foreground">
+            {server.source?.path || "Unknown"}
+          </code>
+          {server.source && (
+            <span className="text-xs text-muted-foreground mt-1 block">
+              Source: {server.source.type} (priority: {server.source.priority})
+            </span>
+          )}
         </div>
       </div>
 

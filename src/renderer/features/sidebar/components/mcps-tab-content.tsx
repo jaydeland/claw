@@ -1,20 +1,29 @@
 "use client"
 
 import React, { useMemo, useState } from "react"
-import { Plug, ChevronRight, CheckCircle, XCircle, Clock, AlertTriangle, Plus } from "lucide-react"
+import { Plug, ChevronRight, ChevronDown, CheckCircle, XCircle, Clock, AlertTriangle, Plus, Folder, Home, FileJson, Sparkles, FolderOpen } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
+import { Button } from "../../../components/ui/button"
 import { selectedProjectAtom } from "../../agents/atoms"
 import { useAtomValue, useSetAtom } from "jotai"
 import { selectWorkflowItemAtom } from "../../workflows/atoms"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../main/lib/trpc/routers"
-import { McpServerDialog } from "../../mcp/ui/mcp-server-dialog"
+import { McpConfigChat } from "../../mcp/ui/mcp-config-chat"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "../../../components/ui/dialog"
 
 type RouterOutput = inferRouterOutputs<AppRouter>
 type McpServerType = RouterOutput["mcp"]["listServers"]["servers"][number]
+type McpServerSource = RouterOutput["mcp"]["listServers"]["servers"][number]["source"]
 
 interface McpsTabContentProps {
   className?: string
@@ -22,6 +31,49 @@ interface McpsTabContentProps {
 }
 
 type McpAuthStatus = "no_auth_needed" | "configured" | "missing_credentials"
+
+interface FileGroup {
+  filePath: string
+  source: McpServerSource | undefined
+  servers: McpServerType[]
+  isExpanded: boolean
+}
+
+/**
+ * Get icon for config source type
+ */
+function getSourceIcon(source: McpServerSource | undefined) {
+  if (!source) return <FileJson className="h-3.5 w-3.5 text-muted-foreground" />
+  switch (source.type) {
+    case "user":
+      return <Home className="h-3.5 w-3.5 text-primary" />
+    case "project":
+      return <Folder className="h-3.5 w-3.5 text-blue-500" />
+    case "custom":
+      return <FileJson className="h-3.5 w-3.5 text-orange-500" />
+  }
+}
+
+/**
+ * Get file name from path
+ */
+function getFileNameFromPath(filePath: string): string {
+  return filePath.split("/").pop() || filePath
+}
+
+/**
+ * Get short path for display
+ */
+function getShortPath(filePath: string, sourceType: string): string {
+  if (sourceType === "user") {
+    return "~/.claude/mcp.json"
+  }
+  const parts = filePath.split("/")
+  if (parts.length > 3) {
+    return "..." + parts.slice(-3).join("/")
+  }
+  return filePath
+}
 
 
 /**
@@ -56,7 +108,10 @@ function AuthStatusIndicator({ status }: { status: McpAuthStatus }) {
 
 export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addFileDialogOpen, setAddFileDialogOpen] = useState(false)
+  const [addServerDialogOpen, setAddServerDialogOpen] = useState(false)
+  const [targetFilePath, setTargetFilePath] = useState<string | null>(null)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const selectedProject = useAtomValue(selectedProjectAtom)
   const selectWorkflowItem = useSetAtom(selectWorkflowItemAtom)
 
@@ -67,56 +122,92 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
 
   const utils = trpc.useUtils()
 
-  // Mutation to create default MCP config
-  const createDefaultConfig = trpc.mcp.createDefaultConfig.useMutation({
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success("Created MCP config", {
-          description: `Edit ${result.path} to configure your MCP servers.`,
-        })
-        // Refresh the list
-        utils.mcp.listServers.invalidate()
-      } else {
-        toast.error("Failed to create config", {
-          description: result.error,
-        })
-      }
-    },
-    onError: (error) => {
-      toast.error("Error creating config", {
-        description: error.message,
-      })
-    },
-  })
-
-  // Debug logging for merged list
-  React.useEffect(() => {
-    if (mcpServers) {
-      console.log("[mcps-tab] Merged MCP servers:", mcpServers.servers.length, "servers")
-      console.log("[mcps-tab] Server details:", mcpServers.servers.map(s => ({
-        id: s.id,
-        name: s.name,
-        source: s.source?.type,
-        enabled: s.enabled
-      })))
-      if (mcpServers.conflicts) {
-        console.log("[mcps-tab] Conflicts detected:", mcpServers.conflicts)
-      }
-    }
-  }, [mcpServers])
-
-  // Filter MCP servers by search query
-  const filteredServers = useMemo((): McpServerType[] => {
+  // Group servers by config file
+  const fileGroups = useMemo((): FileGroup[] => {
     if (!mcpServers?.servers) return []
-    if (!searchQuery.trim()) return mcpServers.servers
+
+    const groups = new Map<string, FileGroup>()
+
+    for (const server of mcpServers.servers) {
+      const filePath = server.source?.path || "unknown"
+
+      if (!groups.has(filePath)) {
+        groups.set(filePath, {
+          filePath,
+          source: server.source,
+          servers: [],
+          isExpanded: expandedGroups[filePath] ?? true,
+        })
+      }
+
+      groups.get(filePath)!.servers.push(server)
+    }
+
+    // Sort groups: user configs first, then project, then custom, then unknown
+    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+      const typeOrder = { user: 0, project: 1, custom: 2, unknown: 3 }
+      const aType = a.source?.type ?? "unknown"
+      const bType = b.source?.type ?? "unknown"
+
+      if (typeOrder[aType] !== typeOrder[bType]) {
+        return typeOrder[aType] - typeOrder[bType]
+      }
+
+      return a.filePath.localeCompare(b.filePath)
+    })
+
+    return sortedGroups
+  }, [mcpServers, expandedGroups])
+
+  // Filter servers within groups
+  const filteredGroups = useMemo(() => {
+    if (!searchQuery.trim()) return fileGroups
 
     const query = searchQuery.toLowerCase()
-    return mcpServers.servers.filter(
-      (server) =>
-        server.name.toLowerCase().includes(query) ||
-        server.id.toLowerCase().includes(query),
-    )
-  }, [mcpServers, searchQuery])
+    return fileGroups
+      .map((group) => ({
+        ...group,
+        servers: group.servers.filter(
+          (server) =>
+            server.name.toLowerCase().includes(query) ||
+            server.id.toLowerCase().includes(query),
+        ),
+      }))
+      .filter((group) => group.servers.length > 0)
+  }, [fileGroups, searchQuery])
+
+  const toggleGroup = (filePath: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [filePath]: !(prev[filePath] ?? true),
+    }))
+  }
+
+  const handleAddFile = async () => {
+    // Use Electron's dialog API to show file picker
+    const result = await window.desktopApi?.showOpenDialog({
+      title: "Select or Create MCP Config File",
+      defaultPath: "~/.claude",
+      filters: [{ name: "JSON Files", extensions: ["json"] }],
+      properties: ["openFile", "createDirectory"],
+    })
+
+    if (result && !result.canceled && result.filePaths.length > 0) {
+      const filePath = result.filePaths[0]
+      setTargetFilePath(filePath)
+      setAddServerDialogOpen(true)
+    }
+  }
+
+  const handleAddServerToGroup = (filePath: string) => {
+    setTargetFilePath(filePath)
+    setAddServerDialogOpen(true)
+  }
+
+  const handleConfigGenerated = () => {
+    setAddServerDialogOpen(false)
+    utils.mcp.listServers.invalidate()
+  }
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
@@ -133,22 +224,22 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
             )}
           />
           <button
-            onClick={() => setAddDialogOpen(true)}
+            onClick={handleAddFile}
             className="flex-shrink-0 p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            title="Add MCP Server"
+            title="Add MCP Config File"
           >
             <Plus className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* MCP servers list */}
+      {/* MCP servers list - Tree view by config file */}
       <div className="flex-1 overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
         {isLoading ? (
           <div className="flex items-center justify-center h-20">
             <span className="text-sm text-muted-foreground">Loading MCPs...</span>
           </div>
-        ) : filteredServers.length === 0 ? (
+        ) : filteredGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 gap-3 px-4">
             <Plug className="h-8 w-8 text-muted-foreground/30" />
             <div className="text-center space-y-1">
@@ -161,75 +252,120 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
                 </p>
               )}
             </div>
-            {!searchQuery && (
-              <button
-                onClick={() => createDefaultConfig.mutate()}
-                disabled={createDefaultConfig.isPending}
-                className="mt-2 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                {createDefaultConfig.isPending ? "Creating..." : "Create Default Config"}
-              </button>
-            )}
           </div>
         ) : (
-          <div className="space-y-0.5">
-            {filteredServers.map((server) => (
-              <button
-                key={server.id}
-                onClick={() => {
-                  // Use combined action to set both category and node atomically
-                  selectWorkflowItem({
-                    node: {
-                      id: server.id,
-                      name: server.name,
-                      type: "mcpServer",
-                      sourcePath: server.id, // Use server.id as sourcePath for MCPs
-                    },
-                    category: "mcps",
-                  })
-                }}
-                className={cn(
-                  "group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/10 cursor-pointer w-full text-left",
-                  !server.enabled && "opacity-50",
-                )}
-              >
-                <Plug className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium text-foreground truncate flex-1">
-                      {server.name}
-                    </span>
-                    {server.source?.type === "project" && (
-                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
+          <div className="space-y-1">
+            {filteredGroups.map((group) => {
+              const isExpanded = expandedGroups[group.filePath] ?? true
+              const isUserConfig = group.source?.type === "user"
+
+              return (
+                <div key={group.filePath} className="mb-1">
+                  {/* Config file header */}
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 px-1.5 py-1 rounded-md",
+                      "bg-muted/30 hover:bg-muted/50 transition-colors"
                     )}
-                    {!server.enabled && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-gray-500/10 text-gray-500">
-                        Disabled
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.filePath)}
+                      className="flex items-center gap-1.5 flex-1 text-left min-w-0"
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                      )}
+                      {getSourceIcon(group.source)}
+                      <span className="text-[11px] font-medium text-foreground truncate">
+                        {getFileNameFromPath(group.filePath)}
                       </span>
-                    )}
+                      <span className="text-[10px] text-muted-foreground/60">
+                        ({group.servers.length})
+                      </span>
+                    </button>
+
+                    {/* Add server button (AI assistant) */}
+                    <button
+                      type="button"
+                      onClick={() => handleAddServerToGroup(group.filePath)}
+                      className="p-1 rounded hover:bg-muted transition-colors"
+                      title={`Add server to ${getFileNameFromPath(group.filePath)}`}
+                    >
+                      <Sparkles className="h-3 w-3 text-primary" />
+                    </button>
                   </div>
-                  <div className="mt-0.5">
-                    <AuthStatusIndicator status={server.authStatus} />
-                  </div>
-                  {server.credentialEnvVars.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
-                      Requires: {server.credentialEnvVars.join(", ")}
-                    </p>
+
+                  {/* Servers in this file */}
+                  {isExpanded && (
+                    <div className="ml-2 mt-0.5 space-y-0.5">
+                      {group.servers.map((server) => (
+                        <button
+                          key={server.id}
+                          onClick={() => {
+                            selectWorkflowItem({
+                              node: {
+                                id: server.id,
+                                name: server.name,
+                                type: "mcpServer",
+                                sourcePath: server.id,
+                              },
+                              category: "mcps",
+                            })
+                          }}
+                          className={cn(
+                            "group flex items-start gap-2 px-2 py-1 rounded-md hover:bg-foreground/10 cursor-pointer w-full text-left",
+                            !server.enabled && "opacity-50",
+                          )}
+                        >
+                          <Plug className="h-3 w-3 flex-shrink-0 mt-0.5 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-medium text-foreground truncate flex-1">
+                                {server.name}
+                              </span>
+                              {!server.enabled && (
+                                <span className="text-[9px] px-1 py-0.5 rounded-sm font-medium bg-gray-500/10 text-gray-500">
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5">
+                              <AuthStatusIndicator status={server.authStatus} />
+                            </div>
+                          </div>
+                          <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
-                <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Add MCP Server Dialog */}
-      <McpServerDialog
-        open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
-        mode="add"
-      />
+      {/* Add MCP Server Dialog (AI Assistant) */}
+      <Dialog open={addServerDialogOpen} onOpenChange={setAddServerDialogOpen}>
+        <DialogContent className="max-w-6xl max-h-[85vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Add MCP Server</DialogTitle>
+            <DialogDescription>
+              {targetFilePath
+                ? `Add a server to ${getFileNameFromPath(targetFilePath)}`
+                : "Configure a new MCP server"}
+            </DialogDescription>
+          </DialogHeader>
+          <McpConfigChat
+            onConfigGenerated={handleConfigGenerated}
+            onCancel={() => setAddServerDialogOpen(false)}
+            targetConfigPath={targetFilePath || undefined}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

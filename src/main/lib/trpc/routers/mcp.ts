@@ -1,13 +1,12 @@
 import fs from "node:fs/promises"
 import { existsSync } from "node:fs"
-import { existsSync } from "fs"
 import path from "node:path"
 import os from "node:os"
 import { safeStorage } from "electron"
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { createHash, randomBytes } from "node:crypto"
-import { getDatabase, mcpCredentials, mcpToolCache, projects } from "../../db"
+import { getDatabase, mcpCredentials, mcpToolCache, projects, claudeCodeSettings, configSources } from "../../db"
 import { eq } from "drizzle-orm"
 import { getConsolidatedConfig } from "../../config/consolidator"
 import type {
@@ -28,8 +27,6 @@ import {
 import { BrowserWindow } from "electron"
 import { getCachedMcpTools } from "../../mcp/cache"
 import { queryBackgroundSession, isBackgroundSessionReady, getBackgroundSessionState, initBackgroundSession } from "../../claude/background-session"
-import { getDatabase, claudeCodeSettings } from "../../db"
-import { eq } from "drizzle-orm"
 
 // ============ TYPES ============
 
@@ -813,13 +810,13 @@ export const mcpRouter = router({
             // Check if cache is stale (config changed or older than 24 hours)
             const configHash = serverConfig ? hashServerConfig(serverConfig) : null
             const isHashStale = configHash !== cached.configHash
-            const isTimeStale =
-              cached.lastQueried &&
-              Date.now() - new Date(cached.lastQueried).getTime() > 24 * 60 * 60 * 1000
+            const isTimeStale = cached.lastQueried
+              ? Date.now() - new Date(cached.lastQueried).getTime() > 24 * 60 * 60 * 1000
+              : false
 
             result[serverId] = {
               count: cached.toolCount,
-              stale: isHashStale || isTimeStale,
+              stale: Boolean(isHashStale) || isTimeStale,
             }
           }
 
@@ -1426,8 +1423,9 @@ export const mcpRouter = router({
           url: z.string().url().optional(),
           headers: z.record(z.string(), z.string()).optional(),
         }),
-        configFile: z.enum(["project", "user"]).default("user"),
+        configFile: z.enum(["project", "user", "custom"]).default("user"),
         projectPath: z.string().optional(),
+        customPath: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -1444,9 +1442,14 @@ export const mcpRouter = router({
         }
 
         // Determine config file path
-        const configPath = input.configFile === "project" && input.projectPath
-          ? path.join(input.projectPath, ".claude", "mcp.json")
-          : path.join(os.homedir(), ".claude", "mcp.json")
+        let configPath: string
+        if (input.configFile === "custom" && input.customPath) {
+          configPath = input.customPath
+        } else if (input.configFile === "project" && input.projectPath) {
+          configPath = path.join(input.projectPath, ".claude", "mcp.json")
+        } else {
+          configPath = path.join(os.homedir(), ".claude", "mcp.json")
+        }
 
         // Check if server name already exists in consolidated config
         const consolidated = await getConsolidatedConfig(input.projectPath)
@@ -1469,7 +1472,7 @@ export const mcpRouter = router({
         }
 
         // Add the new server
-        config.mcpServers[input.name] = input.config
+        config.mcpServers![input.name] = input.config
 
         // Write back to file
         await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8")
@@ -1651,7 +1654,7 @@ export const mcpRouter = router({
         }
 
         // Query tools from the server (this tests the connection)
-        const tools = await queryMcpServerTools(input.config, { timeout: input.timeout })
+        const tools = await queryMcpServerTools(input.config)
 
         const duration = Date.now() - startTime
 
@@ -1668,6 +1671,136 @@ export const mcpRouter = router({
           success: false,
           error: error instanceof Error ? error.message : String(error),
           duration,
+        }
+      }
+    }),
+
+    /**
+   * Create a new empty MCP config file at a specified path
+   * Used for adding new custom MCP config files
+   */
+  createConfigFile: publicProcedure
+    .input(
+      z.object({
+        filePath: z.string().min(1, "File path is required"),
+      })
+    )
+    .mutation(async ({ input }): Promise<{ success: boolean; path?: string; error?: string }> => {
+      try {
+        const configPath = path.resolve(input.filePath) // Resolve to absolute path
+        const configDir = path.dirname(configPath)
+
+        // Ensure directory exists
+        if (!existsSync(configDir)) {
+          await fs.mkdir(configDir, { recursive: true })
+        }
+
+        // Check if file already exists
+        if (existsSync(configPath)) {
+          return {
+            success: false,
+            error: "Config file already exists",
+            path: configPath,
+          }
+        }
+
+        // Create empty config
+        const emptyConfig = {
+          mcpServers: {}
+        }
+
+        await fs.writeFile(configPath, JSON.stringify(emptyConfig, null, 2), "utf-8")
+
+        // Add to config sources in database so it's tracked by the consolidator
+        const db = getDatabase()
+        try {
+          // Check if this path is already registered
+          const existing = db
+            .select()
+            .from(configSources)
+            .where(eq(configSources.path, configPath))
+            .get()
+
+          if (!existing) {
+            db.insert(configSources)
+              .values({
+                type: "mcp",
+                path: configPath,
+                priority: 50, // Default priority for custom configs
+                enabled: true,
+              })
+              .run()
+            console.log("[mcp] Registered new config source:", configPath)
+          }
+        } catch (dbError) {
+          // Don't fail the operation if database insert fails
+          console.warn("[mcp] Failed to register config source (non-critical):", dbError)
+        }
+
+        console.log("[mcp] Created new config file at:", configPath)
+        return {
+          success: true,
+          path: configPath,
+        }
+      } catch (error) {
+        console.error("[mcp] Failed to create config file:", error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Delete an MCP config file
+   */
+  deleteConfigFile: publicProcedure
+    .input(
+      z.object({
+        filePath: z.string().min(1, "File path is required"),
+      })
+    )
+    .mutation(async ({ input }): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const configPath = path.resolve(input.filePath)
+
+        // Don't allow deleting the default user config
+        const defaultPath = getMcpConfigPath()
+        if (configPath === path.resolve(defaultPath)) {
+          return {
+            success: false,
+            error: "Cannot delete the default user config file (~/.claude/mcp.json)",
+          }
+        }
+
+        if (!existsSync(configPath)) {
+          return {
+            success: false,
+            error: "Config file does not exist",
+          }
+        }
+
+        await fs.unlink(configPath)
+
+        // Remove from config sources in database
+        const db = getDatabase()
+        try {
+          db.delete(configSources)
+            .where(eq(configSources.path, configPath))
+            .run()
+          console.log("[mcp] Removed config source:", configPath)
+        } catch (dbError) {
+          // Don't fail the operation if database delete fails
+          console.warn("[mcp] Failed to remove config source (non-critical):", dbError)
+        }
+
+        console.log("[mcp] Deleted config file:", configPath)
+        return { success: true }
+      } catch (error) {
+        console.error("[mcp] Failed to delete config file:", error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
         }
       }
     }),

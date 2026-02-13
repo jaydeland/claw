@@ -2,11 +2,13 @@
 
 import React from "react"
 import { useAtom } from "jotai"
-import { Search, Check, AlertTriangle, Minus, Loader2, Wrench } from "lucide-react"
+import { Search, Check, AlertTriangle, Minus, Loader2, Wrench, ChevronRight, ChevronDown, Folder, FolderOpen, FileJson, Home, Plus, Trash2, Sparkles } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { selectedMcpServerAtom, mcpServerSearchAtom } from "../atoms"
-import type { McpAuthStatus } from "../types"
+import { selectedMcpServerAtom, mcpServerSearchAtom, mcpAddServerDialogOpenAtom, mcpAddServerTargetFileAtom } from "../atoms"
+import type { McpAuthStatus, McpServerSource } from "../types"
+import { Button } from "../../../components/ui/button"
+import { toast } from "sonner"
 
 function getStatusIcon(status: McpAuthStatus) {
   switch (status) {
@@ -30,11 +32,77 @@ function getStatusText(status: McpAuthStatus) {
   }
 }
 
+function getSourceIcon(source: McpServerSource | undefined) {
+  if (!source) return <FileJson className="h-4 w-4 text-muted-foreground" />
+  switch (source.type) {
+    case "user":
+      return <Home className="h-4 w-4 text-primary" />
+    case "project":
+      return <Folder className="h-4 w-4 text-blue-500" />
+    case "custom":
+      return <FileJson className="h-4 w-4 text-orange-500" />
+  }
+}
+
+function getFileNameFromPath(filePath: string): string {
+  return filePath.split("/").pop() || filePath
+}
+
+function getShortPath(filePath: string, sourceType: string): string {
+  if (sourceType === "user") {
+    return "~/.claude/mcp.json"
+  }
+  // For project and custom, show last 2-3 segments
+  const parts = filePath.split("/")
+  if (parts.length > 3) {
+    return "..." + parts.slice(-3).join("/")
+  }
+  return filePath
+}
+
+interface FileGroup {
+  filePath: string
+  source: McpServerSource | undefined
+  servers: Array<{
+    id: string
+    name: string
+    config: {
+      command?: string
+      args?: string[]
+      env?: Record<string, string>
+      disabled?: boolean
+      autoApprove?: string[]
+      type?: "http" | "sse"
+      url?: string
+      headers?: Record<string, string>
+    }
+    authStatus: McpAuthStatus
+    credentialEnvVars: string[]
+    enabled: boolean
+    source?: McpServerSource
+  }>
+  isExpanded: boolean
+}
+
 export function McpServerList() {
   const [selectedServer, setSelectedServer] = useAtom(selectedMcpServerAtom)
   const [search, setSearch] = useAtom(mcpServerSearchAtom)
+  const [, setAddServerDialogOpen] = useAtom(mcpAddServerDialogOpenAtom)
+  const [, setAddServerTargetFile] = useAtom(mcpAddServerTargetFileAtom)
+  const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({})
 
   const { data, isLoading, error } = trpc.mcp.listServers.useQuery()
+  const utils = trpc.useUtils()
+
+  const deleteConfigFileMutation = trpc.mcp.deleteConfigFile.useMutation({
+    onSuccess: () => {
+      utils.mcp.listServers.invalidate()
+      toast.success("Config file deleted")
+    },
+    onError: (error) => {
+      toast.error("Failed to delete config file", { description: error.message })
+    },
+  })
 
   // Query cached tool counts for all servers
   const serverIds = React.useMemo(
@@ -46,17 +114,82 @@ export function McpServerList() {
     { enabled: serverIds.length > 0 }
   )
 
-  const filteredServers = React.useMemo(() => {
+  // Group servers by their specific config file path
+  const fileGroups = React.useMemo(() => {
     if (!data?.servers) return []
-    if (!search.trim()) return data.servers
+
+    const groups = new Map<string, FileGroup>()
+
+    for (const server of data.servers) {
+      // Use the actual file path as the key
+      const filePath = server.source?.path || "unknown"
+
+      if (!groups.has(filePath)) {
+        groups.set(filePath, {
+          filePath,
+          source: server.source,
+          servers: [],
+          isExpanded: expandedGroups[filePath] ?? true,
+        })
+      }
+
+      groups.get(filePath)!.servers.push(server)
+    }
+
+    // Sort groups: user configs first, then project, then custom
+    // Within each type, sort by path
+    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+      const typeOrder = { user: 0, project: 1, custom: 2, unknown: 3 }
+      const aType = a.source?.type ?? "unknown"
+      const bType = b.source?.type ?? "unknown"
+
+      if (typeOrder[aType] !== typeOrder[bType]) {
+        return typeOrder[aType] - typeOrder[bType]
+      }
+
+      // Within same type, sort by path
+      return a.filePath.localeCompare(b.filePath)
+    })
+
+    return sortedGroups
+  }, [data?.servers, expandedGroups])
+
+  // Filter servers within groups
+  const filteredGroups = React.useMemo(() => {
+    if (!search.trim()) return fileGroups
 
     const query = search.toLowerCase()
-    return data.servers.filter(
-      (server) =>
-        server.id.toLowerCase().includes(query) ||
-        server.name.toLowerCase().includes(query)
-    )
-  }, [data?.servers, search])
+    return fileGroups
+      .map((group) => ({
+        ...group,
+        servers: group.servers.filter(
+          (server) =>
+            server.id.toLowerCase().includes(query) ||
+            server.name.toLowerCase().includes(query)
+        ),
+      }))
+      .filter((group) => group.servers.length > 0)
+  }, [fileGroups, search])
+
+  const toggleGroup = (filePath: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [filePath]: !prev[filePath] }))
+  }
+
+  const handleAddServer = (filePath: string) => {
+    setAddServerTargetFile(filePath)
+    setAddServerDialogOpen(true)
+  }
+
+  const handleDeleteFile = (filePath: string, sourceType: string) => {
+    if (sourceType === "user") {
+      toast.error("Cannot delete the default user config file")
+      return
+    }
+
+    if (confirm(`Are you sure you want to delete this config file?\n\n${filePath}\n\nAll servers in this file will be removed.`)) {
+      deleteConfigFileMutation.mutate({ filePath })
+    }
+  }
 
   if (isLoading) {
     return (
@@ -90,9 +223,9 @@ export function McpServerList() {
         </div>
       </div>
 
-      {/* Server list */}
+      {/* Server list - Tree view by config file */}
       <div className="flex-1 overflow-y-auto">
-        {filteredServers.length === 0 ? (
+        {filteredGroups.length === 0 ? (
           <div className="p-4 text-sm text-muted-foreground text-center">
             {data?.servers?.length === 0
               ? "No MCP servers configured"
@@ -100,53 +233,135 @@ export function McpServerList() {
           </div>
         ) : (
           <div className="py-1">
-            {filteredServers.map((server) => {
-              const toolCount = toolCounts?.[server.id]
+            {filteredGroups.map((group) => {
+              const isExpanded = expandedGroups[group.filePath] ?? true
+              const isUserConfig = group.source?.type === "user"
+
               return (
-                <button
-                  key={server.id}
-                  type="button"
-                  onClick={() => setSelectedServer(server.id)}
-                  className={cn(
-                    "w-full px-3 py-2 text-left transition-colors",
-                    "hover:bg-muted/50",
-                    selectedServer === server.id && "bg-accent"
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "flex-1 text-sm font-medium truncate",
-                        !server.enabled && "text-muted-foreground"
-                      )}
+                <div key={group.filePath} className="mb-1">
+                  {/* Config file header */}
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-2",
+                      "bg-muted/30 border-b border-border",
+                      "hover:bg-muted/50 transition-colors group"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.filePath)}
+                      className="flex items-center gap-2 flex-1 text-left"
                     >
-                      {server.name}
-                    </span>
-                    {/* Tool count badge */}
-                    {server.enabled && toolCount && (
-                      <span
-                        className={cn(
-                          "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full",
-                          toolCount.stale
-                            ? "bg-muted text-muted-foreground"
-                            : "bg-primary/10 text-primary"
-                        )}
-                      >
-                        <Wrench className="h-3 w-3" />
-                        {toolCount.count}
+                      {isExpanded ? (
+                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      {getSourceIcon(group.source)}
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-medium text-foreground block truncate">
+                          {getFileNameFromPath(group.filePath)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground block truncate">
+                          {getShortPath(group.filePath, group.source?.type || "unknown")}
+                        </span>
+                      </div>
+                      <span className="text-xs text-muted-foreground/60">
+                        {group.servers.length}
                       </span>
-                    )}
-                    {!server.enabled && (
-                      <span className="text-xs text-muted-foreground">(disabled)</span>
+                    </button>
+
+                    {/* Add server button (AI assistant) */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleAddServer(group.filePath)}
+                      title={`Add server to ${getFileNameFromPath(group.filePath)}`}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    </Button>
+
+                    {/* Delete file button (not for user config) */}
+                    {!isUserConfig && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleDeleteFile(group.filePath, group.source?.type || "unknown")}
+                        disabled={deleteConfigFileMutation.isPending}
+                        title="Delete config file"
+                      >
+                        {deleteConfigFileMutation.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        )}
+                      </Button>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    {getStatusIcon(server.authStatus)}
-                    <span className="text-xs text-muted-foreground">
-                      {getStatusText(server.authStatus)}
-                    </span>
-                  </div>
-                </button>
+
+                  {/* Servers in this file */}
+                  {isExpanded && (
+                    <div className="ml-2 border-l border-border/50">
+                      {group.servers.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-muted-foreground italic">
+                          No servers in this file
+                        </div>
+                      ) : (
+                        group.servers.map((server) => {
+                          const toolCount = toolCounts?.[server.id]
+                          return (
+                            <button
+                              key={server.id}
+                              type="button"
+                              onClick={() => setSelectedServer(server.id)}
+                              className={cn(
+                                "w-full px-3 py-2 text-left transition-colors",
+                                "hover:bg-muted/50",
+                                selectedServer === server.id && "bg-accent"
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "flex-1 text-sm font-medium truncate",
+                                    !server.enabled && "text-muted-foreground"
+                                  )}
+                                >
+                                  {server.name}
+                                </span>
+                                {/* Tool count badge */}
+                                {server.enabled && toolCount && (
+                                  <span
+                                    className={cn(
+                                      "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full",
+                                      toolCount.stale
+                                        ? "bg-muted text-muted-foreground"
+                                        : "bg-primary/10 text-primary"
+                                    )}
+                                  >
+                                    <Wrench className="h-3 w-3" />
+                                    {toolCount.count}
+                                  </span>
+                                )}
+                                {!server.enabled && (
+                                  <span className="text-xs text-muted-foreground">(disabled)</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {getStatusIcon(server.authStatus)}
+                                <span className="text-xs text-muted-foreground">
+                                  {getStatusText(server.authStatus)}
+                                </span>
+                              </div>
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>

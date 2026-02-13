@@ -53,3 +53,27 @@ export const mcpServerSearchAtom = atom<string>("")
  * Format: "serverId:toolName" or null
  */
 export const selectedMcpToolAtom = atom<string | null>(null)
+
+// ============================================
+// MCP FILE DIALOG STATE
+// ============================================
+
+/**
+ * Controls the open/closed state of the Add MCP File dialog
+ */
+export const mcpAddFileDialogOpenAtom = atom<boolean>(false)
+
+// ============================================
+// MCP SERVER DIALOG STATE
+// ============================================
+
+/**
+ * Controls the open/closed state of the Add MCP Server dialog
+ */
+export const mcpAddServerDialogOpenAtom = atom<boolean>(false)
+
+/**
+ * The target config file path for adding a new server
+ * null = no target file (dialog closed)
+ */
+export const mcpAddServerTargetFileAtom = atom<string | null>(null)

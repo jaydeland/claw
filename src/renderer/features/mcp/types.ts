@@ -15,6 +15,16 @@ export interface McpServerConfig {
 export type McpAuthStatus = "no_auth_needed" | "configured" | "missing_credentials"
 
 /**
+ * Source of an MCP config file
+ */
+export type McpServerSource = {
+  type: "project" | "user" | "custom"
+  path: string
+  priority: number
+  exists: boolean
+}
+
+/**
  * MCP server with auth status
  */
 export interface McpServer {
@@ -24,4 +34,5 @@ export interface McpServer {
   authStatus: McpAuthStatus
   credentialEnvVars: string[]
   enabled: boolean
+  source?: McpServerSource
 }
