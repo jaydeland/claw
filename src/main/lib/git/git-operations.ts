@@ -4,7 +4,8 @@ import { z } from "zod";
 import { publicProcedure, router } from "../trpc";
 import { isUpstreamMissingError } from "./git-utils";
 import { assertRegisteredWorktree } from "./security";
-import { fetchGitHubPRStatus } from "./github";
+import { fetchGitHubPRStatus, invalidateGitHubPRStatusCache } from "./github";
+import { gitCache } from "./cache";
 import {
 	createGit,
 	createGitForNetwork,
@@ -118,6 +119,7 @@ export const createGitOperationsRouter = () => {
 					await withLockRetry(input.worktreePath, () =>
 						git.fetch(["--all", "--prune"])
 					);
+					gitCache.invalidateStatus(input.worktreePath);
 					return { success: true };
 				});
 			}),
@@ -225,6 +227,7 @@ export const createGitOperationsRouter = () => {
 						const result = await withLockRetry(input.worktreePath, () =>
 							git.commit(input.message)
 						);
+						gitCache.invalidateStatus(input.worktreePath);
 						return { success: true, hash: result.commit };
 					});
 				},
@@ -277,6 +280,7 @@ export const createGitOperationsRouter = () => {
 							git.commit(input.message)
 						);
 
+						gitCache.invalidateStatus(input.worktreePath);
 						return { success: true, hash: result.commit };
 					});
 				},
@@ -305,6 +309,8 @@ export const createGitOperationsRouter = () => {
 						await withLockRetry(input.worktreePath, () => git.push());
 					}
 					await git.fetch();
+					gitCache.invalidateStatus(input.worktreePath);
+					invalidateGitHubPRStatusCache(input.worktreePath);
 					return { success: true };
 				});
 			}),
@@ -377,6 +383,7 @@ export const createGitOperationsRouter = () => {
 						}
 						throw error;
 					}
+					gitCache.invalidateStatus(input.worktreePath);
 					return { success: true };
 				});
 			}),
@@ -450,6 +457,7 @@ export const createGitOperationsRouter = () => {
 					}
 					await withLockRetry(input.worktreePath, () => git.push());
 					await git.fetch();
+					gitCache.invalidateStatus(input.worktreePath);
 					return { success: true };
 				});
 			}),
@@ -481,6 +489,8 @@ export const createGitOperationsRouter = () => {
 						git.push(["--force-with-lease"])
 					);
 					await git.fetch();
+					gitCache.invalidateStatus(input.worktreePath);
+					invalidateGitHubPRStatusCache(input.worktreePath);
 					return { success: true };
 				});
 			}),
@@ -564,6 +574,7 @@ export const createGitOperationsRouter = () => {
 						throw error;
 					}
 
+					gitCache.invalidateStatus(input.worktreePath);
 					return { success: true };
 				});
 			}),
@@ -818,6 +829,7 @@ export const createGitOperationsRouter = () => {
 							await git.checkout(sourceBranch).catch(() => {});
 						}
 
+						gitCache.invalidateStatus(input.worktreePath);
 						return { success: true, mergeType };
 					});
 				}
@@ -836,6 +848,7 @@ export const createGitOperationsRouter = () => {
 				return withGitLock(input.worktreePath, async () => {
 					const git = createGit(input.worktreePath);
 					await git.rebase(["--abort"]);
+					gitCache.invalidateStatus(input.worktreePath);
 					return { success: true };
 				});
 			}),
@@ -853,6 +866,7 @@ export const createGitOperationsRouter = () => {
 				return withGitLock(input.worktreePath, async () => {
 					const git = createGit(input.worktreePath);
 					await git.merge(["--abort"]);
+					gitCache.invalidateStatus(input.worktreePath);
 					return { success: true };
 				});
 			}),
@@ -909,6 +923,8 @@ export const createGitOperationsRouter = () => {
 
 						await shell.openExternal(url);
 						await git.fetch();
+						gitCache.invalidateStatus(input.worktreePath);
+						invalidateGitHubPRStatusCache(input.worktreePath);
 
 						return { success: true, url };
 					});

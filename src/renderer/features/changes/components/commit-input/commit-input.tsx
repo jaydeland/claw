@@ -45,9 +45,9 @@ export function CommitInput({
 			setDescription("");
 			// Refetch queries immediately to update UI
 			// Use refetch instead of invalidate to force immediate fetch
-			await utils.changes.getStatus.refetch();
-			await utils.changes.getSyncStatus.refetch();
-			await utils.changes.getGitHubStatus.refetch();
+			await utils.changes.getStatus.refetch({ worktreePath });
+			await utils.changes.getSyncStatus.refetch({ worktreePath });
+			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh();
 			onCommitSuccess?.();
 		},
@@ -63,9 +63,9 @@ export function CommitInput({
 			setSummary("");
 			setDescription("");
 			// Refetch queries immediately to update UI
-			await utils.changes.getStatus.refetch();
-			await utils.changes.getSyncStatus.refetch();
-			await utils.changes.getGitHubStatus.refetch();
+			await utils.changes.getStatus.refetch({ worktreePath });
+			await utils.changes.getSyncStatus.refetch({ worktreePath });
+			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh();
 			onCommitSuccess?.();
 		},

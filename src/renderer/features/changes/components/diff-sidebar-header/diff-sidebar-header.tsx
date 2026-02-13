@@ -187,9 +187,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 			setLastFetchTime(new Date());
 			refetchBranches();
 			// Refetch queries immediately to update UI
-			await utils.changes.getStatus.refetch();
-			await utils.changes.getSyncStatus.refetch();
-			await utils.changes.getGitHubStatus.refetch();
+			await utils.changes.getStatus.refetch({ worktreePath });
+			await utils.changes.getSyncStatus.refetch({ worktreePath });
+			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
 	});
@@ -197,9 +197,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const pushMutation = trpc.changes.push.useMutation({
 		onSuccess: async () => {
 			// Refetch queries immediately to update UI
-			await utils.changes.getStatus.refetch();
-			await utils.changes.getSyncStatus.refetch();
-			await utils.changes.getGitHubStatus.refetch();
+			await utils.changes.getStatus.refetch({ worktreePath });
+			await utils.changes.getSyncStatus.refetch({ worktreePath });
+			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
 		onError: (error) => toast.error(`Push failed: ${error.message}`),
@@ -208,9 +208,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const pullMutation = trpc.changes.pull.useMutation({
 		onSuccess: async () => {
 			// Refetch queries immediately to update UI
-			await utils.changes.getStatus.refetch();
-			await utils.changes.getSyncStatus.refetch();
-			await utils.changes.getGitHubStatus.refetch();
+			await utils.changes.getStatus.refetch({ worktreePath });
+			await utils.changes.getSyncStatus.refetch({ worktreePath });
+			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
 		onError: (error) => toast.error(`Pull failed: ${error.message}`),
@@ -219,9 +219,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const forcePushMutation = trpc.changes.forcePush.useMutation({
 		onSuccess: async () => {
 			// Refetch queries immediately to update UI
-			await utils.changes.getStatus.refetch();
-			await utils.changes.getSyncStatus.refetch();
-			await utils.changes.getGitHubStatus.refetch();
+			await utils.changes.getStatus.refetch({ worktreePath });
+			await utils.changes.getSyncStatus.refetch({ worktreePath });
+			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
 		onError: (error: { message: string }) => toast.error(`Force push failed: ${error.message}`),
@@ -230,9 +230,9 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const mergeFromDefaultMutation = trpc.changes.mergeFromDefault.useMutation({
 		onSuccess: async () => {
 			// Refetch queries immediately to update UI
-			await utils.changes.getStatus.refetch();
-			await utils.changes.getSyncStatus.refetch();
-			await utils.changes.getGitHubStatus.refetch();
+			await utils.changes.getStatus.refetch({ worktreePath });
+			await utils.changes.getSyncStatus.refetch({ worktreePath });
+			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
 		onError: (error: { message: string }) => toast.error(`Merge failed: ${error.message}`),
