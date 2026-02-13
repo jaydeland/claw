@@ -527,6 +527,11 @@ export function buildClaudeEnv(options?: {
           env.OLLAMA_API_KEY = customEnv.OLLAMA_API_KEY
         }
 
+        // Model selection for Ollama/Custom API
+        if (customEnv.ANTHROPIC_MODEL) {
+          env.ANTHROPIC_MODEL = customEnv.ANTHROPIC_MODEL
+        }
+
         // Determine if this is Ollama mode (check by baseUrl or the "ollama" marker token)
         const isOllamaMode = customEnv.ANTHROPIC_AUTH_TOKEN === "ollama" ||
                              (customEnv.ANTHROPIC_BASE_URL && customEnv.ANTHROPIC_BASE_URL.includes("ollama.com"))
@@ -537,11 +542,13 @@ export function buildClaudeEnv(options?: {
             baseUrl: customEnv.ANTHROPIC_BASE_URL,
             mode: isCloudMode ? "cloud" : "local",
             hasOllamaApiKey: !!customEnv.OLLAMA_API_KEY,
+            model: customEnv.ANTHROPIC_MODEL || "not set",
           })
         } else {
           console.log("[claude-env] Using Custom API configuration:", {
             baseUrl: customEnv.ANTHROPIC_BASE_URL,
             hasApiKey: !!customEnv.ANTHROPIC_API_KEY,
+            model: customEnv.ANTHROPIC_MODEL || "not set",
           })
         }
       }
@@ -589,6 +596,9 @@ export function logClaudeEnv(
   )
   console.log(
     `${prefix}[claude-env] OLLAMA_API_KEY: ${env.OLLAMA_API_KEY ? "set" : "not set"}`,
+  )
+  console.log(
+    `${prefix}[claude-env] ANTHROPIC_MODEL: ${env.ANTHROPIC_MODEL || "not set"}`,
   )
   if (env.ANTHROPIC_AUTH_TOKEN === "ollama") {
     console.log(`${prefix}[claude-env] Ollama mode detected`)

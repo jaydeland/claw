@@ -15,7 +15,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { existsSync } from "fs"
 import { buildClaudeEnv, getBundledClaudeBinaryPath } from "./env"
-import { getDatabase, claudeCodeCredentials } from "../db"
+import { getDatabase, claudeCodeCredentials, claudeCodeSettings } from "../db"
 import { eq } from "drizzle-orm"
 import { safeStorage } from "electron"
 
@@ -153,6 +153,22 @@ export async function initBackgroundSession(
       }),
     }
 
+    // Check if using Ollama/custom API and get model from settings
+    let resolvedModel = config?.model || "haiku"
+    try {
+      const db = getDatabase()
+      const settings = db.select().from(claudeCodeSettings).where(eq(claudeCodeSettings.id, "default")).get()
+      if (settings?.customEnvVars) {
+        const customEnv = JSON.parse(settings.customEnvVars)
+        if (customEnv.ANTHROPIC_MODEL) {
+          resolvedModel = customEnv.ANTHROPIC_MODEL
+          console.log("[background-session] Using model from settings:", resolvedModel)
+        }
+      }
+    } catch (e) {
+      // Ignore errors, use default
+    }
+
     // Get bundled Claude binary path
     const claudeBinaryPath = getBundledClaudeBinaryPath()
 
@@ -160,7 +176,7 @@ export async function initBackgroundSession(
     backgroundAbortController = new AbortController()
 
     // Resolve model and working directory
-    const model = config?.model || "haiku"
+    const model = resolvedModel
     const cwd = config?.cwd || app.getPath("userData")
 
     sessionState.model = model
@@ -171,6 +187,14 @@ export async function initBackgroundSession(
       await fs.rm(backgroundProjectsDir, { recursive: true, force: true })
       console.log("[background-session] Cleaned up stale session files")
     }
+
+    // Detect Ollama/Custom API mode
+    const isOllamaInit = finalEnv.ANTHROPIC_AUTH_TOKEN === "ollama" ||
+                         finalEnv.ANTHROPIC_BASE_URL?.includes("ollama")
+    const isCustomApiInit = finalEnv.ANTHROPIC_BASE_URL && !isOllamaInit
+
+    // For Ollama/Custom API, DON'T pass model option - use ANTHROPIC_MODEL env var instead
+    const useExplicitModelInit = !isOllamaInit && !isCustomApiInit
 
     // Initialize with a simple ping to verify the session works
     const queryOptions = {
@@ -187,7 +211,8 @@ export async function initBackgroundSession(
         allowDangerouslySkipPermissions: true,
         pathToClaudeCodeExecutable: claudeBinaryPath,
         // Omit continue for fresh initialization - let SDK create new session
-        model,
+        // Only pass model for Anthropic API - Ollama/Custom API use ANTHROPIC_MODEL env var
+        ...(useExplicitModelInit && { model }),
         persistSession: false, // Don't save ephemeral utility sessions
       },
     }
@@ -195,13 +220,34 @@ export async function initBackgroundSession(
     // Run a quick query to initialize the session
     const stream = claudeQuery(queryOptions)
     let gotInit = false
+    let initResponseText = ""
+    let messageTypes: string[] = []
 
     for await (const msg of stream) {
       const msgAny = msg as any
 
+      // Track message types for debugging
+      if (msgAny.type && !messageTypes.includes(msgAny.type)) {
+        messageTypes.push(msgAny.type)
+      }
+
       // Track sessionId from any message
       if (msgAny.session_id && !sessionState.sessionId) {
         sessionState.sessionId = msgAny.session_id
+      }
+
+      // Collect any text content from assistant messages (for debugging)
+      if (msgAny.type === "assistant" && msgAny.message?.content) {
+        const content = msgAny.message.content
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "text" && block.text) {
+              initResponseText += block.text
+            }
+          }
+        } else if (typeof content === "string") {
+          initResponseText += content
+        }
       }
 
       // Check for init message
@@ -214,6 +260,10 @@ export async function initBackgroundSession(
       // Also check for result message (means session is working)
       if (msgAny.type === "result") {
         gotInit = true
+        // Log if result is empty but we might need content
+        if (!msgAny.result && !initResponseText) {
+          console.log("[background-session] Warning: Empty result in init, message types seen:", messageTypes.join(", "))
+        }
         break
       }
     }
@@ -223,12 +273,12 @@ export async function initBackgroundSession(
       sessionState.requestCount = 1
       sessionState.lastUsedTime = new Date()
       console.log(
-        `[background-session] Initialized successfully (session: ${sessionState.sessionId?.slice(0, 8)}...)`
+        `[background-session] Initialized successfully (session: ${sessionState.sessionId?.slice(0, 8)}..., response: ${initResponseText.length} chars, types: ${messageTypes.join(", ")})`
       )
     } else {
       sessionState.status = "error"
       sessionState.errorMessage = "Did not receive init message"
-      console.error("[background-session] Did not receive init message")
+      console.error("[background-session] Did not receive init message, types seen:", messageTypes.join(", "))
     }
 
     return sessionState
@@ -296,8 +346,33 @@ export async function queryBackgroundSession(
     const claudeBinaryPath = getBundledClaudeBinaryPath()
     const model = options?.model || sessionState.model
 
+    // Log debug info for troubleshooting
+    const isOllama = finalEnv.ANTHROPIC_AUTH_TOKEN === "ollama" ||
+                     finalEnv.ANTHROPIC_BASE_URL?.includes("ollama")
+    const isCustomApi = finalEnv.ANTHROPIC_BASE_URL && !isOllama
+    if (isOllama || isCustomApi) {
+      console.log("[background-session] Query with custom provider:", {
+        model,
+        baseUrl: finalEnv.ANTHROPIC_BASE_URL,
+        hasAuthToken: !!finalEnv.ANTHROPIC_AUTH_TOKEN,
+        hasApiKey: !!finalEnv.ANTHROPIC_API_KEY,
+        provider: isOllama ? "ollama" : "custom-api",
+      })
+      // Warn about potentially invalid configurations
+      if (model?.includes("kimi") || model?.includes("claude")) {
+        console.warn("[background-session] Warning: Model name '" + model + "' looks like an Anthropic/Claude model but using custom provider. This may cause issues.")
+      }
+    }
+
     // Create new abort controller for this query
     const queryAbortController = new AbortController()
+
+    // For Ollama/Custom API, DON'T pass model option - use ANTHROPIC_MODEL env var instead
+    // The model option is for Anthropic model names only (haiku, sonnet, opus)
+    const useExplicitModel = !isOllama && !isCustomApi
+    if (isOllama || isCustomApi) {
+      console.log(`[background-session] Using env ANTHROPIC_MODEL=${finalEnv.ANTHROPIC_MODEL}, skipping model option`)
+    }
 
     const queryOptions = {
       prompt,
@@ -317,39 +392,94 @@ export async function queryBackgroundSession(
           resume: sessionState.sessionId,
           continue: true,
         }),
-        model,
+        // Only pass model for Anthropic API - Ollama/Custom API use ANTHROPIC_MODEL env var
+        ...(useExplicitModel && { model }),
         persistSession: false, // Don't save ephemeral utility sessions
       },
     }
 
     const stream = claudeQuery(queryOptions)
     let responseText = ""
+    let messageCount = 0
 
     for await (const msg of stream) {
       const msgAny = msg as any
+      messageCount++
+
+      // Debug: Log first few messages to understand structure
+      if ((isOllama || isCustomApi) && messageCount <= 5) {
+        console.log(`[background-session] Message ${messageCount}:`, {
+          type: msgAny.type,
+          subtype: msgAny.subtype,
+          hasMessage: !!msgAny.message,
+          hasContent: !!msgAny.message?.content,
+          contentType: typeof msgAny.message?.content,
+          hasResult: !!msgAny.result,
+          resultType: typeof msgAny.result,
+          keys: Object.keys(msgAny).join(", "),
+        })
+        // Log full message for debugging (limited size)
+        const msgStr = JSON.stringify(msgAny)
+        if (msgStr.length < 2000) {
+          console.log(`[background-session] Full message ${messageCount}:`, msgStr)
+        } else {
+          console.log(`[background-session] Full message ${messageCount} (truncated):`, msgStr.substring(0, 2000) + "...")
+        }
+      }
 
       // Update sessionId if we get a new one
       if (msgAny.session_id) {
         sessionState.sessionId = msgAny.session_id
       }
 
-      // Collect text content
+      // Collect text content from assistant messages
       if (msgAny.type === "assistant" && msgAny.message?.content) {
-        if (!Array.isArray(msgAny.message.content)) {
-          console.warn("[BackgroundSession] Expected content to be array, got:", typeof msgAny.message.content)
-          continue
-        }
-        for (const block of msgAny.message.content) {
-          if (block.type === "text") {
-            responseText += block.text
+        const content = msgAny.message.content
+
+        // Handle array format (Anthropic standard)
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "text" && block.text) {
+              responseText += block.text
+            }
           }
+        }
+        // Handle string format (Ollama may return plain text)
+        else if (typeof content === "string") {
+          responseText += content
+        }
+        // Handle object with text property
+        else if (typeof content === "object" && content.text) {
+          responseText += String(content.text)
+        }
+        else {
+          console.warn("[BackgroundSession] Unexpected content format:", typeof content, JSON.stringify(content).slice(0, 200))
         }
       }
 
-      // Check for result message
+      // Also check for direct text in message
+      if (msgAny.type === "assistant" && msgAny.message?.text) {
+        responseText += String(msgAny.message.text)
+      }
+
+      // Check for result message - this signals the end
       if (msgAny.type === "result") {
-        if (msgAny.result) {
+        // If we have a result but no collected text yet, try to use the result
+        if (msgAny.result && !responseText) {
           responseText = msgAny.result
+        }
+        // Log if result is empty but we have text (normal case)
+        if (!msgAny.result && responseText) {
+          console.log("[BackgroundSession] Stream completed with", responseText.length, "chars")
+        }
+        // Debug: Log result structure for Ollama
+        if (isOllama) {
+          console.log("[background-session] Result message:", {
+            hasResult: !!msgAny.result,
+            resultType: typeof msgAny.result,
+            isError: msgAny.is_error,
+            errors: msgAny.errors,
+          })
         }
         break
       }
@@ -357,6 +487,11 @@ export async function queryBackgroundSession(
 
     sessionState.requestCount++
     sessionState.lastUsedTime = new Date()
+
+    // Debug log if response is empty (helps diagnose issues)
+    if (!responseText) {
+      console.warn("[BackgroundSession] Empty response after", messageCount, "messages")
+    }
 
     return { text: responseText, success: true }
   } catch (error) {
@@ -606,6 +741,14 @@ export async function executeBackgroundTask(
     const claudeCodeToken = getClaudeCodeToken()
     const claudeEnv = buildClaudeEnv()
 
+    // Debug logging for model selection
+    console.log("[background-session] Task options:", {
+      requestedModel: options?.model || "default (sonnet)",
+      anthropicModelFromEnv: claudeEnv.ANTHROPIC_MODEL || "not set",
+      authToken: claudeEnv.ANTHROPIC_AUTH_TOKEN ? "set" : "not set",
+      baseUrl: claudeEnv.ANTHROPIC_BASE_URL || "not set",
+    })
+
     const finalEnv: Record<string, string> = {
       ...claudeEnv,
       ...(claudeCodeToken && {
@@ -625,7 +768,33 @@ export async function executeBackgroundTask(
     }
 
     const claudeBinaryPath = getBundledClaudeBinaryPath()
-    const model = options?.model || "sonnet"
+
+    // Detect Ollama/Custom API mode and use the configured model
+    const isOllamaMode = finalEnv.ANTHROPIC_AUTH_TOKEN === "ollama" ||
+                         (finalEnv.ANTHROPIC_BASE_URL?.includes("ollama.com") ?? false)
+    const isCustomApiMode = finalEnv.ANTHROPIC_BASE_URL && !finalEnv.CLAUDE_CODE_USE_BEDROCK
+
+    let model = options?.model || "sonnet"
+
+    // Use the stored model from settings when using Ollama or Custom API
+    if ((isOllamaMode || isCustomApiMode) && finalEnv.ANTHROPIC_MODEL) {
+      model = finalEnv.ANTHROPIC_MODEL
+      console.log(`[background-session] Using configured model from settings: ${model}`)
+    } else if (isOllamaMode) {
+      if (!finalEnv.ANTHROPIC_MODEL) {
+        console.log(`[background-session] No ANTHROPIC_MODEL configured - re-save Ollama settings to use your selected model`)
+      }
+      // Fallback: Map Anthropic model names to Ollama model names
+      const ollamaModelMap: Record<string, string> = {
+        "haiku": "claude-haiku",
+        "sonnet": "claude-sonnet",
+        "opus": "claude-opus"
+      }
+      model = ollamaModelMap[model] || model
+      console.log(`[background-session] Ollama mode detected, using mapped model: ${model}`)
+    }
+
+    const resolvedModel = model
 
     // Create abort controller for this task
     const taskAbortController = new AbortController()

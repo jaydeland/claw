@@ -31,7 +31,6 @@ import {
   SidebarTabBar,
   HistoryTabContent,
   WorkspacesTabContent,
-  CommandsTabContent,
   AgentsTabContent,
   SkillsTabContent,
   McpsTabContent,
@@ -284,8 +283,6 @@ export function AgentsLayout() {
                 <WorkspacesTabContent className="h-full" />
               ) : selectedSidebarTab === "terminal" ? (
                 <TerminalTabContent className="h-full" />
-              ) : selectedSidebarTab === "commands" ? (
-                <CommandsTabContent className="h-full" />
               ) : selectedSidebarTab === "agents" ? (
                 <AgentsTabContent className="h-full" />
               ) : selectedSidebarTab === "skills" ? (

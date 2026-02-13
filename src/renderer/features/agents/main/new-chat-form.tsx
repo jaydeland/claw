@@ -44,7 +44,7 @@ import {
 } from "../atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
-import { CommandsDropdown } from "../components/commands-dropdown"
+import { SkillsDropdown } from "../components/skills-dropdown"
 import { GsdDropdown } from "../components/gsd-dropdown"
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
@@ -1468,9 +1468,9 @@ export function NewChatForm({
                         </DropdownMenuContent>
                       </DropdownMenu>
 
-                      {/* Commands Dropdown */}
-                      <CommandsDropdown
-                        onCommandSelect={handleCommandSelect}
+                      {/* Skills Dropdown - Shows skills and commands */}
+                      <SkillsDropdown
+                        onSkillSelect={handleSkillSelect}
                         disabled={createChatMutation.isPending}
                       />
 

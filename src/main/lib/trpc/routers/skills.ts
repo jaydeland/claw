@@ -89,6 +89,16 @@ interface FileSkill {
   description: string
   source: "user" | "project" | "custom"
   path: string
+  type: "skill" | "command"
+}
+
+interface FileCommand {
+  name: string
+  description: string
+  argumentHint?: string
+  source: "user" | "project" | "custom"
+  path: string
+  type: "skill" | "command"
 }
 
 /**
@@ -109,6 +119,40 @@ function parseSkillMd(content: string): { name?: string; description?: string } 
     console.error("[skills] Failed to parse frontmatter:", err)
     return {}
   }
+}
+
+/**
+ * Parse command .md frontmatter to extract description and argument-hint
+ */
+function parseCommandMd(content: string): {
+  description?: string
+  argumentHint?: string
+} {
+  try {
+    const { data } = matter(content, {
+      engines: {
+        yaml: { parse: parseYamlSafe }
+      }
+    })
+    return {
+      description:
+        typeof data.description === "string" ? data.description : undefined,
+      argumentHint:
+        typeof data["argument-hint"] === "string"
+          ? data["argument-hint"]
+          : undefined,
+    }
+  } catch (err) {
+    console.error("[skills] Failed to parse command frontmatter:", err)
+    return {}
+  }
+}
+
+/**
+ * Validate entry name for security (prevent path traversal)
+ */
+function isValidEntryName(name: string): boolean {
+  return !name.includes("..") && !name.includes("/") && !name.includes("\\")
 }
 
 /**
@@ -161,6 +205,7 @@ async function scanSkillsDirectory(
           description: parsed.description || "",
           source,
           path: skillMdPath,
+          type: "skill",
         })
       } catch {
         // No SKILL.md in this directory - check if it's a namespace directory
@@ -178,6 +223,71 @@ async function scanSkillsDirectory(
   }
 
   return skills
+}
+
+/**
+ * Recursively scan a directory for .md command files
+ * Supports namespaces via nested folders: git/commit.md → git:commit
+ */
+async function scanCommandsDirectory(
+  dir: string,
+  source: "user" | "project" | "custom",
+  prefix = "",
+): Promise<FileCommand[]> {
+  const commands: FileCommand[] = []
+
+  try {
+    // Check if directory exists
+    try {
+      await fs.access(dir)
+    } catch {
+      return commands
+    }
+
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+
+    for (const entry of entries) {
+      if (!isValidEntryName(entry.name)) {
+        console.warn(`[skills] Skipping invalid entry name: ${entry.name}`)
+        continue
+      }
+
+      const fullPath = path.join(dir, entry.name)
+
+      if (entry.isDirectory()) {
+        // Recursively scan nested directories
+        const nestedCommands = await scanCommandsDirectory(
+          fullPath,
+          source,
+          prefix ? `${prefix}:${entry.name}` : entry.name,
+        )
+        commands.push(...nestedCommands)
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        const baseName = entry.name.replace(/\.md$/, "")
+        const commandName = prefix ? `${prefix}:${baseName}` : baseName
+
+        try {
+          const content = await fs.readFile(fullPath, "utf-8")
+          const parsed = parseCommandMd(content)
+
+          commands.push({
+            name: commandName,
+            description: parsed.description || "",
+            argumentHint: parsed.argumentHint,
+            source,
+            path: fullPath,
+            type: "command",
+          })
+        } catch (err) {
+          console.warn(`[skills] Failed to read ${fullPath}:`, err)
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[skills] Failed to scan commands directory ${dir}:`, err)
+  }
+
+  return commands
 }
 
 // Shared procedure for listing skills
@@ -230,6 +340,82 @@ const listSkillsProcedure = publicProcedure
     return skills
   })
 
+// Combined procedure for listing both skills and commands
+const listCombinedProcedure = publicProcedure
+  .input(
+    z
+      .object({
+        cwd: z.string().optional(),
+      })
+      .optional(),
+  )
+  .query(async ({ input }) => {
+    const skillLocations = getScanLocations("skills", input?.cwd)
+    const customDirs = getCustomPluginDirectories()
+
+    // Scan skills directories
+    const skillPromises: Promise<FileSkill[]>[] = []
+
+    if (skillLocations.projectDir) {
+      skillPromises.push(scanSkillsDirectory(skillLocations.projectDir, "project"))
+    }
+    skillPromises.push(scanSkillsDirectory(skillLocations.userDir, "user"))
+    for (const customDir of customDirs) {
+      const skillsDir = path.join(customDir.path, "skills")
+      skillPromises.push(scanSkillsDirectory(skillsDir, "custom"))
+    }
+
+    // Scan commands directories
+    const homeDir = os.homedir()
+    const userCommandsDir = path.join(homeDir, ".claude", "commands")
+    const projectCommandsDir = input?.cwd
+      ? path.join(input.cwd, ".claude", "commands")
+      : null
+
+    const commandPromises: Promise<FileCommand[]>[] = []
+
+    if (projectCommandsDir) {
+      commandPromises.push(scanCommandsDirectory(projectCommandsDir, "project"))
+    }
+    commandPromises.push(scanCommandsDirectory(userCommandsDir, "user"))
+    for (const customDir of customDirs) {
+      const commandsDir = path.join(customDir.path, "commands")
+      commandPromises.push(scanCommandsDirectory(commandsDir, "custom"))
+    }
+
+    // Wait for all scans to complete
+    const [skillResults, commandResults] = await Promise.all([
+      Promise.all(skillPromises),
+      Promise.all(commandPromises),
+    ])
+
+    // Combine and deduplicate (skills take precedence over commands with same name)
+    const seenNames = new Set<string>()
+    const combined: FileSkill[] = []
+
+    // Add skills first (higher priority)
+    for (const skillList of skillResults) {
+      for (const skill of skillList) {
+        if (!seenNames.has(skill.name)) {
+          seenNames.add(skill.name)
+          combined.push(skill)
+        }
+      }
+    }
+
+    // Add commands (skip if name already exists from skills)
+    for (const commandList of commandResults) {
+      for (const command of commandList) {
+        if (!seenNames.has(command.name)) {
+          seenNames.add(command.name)
+          combined.push(command as FileSkill)
+        }
+      }
+    }
+
+    return combined
+  })
+
 export const skillsRouter = router({
   /**
    * List all skills from filesystem
@@ -242,4 +428,10 @@ export const skillsRouter = router({
    * Alias for list - used by @ mention
    */
   listEnabled: listSkillsProcedure,
+
+  /**
+   * List both skills and commands combined
+   * Skills take precedence over commands with the same name
+   */
+  listCombined: listCombinedProcedure,
 })

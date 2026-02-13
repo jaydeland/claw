@@ -38,7 +38,6 @@ const tabs: TabItem[] = [
   { id: "chats", label: "Workspaces", icon: FolderOpen },
   { id: "clusters", label: "Clusters", icon: Server },
   { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
-  { id: "commands", label: "Commands", icon: Terminal },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },

@@ -52,6 +52,8 @@ export const chats = sqliteTable("chats", {
   // PR tracking fields
   prUrl: text("pr_url"),
   prNumber: integer("pr_number"),
+  // Transient chat flag (for temporary mini-conversations like MCP config dialog)
+  isTransient: integer("is_transient", { mode: "boolean" }).default(false),
 })
 
 export const chatsRelations = relations(chats, ({ one, many }) => ({

@@ -655,28 +655,22 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
 // COMMAND SELECTION
 // ============================================
 
-/**
- * Currently selected command path for detail view
- * null = no command selected
- */
-export const selectedCommandAtom = atom<string | null>(null)
-
 // ============================================
 // SIDEBAR TAB NAVIGATION
 // ============================================
 
 /**
  * Sidebar tab types:
+ * - "history": Chat history view
  * - "chats": Default chat list view
- * - "commands": List of available commands
  * - "agents": List of available agents
- * - "skills": List of available skills
+ * - "skills": List of available skills (includes commands)
  * - "mcps": List of MCP servers
  * - "clusters": Cluster management
  * - "terminal": Terminal sessions list
  * - "gsd": GSD (Get Shit Done) planning framework
  */
-export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd"
+export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd"
 
 /**
  * Currently selected sidebar tab (persisted)

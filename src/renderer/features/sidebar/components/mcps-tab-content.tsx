@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useMemo, useState } from "react"
-import { Plug, ChevronRight, CheckCircle, XCircle, Clock, AlertTriangle } from "lucide-react"
+import { Plug, ChevronRight, CheckCircle, XCircle, Clock, AlertTriangle, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
@@ -10,6 +11,7 @@ import { useAtomValue, useSetAtom } from "jotai"
 import { selectWorkflowItemAtom } from "../../workflows/atoms"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../main/lib/trpc/routers"
+import { McpServerDialog } from "../../mcp/ui/mcp-server-dialog"
 
 type RouterOutput = inferRouterOutputs<AppRouter>
 type McpServerType = RouterOutput["mcp"]["listServers"]["servers"][number]
@@ -54,12 +56,37 @@ function AuthStatusIndicator({ status }: { status: McpAuthStatus }) {
 
 export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const selectWorkflowItem = useSetAtom(selectWorkflowItemAtom)
 
   // Fetch MCP servers using tRPC
   const { data: mcpServers, isLoading } = trpc.mcp.listServers.useQuery({
     projectPath: selectedProject?.path,
+  })
+
+  const utils = trpc.useUtils()
+
+  // Mutation to create default MCP config
+  const createDefaultConfig = trpc.mcp.createDefaultConfig.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Created MCP config", {
+          description: `Edit ${result.path} to configure your MCP servers.`,
+        })
+        // Refresh the list
+        utils.mcp.listServers.invalidate()
+      } else {
+        toast.error("Failed to create config", {
+          description: result.error,
+        })
+      }
+    },
+    onError: (error) => {
+      toast.error("Error creating config", {
+        description: error.message,
+      })
+    },
   })
 
   // Debug logging for merged list
@@ -93,17 +120,26 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
-      {/* Search input */}
-      <div className="px-2 pb-2 flex-shrink-0">
-        <Input
-          placeholder="Search MCPs..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className={cn(
-            "w-full rounded-lg text-sm bg-muted border border-input placeholder:text-muted-foreground/40",
-            isMobileFullscreen ? "h-10" : "h-7",
-          )}
-        />
+      {/* Search input and Add button */}
+      <div className="px-2 pb-2 flex-shrink-0 space-y-2">
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Search MCPs..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={cn(
+              "flex-1 rounded-lg text-sm bg-muted border border-input placeholder:text-muted-foreground/40",
+              isMobileFullscreen ? "h-10" : "h-8",
+            )}
+          />
+          <button
+            onClick={() => setAddDialogOpen(true)}
+            className="flex-shrink-0 p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            title="Add MCP Server"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* MCP servers list */}
@@ -113,11 +149,27 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
             <span className="text-sm text-muted-foreground">Loading MCPs...</span>
           </div>
         ) : filteredServers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-20 gap-2">
-            <Plug className="h-6 w-6 text-muted-foreground/50" />
-            <span className="text-sm text-muted-foreground">
-              {searchQuery ? "No MCPs found" : "No MCPs configured"}
-            </span>
+          <div className="flex flex-col items-center justify-center h-32 gap-3 px-4">
+            <Plug className="h-8 w-8 text-muted-foreground/30" />
+            <div className="text-center space-y-1">
+              <p className="text-sm text-muted-foreground font-medium">
+                {searchQuery ? "No MCPs found" : "No MCPs configured"}
+              </p>
+              {!searchQuery && (
+                <p className="text-xs text-muted-foreground/70 max-w-[200px]">
+                  MCP servers are loaded from ~/.claude/mcp.json or project .claude/mcp.json files
+                </p>
+              )}
+            </div>
+            {!searchQuery && (
+              <button
+                onClick={() => createDefaultConfig.mutate()}
+                disabled={createDefaultConfig.isPending}
+                className="mt-2 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {createDefaultConfig.isPending ? "Creating..." : "Create Default Config"}
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-0.5">
@@ -171,6 +223,13 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
           </div>
         )}
       </div>
+
+      {/* Add MCP Server Dialog */}
+      <McpServerDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        mode="add"
+      />
     </div>
   )
 }

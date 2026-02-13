@@ -1,0 +1,563 @@
+"use client"
+
+import React, { useState, useRef, useEffect } from "react"
+import { Button } from "../../../components/ui/button"
+import { Input } from "../../../components/ui/input"
+import { trpc } from "../../../lib/trpc"
+import { toast } from "sonner"
+import { Loader2, Send, Sparkles, Check, AlertCircle, Wand2 } from "lucide-react"
+import { cn } from "../../../lib/utils"
+
+interface Message {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  isStreaming?: boolean
+}
+
+interface GeneratedConfig {
+  name: string
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  type?: "stdio" | "http" | "sse"
+  url?: string
+  headers?: Record<string, string>
+}
+
+interface McpConfigChatProps {
+  onConfigGenerated: (config: GeneratedConfig) => void
+  onCancel: () => void
+}
+
+export function McpConfigChat({ onConfigGenerated, onCancel }: McpConfigChatProps) {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [inputValue, setInputValue] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [isComplete, setIsComplete] = useState(false)
+  const [session, setSession] = useState<{
+    chatId: string
+    subChatId: string
+    projectId: string
+  } | null>(null)
+  const [generatedConfig, setGeneratedConfig] = useState<GeneratedConfig | null>(null)
+  const [isCreatingSession, setIsCreatingSession] = useState(false)
+
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const utils = trpc.useUtils()
+  const cleanupRef = useRef<(() => void) | null>(null)
+
+  // Cleanup transient session on unmount
+  useEffect(() => {
+    return () => {
+      if (session?.chatId) {
+        // Cleanup the transient chat (fire and forget - don't block unmount)
+        utils.client.transientChat.cleanup
+          .mutate({ chatId: session.chatId })
+          .catch((err) => {
+            console.warn("[McpConfigChat] Cleanup error (non-critical):", err)
+          })
+      }
+    }
+  }, [session])
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  // Focus input on mount
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  // Auto-start the conversation on mount
+  useEffect(() => {
+    const autoStart = async () => {
+      // Create session with a start message to trigger the AI greeting
+      const newSession = await createSession("__start_mcp_config__")
+      if (!newSession) return
+
+      // Add placeholder for assistant response
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      }
+      setMessages((prev) => [...prev, assistantMessage])
+
+      setIsLoading(true)
+
+      // Subscribe to streaming response
+      const subscription = utils.client.transientChat.chat.subscribe(
+        {
+          chatId: newSession.chatId,
+          subChatId: newSession.subChatId,
+          prompt: "__start_mcp_config__",
+        },
+        {
+          onData: (chunk) => {
+            if (chunk.type === "text-delta" && chunk.delta) {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1]
+                if (last?.role === "assistant") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...last, content: last.content + chunk.delta },
+                  ]
+                }
+                return prev
+              })
+            } else if (chunk.type === "text" && chunk.text) {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1]
+                if (last?.role === "assistant") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...last, content: last.content + chunk.text },
+                  ]
+                }
+                return prev
+              })
+            } else if (chunk.type === "error") {
+              toast.error(chunk.errorText || "Error generating response")
+            }
+          },
+          onError: (error) => {
+            console.error("Stream error:", error)
+            toast.error("Error in chat stream")
+            setIsLoading(false)
+            setMessages((prev) => {
+              const last = prev[prev.length - 1]
+              if (last?.role === "assistant") {
+                return [...prev.slice(0, -1), { ...last, isStreaming: false }]
+              }
+              return prev
+            })
+          },
+          onComplete: () => {
+            setIsLoading(false)
+            setMessages((prev) => {
+              const last = prev[prev.length - 1]
+              if (last?.role === "assistant") {
+                return [...prev.slice(0, -1), { ...last, isStreaming: false }]
+              }
+              return prev
+            })
+          },
+        }
+      )
+
+      // Store cleanup function
+      cleanupRef.current = () => subscription.unsubscribe()
+    }
+
+    autoStart()
+  }, []) // Run only on mount
+
+  const [error, setError] = useState<string | null>(null)
+
+  const createSession = async (prompt: string) => {
+    setIsCreatingSession(true)
+    setError(null)
+    try {
+      const result = await utils.client.transientChat.create.mutate({
+        prompt,
+        mode: "agent",
+      })
+      setSession(result)
+      return result
+    } catch (err) {
+      console.error("Failed to create transient session:", err)
+      const errorMessage = err instanceof Error ? err.message : "Unknown error"
+      setError(`Failed to start chat: ${errorMessage}`)
+      toast.error("Failed to start chat session", {
+        description: errorMessage,
+      })
+      return null
+    } finally {
+      setIsCreatingSession(false)
+    }
+  }
+
+  const parseConfigFromMessage = (text: string): GeneratedConfig | null => {
+    try {
+      // Look for JSON code blocks
+      const jsonMatch = text.match(/```(?:json)?\s*({[\s\S]*?})\s*```/)
+      if (jsonMatch) {
+        const config = JSON.parse(jsonMatch[1])
+        if (config.name) {
+          return {
+            name: config.name,
+            command: config.command,
+            args: config.args,
+            env: config.env,
+            type: config.type || "stdio",
+            url: config.url,
+            headers: config.headers,
+          }
+        }
+      }
+
+      // Try to find JSON object directly
+      const directJsonMatch = text.match(/\{[\s\S]*"name"[\s\S]*\}/)
+      if (directJsonMatch) {
+        const config = JSON.parse(directJsonMatch[0])
+        if (config.name) {
+          return {
+            name: config.name,
+            command: config.command,
+            args: config.args,
+            env: config.env,
+            type: config.type || "stdio",
+            url: config.url,
+            headers: config.headers,
+          }
+        }
+      }
+    } catch {
+      // Not valid JSON, ignore
+    }
+    return null
+  }
+
+  const handleSend = async () => {
+    if (!inputValue.trim() || isLoading || isCreatingSession) return
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: inputValue.trim(),
+    }
+
+    // Add user message immediately
+    setMessages((prev) => [...prev, userMessage])
+    const currentInput = inputValue.trim()
+    setInputValue("")
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      let currentSession = session
+
+      // Create session on first message
+      if (!currentSession) {
+        currentSession = await createSession(currentInput)
+        if (!currentSession) {
+          // Remove the user message we just added since session creation failed
+          setMessages((prev) => prev.filter((m) => m.id !== userMessage.id))
+          setIsLoading(false)
+          return
+        }
+      }
+
+      // Add placeholder for assistant response
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      }
+      setMessages((prev) => [...prev, assistantMessage])
+
+      // Subscribe to streaming response
+      const subscription = utils.client.transientChat.chat.subscribe(
+        {
+          chatId: currentSession.chatId,
+          subChatId: currentSession.subChatId,
+          prompt: currentInput,
+        },
+        {
+          onData: (chunk) => {
+            console.log("[McpConfigChat] Received chunk:", chunk.type, chunk)
+            if (chunk.type === "text-delta" && chunk.delta) {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1]
+                if (last?.role === "assistant") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...last, content: last.content + chunk.delta },
+                  ]
+                }
+                return prev
+              })
+            } else if (chunk.type === "text" && chunk.text) {
+              // Handle legacy text chunks if any
+              setMessages((prev) => {
+                const last = prev[prev.length - 1]
+                if (last?.role === "assistant") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...last, content: last.content + chunk.text },
+                  ]
+                }
+                return prev
+              })
+            } else if (chunk.type === "error") {
+              console.error("[McpConfigChat] Error chunk:", chunk.errorText)
+              toast.error(chunk.errorText || "Error generating response")
+            } else if (chunk.type === "finish") {
+              console.log("[McpConfigChat] Finish chunk received")
+            }
+          },
+          onError: (error) => {
+            console.error("Stream error:", error)
+            toast.error("Error in chat stream")
+            setIsLoading(false)
+            setMessages((prev) => {
+              const last = prev[prev.length - 1]
+              if (last?.role === "assistant") {
+                return [...prev.slice(0, -1), { ...last, isStreaming: false }]
+              }
+              return prev
+            })
+          },
+          onComplete: () => {
+            setIsLoading(false)
+            setMessages((prev) => {
+              const last = prev[prev.length - 1]
+              if (last?.role === "assistant") {
+                // Try to parse config from the completed message
+                const config = parseConfigFromMessage(last.content)
+                if (config) {
+                  setGeneratedConfig(config)
+                }
+                // Check if the AI indicated the conversation is complete
+                const completionPhrases = [
+                  "the configuration has been added and the conversation is complete",
+                  "configuration has been added",
+                  "conversation is complete",
+                  "we're done",
+                  "mcp.json has been updated",
+                  "successfully added",
+                  "you can now use",
+                ]
+                const isConversationComplete = completionPhrases.some((phrase) =
+                  last.content.toLowerCase().includes(phrase.toLowerCase())
+                )
+                if (isConversationComplete) {
+                  setIsComplete(true)
+                }
+                return [...prev.slice(0, -1), { ...last, isStreaming: false }]
+              }
+              return prev
+            })
+          },
+        }
+      )
+
+      // Cleanup subscription when done
+      return () => subscription.unsubscribe()
+    } catch (error) {
+      console.error("Failed to send message:", error)
+      toast.error("Failed to send message")
+      setIsLoading(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      if (!isComplete) {
+        handleSend()
+      }
+    }
+  }
+
+  const handleUseConfig = () => {
+    if (generatedConfig) {
+      onConfigGenerated(generatedConfig)
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-2 p-3 border-b bg-muted/50">
+        <Sparkles className="h-4 w-4 text-primary" />
+        <span className="text-sm font-medium">AI Configuration Assistant</span>
+        <div className="flex-1" />
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+
+      {/* Messages */}
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px] max-h-[400px]",
+          isComplete && "opacity-60 grayscale"
+        )}
+      >
+        {messages.length === 0 && !error && (
+          <div className="text-center text-muted-foreground py-8">
+            <Loader2 className="h-8 w-8 mx-auto mb-3 opacity-50 animate-spin" />
+            <p className="text-sm">Starting AI Configuration Assistant...</p>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {error && (
+          <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/10 mt-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-destructive">Error</p>
+                <p className="text-sm text-destructive/80 mt-1">{error}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setError(null)}
+                  className="mt-3"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={cn(
+              "flex gap-3",
+              message.role === "user" ? "justify-end" : "justify-start"
+            )}
+          >
+            <div
+              className={cn(
+                "max-w-[85%] rounded-lg px-3 py-2 text-sm",
+                message.role === "user"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted border"
+              )}
+            >
+              <div className="whitespace-pre-wrap">{message.content}</div>
+              {message.isStreaming && (
+                <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Generated Config Preview */}
+        {generatedConfig && !isLoading && (
+          <div className="border border-primary/30 rounded-lg p-3 bg-primary/5 mt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Check className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium">
+                Configuration Generated
+              </span>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <div className="flex justify-between">
+                <span>Name:</span>
+                <span className="font-medium text-foreground">
+                  {generatedConfig.name}
+                </span>
+              </div>
+              {generatedConfig.command && (
+                <div className="flex justify-between">
+                  <span>Command:</span>
+                  <span className="font-medium text-foreground">
+                    {generatedConfig.command}
+                  </span>
+                </div>
+              )}
+              {generatedConfig.url && (
+                <div className="flex justify-between">
+                  <span>URL:</span>
+                  <span className="font-medium text-foreground">
+                    {generatedConfig.url}
+                  </span>
+                </div>
+              )}
+              {generatedConfig.env &&
+                Object.keys(generatedConfig.env).length > 0 && (
+                  <div className="flex justify-between">
+                    <span>Env Vars:</span>
+                    <span className="font-medium text-foreground">
+                      {Object.keys(generatedConfig.env).join(", ")}
+                    </span>
+                  </div>
+                )}
+            </div>
+            <Button
+              onClick={handleUseConfig}
+              className="w-full mt-3"
+              size="sm"
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Use This Configuration
+            </Button>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className={cn("p-3 border-t bg-background", isComplete && "bg-muted/50")}>
+        {isComplete ? (
+          <div className="text-center py-2">
+            <Check className="h-5 w-5 text-primary mx-auto mb-2" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Configuration complete
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              The MCP server has been added to ~/.claude/mcp.json
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              className="mt-3"
+            >
+              Close
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              <Input
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  messages.length === 0
+                    ? "Describe what you need..."
+                    : "Ask a follow-up question..."
+                }
+                disabled={isLoading || isCreatingSession}
+                className="flex-1"
+              />
+              <Button
+                onClick={handleSend}
+                disabled={
+                  !inputValue.trim() || isLoading || isCreatingSession
+                }
+                size="icon"
+              >
+                {isLoading || isCreatingSession ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {generatedConfig
+                ? "You can ask follow-up questions to refine the configuration, or click 'Use This Configuration' to apply it."
+                : "The AI will generate an MCP server configuration based on your description."}
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

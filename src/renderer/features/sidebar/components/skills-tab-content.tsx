@@ -17,11 +17,12 @@ interface SkillsTabContentProps {
   isMobileFullscreen?: boolean
 }
 
-type Skill = {
+type SkillItem = {
   name: string
   path: string
   source: "user" | "project" | "custom"
   description?: string
+  type: "skill" | "command"
 }
 
 export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabContentProps) {
@@ -30,28 +31,27 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
   const selectWorkflowItem = useSetAtom(selectWorkflowItemAtom)
   const [expandedGroups, setExpandedGroups] = useAtom(skillsExpansionAtom)
 
-  // Fetch skills using tRPC
-  const { data: skills, isLoading } = trpc.skills.list.useQuery({
+  // Fetch combined skills and commands using tRPC
+  const { data: items = [], isLoading } = trpc.skills.listCombined.useQuery({
     cwd: selectedProject?.path,
   })
 
-  // Filter skills by search query
-  const filteredSkills = useMemo(() => {
-    if (!skills) return []
-    if (!searchQuery.trim()) return skills
+  // Filter items by search query
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items
 
     const query = searchQuery.toLowerCase()
-    return skills.filter(
-      (skill) =>
-        skill.name.toLowerCase().includes(query) ||
-        skill.description?.toLowerCase().includes(query),
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(query) ||
+        item.description?.toLowerCase().includes(query),
     )
-  }, [skills, searchQuery])
+  }, [items, searchQuery])
 
-  // Group skills hierarchically with sub-groups
+  // Group items hierarchically with sub-groups
   const hierarchicalGroups = useMemo(() => {
-    return groupWorkflowsHierarchically(filteredSkills)
-  }, [filteredSkills])
+    return groupWorkflowsHierarchically(filteredItems)
+  }, [filteredItems])
 
   // Toggle group expansion (supports both namespaces and sub-groups)
   const toggleGroup = (key: string) => {
@@ -66,18 +66,18 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
     })
   }
 
-  // Render a single skill item
-  const renderSkillItem = (skill: Skill & { displayName: string }) => (
+  // Render a single item
+  const renderItem = (item: SkillItem & { displayName: string }) => (
     <button
-      key={skill.path}
+      key={item.path}
       onClick={() => {
         // Use combined action to set both category and node atomically
         selectWorkflowItem({
           node: {
-            id: skill.name,
-            name: skill.name,
-            type: "skill",
-            sourcePath: skill.path,
+            id: item.name,
+            name: item.name,
+            type: item.type,
+            sourcePath: item.path,
           },
           category: "skills",
         })
@@ -88,9 +88,9 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-medium text-foreground truncate flex-1">
-            {skill.displayName}
+            {item.displayName}
           </span>
-          {skill.source === "project" && (
+          {item.source === "project" && (
             <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
           )}
         </div>
@@ -101,7 +101,7 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
-      {/* Search input */}
+      {/* Search */}
       <div className="px-2 pb-2 flex-shrink-0">
         <Input
           placeholder="Search skills..."
@@ -118,9 +118,9 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
       <div className="flex-1 overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
         {isLoading ? (
           <div className="flex items-center justify-center h-20">
-            <span className="text-sm text-muted-foreground">Loading skills...</span>
+            <span className="text-sm text-muted-foreground">Loading...</span>
           </div>
-        ) : filteredSkills.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-20 gap-2">
             <Sparkles className="h-6 w-6 text-muted-foreground/50" />
             <span className="text-sm text-muted-foreground">
@@ -149,13 +149,13 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
                       onToggle={() => toggleGroup(subGroupKey)}
                       nested
                     >
-                      {subGroup.items.map(renderSkillItem)}
+                      {subGroup.items.map(renderItem)}
                     </CollapsibleWorkflowGroup>
                   )
                 })}
 
                 {/* Flat items (no sub-group) */}
-                {nsGroup.flatItems.map(renderSkillItem)}
+                {nsGroup.flatItems.map(renderItem)}
               </CollapsibleWorkflowGroup>
             ))}
           </div>

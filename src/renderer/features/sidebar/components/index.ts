@@ -1,7 +1,6 @@
 export { SidebarTabBar } from "./sidebar-tab-bar"
 export { HistoryTabContent } from "./history-tab-content"
 export { WorkspacesTabContent } from "./workspaces-tab-content"
-export { CommandsTabContent } from "./commands-tab-content"
 export { AgentsTabContent } from "./agents-tab-content"
 export { SkillsTabContent } from "./skills-tab-content"
 export { McpsTabContent } from "./mcps-tab-content"

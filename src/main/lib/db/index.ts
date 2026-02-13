@@ -124,7 +124,50 @@ export function initDatabase() {
   // Ensure default Home workspace exists
   ensureDefaultHomeWorkspace(db)
 
+  // Clean up any orphaned transient chats from previous sessions
+  cleanupTransientChats(db)
+
   return db
+}
+
+/**
+ * Clean up transient chats that weren't properly cleaned up
+ * This can happen if the app crashed or the dialog was closed unexpectedly
+ */
+function cleanupTransientChats(database: ReturnType<typeof drizzle<typeof schema>>) {
+  try {
+    // Get all transient chat IDs
+    const transientChats = database
+      .select({ id: schema.chats.id })
+      .from(schema.chats)
+      .where(eq(schema.chats.isTransient, true))
+      .all()
+
+    if (transientChats.length === 0) {
+      return
+    }
+
+    console.log(`[DB] Cleaning up ${transientChats.length} orphaned transient chats`)
+
+    // Delete sub-chats for all transient chats
+    for (const chat of transientChats) {
+      database
+        .delete(schema.subChats)
+        .where(eq(schema.subChats.chatId, chat.id))
+        .run()
+    }
+
+    // Delete transient chats
+    database
+      .delete(schema.chats)
+      .where(eq(schema.chats.isTransient, true))
+      .run()
+
+    console.log(`[DB] Cleaned up ${transientChats.length} transient chats`)
+  } catch (error) {
+    console.error("[DB] Failed to cleanup transient chats:", error)
+    // Don't throw - this is not critical for app startup
+  }
 }
 
 /**

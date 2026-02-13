@@ -71,13 +71,14 @@ function getCustomMcpConfigsFromDb(): ConfigSource[] {
  * Get all MCP config paths in priority order
  * Priority: Project (10) → User (100) → Custom configs (by priority field)
  *
- * @param projectPath Optional path to project root (for project-specific mcp.json)
+ * @param projectPath Optional path to project root (for project-specific mcp.json) - deprecated, use projectPaths
+ * @param projectPaths Optional array of project paths to scan for workspace-level MCP configs
  * @returns Array of ConfigSource objects in priority order
  */
-export function getMcpConfigPaths(projectPath?: string): ConfigSource[] {
+export function getMcpConfigPaths(projectPath?: string, projectPaths?: string[]): ConfigSource[] {
   const sources: ConfigSource[] = []
 
-  // 1. Project-level config (priority 10) - highest priority
+  // 1. Legacy: Single project-level config (priority 10) - highest priority
   if (projectPath) {
     const projectConfigPath = path.join(projectPath, ".claude", "mcp.json")
     sources.push({
@@ -86,6 +87,19 @@ export function getMcpConfigPaths(projectPath?: string): ConfigSource[] {
       priority: 10,
       exists: existsSync(projectConfigPath),
     })
+  }
+
+  // 1b. All workspace directories (priority 10) - scan all project paths
+  if (projectPaths && projectPaths.length > 0) {
+    for (const projPath of projectPaths) {
+      const projectConfigPath = path.join(projPath, ".claude", "mcp.json")
+      sources.push({
+        type: "project",
+        path: projectConfigPath,
+        priority: 10,
+        exists: existsSync(projectConfigPath),
+      })
+    }
   }
 
   // 2. User config (priority 100)
@@ -244,14 +258,16 @@ export function detectConflicts(configs: McpConfigMetadata[]): ConflictInfo[] {
  * Get consolidated view of all MCP configs
  * Merges all config sources in priority order
  *
- * @param projectPath Optional path to project root
+ * @param projectPath Optional path to project root (legacy single project)
+ * @param projectPaths Optional array of all project paths to scan
  * @returns Complete consolidated config with sources, merged servers, and conflicts
  */
 export async function getConsolidatedConfig(
-  projectPath?: string
+  projectPath?: string,
+  projectPaths?: string[]
 ): Promise<ConsolidatedConfig> {
   // Get all config paths in priority order
-  const configSources = getMcpConfigPaths(projectPath)
+  const configSources = getMcpConfigPaths(projectPath, projectPaths)
 
   // Parse each config file
   const parsedConfigs: McpConfigMetadata[] = []

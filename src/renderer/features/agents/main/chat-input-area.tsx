@@ -33,7 +33,7 @@ import { cn } from "../../../lib/utils"
 import { agentModeAtom, type AgentMode, lastSelectedModelIdAtom } from "../atoms"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
-import { CommandsDropdown } from "../components/commands-dropdown"
+import { SkillsDropdown } from "../components/skills-dropdown"
 import { GsdDropdown } from "../components/gsd-dropdown"
 import {
   AgentsMentionsEditor,
@@ -1038,9 +1038,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                       </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {/* Commands Dropdown */}
-                  <CommandsDropdown
-                    onCommandSelect={handleCommandSelect}
+                  {/* Skills Dropdown - Shows skills and commands */}
+                  <SkillsDropdown
+                    onSkillSelect={handleSkillSelect}
                     disabled={isStreaming}
                   />
 

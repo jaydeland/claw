@@ -79,9 +79,9 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       }))
   }, [sessionInfo?.slashCommands])
 
-  // Fallback: Fetch commands from filesystem if SDK hasn't provided them yet
-  const { data: fileCommands = [], isLoading } = trpc.commands.list.useQuery(
-    { projectPath },
+  // Fetch combined skills and commands from filesystem if SDK hasn't provided them yet
+  const { data: combinedItems = [], isLoading } = trpc.skills.listCombined.useQuery(
+    { cwd: projectPath },
     {
       enabled: isOpen && !sessionInfo?.slashCommands?.length,
       staleTime: 30_000,
@@ -89,33 +89,27 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     },
   )
 
-  // Transform FileCommand to SlashCommandOption (fallback)
+  // Transform combined items to SlashCommandOption (fallback)
+  // Includes both skills and commands (excluding GSD items which are handled separately)
   const fallbackCommands: SlashCommandOption[] = useMemo(() => {
     if (sessionInfo?.slashCommands?.length) return [] // Use SDK commands if available
-    return fileCommands
-      .filter((cmd) => cmd.name && typeof cmd.name === 'string')
-      .map((cmd) => ({
-        id: `custom:${cmd.source}:${cmd.name}`,
-        name: cmd.name,
-        command: `/${cmd.name}`,
-        description: cmd.description || `Custom command from ${cmd.source}`,
+    return combinedItems
+      .filter((item) => item.name && typeof item.name === 'string' && !item.name.startsWith("gsd:"))
+      .map((item) => ({
+        id: `${item.type}:${item.source}:${item.name}`,
+        name: item.name,
+        command: `/${item.name}`,
+        description: item.description || `${item.type === "skill" ? "Skill" : "Command"} from ${item.source}`,
         category: "repository" as const,
-        path: cmd.path,
-        argumentHint: cmd.argumentHint,
+        path: item.path,
+        type: item.type,
       }))
-  }, [fileCommands, sessionInfo?.slashCommands])
+  }, [combinedItems, sessionInfo?.slashCommands])
 
-  // Use SDK commands or fallback to filesystem commands
+  // Use SDK commands or fallback to filesystem commands (skills + commands combined)
   const customCommands = sessionInfo?.slashCommands?.length ? sdkCommands : fallbackCommands
 
-  // Fetch GSD commands: skills with gsd: prefix
-  const { data: skills = [], isLoading: skillsLoading } = trpc.skills.listEnabled.useQuery(undefined, {
-    enabled: isOpen,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    refetchOnWindowFocus: false,
-  })
-
-  // Fetch bundled GSD commands
+  // Fetch bundled GSD commands (skills with gsd: prefix come from combined list)
   const { data: bundledGsdCommands = [], isLoading: gsdCommandsLoading } = trpc.gsd.listCommands.useQuery(undefined, {
     enabled: isOpen,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
@@ -123,28 +117,33 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   })
 
   // Transform GSD items to SlashCommandOption
+  // GSD skills come from combined list (gsd: prefix items), bundled commands from gsd router
   const gsdCommands: SlashCommandOption[] = useMemo(() => {
     const items: SlashCommandOption[] = []
     const seenNames = new Set<string>()
 
-    // Add skills with gsd: prefix
-    for (const skill of skills) {
-      if (skill.name.startsWith("gsd:")) {
-        if (!seenNames.has(skill.name)) {
-          seenNames.add(skill.name)
-          items.push({
-            id: `gsd:skill:${skill.name}`,
-            name: skill.name,
-            command: `/${skill.name}`,
-            description: skill.description || "",
-            category: "gsd",
-            source: "skill",
-          })
+    // Add GSD items from combined list (skills with gsd: prefix and any gsd: commands)
+    // These are already in fallbackCommands if using filesystem fallback
+    if (!sessionInfo?.slashCommands?.length) {
+      // Using filesystem fallback - extract GSD items from combined list
+      for (const item of combinedItems) {
+        if (item.name.startsWith("gsd:")) {
+          if (!seenNames.has(item.name)) {
+            seenNames.add(item.name)
+            items.push({
+              id: `gsd:${item.type}:${item.name}`,
+              name: item.name,
+              command: `/${item.name}`,
+              description: item.description || "",
+              category: "gsd",
+              source: item.type,
+            })
+          }
         }
       }
     }
 
-    // Add bundled GSD commands (only if not already present from skills)
+    // Add bundled GSD commands (only if not already present)
     for (const cmd of bundledGsdCommands) {
       if (!seenNames.has(cmd.name)) {
         seenNames.add(cmd.name)
@@ -160,7 +159,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     }
 
     return items
-  }, [skills, bundledGsdCommands])
+  }, [combinedItems, bundledGsdCommands, sessionInfo?.slashCommands])
 
   // State for loading command content
   const [isLoadingContent, setIsLoadingContent] = useState(false)
@@ -661,20 +660,20 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         </>
       )}
 
-      {/* Loading state for repository commands */}
-      {(isLoading || skillsLoading || gsdCommandsLoading) && (
+      {/* Loading state for skills and commands */}
+      {(isLoading || gsdCommandsLoading) && (
         <div className="flex items-center gap-1.5 h-7 px-1.5 mx-1 text-xs text-muted-foreground">
           <IconSpinner className="h-3.5 w-3.5" />
-          <span>Loading commands...</span>
+          <span>Loading skills & commands...</span>
         </div>
       )}
 
       {/* Empty state */}
-      {!isLoading && !skillsLoading && !gsdCommandsLoading && flatOptions.length === 0 && (
+      {!isLoading && !gsdCommandsLoading && flatOptions.length === 0 && (
         <div className="h-7 px-1.5 mx-1 flex items-center text-xs text-muted-foreground">
           {debouncedSearchText
-            ? `No commands matching "${debouncedSearchText}"`
-            : "No commands available"}
+            ? `No skills or commands matching "${debouncedSearchText}"`
+            : "No skills or commands available"}
         </div>
       )}
     </div>,

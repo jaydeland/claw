@@ -35,17 +35,6 @@ export const agentsExpansionAtom = atomWithStorage<Set<string>>(
 )
 
 /**
- * Track expanded workflow groups in commands tab
- * Stores namespace keys (e.g., "gsd", "acme")
- */
-export const commandsExpansionAtom = atomWithStorage<Set<string>>(
-  "sidebar:commands-expansion",
-  new Set(),
-  setStorage,
-  { getOnInit: true }
-)
-
-/**
  * Track expanded workflow groups in skills tab
  * Stores namespace keys (e.g., "gsd", "acme")
  */

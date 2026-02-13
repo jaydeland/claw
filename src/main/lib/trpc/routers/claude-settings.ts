@@ -450,9 +450,11 @@ export const claudeSettingsRouter = router({
       const authToken = (isOllamaCloud && input.ollamaApiKey) ? input.ollamaApiKey : input.token
 
       // Build customEnvVars with Ollama/Custom API settings
-      const customEnvVars = {
+      const customEnvVars: Record<string, string> = {
         ANTHROPIC_AUTH_TOKEN: authToken,
         ANTHROPIC_BASE_URL: correctedBaseUrl,
+        // Store the Ollama/Custom API model for background tasks
+        ANTHROPIC_MODEL: input.model,
         ...(input.apiKey && { ANTHROPIC_API_KEY: input.apiKey }),
         ...(input.ollamaApiKey && { OLLAMA_API_KEY: input.ollamaApiKey }),
       }

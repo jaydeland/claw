@@ -40,7 +40,7 @@ const contentRendererRegistry: ContentRenderer[] = [
     name: "mermaid",
     languages: ["mermaid"],
     contentPattern:
-      /^(sequenceDiagram|flowchart|graph\s|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment|requirementDiagram|sankey|xychart|block)/,
+      /^(sequenceDiagram|flowchart|graph\s|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment|requirementDiagram|sankey|xychart|blockDiagram)/,
     component: MermaidBlock,
     priority: 10,
   },

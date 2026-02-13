@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   Check,
@@ -17,6 +17,8 @@ import {
   ChevronRight,
   X,
   Globe,
+  Trash2,
+  Edit,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -30,6 +32,7 @@ import { selectedProjectAtom } from "../../agents/atoms"
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
 import { JsonSchemaViewer } from "./json-schema-viewer"
+import { McpServerDialog } from "./mcp-server-dialog"
 import type { McpAuthStatus } from "../types"
 import type { McpTool } from "../../../../main/lib/mcp/tool-query"
 
@@ -63,6 +66,7 @@ export function McpServerDetail() {
   const selectedServerId = useAtomValue(selectedMcpServerAtom)
   const setAuthModalOpen = useSetAtom(mcpAuthModalOpenAtom)
   const setAuthModalServerId = useSetAtom(mcpAuthModalServerIdAtom)
+  const [isEditing, setIsEditing] = useState(false)
 
   const utils = trpc.useUtils()
 
@@ -77,6 +81,20 @@ export function McpServerDetail() {
       utils.mcp.getServer.invalidate({ serverId: selectedServerId! })
     },
   })
+
+  const deleteMutation = trpc.mcp.deleteServer.useMutation({
+    onSuccess: () => {
+      utils.mcp.listServers.invalidate()
+      // Clear selection after delete
+      // (Would need to import the setter atom for selectedMcpServerAtom)
+    },
+  })
+
+  const handleDelete = () => {
+    if (selectedServerId && confirm(`Are you sure you want to delete "${server?.name}"?`)) {
+      deleteMutation.mutate({ serverId: selectedServerId })
+    }
+  }
 
   const handleConfigureAuth = () => {
     if (selectedServerId) {
@@ -130,7 +148,24 @@ export function McpServerDetail() {
             <h2 className="text-lg font-semibold select-text cursor-text">{server.name}</h2>
             <p className="text-sm text-muted-foreground mt-0.5 select-text cursor-text">{server.id}</p>
           </div>
-          {getStatusBadge(server.authStatus)}
+          <div className="flex items-center gap-1">
+            {getStatusBadge(server.authStatus)}
+            <button
+              onClick={() => setIsEditing(true)}
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Edit server"
+            >
+              <Edit className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              title="Delete server"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Enable/Disable toggle */}
@@ -522,6 +557,15 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
           )}
         </>
       )}
+
+      {/* Edit Server Dialog */}
+      <McpServerDialog
+        open={isEditing}
+        onOpenChange={setIsEditing}
+        mode="edit"
+        serverId={server?.id}
+        serverConfig={server?.config}
+      />
     </div>
   )
 }

@@ -1,11 +1,13 @@
 import fs from "node:fs/promises"
+import { existsSync } from "node:fs"
+import { existsSync } from "fs"
 import path from "node:path"
 import os from "node:os"
 import { safeStorage } from "electron"
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { createHash, randomBytes } from "node:crypto"
-import { getDatabase, mcpCredentials, mcpToolCache } from "../../db"
+import { getDatabase, mcpCredentials, mcpToolCache, projects } from "../../db"
 import { eq } from "drizzle-orm"
 import { getConsolidatedConfig } from "../../config/consolidator"
 import type {
@@ -25,6 +27,9 @@ import {
 } from "../../mcp/oauth-window"
 import { BrowserWindow } from "electron"
 import { getCachedMcpTools } from "../../mcp/cache"
+import { queryBackgroundSession, isBackgroundSessionReady, getBackgroundSessionState, initBackgroundSession } from "../../claude/background-session"
+import { getDatabase, claudeCodeSettings } from "../../db"
+import { eq } from "drizzle-orm"
 
 // ============ TYPES ============
 
@@ -464,11 +469,15 @@ export const mcpRouter = router({
         const servers: McpServer[] = []
 
         try {
-          // Get consolidated config from all sources
-          const consolidated = await getConsolidatedConfig(input?.projectPath)
+          // Get all project paths from the database
+          const db = getDatabase()
+          const allProjects = db.select({ path: projects.path }).from(projects).all()
+          const projectPaths = allProjects.map(p => p.path).filter((p): p is string => !!p)
+
+          // Get consolidated config from all sources (all workspaces + user config)
+          const consolidated = await getConsolidatedConfig(input?.projectPath, projectPaths)
 
           // Get stored credentials from database
-          const db = getDatabase()
           const allCredentials = db.select().from(mcpCredentials).all()
           const credentialsMap = new Map<string, Record<string, string>>()
 
@@ -1662,4 +1671,219 @@ export const mcpRouter = router({
         }
       }
     }),
+
+  /**
+   * Create default MCP config file at ~/.claude/mcp.json
+   * Returns success status and the path created
+   */
+  createDefaultConfig: publicProcedure
+    .mutation(async (): Promise<{ success: boolean; path?: string; error?: string }> => {
+      try {
+        const configPath = getMcpConfigPath()
+        const configDir = path.dirname(configPath)
+
+        // Ensure .claude directory exists
+        if (!existsSync(configDir)) {
+          await fs.mkdir(configDir, { recursive: true })
+        }
+
+        // Check if file already exists
+        if (existsSync(configPath)) {
+          return {
+            success: false,
+            error: "Config file already exists",
+            path: configPath,
+          }
+        }
+
+        // Create default config with example servers
+        const defaultConfig = {
+          mcpServers: {
+            "filesystem": {
+              command: "npx",
+              "args": ["-y", "@modelcontextprotocol/server-filesystem", "~/Downloads"],
+              "autoApprove": ["read_file", "list_directory"]
+            },
+            "brave-search": {
+              "command": "npx",
+              "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+              "env": {
+                "BRAVE_API_KEY": "YOUR_API_KEY_HERE"
+              }
+            },
+            "electron": {
+              "command": "npx",
+              "args": ["-y", "electron-mcp-server"],
+              "env": {
+                "SCREENSHOT_ENCRYPTION_KEY": "YOUR_32_BYTE_HEX_KEY"
+              },
+              "autoApprove": ["take-screenshot", "list-pages"]
+            }
+          }
+        }
+
+        await fs.writeFile(configPath, JSON.stringify(defaultConfig, null, 2), "utf-8")
+
+        console.log("[mcp] Created default config at:", configPath)
+        return {
+          success: true,
+          path: configPath,
+        }
+      } catch (error) {
+        console.error("[mcp] Failed to create default config:", error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Generate MCP server configuration from natural language description
+   * Uses AI to convert user description into proper MCP config
+   */
+  generateMcpConfig: publicProcedure
+    .input(
+      z.object({
+        description: z.string().min(10, "Please provide a more detailed description"),
+      })
+    )
+    .mutation(async ({ input }): Promise<{
+      success: boolean
+      config?: {
+        name: string
+        command?: string
+        args?: string[]
+        env?: Record<string, string>
+        type?: "http" | "sse"
+        url?: string
+        headers?: Record<string, string>
+      }
+      error?: string
+    }> => {
+      try {
+        // Ensure background session is ready (auto-initialize if needed)
+        let sessionState = getBackgroundSessionState()
+        console.log("[mcp] Background session state:", sessionState.status)
+        if (sessionState.status !== "ready") {
+          console.log("[mcp] Background session not ready, initializing...")
+          sessionState = await initBackgroundSession()
+          console.log("[mcp] Background session initialized:", sessionState.status, sessionState.errorMessage)
+          if (sessionState.status !== "ready") {
+            console.error("[mcp] Background session failed to initialize:", sessionState.errorMessage)
+            return {
+              success: false,
+              error: `AI service is not available: ${sessionState.errorMessage || "initialization failed"}`,
+            }
+          }
+        }
+
+        const prompt = `Generate an MCP (Model Context Protocol) server configuration based on this description:
+
+"${input.description}"
+
+Respond ONLY with a JSON object in this exact format (no markdown, no explanation):
+
+{
+  "name": "server-name",
+  "command": "npx",
+  "args": ["-y", "package-name"],
+  "env": { "API_KEY": "placeholder" },
+  "type": "stdio"
+}
+
+For HTTP/SSE servers, use:
+{
+  "name": "server-name",
+  "type": "http",
+  "url": "https://api.example.com/mcp",
+  "env": { "AUTH_TOKEN": "placeholder" }
+}
+
+Rules:
+- name: lowercase letters, numbers, hyphens, underscores only
+- command: the executable (npx, python, node, etc.)
+- args: array of command arguments
+- env: object with environment variable names as keys and placeholder values
+- type: "stdio" for command-based, "http" or "sse" for remote
+- url: required for http/sse type
+
+Use standard MCP server packages from the community when applicable.`
+
+        console.log("[mcp] Querying background session...")
+        const result = await queryBackgroundSession(prompt, { maxTokens: 500 })
+        console.log("[mcp] Background session result:", { success: result.success, textLength: result.text?.length, error: result.error })
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || "Failed to generate configuration. Please try again.",
+          }
+        }
+
+        // Check for empty response (can happen with some AI providers like Ollama)
+        if (!result.text || result.text.trim().length === 0) {
+          console.error("[mcp] AI returned empty response")
+          return {
+            success: false,
+            error: "AI service returned an empty response. Common causes:\n\n1. Invalid model name - ensure you're using a valid model for your provider (e.g., 'llama3.2' for Ollama, not Anthropic model names)\n2. API endpoint misconfiguration - verify the base URL is correct\n3. Authentication failure - check your API key\n4. The model may not be available or may require different API formatting\n\nPlease check your AI settings or use manual configuration.",
+          }
+        }
+
+        // Parse the response
+        let config: any
+        try {
+          // Try to extract JSON from the response
+          const text = result.text.trim()
+          console.log("[mcp] Raw AI response:", text.substring(0, 500))
+          const jsonMatch = text.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            config = JSON.parse(jsonMatch[0])
+          } else {
+            config = JSON.parse(text)
+          }
+          console.log("[mcp] Parsed config:", config)
+        } catch (parseError) {
+          console.error("[mcp] Failed to parse AI response:", result.text)
+          return {
+            success: false,
+            error: "Failed to parse generated configuration. Please try again with a clearer description.",
+          }
+        }
+
+        // Validate the config
+        if (!config.name) {
+          return {
+            success: false,
+            error: "Generated configuration is missing a server name.",
+          }
+        }
+
+        // Normalize name (lowercase, replace spaces with hyphens)
+        config.name = config.name.toLowerCase().replace(/[^a-z0-9_-]/g, "-")
+
+        // Set defaults
+        const type = config.type || "stdio"
+
+        return {
+          success: true,
+          config: {
+            name: config.name,
+            command: config.command,
+            args: config.args || [],
+            env: config.env || {},
+            type: type === "http" || type === "sse" ? type : undefined,
+            url: config.url,
+            headers: config.headers,
+          },
+        }
+      } catch (error) {
+        console.error("[mcp] Error generating MCP config:", error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error occurred",
+        }
+      }
+    }),
+
 })

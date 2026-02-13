@@ -102,7 +102,6 @@ import {
   SidebarTabBar,
   HistoryTabContent,
   WorkspacesTabContent,
-  CommandsTabContent,
   AgentsTabContent,
   SkillsTabContent,
   McpsTabContent,
@@ -2405,8 +2404,6 @@ export function AgentsSidebar({
             <HistoryTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : selectedSidebarTab === "chats" ? (
             <WorkspacesTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
-          ) : selectedSidebarTab === "commands" ? (
-            <CommandsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : selectedSidebarTab === "agents" ? (
             <AgentsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : selectedSidebarTab === "skills" ? (
