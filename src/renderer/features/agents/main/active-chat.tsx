@@ -4738,7 +4738,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   )
 
   // Fetch git status for sync counts (pushCount, pullCount, hasUpstream)
-  const { data: gitStatus, refetch: refetchGitStatus, isLoading: isGitStatusLoading } = trpc.changes.getStatus.useQuery(
+  const { data: gitStatus, refetch: refetchGitStatus, isLoading: isGitStatusLoading, isFetching: isGitStatusFetching } = trpc.changes.getStatus.useQuery(
     { worktreePath: worktreePath || "" },
     { enabled: !!worktreePath && isDiffSidebarOpen, staleTime: 30000 }
   )
@@ -5931,7 +5931,7 @@ Make sure to preserve all functionality from both branches when resolving confli
               agentChat={agentChat}
               branchData={branchData}
               gitStatus={gitStatus}
-              isGitStatusLoading={isGitStatusLoading}
+              isGitStatusLoading={isGitStatusLoading || isGitStatusFetching}
               isDiffSidebarOpen={isDiffSidebarOpen}
               diffDisplayMode={diffDisplayMode}
               diffSidebarWidth={diffSidebarWidth}

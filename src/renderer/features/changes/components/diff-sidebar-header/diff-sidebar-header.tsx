@@ -188,7 +188,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 			refetchBranches();
 			// Refetch queries immediately to update UI
 			await utils.changes.getStatus.refetch({ worktreePath });
-			await utils.changes.getSyncStatus.refetch({ worktreePath });
 			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
@@ -198,7 +197,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: async () => {
 			// Refetch queries immediately to update UI
 			await utils.changes.getStatus.refetch({ worktreePath });
-			await utils.changes.getSyncStatus.refetch({ worktreePath });
 			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
@@ -209,7 +207,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: async () => {
 			// Refetch queries immediately to update UI
 			await utils.changes.getStatus.refetch({ worktreePath });
-			await utils.changes.getSyncStatus.refetch({ worktreePath });
 			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
@@ -220,7 +217,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: async () => {
 			// Refetch queries immediately to update UI
 			await utils.changes.getStatus.refetch({ worktreePath });
-			await utils.changes.getSyncStatus.refetch({ worktreePath });
 			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},
@@ -231,7 +227,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		onSuccess: async () => {
 			// Refetch queries immediately to update UI
 			await utils.changes.getStatus.refetch({ worktreePath });
-			await utils.changes.getSyncStatus.refetch({ worktreePath });
 			await utils.changes.getGitHubStatus.refetch({ worktreePath });
 			onRefresh?.();
 		},

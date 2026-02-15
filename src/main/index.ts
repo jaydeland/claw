@@ -318,6 +318,11 @@ if (gotTheLock) {
     // Create main window
     createMainWindow()
 
+    // Pre-load Claude SDK in background for faster first chat
+    import("@anthropic-ai/claude-agent-sdk")
+      .then(() => console.log("[App] Claude SDK pre-loaded"))
+      .catch((err) => console.warn("[App] Failed to pre-load Claude SDK:", err))
+
     // Initialize task watcher and cleanup scheduler (after database init)
     console.log("[App] Starting task watcher...")
     taskWatcher.start()
