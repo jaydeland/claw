@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState } from "react"
-import { Plug, Plus, FileJson } from "lucide-react"
+import React, { useState, useEffect, useCallback } from "react"
+import { AnimatePresence, motion } from "motion/react"
+import { Plug, Plus, FileJson, X } from "lucide-react"
 import { useAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import { McpServerList } from "./mcp-server-list"
@@ -112,6 +113,24 @@ export function McpContent() {
     })
   }
 
+  // Handle Escape key for add server dialog
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation()
+        setAddServerDialogOpen(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (addServerDialogOpen) {
+      document.addEventListener("keydown", handleKeyDown)
+      return () => document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [addServerDialogOpen, handleKeyDown])
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -201,15 +220,70 @@ export function McpContent() {
       </Dialog>
 
       {/* Add MCP Server Dialog (AI Assistant) */}
-      <Dialog open={addServerDialogOpen} onOpenChange={setAddServerDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[85vh] overflow-hidden">
-          <McpConfigChat
-            onConfigGenerated={handleConfigGenerated}
-            onCancel={() => setAddServerDialogOpen(false)}
-            targetConfigPath={targetFilePath}
-          />
-        </DialogContent>
-      </Dialog>
+      <AnimatePresence>
+        {addServerDialogOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-black/50 z-50"
+              onClick={() => setAddServerDialogOpen(false)}
+            />
+
+            {/* Dialog */}
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+              className="fixed z-50 flex flex-col bg-background border border-border/50 overflow-hidden"
+              style={{
+                top: "72px",
+                left: "72px",
+                right: "72px",
+                height: "calc(100% - 144px)",
+                maxWidth: "1200px",
+                marginInline: "auto",
+                borderRadius: "12px",
+                boxShadow:
+                  "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)",
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                <div>
+                  <h2 className="text-lg font-semibold">Add MCP Server</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {targetFilePath
+                      ? `Add a server to ${targetFilePath.split("/").pop()}`
+                      : "Configure a new MCP server"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAddServerDialogOpen(false)}
+                  className="p-2 rounded-md hover:bg-muted transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-hidden">
+                <McpConfigChat
+                  onConfigGenerated={handleConfigGenerated}
+                  onCancel={() => setAddServerDialogOpen(false)}
+                  targetConfigPath={targetFilePath}
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

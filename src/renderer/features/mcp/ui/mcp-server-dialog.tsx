@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
+import { AnimatePresence, motion } from "motion/react"
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,7 @@ import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, Sparkles } from "lucide-react"
+import { Loader2, Plus, Trash2, X } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { McpConfigChat } from "./mcp-config-chat"
 
@@ -225,31 +226,106 @@ export function McpServerDialog({
     setEnvVars(newEnvVars)
   }
 
+  // Handle Escape key for add mode
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation()
+        onOpenChange(false)
+      }
+    },
+    [onOpenChange]
+  )
+
+  useEffect(() => {
+    if (open && mode === "add") {
+      document.addEventListener("keydown", handleKeyDown)
+      return () => document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [open, mode, handleKeyDown])
+
+  // For "add" mode, use motion.div like diff-center-peek-dialog
+  if (mode === "add") {
+    return (
+      <AnimatePresence>
+        {open && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-black/50 z-50"
+              onClick={() => onOpenChange(false)}
+            />
+
+            {/* Dialog */}
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+              className="fixed z-50 flex flex-col bg-background border border-border/50 overflow-hidden"
+              style={{
+                top: "72px",
+                left: "72px",
+                right: "72px",
+                height: "calc(100% - 144px)",
+                maxWidth: "1200px",
+                marginInline: "auto",
+                borderRadius: "12px",
+                boxShadow:
+                  "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)",
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                <div>
+                  <h2 className="text-lg font-semibold">Add MCP Server</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Configure a new MCP server to extend Claude&apos;s capabilities
+                  </p>
+                </div>
+                <button
+                  onClick={() => onOpenChange(false)}
+                  className="p-2 rounded-md hover:bg-muted transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-hidden">
+                <McpConfigChat
+                  onConfigGenerated={(config) => {
+                    setAiGeneratedConfig(config)
+                    handleUseGenerated()
+                  }}
+                  onCancel={() => onOpenChange(false)}
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    )
+  }
+
+  // For "edit" mode, use the regular Dialog
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
-        mode === "add" ? "max-w-6xl max-h-[85vh] overflow-hidden" : "max-w-lg"
-      )}>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{mode === "add" ? "Add MCP Server" : "Edit MCP Server"}</DialogTitle>
+          <DialogTitle>Edit MCP Server</DialogTitle>
           <DialogDescription>
-            {mode === "add"
-              ? "Configure a new MCP server to extend Claude's capabilities"
-              : "Update the configuration for this MCP server"}
+            Update the configuration for this MCP server
           </DialogDescription>
         </DialogHeader>
 
-        {mode === "add" ? (
-          /* AI Mode - Chat Interface */
-          <McpConfigChat
-            onConfigGenerated={(config) => {
-              setAiGeneratedConfig(config)
-              handleUseGenerated()
-            }}
-            onCancel={() => onOpenChange(false)}
-          />
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
             {/* Server Name */}
             <div className="space-y-2">
               <Label htmlFor="name">Server Name</Label>
@@ -388,11 +464,10 @@ export function McpServerDialog({
               </Button>
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {mode === "add" ? "Add Server" : "Save Changes"}
+                Save Changes
               </Button>
             </DialogFooter>
           </form>
-        )}
       </DialogContent>
     </Dialog>
   )
