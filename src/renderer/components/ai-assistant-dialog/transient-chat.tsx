@@ -37,6 +37,8 @@ export interface TransientChatProps {
   onComplete?: () => void
   /** Additional prompt context to send with first message */
   promptContext?: string
+  /** System prompt type - determines which system prompt to use */
+  systemPromptType?: "mcp" | "review"
 }
 
 export function TransientChat({
@@ -50,6 +52,7 @@ export function TransientChat({
   renderResultPreview,
   onComplete,
   promptContext,
+  systemPromptType = "mcp",
 }: TransientChatProps) {
   // Initialize with greeting if provided
   const [messages, setMessages] = useState<Message[]>(() =>
@@ -108,6 +111,7 @@ export function TransientChat({
       const result = await utils.client.transientChat.create.mutate({
         prompt: enhancedPrompt,
         mode: "agent",
+        systemPromptType,
       })
       setSession(result)
       return result
@@ -167,6 +171,7 @@ export function TransientChat({
           chatId: currentSession.chatId,
           subChatId: currentSession.subChatId,
           prompt: currentInput,
+          systemPromptType,
         },
         {
           onData: (chunk) => {

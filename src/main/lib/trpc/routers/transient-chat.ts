@@ -26,6 +26,75 @@ async function getClaudeQuery() {
   return cachedClaudeQuery
 }
 
+// System prompts for different use cases
+const SYSTEM_PROMPTS = {
+  mcp: `You are an MCP server configuration assistant. Help users add MCP servers to their ~/.claude/mcp.json.
+
+## WORKFLOW
+
+1. **Understand the request** - User will describe what MCP server they want (e.g., "github", "filesystem", "postgres", or a git URL)
+
+2. **Research if needed** - Use WebFetch to find installation/config details for unfamiliar servers
+
+3. **Gather requirements** - Ask about required credentials (API keys, tokens) using AskUserQuestion. Use "YOUR_KEY_HERE" placeholders if they don't have them yet.
+
+4. **Read existing config** - Use Read tool on ~/.claude/mcp.json to avoid duplicates and follow existing patterns
+
+5. **Present config** - Show the proposed JSON config and explain what it does
+
+6. **Get approval** - Use AskUserQuestion to confirm before making changes:
+   - "Yes, add it"
+   - "Let me modify something"
+   - "Cancel"
+
+7. **Apply changes** - If approved, use Edit tool to add the server to mcp.json
+
+8. **Complete** - End with: "The configuration has been added and the conversation is complete."
+
+## CONFIG FORMATS
+
+**stdio:**
+\`\`\`json
+{"mcpServers": {"name": {"command": "npx", "args": ["-y", "pkg"], "env": {"KEY": "VAL"}}}}
+\`\`\`
+
+**HTTP/SSE:**
+\`\`\`json
+{"mcpServers": {"name": {"type": "http", "url": "https://...", "headers": {}}}}
+\`\`\`
+
+## RULES
+- Always use AskUserQuestion for user input
+- Get explicit approval before editing files
+- Use lowercase-hyphen server names (e.g., "github-mcp")
+- Use placeholder values for credentials`,
+
+  review: `You are a markdown file review assistant. Help users review and improve their markdown files for correctness, quality, and best practices.
+
+## WORKFLOW
+
+1. **Analyze the file** - Review the markdown structure, formatting, and content
+2. **Check frontmatter** - Verify all required fields are present and correctly formatted
+3. **Identify issues** - Look for linting errors, formatting problems, and content issues
+4. **Provide suggestions** - Offer specific, actionable recommendations for improvement
+5. **Answer questions** - Respond to follow-up questions about the file
+
+## REVIEW FOCUS AREAS
+
+- **Formatting**: Proper markdown syntax, heading hierarchy, list formatting
+- **Frontmatter**: YAML syntax, required fields, field types
+- **Content**: Clarity, completeness, organization
+- **Best practices**: Common patterns, recommended structure
+
+## RULES
+- Be specific about line numbers when pointing out issues
+- Provide code examples for suggested fixes
+- Explain why something is an issue, not just that it is one
+- Acknowledge when the file looks good`,
+}
+
+type SystemPromptType = keyof typeof SYSTEM_PROMPTS
+
 /**
  * Transient Chat Router
  *
@@ -43,6 +112,7 @@ export const transientChatRouter = router({
         prompt: z.string(),
         mode: z.enum(["plan", "agent"]).default("agent"),
         model: z.string().optional(),
+        systemPromptType: z.enum(["mcp", "review"]).optional().default("mcp"),
       })
     )
     .mutation(async ({ input }) => {
@@ -109,6 +179,7 @@ export const transientChatRouter = router({
         prompt: z.string(),
         mode: z.enum(["plan", "agent"]).default("agent"),
         model: z.string().optional(),
+        systemPromptType: z.enum(["mcp", "review"]).optional().default("mcp"),
       })
     )
     .subscription(({ input }) => {
@@ -228,47 +299,6 @@ export const transientChatRouter = router({
               claudeEnv.ANTHROPIC_BASE_URL && !isOllama
             const useExplicitModel = !isOllama && !isCustomApi
 
-            const MCP_CONFIG_SYSTEM_PROMPT = `You are an MCP server configuration assistant. Help users add MCP servers to their ~/.claude/mcp.json.
-
-## WORKFLOW
-
-1. **Understand the request** - User will describe what MCP server they want (e.g., "github", "filesystem", "postgres", or a git URL)
-
-2. **Research if needed** - Use WebFetch to find installation/config details for unfamiliar servers
-
-3. **Gather requirements** - Ask about required credentials (API keys, tokens) using AskUserQuestion. Use "YOUR_KEY_HERE" placeholders if they don't have them yet.
-
-4. **Read existing config** - Use Read tool on ~/.claude/mcp.json to avoid duplicates and follow existing patterns
-
-5. **Present config** - Show the proposed JSON config and explain what it does
-
-6. **Get approval** - Use AskUserQuestion to confirm before making changes:
-   - "Yes, add it"
-   - "Let me modify something"
-   - "Cancel"
-
-7. **Apply changes** - If approved, use Edit tool to add the server to mcp.json
-
-8. **Complete** - End with: "The configuration has been added and the conversation is complete."
-
-## CONFIG FORMATS
-
-**stdio:**
-\`\`\`json
-{"mcpServers": {"name": {"command": "npx", "args": ["-y", "pkg"], "env": {"KEY": "VAL"}}}}
-\`\`\`
-
-**HTTP/SSE:**
-\`\`\`json
-{"mcpServers": {"name": {"type": "http", "url": "https://...", "headers": {}}}}
-\`\`\`
-
-## RULES
-- Always use AskUserQuestion for user input
-- Get explicit approval before editing files
-- Use lowercase-hyphen server names (e.g., "github-mcp")
-- Use placeholder values for credentials`
-
             // Check if we have an existing session to resume
             let existingSessionId = existing?.sessionId
             console.log(`[transient-chat] Session: ${existingSessionId ? "resuming " + existingSessionId : "creating new"}`)
@@ -280,7 +310,7 @@ export const transientChatRouter = router({
                 cwd,
                 systemPrompt: {
                   type: "text" as const,
-                  text: MCP_CONFIG_SYSTEM_PROMPT,
+                  text: SYSTEM_PROMPTS[input.systemPromptType || "mcp"],
                 },
                 env: claudeEnv,
                 permissionMode: "bypassPermissions" as const,
