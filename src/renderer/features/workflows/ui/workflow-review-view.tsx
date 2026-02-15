@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useAtomValue } from "jotai"
 import { Loader2, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react"
 import { selectedWorkflowNodeAtom } from "../atoms"
@@ -46,6 +46,15 @@ export function WorkflowReviewView() {
     { path: selectedNode?.sourcePath || "" },
     { enabled: !!selectedNode?.sourcePath && selectedNode?.type !== "mcpServer" }
   )
+
+  // Auto-open dialog when file content is loaded
+  useEffect(() => {
+    if (fileContent && selectedNode && selectedNode.type !== "mcpServer") {
+      // Small delay to ensure smooth animation
+      const timer = setTimeout(() => setDialogOpen(true), 100)
+      return () => clearTimeout(timer)
+    }
+  }, [fileContent, selectedNode?.sourcePath])
 
   // Run client-side linting
   const lintResults = useMemo(() => {
@@ -140,83 +149,33 @@ Please analyze:
 
   return (
     <>
-      <div className="flex flex-col h-full">
-        {/* Status Bar */}
-        <div className="flex-shrink-0 border-b bg-muted/30 px-4 py-3">
-          <div className="flex items-center justify-between">
+      {/* Background view - shows while dialog is closed */}
+      {!dialogOpen && (
+        <div className="flex flex-col h-full">
+          {/* Status Bar */}
+          <div className="flex-shrink-0 border-b bg-muted/30 px-4 py-3">
             <div className="flex items-center gap-3">
-              {/* Linting Status */}
-              <div className="flex items-center gap-2 text-sm">
-                {hasLintIssues ? (
-                  <>
-                    <AlertCircle className="h-4 w-4 text-amber-500" />
-                    <span className="text-muted-foreground">{issuesSummary}</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    <span className="text-muted-foreground">No linting issues</span>
-                  </>
-                )}
-              </div>
+              {hasLintIssues ? (
+                <>
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                  <span className="text-sm text-muted-foreground">{issuesSummary}</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-sm text-muted-foreground">No linting issues</span>
+                </>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Info */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
-          <Sparkles className="h-16 w-16 text-primary opacity-20" />
-          <div className="text-center space-y-3 max-w-md">
-            <h3 className="text-lg font-semibold">Review with Claude</h3>
-            <p className="text-sm text-muted-foreground">
-              Click the button below to start an AI-powered review of your {selectedNode.type} file:
-            </p>
-            <ul className="text-sm text-muted-foreground text-left space-y-2">
-              <li className="flex items-start gap-2">
-                <span className="text-primary">•</span>
-                <span>Comprehensive analysis of markdown formatting</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary">•</span>
-                <span>Review of linting issues with specific fixes</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary">•</span>
-                <span>Content quality and best practices review</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary">•</span>
-                <span>Interactive Q&A for improvements</span>
-              </li>
-            </ul>
-          </div>
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            <Sparkles className="h-4 w-4" />
-            Start Review Session
-          </button>
-          <div className="p-4 bg-muted/50 rounded-lg text-xs space-y-1.5 w-full max-w-md">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">File:</span>
-              <span className="font-mono text-right truncate ml-2">{selectedNode.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Path:</span>
-              <span className="font-mono text-right truncate ml-2 text-xs">
-                {selectedNode.sourcePath}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Linting:</span>
-              <span className={hasLintIssues ? "text-amber-500" : "text-green-500"}>
-                {issuesSummary}
-              </span>
-            </div>
+          {/* Loading state */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Starting review...</p>
           </div>
         </div>
-      </div>
+      )}
 
       {/* AI Assistant Dialog for Review */}
       <AiAssistantDialog
