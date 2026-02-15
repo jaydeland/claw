@@ -79,7 +79,7 @@ export const workflowFileListSearchAtom = atom<string>("")
  * Format: { "agents": "markdown", "commands": "flowchart", ... }
  */
 const workflowViewModesStorageAtom = atomWithStorage<
-  Record<string, "markdown" | "flowchart" | "review">
+  Record<string, "markdown" | "flowchart">
 >(
   "workflows:view-modes",
   {},
@@ -99,10 +99,19 @@ export const workflowViewModeAtom = atom(
     const modes = get(workflowViewModesStorageAtom)
     return modes[category] ?? "markdown"
   },
-  (get, set, newMode: "markdown" | "flowchart" | "review") => {
+  (get, set, newMode: "markdown" | "flowchart") => {
     const category = get(selectedWorkflowCategoryAtom)
     if (!category) return
     const current = get(workflowViewModesStorageAtom)
     set(workflowViewModesStorageAtom, { ...current, [category]: newMode })
   }
 )
+
+// ============================================
+// REVIEW DIALOG STATE
+// ============================================
+
+/**
+ * Controls the review dialog open state
+ */
+export const workflowReviewDialogOpenAtom = atom<boolean>(false)

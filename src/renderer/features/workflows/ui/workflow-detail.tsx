@@ -7,11 +7,11 @@ import { WorkflowDetailHeader } from "./workflow-detail-header"
 import { WorkflowMarkdownView } from "./workflow-markdown-view"
 import { WorkflowReactFlowView } from "./workflow-reactflow-view"
 import { WorkflowMcpView } from "./workflow-mcp-view"
-import { WorkflowReviewView } from "./workflow-review-view"
 
 /**
  * Detail panel for viewing workflow file content
- * Shows markdown view, flowchart view, or AI review based on toggle
+ * Shows markdown view or flowchart view based on toggle
+ * Review is now a dialog triggered from the header
  */
 export function WorkflowDetail() {
   const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
@@ -48,14 +48,13 @@ export function WorkflowDetail() {
     )
   }
 
-  // Agents, Commands, Skills show markdown, flowchart, or review
+  // Agents, Commands, Skills show markdown or flowchart
   return (
     <div className="flex flex-col h-full">
       <WorkflowDetailHeader />
 
       {viewMode === "markdown" && <WorkflowMarkdownView />}
       {viewMode === "flowchart" && <WorkflowReactFlowView />}
-      {viewMode === "review" && <WorkflowReviewView />}
     </div>
   )
 }
