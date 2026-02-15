@@ -1,19 +1,23 @@
 "use client"
 
-import React, { useMemo, useState, useEffect, useCallback } from "react"
-import { AnimatePresence, motion } from "motion/react"
-import { Plug, ChevronRight, ChevronDown, CheckCircle, XCircle, Clock, AlertTriangle, Plus, Folder, Home, FileJson, Sparkles, FolderOpen, X } from "lucide-react"
+import React, { useMemo, useState } from "react"
+import { Plug, ChevronRight, ChevronDown, CheckCircle, AlertTriangle, Plus, Folder, Home, FileJson, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
-import { Button } from "../../../components/ui/button"
 import { selectedProjectAtom } from "../../agents/atoms"
 import { useAtomValue, useSetAtom } from "jotai"
 import { selectWorkflowItemAtom } from "../../workflows/atoms"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../main/lib/trpc/routers"
-import { McpConfigChat } from "../../mcp/ui/mcp-config-chat"
+import { AiAssistantDialog } from "../../../components/ai-assistant-dialog"
+import {
+  parseMcpConfig,
+  MCP_GREETING,
+  MCP_COMPLETION_PHRASES,
+  McpConfigResultPreview,
+} from "../../mcp/ui/mcp-config-chat"
 
 type RouterOutput = inferRouterOutputs<AppRouter>
 type McpServerType = RouterOutput["mcp"]["listServers"]["servers"][number]
@@ -203,24 +207,6 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
     utils.mcp.listServers.invalidate()
   }
 
-  // Handle Escape key for add server dialog
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation()
-        setAddServerDialogOpen(false)
-      }
-    },
-    []
-  )
-
-  useEffect(() => {
-    if (addServerDialogOpen) {
-      document.addEventListener("keydown", handleKeyDown)
-      return () => document.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [addServerDialogOpen, handleKeyDown])
-
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {/* Search input and Add button */}
@@ -360,71 +346,27 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
         )}
       </div>
 
-      {/* Add MCP Server Dialog (AI Assistant) */}
-      <AnimatePresence>
-        {addServerDialogOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="fixed inset-0 bg-black/50 z-50"
-              onClick={() => setAddServerDialogOpen(false)}
-            />
-
-            {/* Dialog */}
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
-              className="fixed z-50 flex flex-col bg-background border border-border/50 overflow-hidden"
-              style={{
-                top: "72px",
-                left: "72px",
-                right: "72px",
-                height: "calc(100% - 144px)",
-                maxWidth: "1200px",
-                marginInline: "auto",
-                borderRadius: "12px",
-                boxShadow:
-                  "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)",
-              }}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                <div>
-                  <h2 className="text-lg font-semibold">Add MCP Server</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {targetFilePath
-                      ? `Add a server to ${getFileNameFromPath(targetFilePath)}`
-                      : "Configure a new MCP server"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setAddServerDialogOpen(false)}
-                  className="p-2 rounded-md hover:bg-muted transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 overflow-hidden">
-                <McpConfigChat
-                  onConfigGenerated={handleConfigGenerated}
-                  onCancel={() => setAddServerDialogOpen(false)}
-                  targetConfigPath={targetFilePath || undefined}
-                />
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Add MCP Server Dialog (AI Assistant) - using generic component */}
+      <AiAssistantDialog
+        open={addServerDialogOpen}
+        onClose={() => setAddServerDialogOpen(false)}
+        title="Add MCP Server"
+        description={
+          targetFilePath
+            ? `Add a server to ${getFileNameFromPath(targetFilePath)}`
+            : "Configure a new MCP server"
+        }
+        icon={Sparkles}
+        initialGreeting={MCP_GREETING}
+        placeholder="Describe the MCP server you want to add..."
+        hint="The AI will generate an MCP server configuration based on your description."
+        resultParser={parseMcpConfig}
+        completionPhrases={MCP_COMPLETION_PHRASES}
+        onResultDetected={() => utils.mcp.listServers.invalidate()}
+        onComplete={handleConfigGenerated}
+        promptContext={targetFilePath ? `Target config file: ${targetFilePath}` : undefined}
+        completeMessage="Configuration complete"
+      />
     </div>
   )
 }
