@@ -16,19 +16,6 @@ import { lintWorkflowFile, getLintStatusSummary } from "../lib/markdown-linter"
 import { AiAssistantDialog } from "../../../components/ai-assistant-dialog"
 
 /**
- * Review greeting message
- */
-const REVIEW_GREETING = `I'll help you review your markdown file for correctness and quality.
-
-Share the file content or describe what you'd like me to check, and I'll analyze:
-- **Formatting**: Proper markdown structure and syntax
-- **Required sections**: All necessary frontmatter and sections
-- **Content quality**: Clarity, completeness, and organization
-- **Best practices**: Suggestions for improvement
-
-What would you like me to review?`
-
-/**
  * Phrases that indicate review is complete
  */
 const REVIEW_COMPLETION_PHRASES = [
@@ -99,9 +86,9 @@ export function WorkflowDetailHeader() {
     console.log("[workflows] Refreshed workflow graph")
   }
 
-  // Build the review context with linting results and file content
+  // Build the review context with file path (AI will read the file directly)
   const buildReviewContext = () => {
-    if (!fileContent || !selectedNode) return ""
+    if (!selectedNode?.sourcePath) return ""
 
     const hasLintIssues = lintStatus && lintStatus.status !== "valid"
 
@@ -126,14 +113,14 @@ export function WorkflowDetailHeader() {
       return formatted
     }
 
-    // Re-run linting to get full results
+    // Re-run linting to get full results for context
     let type: "agent" | "command" | "skill" = "command"
     if (selectedNode.type === "agent") {
       type = "agent"
     } else if (selectedNode.type === "skill") {
       type = "skill"
     }
-    const lintResults = lintWorkflowFile(fileContent, type)
+    const lintResults = fileContent ? lintWorkflowFile(fileContent, type) : null
 
     const lintIssuesSection = hasLintIssues && lintResults
       ? `
@@ -154,12 +141,7 @@ Path: ${selectedNode.sourcePath}
 Type: ${selectedNode.type}
 ${lintIssuesSection}
 
-## File Content
-\`\`\`markdown
-${fileContent}
-\`\`\`
-
-Please analyze:
+Read the file at the path above and analyze:
 1. **Correctness**: Is the markdown properly formatted? Are all required sections present?
 2. **Linting Issues**: Address any linting errors or warnings listed above
 3. **Content Quality**: Is the content clear, complete, and well-structured?
@@ -271,12 +253,14 @@ Please analyze:
           title={`Review: ${selectedNode.name}`}
           description={`${selectedNode.type} file review with Claude`}
           icon={Sparkles}
-          initialGreeting={REVIEW_GREETING}
           placeholder="Ask about specific issues or request improvements..."
           hint="The AI will analyze your file and suggest improvements."
           completionPhrases={REVIEW_COMPLETION_PHRASES}
           promptContext={buildReviewContext()}
           systemPromptType="review"
+          autoSendInitialMessage={true}
+          initialMessage={`Review this Claude ${selectedNode.type} file for correctness and quality.`}
+          projectPath={selectedProject?.path}
           completeMessage="Review complete"
           completeDescription="The file review is finished. You can close this dialog."
         />

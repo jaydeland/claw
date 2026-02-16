@@ -43,6 +43,8 @@ export interface TransientChatProps {
   autoSendInitialMessage?: boolean
   /** Custom message to display when auto-sending (defaults to "Please analyze this file.") */
   initialMessage?: string
+  /** Project path to use as working directory - allows AI to read project files directly */
+  projectPath?: string
 }
 
 export function TransientChat({
@@ -59,6 +61,7 @@ export function TransientChat({
   systemPromptType = "mcp",
   autoSendInitialMessage = false,
   initialMessage = "Please analyze this file.",
+  projectPath,
 }: TransientChatProps) {
   // Initialize with greeting if provided
   const [messages, setMessages] = useState<Message[]>(() =>
@@ -135,6 +138,7 @@ export function TransientChat({
         prompt: enhancedPrompt,
         mode: "agent",
         systemPromptType,
+        projectPath,
       })
       setSession(result)
       return result
@@ -200,6 +204,7 @@ export function TransientChat({
           subChatId: currentSession.subChatId,
           prompt: enhancedPrompt,
           systemPromptType,
+          projectPath,
         },
         {
           onData: (chunk) => {

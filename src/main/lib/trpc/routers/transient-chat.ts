@@ -113,6 +113,7 @@ export const transientChatRouter = router({
         mode: z.enum(["plan", "agent"]).default("agent"),
         model: z.string().optional(),
         systemPromptType: z.enum(["mcp", "review"]).optional().default("mcp"),
+        projectPath: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -180,6 +181,7 @@ export const transientChatRouter = router({
         mode: z.enum(["plan", "agent"]).default("agent"),
         model: z.string().optional(),
         systemPromptType: z.enum(["mcp", "review"]).optional().default("mcp"),
+        projectPath: z.string().optional(),
       })
     )
     .subscription(({ input }) => {
@@ -288,8 +290,9 @@ export const transientChatRouter = router({
             const claudeEnv = buildClaudeEnv()
             const claudeBinaryPath = getBundledClaudeBinaryPath()
 
-            // Use userData as cwd for transient chats
-            const cwd = app.getPath("userData")
+            // Use project path as cwd if provided (allows AI to read project files)
+            // Fall back to userData for MCP config chats that don't have a project
+            const cwd = input.projectPath || app.getPath("userData")
 
             // Detect Ollama/Custom API
             const isOllama =
