@@ -58,19 +58,25 @@ import { CLAUDE_MODELS, type ClaudeModel } from "../lib/models"
 import { trpc } from "../../../lib/trpc"
 import { type SubChatFileChange } from "../atoms"
 import {
+  ollamaConfigAtom,
   customClaudeConfigAtom,
   normalizeCustomClaudeConfig,
   activeConfigAtom,
   extendedThinkingEnabledAtom,
   activeProviderAtom,
+  anthropicModelAtom,
+  bedrockModelAtom,
+  customApiConfigAtom,
 } from "../../../lib/atoms"
 
 // Hook to get available models
 interface OllamaModel {
   id: string
   name: string
+  displayName?: string
   description?: string
   size?: number
+  isRemote?: boolean
 }
 
 interface AvailableModelsResult {
@@ -83,16 +89,23 @@ interface AvailableModelsResult {
 
 function useAvailableModels(): AvailableModelsResult {
   const [activeProvider] = useAtom(activeProviderAtom)
-  const [customConfig] = useAtom(customClaudeConfigAtom)
+  const [ollamaConfig] = useAtom(ollamaConfigAtom)
+  const [customApiConfig] = useAtom(customApiConfigAtom)
+
+  // Determine if this is a cloud/remote Ollama endpoint
+  const isCloudEndpoint = ollamaConfig.baseUrl && !ollamaConfig.baseUrl.includes('localhost') && !ollamaConfig.baseUrl.includes('127.0.0.1')
 
   // Fetch Ollama models when Ollama is the active provider
+  // For local endpoints, filter to show only remote/cloud models
+  // For cloud endpoints, all models are already remote so no filtering needed
   const { data: ollamaModelsData } = trpc.claude.getOllamaModels.useQuery(
     {
-      baseUrl: customConfig.baseUrl || "http://localhost:11434",
-      apiKey: customConfig.ollamaApiKey,
+      baseUrl: ollamaConfig.baseUrl || "http://localhost:11434",
+      apiKey: ollamaConfig.ollamaApiKey,
+      filterRemote: !isCloudEndpoint, // Filter for local endpoints only
     },
     {
-      enabled: activeProvider === "ollama" && !!customConfig.baseUrl,
+      enabled: activeProvider === "ollama" && !!ollamaConfig.baseUrl,
       staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     }
   )
@@ -100,27 +113,22 @@ function useAvailableModels(): AvailableModelsResult {
   // Get models based on active provider
   const models: ClaudeModel[] = activeProvider === "ollama"
     ? (() => {
-        // Use user's configured models if available
-        const userModels = customConfig.ollamaModels
-        if (userModels && userModels.length > 0) {
-          return userModels.map((m) => ({ id: m.id, name: m.name }))
-        }
-        // Fall back to fetched models from API
+        // Fetch models from API - the model selected in providers tab is the default
         const fetched = ollamaModelsData?.models ?? []
         if (fetched.length > 0) {
-          return fetched.map((m: OllamaModel) => ({ id: m.id, name: m.name }))
+          return fetched.map((m: OllamaModel) => ({ id: m.id, name: m.displayName || m.name }))
         }
         // Final fallback
         return []
       })()
-    : CLAUDE_MODELS
+    : CLAUDE_MODELS // For Anthropic OAuth, Bedrock, and Custom API - use standard Claude models
 
   return {
     models,
     ollamaModels: ollamaModelsData?.models ?? [],
     recommendedModel: undefined,
     isOffline: false,
-    hasOllama: activeProvider === "ollama" && !!customConfig.baseUrl,
+    hasOllama: activeProvider === "ollama" && !!ollamaConfig.baseUrl,
   }
 }
 
@@ -412,19 +420,42 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [lastSelectedModelId, setLastSelectedModelId] = useAtom(lastSelectedModelIdAtom)
   const availableModels = useAvailableModels()
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
+  const [ollamaConfig] = useAtom(ollamaConfigAtom)
   const [activeProvider] = useAtom(activeProviderAtom)
+  const [anthropicModel] = useAtom(anthropicModelAtom)
+  const [bedrockModel] = useAtom(bedrockModelAtom)
+  const [customApiConfig] = useAtom(customApiConfigAtom)
 
-  // Initialize selected model:
-  // 1. Use lastSelectedModelId if it matches an available model
-  // 2. For Ollama, use the default model from settings if available
-  // 3. Otherwise use the first available model
+  // Initialize selected model based on provider:
+  // - Anthropic OAuth: Use anthropicModelAtom (opus/sonnet/haiku)
+  // - Bedrock: Use bedrockModelAtom (opus/sonnet/haiku)
+  // - Ollama: Use ollamaConfig.model
+  // - Custom API: Use customApiConfig.model
+  // - Per-chat override: lastSelectedModelIdAtom
   const [selectedModel, setSelectedModel] = useState(() => {
+    // First check if user has a per-chat override
     const lastMatch = availableModels.models.find((m) => m.id === lastSelectedModelId)
     if (lastMatch) return lastMatch
 
-    // For Ollama, use the configured default model
-    if (activeProvider === "ollama" && customClaudeConfig.model) {
-      const defaultMatch = availableModels.models.find((m) => m.id === customClaudeConfig.model)
+    // Then check provider-specific default
+    if (activeProvider === "anthropic-oauth") {
+      const modelMatch = availableModels.models.find((m) => m.id === anthropicModel)
+      if (modelMatch) return modelMatch
+    }
+
+    if (activeProvider === "aws-bedrock") {
+      const modelMatch = availableModels.models.find((m) => m.id === bedrockModel)
+      if (modelMatch) return modelMatch
+    }
+
+    if (activeProvider === "ollama" && ollamaConfig.model) {
+      const defaultMatch = availableModels.models.find((m) => m.id === ollamaConfig.model)
+      if (defaultMatch) return defaultMatch
+    }
+
+    if (activeProvider === "custom-api" && customApiConfig.model) {
+      // For Custom API, the model is a string - try to find it in available models
+      const defaultMatch = availableModels.models.find((m) => m.id === customApiConfig.model)
       if (defaultMatch) return defaultMatch
     }
 

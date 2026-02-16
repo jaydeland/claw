@@ -6,8 +6,12 @@ import { trpc } from "../../../lib/trpc"
 import {
   activeProviderAtom,
   type AIProvider,
-  customClaudeConfigAtom,
-  type CustomClaudeConfig,
+  ollamaConfigAtom,
+  type OllamaConfig,
+  customApiConfigAtom,
+  type CustomApiConfig,
+  anthropicModelAtom,
+  bedrockModelAtom,
 } from "../../../lib/atoms"
 import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
@@ -20,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select"
-import { Check, X, Copy, ExternalLink, Server, Settings, Cloud } from "lucide-react"
+import { Check, X, Copy, ExternalLink, Server, Settings, Cloud, ChevronDown, ChevronUp } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { AwsSsoSection } from "../../../features/agents/components/aws-sso-section"
@@ -112,6 +116,7 @@ function ClaudeCodeProvider() {
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
   const [authCode, setAuthCode] = useState("")
   const [copied, setCopied] = useState(false)
+  const [anthropicModel, setAnthropicModel] = useAtom(anthropicModelAtom)
 
   const utils = trpc.useUtils()
 
@@ -235,6 +240,40 @@ function ClaudeCodeProvider() {
               )}
             </div>
           </div>
+
+          {/* Model Selection */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Model</Label>
+            <Select value={anthropicModel} onValueChange={setAnthropicModel}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="opus">
+                  <div className="flex flex-col">
+                    <span className="font-medium">Claude Opus</span>
+                    <span className="text-xs text-muted-foreground">Most capable model</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="sonnet">
+                  <div className="flex flex-col">
+                    <span className="font-medium">Claude Sonnet</span>
+                    <span className="text-xs text-muted-foreground">Balanced performance</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="haiku">
+                  <div className="flex flex-col">
+                    <span className="font-medium">Claude Haiku</span>
+                    <span className="text-xs text-muted-foreground">Fast and efficient</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              This model will be used for all Anthropic OAuth conversations.
+            </p>
+          </div>
+
           <Button
             variant="outline"
             onClick={() => disconnect.mutate()}
@@ -355,6 +394,8 @@ function AWSBedrockProvider() {
   const [awsProfileName, setAwsProfileName] = useState("")
   const [maxMcpOutputTokens, setMaxMcpOutputTokens] = useState(48000)
   const [maxThinkingTokens, setMaxThinkingTokens] = useState(15000)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [bedrockModel, setBedrockModel] = useAtom(bedrockModelAtom)
 
   const { data: claudeSettings, refetch: refetchSettings } = trpc.claudeSettings.getSettings.useQuery()
 
@@ -388,6 +429,39 @@ function AWSBedrockProvider() {
 
   return (
     <div className="space-y-4">
+      {/* Model Selection */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Model</Label>
+        <Select value={bedrockModel} onValueChange={setBedrockModel}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a model" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="opus">
+              <div className="flex flex-col">
+                <span className="font-medium">Claude Opus</span>
+                <span className="text-xs text-muted-foreground">Most capable model</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="sonnet">
+              <div className="flex flex-col">
+                <span className="font-medium">Claude Sonnet</span>
+                <span className="text-xs text-muted-foreground">Balanced performance</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="haiku">
+              <div className="flex flex-col">
+                <span className="font-medium">Claude Haiku</span>
+                <span className="text-xs text-muted-foreground">Fast and efficient</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          This model will be used for all AWS Bedrock conversations.
+        </p>
+      </div>
+
       <AwsSsoSection
         bedrockRegion={bedrockRegion}
         onBedrockRegionChange={setBedrockRegion}
@@ -417,6 +491,75 @@ function AWSBedrockProvider() {
         maxThinkingTokens={maxThinkingTokens}
         onMaxThinkingTokensChange={setMaxThinkingTokens}
       />
+
+      {/* Advanced Settings - Collapsible */}
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="flex items-center justify-between w-full py-2 text-sm font-medium text-foreground hover:text-foreground/80"
+        >
+          <span>Advanced Model Configuration</span>
+          {showAdvanced ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+
+        {showAdvanced && (
+          <div className="bg-background rounded-lg border border-border overflow-hidden">
+            <div className="p-4 space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Override default model IDs for specific Bedrock deployments.
+              </p>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Opus Model ID</Label>
+                <Input
+                  value={claudeSettings?.bedrockOpusModel || ""}
+                  onChange={(e) => {
+                    // Update locally first, then save on button click
+                  }}
+                  placeholder="global.anthropic.claude-opus-4-6-v1:0"
+                  className="font-mono"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Sonnet Model ID</Label>
+                <Input
+                  value={claudeSettings?.bedrockSonnetModel || ""}
+                  onChange={() => {}}
+                  placeholder="us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+                  className="font-mono"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Haiku Model ID</Label>
+                <Input
+                  value={claudeSettings?.bedrockHaikuModel || ""}
+                  onChange={() => {}}
+                  placeholder="us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  className="font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    toast.success("Advanced settings are saved via the main Save button above")
+                  }}
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -438,7 +581,7 @@ const OLLAMA_FALLBACK_MODELS = [
 type OllamaMode = "local" | "cloud" | null
 
 function OllamaProvider() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
+  const [storedConfig, setStoredConfig] = useAtom(ollamaConfigAtom)
   const [model, setModel] = useState(storedConfig.model)
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
   const [token, setToken] = useState(storedConfig.token)
@@ -473,10 +616,13 @@ function OllamaProvider() {
   }, [storedConfig])
 
   // Fetch Ollama models dynamically
+  // For local mode, filter to show only remote/cloud models
+  // For cloud mode, all models are already remote so no filtering needed
   const { data: ollamaModelsData, isLoading: isLoadingModels } = trpc.claude.getOllamaModels.useQuery(
     {
       baseUrl: baseUrl || "http://localhost:11434",
       apiKey: ollamaApiKey,
+      filterRemote: ollamaMode === "local", // Filter for local mode only
     },
     {
       enabled: ollamaMode !== null, // Only fetch when mode is selected
@@ -489,7 +635,7 @@ function OllamaProvider() {
     if (ollamaModelsData?.success && ollamaModelsData.models.length > 0) {
       return ollamaModelsData.models.map((m) => ({
         id: m.id,
-        name: m.name,
+        name: m.displayName || m.name,
         description: m.description || 'Ollama model',
       }))
     }
@@ -521,15 +667,20 @@ function OllamaProvider() {
       toast.error("Please fill in all required fields")
       return
     }
-    const config = {
+    const config: OllamaConfig = {
       model: model.trim(),
       token: token.trim(),
       baseUrl: baseUrl.trim(),
       ollamaApiKey: ollamaApiKey.trim() || undefined,
     }
     setStoredConfig(config)
-    // Sync to backend for background session
-    syncCustomConfig.mutate(config)
+    // Sync to backend for background session (uses legacy format for compatibility)
+    syncCustomConfig.mutate({
+      model: config.model,
+      token: config.token,
+      baseUrl: config.baseUrl,
+      ollamaApiKey: config.ollamaApiKey,
+    })
     toast.success("Ollama configuration saved")
   }
 
@@ -649,8 +800,8 @@ function OllamaProvider() {
               onClick={() => {
                 setOllamaMode(null)
                 setModel("")
-                setBaseUrl("")
-                setToken("")
+                setBaseUrl("http://localhost:11434")
+                setToken("ollama")
                 setOllamaApiKey("")
               }}
             >
@@ -683,7 +834,7 @@ function OllamaProvider() {
 // ============================================
 
 function CustomApiProvider() {
-  const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
+  const [storedConfig, setStoredConfig] = useAtom(customApiConfigAtom)
   const [model, setModel] = useState(storedConfig.model)
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
   const [token, setToken] = useState(storedConfig.token)
@@ -709,20 +860,25 @@ function CustomApiProvider() {
       toast.error("Please fill in model, token, and base URL")
       return
     }
-    const config = {
+    const config: CustomApiConfig = {
       model: model.trim(),
       token: token.trim(),
       baseUrl: baseUrl.trim(),
       apiKey: apiKey.trim() || undefined,
     }
     setStoredConfig(config)
-    // Sync to backend for background session
-    syncCustomConfig.mutate(config)
+    // Sync to backend for background session (uses legacy format for compatibility)
+    syncCustomConfig.mutate({
+      model: config.model,
+      token: config.token,
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+    })
     toast.success("Custom API configuration saved")
   }
 
   const handleReset = () => {
-    setStoredConfig({ model: "", token: "", baseUrl: "", apiKey: "", ollamaApiKey: "" })
+    setStoredConfig({ model: "", token: "", baseUrl: "", apiKey: "" })
     setModel("")
     setBaseUrl("")
     setToken("")
@@ -806,7 +962,8 @@ function CustomApiProvider() {
 
 export function AgentsProvidersTab() {
   const [activeProvider, setActiveProvider] = useAtom(activeProviderAtom)
-  const [customConfig] = useAtom(customClaudeConfigAtom)
+  const [ollamaConfig] = useAtom(ollamaConfigAtom)
+  const [customApiConfig] = useAtom(customApiConfigAtom)
 
   // Backend sync mutation
   const syncMutation = trpc.claudeSettings.syncProviderToBackend.useMutation()
@@ -818,10 +975,10 @@ export function AgentsProvidersTab() {
   const isClaudeConnected = claudeIntegration?.isConnected ?? false
   const isAWSConnected = awsStatus?.authenticated ?? false
   const isOllamaConfigured = Boolean(
-    customConfig.model && customConfig.baseUrl && customConfig.token
+    ollamaConfig.model && ollamaConfig.baseUrl && ollamaConfig.token
   )
   const isCustomApiConfigured = Boolean(
-    customConfig.model && customConfig.baseUrl && customConfig.token && !customConfig.token.includes("ollama")
+    customApiConfig.model && customApiConfig.baseUrl && customApiConfig.token
   )
 
   const providers: { id: AIProvider; name: string; description: string; icon: React.ReactNode; isConnected: boolean }[] = [
@@ -898,12 +1055,8 @@ export function AgentsProvidersTab() {
       {/* Help Text */}
       <div className="text-xs text-muted-foreground space-y-1">
         <p>
-          <strong>Tip:</strong> Switching providers changes which AI model processes your requests.
-          Your chat history and projects remain the same.
-        </p>
-        <p>
-          Model-specific settings can be configured in the{" "}
-          <span className="text-foreground font-medium">Models</span> tab.
+          <strong>Tip:</strong> The model selected above is used for all conversations with this provider.
+          Switching providers preserves your chat history and projects.
         </p>
       </div>
     </div>

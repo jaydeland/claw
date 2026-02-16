@@ -12,13 +12,12 @@ import {
   SlidersFilledIcon,
   SettingsIcon,
 } from "../../icons"
-import { BrainFilledIcon, FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
+import { FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
 import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
-import { AgentsModelsTab } from "./settings-tabs/agents-models-tab"
 import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
 import { AgentsKubernetesTab } from "./settings-tabs/agents-kubernetes-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
@@ -84,12 +83,6 @@ const MAIN_TABS = [
     label: "Preferences",
     icon: SlidersFilledIcon,
     description: "Claude behavior settings",
-  },
-  {
-    id: "models" as SettingsTab,
-    label: "Models",
-    icon: BrainFilledIcon,
-    description: "Model overrides",
   },
   {
     id: "kubernetes" as SettingsTab,
@@ -305,8 +298,6 @@ export function AgentsSettingsDialog({
         return <AgentsKeyboardTab />
       case "preferences":
         return <AgentsPreferencesTab />
-      case "models":
-        return <AgentsModelsTab />
       case "kubernetes":
         return <AgentsKubernetesTab />
       case "advanced":

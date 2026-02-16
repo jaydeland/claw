@@ -172,7 +172,6 @@ export type SettingsTab =
   | "appearance"
   | "keyboard"
   | "preferences"
-  | "models"
   | "kubernetes"
   | "advanced"
   | "worktrees"
@@ -191,6 +190,37 @@ export interface OllamaModelConfig {
   isPulled?: boolean // Whether the model has been pulled locally
 }
 
+// ============================================
+// PROVIDER-SPECIFIC CONFIG TYPES
+// ============================================
+
+/**
+ * Ollama-specific configuration
+ * Stored independently from other providers to preserve settings when switching
+ */
+export type OllamaConfig = {
+  model: string
+  baseUrl: string
+  token: string
+  ollamaApiKey?: string
+  ollamaModels?: OllamaModelConfig[] // User's selected/favorite Ollama models
+}
+
+/**
+ * Custom API-specific configuration
+ * Stored independently from other providers to preserve settings when switching
+ */
+export type CustomApiConfig = {
+  model: string
+  baseUrl: string
+  token: string
+  apiKey?: string
+}
+
+/**
+ * Legacy unified config type (deprecated)
+ * @deprecated Use OllamaConfig or CustomApiConfig instead
+ */
 export type CustomClaudeConfig = {
   model: string
   token: string
@@ -207,7 +237,7 @@ export type ModelProfile = {
   config: CustomClaudeConfig
 }
 
-// Legacy single config (deprecated, kept for backwards compatibility)
+// Legacy single config (deprecated, kept for backwards compatibility and migration)
 export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
   "agents:claude-custom-config",
   {
@@ -216,6 +246,42 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
     baseUrl: "",
     apiKey: "",
     ollamaApiKey: "",
+  },
+  undefined,
+  { getOnInit: true },
+)
+
+// ============================================
+// PROVIDER-SPECIFIC CONFIG ATOMS
+// ============================================
+
+/**
+ * Ollama configuration (independent storage)
+ * Persists Ollama settings even when switching to other providers
+ */
+export const ollamaConfigAtom = atomWithStorage<OllamaConfig>(
+  "agents:ollama-config",
+  {
+    model: "",
+    baseUrl: "http://localhost:11434",
+    token: "ollama",
+    ollamaApiKey: "",
+  },
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Custom API configuration (independent storage)
+ * Persists Custom API settings even when switching to other providers
+ */
+export const customApiConfigAtom = atomWithStorage<CustomApiConfig>(
+  "agents:custom-api-config",
+  {
+    model: "",
+    baseUrl: "",
+    token: "",
+    apiKey: "",
   },
   undefined,
   { getOnInit: true },
@@ -258,6 +324,36 @@ export const activeProviderAtom = atomWithStorage<AIProvider>(
   { getOnInit: true },
 )
 
+// ============================================
+// MODEL SELECTION ATOMS (per provider)
+// ============================================
+
+/**
+ * Model selection for Anthropic OAuth provider
+ * Stores the selected model tier (opus/sonnet/haiku)
+ */
+export const anthropicModelAtom = atomWithStorage<string>(
+  "agents:anthropic-model",
+  "sonnet", // default
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Model selection for AWS Bedrock provider
+ * Stores the selected model tier (opus/sonnet/haiku)
+ */
+export const bedrockModelAtom = atomWithStorage<string>(
+  "agents:bedrock-model",
+  "sonnet", // default
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Normalize legacy CustomClaudeConfig
+ * @deprecated Use normalizeOllamaConfig or normalizeCustomApiConfig instead
+ */
 export function normalizeCustomClaudeConfig(
   config: CustomClaudeConfig,
 ): CustomClaudeConfig | undefined {
@@ -272,13 +368,46 @@ export function normalizeCustomClaudeConfig(
   return { model, token, baseUrl, apiKey, ollamaApiKey }
 }
 
-// Get active config
+/**
+ * Normalize Ollama config for use with Claude SDK
+ */
+export function normalizeOllamaConfig(
+  config: OllamaConfig,
+): CustomClaudeConfig | undefined {
+  const model = config.model.trim()
+  const token = config.token.trim()
+  const baseUrl = config.baseUrl.trim()
+  const ollamaApiKey = config.ollamaApiKey?.trim() || ""
+  const ollamaModels = config.ollamaModels
+
+  if (!model || !token || !baseUrl) return undefined
+
+  return { model, token, baseUrl, apiKey: "", ollamaApiKey, ollamaModels }
+}
+
+/**
+ * Normalize Custom API config for use with Claude SDK
+ */
+export function normalizeCustomApiConfig(
+  config: CustomApiConfig,
+): CustomClaudeConfig | undefined {
+  const model = config.model.trim()
+  const token = config.token.trim()
+  const baseUrl = config.baseUrl.trim()
+  const apiKey = config.apiKey?.trim() || ""
+
+  if (!model || !token || !baseUrl) return undefined
+
+  return { model, token, baseUrl, apiKey, ollamaApiKey: "" }
+}
+
+// Get active config based on current provider
 export const activeConfigAtom = atom((get) => {
+  const activeProvider = get(activeProviderAtom)
   const activeProfileId = get(activeProfileIdAtom)
   const profiles = get(modelProfilesAtom)
-  const legacyConfig = get(customClaudeConfigAtom)
 
-  // If specific profile is selected, use it
+  // If specific profile is selected, use it (highest priority)
   if (activeProfileId) {
     const profile = profiles.find(p => p.id === activeProfileId)
     if (profile) {
@@ -286,7 +415,20 @@ export const activeConfigAtom = atom((get) => {
     }
   }
 
-  // Fallback to legacy config if set
+  // Select config based on active provider
+  if (activeProvider === "ollama") {
+    const ollamaConfig = get(ollamaConfigAtom)
+    return normalizeOllamaConfig(ollamaConfig)
+  }
+
+  if (activeProvider === "custom-api") {
+    const customApiConfig = get(customApiConfigAtom)
+    return normalizeCustomApiConfig(customApiConfig)
+  }
+
+  // anthropic-oauth and aws-bedrock don't use custom config
+  // Fallback to legacy config if set (for backwards compatibility)
+  const legacyConfig = get(customClaudeConfigAtom)
   const normalized = normalizeCustomClaudeConfig(legacyConfig)
   if (normalized) {
     return normalized

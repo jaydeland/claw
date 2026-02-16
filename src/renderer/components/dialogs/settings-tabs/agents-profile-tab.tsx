@@ -4,6 +4,7 @@ import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { IconSpinner } from "../../../icons"
 import { toast } from "sonner"
+import { trpc } from "../../../lib/trpc"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -36,6 +37,9 @@ export function AgentsProfileTab() {
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const isNarrowScreen = useIsNarrowScreen()
+
+  // Get version info
+  const { data: versionInfo } = trpc.claude.getVersionInfo.useQuery()
 
   // Fetch real user data from desktop API
   useEffect(() => {
@@ -151,6 +155,29 @@ export function AgentsProfileTab() {
       <div className="text-xs text-muted-foreground">
         AI provider connections are managed in the{" "}
         <span className="text-foreground font-medium">AI Providers</span> tab.
+      </div>
+
+      {/* Version Information */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">Version Information</h4>
+        </div>
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Claude Agent SDK</span>
+              <span className="text-sm font-mono text-foreground">
+                {versionInfo?.sdkVersion || "Loading..."}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Claude Binary</span>
+              <span className="text-sm font-mono text-foreground">
+                {versionInfo?.binaryVersion || "Loading..."}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
