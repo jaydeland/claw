@@ -39,6 +39,10 @@ export interface TransientChatProps {
   promptContext?: string
   /** System prompt type - determines which system prompt to use */
   systemPromptType?: "mcp" | "review"
+  /** If true, automatically send promptContext as the first message when the dialog opens */
+  autoSendInitialMessage?: boolean
+  /** Custom message to display when auto-sending (defaults to "Please analyze this file.") */
+  initialMessage?: string
 }
 
 export function TransientChat({
@@ -53,6 +57,8 @@ export function TransientChat({
   onComplete,
   promptContext,
   systemPromptType = "mcp",
+  autoSendInitialMessage = false,
+  initialMessage = "Please analyze this file.",
 }: TransientChatProps) {
   // Initialize with greeting if provided
   const [messages, setMessages] = useState<Message[]>(() =>
@@ -76,6 +82,7 @@ export function TransientChat({
   const inputRef = useRef<HTMLInputElement>(null)
   const utils = trpc.useUtils()
   const cleanupRef = useRef<(() => void) | null>(null)
+  const hasAutoSentRef = useRef(false)
 
   // Cleanup transient session on unmount
   useEffect(() => {
@@ -99,6 +106,22 @@ export function TransientChat({
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Auto-send initial message when enabled
+  useEffect(() => {
+    if (
+      autoSendInitialMessage &&
+      promptContext &&
+      promptContext.trim().length > 0 &&
+      !hasAutoSentRef.current &&
+      !isLoading &&
+      !isCreatingSession &&
+      !session
+    ) {
+      hasAutoSentRef.current = true
+      handleSend(initialMessage)
+    }
+  }, [autoSendInitialMessage, promptContext, isLoading, isCreatingSession, session, initialMessage])
 
   const createSession = async (prompt: string) => {
     setIsCreatingSession(true)
@@ -128,17 +151,17 @@ export function TransientChat({
     }
   }
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || isLoading || isCreatingSession) return
+  const handleSend = async (promptOverride?: string) => {
+    const messageContent = promptOverride ?? inputValue.trim()
+    if (!messageContent || isLoading || isCreatingSession) return
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: "user",
-      content: inputValue.trim(),
+      content: messageContent,
     }
 
     setMessages((prev) => [...prev, userMessage])
-    const currentInput = inputValue.trim()
     setInputValue("")
     setIsLoading(true)
     setError(null)
@@ -148,7 +171,7 @@ export function TransientChat({
 
       // Create session on first message
       if (!currentSession) {
-        currentSession = await createSession(currentInput)
+        currentSession = await createSession(messageContent)
         if (!currentSession) {
           setMessages((prev) => prev.filter((m) => m.id !== userMessage.id))
           setIsLoading(false)
@@ -166,11 +189,16 @@ export function TransientChat({
       setMessages((prev) => [...prev, assistantMessage])
 
       // Subscribe to streaming response
+      // Combine prompt with context (same as createSession does)
+      const enhancedPrompt = promptContext
+        ? `${messageContent}\n\n${promptContext}`
+        : messageContent
+
       const subscription = utils.client.transientChat.chat.subscribe(
         {
           chatId: currentSession.chatId,
           subChatId: currentSession.subChatId,
-          prompt: currentInput,
+          prompt: enhancedPrompt,
           systemPromptType,
         },
         {
