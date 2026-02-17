@@ -261,6 +261,7 @@ Read the file at the path above and analyze:
           autoSendInitialMessage={true}
           initialMessage={`Review this Claude ${selectedNode.type} file for correctness and quality.`}
           projectPath={selectedProject?.path}
+          contextKey={selectedNode.sourcePath}
           completeMessage="Review complete"
           completeDescription="The file review is finished. You can close this dialog."
         />

@@ -25,6 +25,8 @@ export interface AiAssistantDialogProps extends TransientChatProps {
   completeMessage?: string
   /** Complete description shown when task is done */
   completeDescription?: string
+  /** Unique key to reset state when context changes (e.g., file path being reviewed) */
+  contextKey?: string
 }
 
 export function AiAssistantDialog({

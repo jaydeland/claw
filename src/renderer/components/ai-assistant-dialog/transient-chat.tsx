@@ -45,6 +45,8 @@ export interface TransientChatProps {
   initialMessage?: string
   /** Project path to use as working directory - allows AI to read project files directly */
   projectPath?: string
+  /** Unique key to reset state when context changes (e.g., file path being reviewed) */
+  contextKey?: string
 }
 
 export function TransientChat({
@@ -62,6 +64,7 @@ export function TransientChat({
   autoSendInitialMessage = false,
   initialMessage = "Please analyze this file.",
   projectPath,
+  contextKey,
 }: TransientChatProps) {
   // Initialize with greeting if provided
   const [messages, setMessages] = useState<Message[]>(() =>
@@ -80,12 +83,43 @@ export function TransientChat({
   const [detectedResult, setDetectedResult] = useState<unknown>(null)
   const [isCreatingSession, setIsCreatingSession] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentContextKey, setCurrentContextKey] = useState(contextKey)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const utils = trpc.useUtils()
   const cleanupRef = useRef<(() => void) | null>(null)
   const hasAutoSentRef = useRef(false)
+
+  // Reset state when contextKey changes (e.g., different file being reviewed)
+  useEffect(() => {
+    if (contextKey && contextKey !== currentContextKey) {
+      // Cleanup old session
+      if (session?.chatId) {
+        utils.client.transientChat.cleanup
+          .mutate({ chatId: session.chatId })
+          .catch((err) => {
+            console.warn("[TransientChat] Cleanup error (non-critical):", err)
+          })
+      }
+
+      // Reset all state
+      setMessages(
+        initialGreeting
+          ? [{ id: "assistant-initial", role: "assistant" as const, content: initialGreeting }]
+          : []
+      )
+      setInputValue("")
+      setIsLoading(false)
+      setIsComplete(false)
+      setSession(null)
+      setDetectedResult(null)
+      setIsCreatingSession(false)
+      setError(null)
+      hasAutoSentRef.current = false
+      setCurrentContextKey(contextKey)
+    }
+  }, [contextKey, currentContextKey, session?.chatId, initialGreeting, utils.client.transientChat.cleanup])
 
   // Cleanup transient session on unmount
   useEffect(() => {
