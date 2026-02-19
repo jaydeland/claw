@@ -9,8 +9,13 @@ import { promisify } from "util"
 import * as https from "https"
 import * as http from "http"
 import { URL } from "url"
+import { BedrockClient, ListFoundationModelsCommand } from "@aws-sdk/client-bedrock"
 
 const dnsLookup = promisify(lookup)
+
+// Cache for Bedrock models (5 minutes)
+let bedrockModelsCache: { models: Array<{ modelId: string; name: string; supportedStreamingModes: string[] }>; expiresAt: number } | null = null
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 // Bedrock model token limits
 // Based on AWS Bedrock testing: "exceeds the model limit of 64000" error
@@ -691,4 +696,108 @@ export const awsSsoRouter = router({
 
       return { success: true }
     }),
+
+  /**
+   * List available Anthropic models from AWS Bedrock
+   * Uses ListFoundationModels API to get models available in the user's region
+   */
+  listAvailableModels: publicProcedure.query(async () => {
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    if (!settings?.bedrockRegion) {
+      return { models: [], error: "Bedrock region not configured" }
+    }
+
+    // Check cache first
+    if (bedrockModelsCache && Date.now() < bedrockModelsCache.expiresAt) {
+      console.log("[bedrock] Returning cached models:", bedrockModelsCache.models.length)
+      return { models: bedrockModelsCache.models }
+    }
+
+    // Get credentials - either from SSO or from profile
+    let credentials: { accessKeyId: string; secretAccessKey: string; sessionToken?: string }
+
+    if (settings.bedrockConnectionMethod === "sso") {
+      // Decrypt SSO credentials
+      if (!settings.awsAccessKeyId || !settings.awsSecretAccessKey) {
+        return { models: [], error: "AWS credentials not configured" }
+      }
+      credentials = {
+        accessKeyId: decrypt(settings.awsAccessKeyId),
+        secretAccessKey: decrypt(settings.awsSecretAccessKey),
+        sessionToken: settings.awsSessionToken ? decrypt(settings.awsSessionToken) : undefined,
+      }
+    } else {
+      // Load from AWS profile
+      try {
+        const { fromIni } = await import("@aws-sdk/credential-provider-ini")
+        const credentialProvider = fromIni({ profile: settings.awsProfileName || "default" })
+        const creds = await credentialProvider()
+        credentials = {
+          accessKeyId: creds.accessKeyId,
+          secretAccessKey: creds.secretAccessKey,
+          sessionToken: creds.sessionToken,
+        }
+      } catch (error: any) {
+        console.error("[bedrock] Failed to load AWS profile credentials:", error)
+        return { models: [], error: `Failed to load AWS profile: ${error.message}` }
+      }
+    }
+
+    try {
+      const client = new BedrockClient({
+        region: settings.bedrockRegion,
+        credentials,
+      })
+
+      const command = new ListFoundationModelsCommand({
+        provider: "anthropic",
+      })
+
+      const response = await client.send(command)
+
+      const models = (response.modelSummaries || [])
+        .filter((m) => m.modelId?.includes("claude"))
+        .map((m) => ({
+          modelId: m.modelId || "",
+          name: m.modelName || m.modelId?.split(".").pop() || "Unknown",
+          supportedStreamingModes: m.supportedStreamingModes || [],
+        }))
+        .sort((a, b) => {
+          // Sort by model tier: Opus > Sonnet > Haiku
+          const tierOrder = (id: string) => {
+            if (id.includes("opus")) return 0
+            if (id.includes("sonnet")) return 1
+            if (id.includes("haiku")) return 2
+            return 3
+          }
+          return tierOrder(a.modelId) - tierOrder(b.modelId)
+        })
+
+      // Update cache
+      bedrockModelsCache = {
+        models,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+      }
+
+      console.log("[bedrock] Found available models:", models.length)
+      return { models }
+    } catch (error: any) {
+      console.error("[bedrock] Failed to list models:", error)
+      return { models: [], error: error.message || "Failed to fetch available models" }
+    }
+  }),
+
+  /**
+   * Clear the cached Bedrock models (force refresh)
+   */
+  clearModelsCache: publicProcedure.mutation(() => {
+    bedrockModelsCache = null
+    return { success: true }
+  }),
 })

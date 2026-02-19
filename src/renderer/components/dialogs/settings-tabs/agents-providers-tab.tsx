@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select"
-import { Check, X, Copy, ExternalLink, Server, Settings, Cloud, ChevronDown, ChevronUp } from "lucide-react"
+import { Check, X, Copy, ExternalLink, Server, Settings, Cloud, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { AwsSsoSection } from "../../../features/agents/components/aws-sso-section"
@@ -399,6 +399,20 @@ function AWSBedrockProvider() {
 
   const { data: claudeSettings, refetch: refetchSettings } = trpc.claudeSettings.getSettings.useQuery()
 
+  // Fetch available Bedrock models
+  const { data: availableModels, isLoading: isLoadingModels, refetch: refetchModels } =
+    trpc.awsSso.listAvailableModels.useQuery(undefined, {
+      enabled: claudeSettings?.authMode === "aws", // Only fetch when AWS is configured
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    })
+
+  // Clear cache mutation
+  const clearCache = trpc.awsSso.clearModelsCache.useMutation({
+    onSuccess: () => {
+      refetchModels()
+    },
+  })
+
   const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
     onSuccess: () => {
       toast.success("AWS Bedrock settings saved")
@@ -431,35 +445,71 @@ function AWSBedrockProvider() {
     <div className="space-y-4">
       {/* Model Selection */}
       <div className="space-y-2">
-        <Label className="text-sm font-medium">Model</Label>
-        <Select value={bedrockModel} onValueChange={setBedrockModel}>
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-medium">Model</Label>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (availableModels?.models.length) {
+                refetchModels()
+              } else {
+                clearCache.mutate()
+              }
+            }}
+            disabled={isLoadingModels}
+            className="h-6 px-2 text-xs"
+          >
+            {isLoadingModels ? (
+              <IconSpinner className="h-3 w-3 mr-1" />
+            ) : (
+              <RefreshCw className="h-3 w-3 mr-1" />
+            )}
+            Refresh Models
+          </Button>
+        </div>
+        <Select
+          value={bedrockModel}
+          onValueChange={setBedrockModel}
+          disabled={!availableModels?.models.length && !isLoadingModels}
+        >
           <SelectTrigger>
-            <SelectValue placeholder="Select a model" />
+            <SelectValue
+              placeholder={
+                isLoadingModels
+                  ? "Loading models..."
+                  : availableModels?.error
+                    ? "Failed to load models"
+                    : availableModels?.models.length
+                      ? "Select a model"
+                      : "Configure AWS to fetch models"
+              }
+            />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="opus">
-              <div className="flex flex-col">
-                <span className="font-medium">Claude Opus</span>
-                <span className="text-xs text-muted-foreground">Most capable model</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="sonnet">
-              <div className="flex flex-col">
-                <span className="font-medium">Claude Sonnet</span>
-                <span className="text-xs text-muted-foreground">Balanced performance</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="haiku">
-              <div className="flex flex-col">
-                <span className="font-medium">Claude Haiku</span>
-                <span className="text-xs text-muted-foreground">Fast and efficient</span>
-              </div>
-            </SelectItem>
+            {availableModels?.models.map((model) => (
+              <SelectItem key={model.modelId} value={model.modelId}>
+                <div className="flex flex-col">
+                  <span className="font-medium">{model.name}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{model.modelId}</span>
+                </div>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">
-          This model will be used for all AWS Bedrock conversations.
-        </p>
+        {availableModels?.models.length === 0 && !isLoadingModels && !availableModels?.error && (
+          <p className="text-xs text-muted-foreground">
+            Configure AWS credentials above, then click "Refresh Models" to fetch available Bedrock models.
+          </p>
+        )}
+        {availableModels?.error && (
+          <p className="text-xs text-destructive">{availableModels.error}</p>
+        )}
+        {availableModels?.models.length && (
+          <p className="text-xs text-muted-foreground">
+            {availableModels.models.length} models available in {bedrockRegion}
+          </p>
+        )}
       </div>
 
       <AwsSsoSection
