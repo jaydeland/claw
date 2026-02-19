@@ -733,6 +733,16 @@ export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
 export const viewingHistoryChatIdAtom = atom<string | null>(null)
 
 // ============================================
+// PROJECT DETAIL VIEW
+// ============================================
+
+/**
+ * ID of the project currently shown in the project detail page
+ * null = no project detail view active
+ */
+export const selectedProjectDetailIdAtom = atom<string | null>(null)
+
+// ============================================
 // GSD CHAT SIDEBAR
 // ============================================
 

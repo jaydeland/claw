@@ -52,14 +52,32 @@ ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
 ## -------------------------------------------------------------------
 [hook]
 on-activate = '''
-  # Setup electron for Flox-provided Electron binary
+  # Wire up the Flox-provided Electron binary so electron-vite can find it.
+  # Resolved dynamically so this works on any machine regardless of Nix store hash.
   if [ -d "$FLOX_ENV_PROJECT/node_modules/electron" ]; then
-    # Create path.txt
-    echo -n "Electron.app/Contents/MacOS/Electron" > "$FLOX_ENV_PROJECT/node_modules/electron/path.txt"
-    # Create symlink to Electron.app (if not exists)
-    if [ ! -e "$FLOX_ENV_PROJECT/node_modules/electron/dist" ]; then
-      ln -s /nix/store/29ac4qwh9nri55cla2fhgbjqvhpamgzk-electron-33.0.2/Applications "$FLOX_ENV_PROJECT/node_modules/electron/dist"
+    ELECTRON_BIN="$(which electron 2>/dev/null)"
+    if [ -n "$ELECTRON_BIN" ]; then
+      ELECTRON_APPS_DIR="$(dirname $(dirname "$ELECTRON_BIN"))/Applications"
+      echo -n "Electron.app/Contents/MacOS/Electron" > "$FLOX_ENV_PROJECT/node_modules/electron/path.txt"
+      DIST_LINK="$FLOX_ENV_PROJECT/node_modules/electron/dist"
+      if [ -L "$DIST_LINK" ] && [ "$(readlink "$DIST_LINK")" != "$ELECTRON_APPS_DIR" ]; then
+        rm "$DIST_LINK"
+      fi
+      if [ ! -e "$DIST_LINK" ]; then
+        ln -s "$ELECTRON_APPS_DIR" "$DIST_LINK"
+      fi
     fi
+  fi
+
+  # Download Claude binary if missing (required for background session).
+  OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  ARCH="$(uname -m)"
+  [ "$ARCH" = "x86_64" ] && ARCH="x64"
+  [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] && ARCH="arm64"
+  CLAUDE_BIN="$FLOX_ENV_PROJECT/resources/bin/${OS}-${ARCH}/claude"
+  if [ ! -f "$CLAUDE_BIN" ]; then
+    echo "Claude binary not found, downloading..."
+    cd "$FLOX_ENV_PROJECT" && bun run claude:download
   fi
 '''
 
