@@ -795,16 +795,6 @@ export const gsdSidebarWidthAtom = atomWithStorage<number>(
 )
 
 // ============================================
-// PROJECT DETAIL VIEW
-// ============================================
-
-/**
- * ID of the project currently being viewed in detail
- * null = no project detail view open
- */
-export const selectedProjectDetailIdAtom = atom<string | null>(null)
-
-// ============================================
 // CLEANUP - Release localStorage on chat deletion
 // ============================================
 
