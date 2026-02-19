@@ -45,7 +45,12 @@ export function parseAnalysisResult(responseText: string, toolOutput?: string): 
       jsonText = jsonMatch[0]
     }
 
-    const data = JSON.parse(jsonText)
+    let data = JSON.parse(jsonText)
+
+    // Handle wrapped response (e.g., {success: true, result: {...}})
+    if (data.result && typeof data.result === "object") {
+      data = data.result
+    }
 
     // Validate
     if (!data.nodes || !Array.isArray(data.nodes)) {

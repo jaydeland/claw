@@ -7,12 +7,21 @@
 // Analysis types
 export type AnalysisType = "codeflow" | "db" | "architecture" | "build"
 
+// Flowchart node types
+export type FlowchartNodeType = "start" | "end" | "process" | "decision" | "data" | "subprocess"
+
 // Flow node data
 export interface FlowNode {
   id: string
-  type?: string
+  type?: FlowchartNodeType | "default" | "input" | "output" | "group" | string // Support new flowchart types + legacy types
   position: { x: number; y: number }
-  data: Record<string, unknown>
+  data: {
+    label?: string
+    description?: string
+    flowType?: FlowchartNodeType // Explicit flowchart type in data
+    type?: string // Legacy type field for backward compatibility
+    [key: string]: unknown
+  }
   width?: number
   height?: number
 }

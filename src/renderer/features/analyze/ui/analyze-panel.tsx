@@ -14,6 +14,7 @@ import ReactFlow, {
   type Edge,
   MiniMap,
   Panel,
+  MarkerType,
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { Loader2, AlertCircle, RefreshCw, Maximize2, Minimize2, Play, X } from "lucide-react"
@@ -48,9 +49,24 @@ interface AnalyzePanelProps {
 function AnalysisNode({ data, id }: { data: Record<string, unknown>; id: string }) {
   const setSelectedNode = useSetAtom(selectedNodeAtom)
   const nodeType = (data.type as string) || "default"
+  const flowType = (data.flowType as string) || nodeType
 
   const getNodeStyle = () => {
-    switch (nodeType) {
+    // Flowchart node types (new format)
+    switch (flowType) {
+      case "start":
+      case "end":
+        return "bg-emerald-50 border-emerald-500 dark:bg-emerald-950 dark:border-emerald-500 rounded-3xl border-2 font-bold"
+      case "process":
+        return "bg-blue-50 border-blue-500 dark:bg-blue-950 dark:border-blue-500 rounded-lg border-2"
+      case "decision":
+        return "bg-amber-50 border-amber-500 dark:bg-amber-950 dark:border-amber-500 rounded-lg border-2"
+      case "data":
+        return "bg-purple-50 border-purple-500 dark:bg-purple-950 dark:border-purple-500 rounded-lg border-2"
+      case "subprocess":
+        return "bg-orange-50 border-orange-500 dark:bg-orange-950 dark:border-orange-500 rounded-lg border-2 border-double"
+
+      // Legacy node types (backward compatibility)
       case "table":
         return "bg-blue-50 border-blue-300 dark:bg-blue-950 dark:border-blue-700"
       case "service":
@@ -75,7 +91,7 @@ function AnalysisNode({ data, id }: { data: Record<string, unknown>; id: string 
     <div
       onClick={() => setSelectedNode({ id, data, position: { x: 0, y: 0 } })}
       className={cn(
-        "rounded-lg border-2 p-3 shadow-sm cursor-pointer transition-all hover:shadow-md min-w-[150px]",
+        "border-2 p-3 shadow-sm cursor-pointer transition-all hover:shadow-md min-w-[150px]",
         getNodeStyle()
       )}
     >
@@ -165,6 +181,14 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
           type: e.type || "smoothstep",
           label: e.label,
           data: e.data,
+          animated: e.data?.critical || false,
+          style: {
+            stroke: e.data?.critical ? "#ef4444" : "#64748b",
+            strokeWidth: 2,
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+          },
         }))
 
         setNodes(flowNodes)
@@ -365,8 +389,25 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
                   className="bg-background border border-border rounded-lg shadow-sm"
                   maskColor="rgb(0, 0, 0, 0.1)"
                   nodeColor={(node) => {
+                    const flowType = node.data?.flowType as string
                     const type = node.data?.type as string
-                    switch (type) {
+                    const nodeType = flowType || type
+
+                    switch (nodeType) {
+                      // Flowchart node types
+                      case "start":
+                      case "end":
+                        return "#10b981" // emerald
+                      case "process":
+                        return "#3b82f6" // blue
+                      case "decision":
+                        return "#f59e0b" // amber
+                      case "data":
+                        return "#a855f7" // purple
+                      case "subprocess":
+                        return "#f97316" // orange
+
+                      // Legacy node types
                       case "table":
                         return "#3b82f6"
                       case "service":

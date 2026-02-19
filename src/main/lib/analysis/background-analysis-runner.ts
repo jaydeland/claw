@@ -29,25 +29,28 @@ import { parseAnalysisResult } from "./analysis-parser"
 export type { AnalysisType, FlowNode, FlowEdge, AnalysisProgressUpdate, AnalysisResult }
 export { parseAnalysisResult }
 
-// Analysis prompts (mirrored from analyzer router)
+// Analysis prompts - Flowchart format (10-20 nodes, high-level overview)
 const ANALYSIS_PROMPTS: Record<AnalysisType, string> = {
-  codeflow: `Analyze this codebase and generate a React Flow diagram showing the code flow and module dependencies.
+  codeflow: `Analyze this codebase and generate a FLOWCHART showing the high-level code execution flow.
 
-Focus on:
-1. Main entry points (index files, main functions)
-2. Module hierarchy and imports
-3. Function/class relationships
-4. Data flow between modules
-5. Key exports and their consumers
+CRITICAL CONSTRAINTS:
+- MAXIMUM 10-20 nodes (keep it simple and high-level)
+- Use standard FLOWCHART conventions
+- Focus on execution flow, not detailed dependencies
+- Group similar operations into single nodes
 
 Output format - respond with ONLY a JSON object:
 {
   "nodes": [
     {
       "id": "unique-id",
-      "type": "default|input|output|group",
-      "position": { "x": 0, "y": 0 },
-      "data": { "label": "Module Name", "description": "What this does", "type": "file|function|class|module" }
+      "type": "start|end|process|decision|data|subprocess",
+      "position": { "x": 400, "y": 0 },
+      "data": {
+        "label": "Short Label",
+        "description": "Brief description",
+        "flowType": "start|end|process|decision|data|subprocess"
+      }
     }
   ],
   "edges": [
@@ -55,159 +58,210 @@ Output format - respond with ONLY a JSON object:
       "id": "edge-1",
       "source": "source-node-id",
       "target": "target-node-id",
-      "label": "imports|calls|extends",
-      "type": "default|smoothstep|straight"
-    }
-  ],
-  "summary": "Brief summary of the codebase structure",
-  "stats": { "fileCount": 10, "functionCount": 50, "classCount": 5 }
-}
-
-Use the following node types for different elements:
-- "input" for entry points
-- "output" for exports/public APIs
-- "default" for internal modules
-- "group" to group related files
-
-Position nodes in a hierarchical layout with entry points at top, dependencies flowing downward.
-
-IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations.`,
-
-  db: `Analyze this codebase and generate a React Flow diagram showing the database schema and data flow.
-
-Focus on:
-1. Database tables/collections
-2. Field definitions and types
-3. Relationships (1:1, 1:N, N:M)
-4. Foreign keys and constraints
-5. Indexes and keys
-6. Migration patterns
-
-Output format - respond with ONLY a JSON object:
-{
-  "nodes": [
-    {
-      "id": "table-name",
-      "type": "default",
-      "position": { "x": 0, "y": 0 },
-      "data": {
-        "label": "Table Name",
-        "type": "table",
-        "columns": [
-          { "name": "id", "type": "uuid", "primary": true },
-          { "name": "name", "type": "varchar" }
-        ]
-      }
-    }
-  ],
-  "edges": [
-    {
-      "id": "rel-1",
-      "source": "users",
-      "target": "posts",
-      "label": "1:N",
+      "label": "Yes|No|condition",
       "type": "smoothstep"
     }
   ],
-  "summary": "Database schema overview",
-  "stats": { "tableCount": 5, "relationshipCount": 3 }
+  "summary": "Brief summary of execution flow",
+  "stats": { "nodeCount": 15 }
 }
 
-Position related tables near each other. Use smoothstep edges for relationships.
+FLOWCHART NODE TYPES:
+- "start" - Entry point (rounded, green) - ONE per diagram at top
+- "end" - Exit point (rounded, green) - Use for success/error endings
+- "process" - Action/operation (rectangle, blue) - Main processing steps
+- "decision" - Conditional/branch (diamond, yellow) - Yes/No branching
+- "data" - Input/output data (parallelogram, purple) - Data operations
+- "subprocess" - Sub-module (rectangle, orange) - Complex operations
 
-IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations.`,
+EXAMPLE FLOW (10 nodes):
+Start (Entry Point) → Load Config → Initialize System → [Decision: Has Dependencies?]
+  → Yes: Install Dependencies → Load Modules → Start Server → End (Success)
+  → No: Load Modules → Start Server → End (Success)
 
-  architecture: `Analyze this codebase and generate a React Flow diagram showing the high-level system architecture.
+LAYOUT RULES:
+- Start node at top center (x: 400, y: 0)
+- Process nodes flow vertically downward (y increment: 180)
+- Decision nodes centered with branches (left: x-250, right: x+250, y increment: 180)
+- End nodes at bottom (y: last + 180)
+- Horizontal spacing for parallel paths: 250 pixels
 
-Focus on:
-1. System layers (frontend, backend, database, external services)
-2. Major components and their responsibilities
-3. Communication patterns between components
-4. External integrations (APIs, services, libraries)
-5. Infrastructure components
+IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations. Keep total nodes between 10-20.`,
+
+  db: `Analyze this codebase and generate a FLOWCHART showing the high-level database interaction flow.
+
+CRITICAL CONSTRAINTS:
+- MAXIMUM 10-20 nodes (keep it simple and high-level)
+- Use standard FLOWCHART conventions
+- Focus on data flow patterns, not detailed schema
+- Group related tables/operations
 
 Output format - respond with ONLY a JSON object:
 {
   "nodes": [
     {
-      "id": "component-id",
-      "type": "default|input|output",
-      "position": { "x": 0, "y": 0 },
+      "id": "unique-id",
+      "type": "start|end|process|decision|data|subprocess",
+      "position": { "x": 400, "y": 0 },
       "data": {
-        "label": "Component Name",
-        "type": "service|database|frontend|external|layer",
-        "description": "What this component does",
-        "tech": "React|Node.js|PostgreSQL|etc"
+        "label": "Short Label",
+        "description": "Brief description",
+        "flowType": "start|end|process|decision|data|subprocess"
       }
     }
   ],
   "edges": [
     {
-      "id": "conn-1",
-      "source": "frontend",
-      "target": "api",
-      "label": "HTTP/REST",
+      "id": "edge-1",
+      "source": "source-node-id",
+      "target": "target-node-id",
+      "label": "Read|Write|Join",
       "type": "smoothstep"
     }
   ],
-  "summary": "System architecture overview",
-  "stats": { "componentCount": 8, "externalServices": 3 }
+  "summary": "Database interaction flow overview",
+  "stats": { "nodeCount": 12 }
 }
 
-Use a layered layout:
-- Frontend/Client at top
-- API/Gateway layer below
-- Services/Business logic in middle
-- Databases at bottom
-- External services on sides
+FLOWCHART NODE TYPES:
+- "start" - User action/trigger (rounded, green)
+- "end" - Return result (rounded, green)
+- "process" - Query/update operation (rectangle, blue)
+- "decision" - Read vs Write, validation (diamond, yellow)
+- "data" - Main tables/collections (parallelogram, purple)
+- "subprocess" - Complex joins/transactions (rectangle, orange)
 
-IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations.`,
+EXAMPLE FLOW (12 nodes):
+Start (User Request) → [Decision: Read or Write?]
+  → Read Path: Query Tables → Join Relations → Return Data → End
+  → Write Path: Validate Input → [Decision: Valid?]
+    → Yes: Update Tables → Trigger Events → Return Success → End
+    → No: Return Error → End
 
-  build: `Analyze this codebase and generate a React Flow diagram showing the build system and dependencies.
+LAYOUT RULES:
+- Start node at top center (x: 400, y: 0)
+- Decision nodes for operation type (y: 180)
+- Branch paths (left: read x: 200, right: write x: 600)
+- End nodes at bottom (multiple if needed)
 
-Focus on:
-1. Build tools and configuration (webpack, vite, rollup, etc.)
-2. Package dependencies (direct and dev)
-3. Build pipeline steps
-4. Scripts and commands
-5. Output/bundle structure
-6. CI/CD integration if present
+IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations. Keep total nodes between 10-20.`,
+
+  architecture: `Analyze this codebase and generate a FLOWCHART showing the high-level system request flow.
+
+CRITICAL CONSTRAINTS:
+- MAXIMUM 10-20 nodes (keep it simple and high-level)
+- Use standard FLOWCHART conventions
+- Focus on request/response flow through system layers
+- Group components by layer
 
 Output format - respond with ONLY a JSON object:
 {
   "nodes": [
     {
-      "id": "step-id",
-      "type": "default|input|output",
-      "position": { "x": 0, "y": 0 },
+      "id": "unique-id",
+      "type": "start|end|process|decision|data|subprocess",
+      "position": { "x": 400, "y": 0 },
       "data": {
-        "label": "Step Name",
-        "type": "tool|script|dependency|output",
-        "description": "What this step does",
-        "config": "relevant config"
+        "label": "Short Label",
+        "description": "Brief description",
+        "tech": "Technology if relevant",
+        "flowType": "start|end|process|decision|data|subprocess"
       }
     }
   ],
   "edges": [
     {
-      "id": "dep-1",
-      "source": "source",
-      "target": "build",
+      "id": "edge-1",
+      "source": "source-node-id",
+      "target": "target-node-id",
+      "label": "HTTP|API|Query",
+      "type": "smoothstep"
+    }
+  ],
+  "summary": "System architecture request flow",
+  "stats": { "nodeCount": 14 }
+}
+
+FLOWCHART NODE TYPES:
+- "start" - User/client request (rounded, green)
+- "end" - Response returned (rounded, green)
+- "process" - Layer/component processing (rectangle, blue)
+- "decision" - Routing/auth decisions (diamond, yellow)
+- "data" - Database/cache (parallelogram, purple)
+- "subprocess" - External services (rectangle, orange)
+
+EXAMPLE FLOW (14 nodes):
+Start (User Request) → Frontend/UI → [Decision: Authenticated?]
+  → No: Login Flow → Auth Service → Return to Frontend
+  → Yes: API Gateway → [Decision: Route Type?]
+    → Data Query: Backend Service → Query Database → Transform Data → Return Response → End
+    → External: External Service API → Process Response → Return Response → End
+
+LAYOUT RULES:
+- Start at top (x: 400, y: 0)
+- Layer flow downward (Frontend → API → Services → Database)
+- Decision branches horizontally (±250 pixels)
+- End nodes at bottom (y: 900+)
+
+IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations. Keep total nodes between 10-20.`,
+
+  build: `Analyze this codebase and generate a FLOWCHART showing the high-level build pipeline flow.
+
+CRITICAL CONSTRAINTS:
+- MAXIMUM 10-20 nodes (keep it simple and high-level)
+- Use standard FLOWCHART conventions
+- Focus on build execution flow, not detailed configs
+- Group related build steps
+
+Output format - respond with ONLY a JSON object:
+{
+  "nodes": [
+    {
+      "id": "unique-id",
+      "type": "start|end|process|decision|data|subprocess",
+      "position": { "x": 400, "y": 0 },
+      "data": {
+        "label": "Short Label",
+        "description": "Brief description",
+        "flowType": "start|end|process|decision|data|subprocess"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "source": "source-node-id",
+      "target": "target-node-id",
       "label": "depends on",
       "type": "smoothstep"
     }
   ],
-  "summary": "Build system overview",
-  "stats": { "scriptCount": 8, "dependencyCount": 50, "devDependencyCount": 30 }
+  "summary": "Build pipeline flow overview",
+  "stats": { "nodeCount": 13 }
 }
 
-Layout as a pipeline from left to right:
-- Source files on left
-- Build steps in middle
-- Output/bundles on right
-- Dependencies as supporting nodes
+FLOWCHART NODE TYPES:
+- "start" - Build triggered (rounded, green)
+- "end" - Build complete/deployed (rounded, green)
+- "process" - Build step/compilation (rectangle, blue)
+- "decision" - Dev vs Prod, test pass (diamond, yellow)
+- "data" - Source files/dependencies (parallelogram, purple)
+- "subprocess" - Complex tools/bundlers (rectangle, orange)
 
-IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations.`,
+EXAMPLE FLOW (13 nodes):
+Start (Trigger Build) → Load Dependencies → [Decision: Dev or Prod?]
+  → Dev: Fast Build → Hot Reload → Dev Server → End
+  → Prod: Type Check → Run Tests → [Decision: Tests Pass?]
+    → No: Report Errors → End (Failed)
+    → Yes: Optimize Code → Bundle Assets → Deploy → End (Success)
+
+LAYOUT RULES:
+- Start at top center (x: 400, y: 0)
+- Decision points for environment and validation
+- Parallel paths for dev/prod (left: dev, right: prod)
+- Multiple end nodes for success/failure states
+
+IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations. Keep total nodes between 10-20.`,
 }
 
 // Active analysis tracking
