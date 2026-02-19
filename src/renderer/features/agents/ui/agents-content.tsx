@@ -16,6 +16,7 @@ import {
   agentsPreviewSidebarOpenAtom,
   agentsSidebarOpenAtom,
   selectedSidebarTabAtom,
+  selectedProjectDetailIdAtom,
 } from "../atoms"
 import {
   selectedTeamIdAtom,
@@ -53,6 +54,7 @@ import { GsdContent } from "../../gsd/ui/gsd-content"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { HistoryChatView } from "../../history"
+import { ProjectDetailPage } from "./project-detail-page"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -60,6 +62,7 @@ const useIsAdmin = () => false
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
+  const selectedProjectDetailId = useAtomValue(selectedProjectDetailIdAtom)
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
@@ -839,7 +842,8 @@ export function AgentsContent() {
   const showGsdView = selectedGsdCategory === "gsd" || selectedSidebarTab === "gsd"
   const showMcpView = selectedMcpCategory === "mcp"
   const showWorkflowsView = !!selectedWorkflowCategory
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView
+  const showProjectDetail = !!selectedProjectDetailId
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail
 
   return (
     <>
@@ -856,6 +860,13 @@ export function AgentsContent() {
 
       {/* Workflow browser */}
       {showWorkflowsView && <WorkflowsContent />}
+
+      {/* Project detail page */}
+      {showProjectDetail && (
+        <div className="flex-1 h-full overflow-hidden">
+          <ProjectDetailPage />
+        </div>
+      )}
 
       {/* Main content - chats/terminal/other */}
       <div className={showMainContent ? "flex h-full" : "hidden"}>
