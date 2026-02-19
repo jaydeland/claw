@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select"
-import { Check, X, Copy, ExternalLink, Server, Settings, Cloud, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
+import { Check, X, Copy, ExternalLink, Server, Settings, Cloud, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { AwsSsoSection } from "../../../features/agents/components/aws-sso-section"
@@ -394,8 +394,12 @@ function AWSBedrockProvider() {
   const [awsProfileName, setAwsProfileName] = useState("")
   const [maxMcpOutputTokens, setMaxMcpOutputTokens] = useState(48000)
   const [maxThinkingTokens, setMaxThinkingTokens] = useState(15000)
-  const [showAdvanced, setShowAdvanced] = useState(false)
   const [bedrockModel, setBedrockModel] = useAtom(bedrockModelAtom)
+
+  // Separate model selections for each tier
+  const [opusModelId, setOpusModelId] = useState("")
+  const [sonnetModelId, setSonnetModelId] = useState("")
+  const [haikuModelId, setHaikuModelId] = useState("")
 
   const { data: claudeSettings, refetch: refetchSettings } = trpc.claudeSettings.getSettings.useQuery()
 
@@ -433,8 +437,30 @@ function AWSBedrockProvider() {
       setAwsProfileName(claudeSettings.awsProfileName || "")
       setMaxMcpOutputTokens(claudeSettings.maxMcpOutputTokens || 48000)
       setMaxThinkingTokens(claudeSettings.maxThinkingTokens || 15000)
+      setOpusModelId(claudeSettings.bedrockOpusModel || "")
+      setSonnetModelId(claudeSettings.bedrockSonnetModel || "")
+      setHaikuModelId(claudeSettings.bedrockHaikuModel || "")
     }
   }, [claudeSettings])
+
+  // Filter models by tier
+  const opusModels = useMemo(() => {
+    return availableModels?.models.filter(m =>
+      m.name.toLowerCase().includes("opus") || m.modelId.toLowerCase().includes("opus")
+    ) || []
+  }, [availableModels])
+
+  const sonnetModels = useMemo(() => {
+    return availableModels?.models.filter(m =>
+      m.name.toLowerCase().includes("sonnet") || m.modelId.toLowerCase().includes("sonnet")
+    ) || []
+  }, [availableModels])
+
+  const haikuModels = useMemo(() => {
+    return availableModels?.models.filter(m =>
+      m.name.toLowerCase().includes("haiku") || m.modelId.toLowerCase().includes("haiku")
+    ) || []
+  }, [availableModels])
 
   const isConfigured = Boolean(
     claudeSettings?.authMode === "aws" &&
@@ -443,34 +469,37 @@ function AWSBedrockProvider() {
 
   return (
     <div className="space-y-4">
-      {/* Model Selection */}
+      {/* Model Selection Header */}
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-medium">Model Configuration</Label>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            if (availableModels?.models.length) {
+              refetchModels()
+            } else {
+              clearCache.mutate()
+            }
+          }}
+          disabled={isLoadingModels}
+          className="h-6 px-2 text-xs"
+        >
+          {isLoadingModels ? (
+            <IconSpinner className="h-3 w-3 mr-1" />
+          ) : (
+            <RefreshCw className="h-3 w-3 mr-1" />
+          )}
+          Refresh Models
+        </Button>
+      </div>
+
+      {/* Opus Model Selection */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">Model</Label>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (availableModels?.models.length) {
-                refetchModels()
-              } else {
-                clearCache.mutate()
-              }
-            }}
-            disabled={isLoadingModels}
-            className="h-6 px-2 text-xs"
-          >
-            {isLoadingModels ? (
-              <IconSpinner className="h-3 w-3 mr-1" />
-            ) : (
-              <RefreshCw className="h-3 w-3 mr-1" />
-            )}
-            Refresh Models
-          </Button>
-        </div>
+        <Label className="text-sm font-medium">Opus Model</Label>
         <Select
-          value={bedrockModel}
-          onValueChange={setBedrockModel}
+          value={opusModelId}
+          onValueChange={setOpusModelId}
           disabled={!availableModels?.models.length && !isLoadingModels}
         >
           <SelectTrigger>
@@ -480,14 +509,14 @@ function AWSBedrockProvider() {
                   ? "Loading models..."
                   : availableModels?.error
                     ? "Failed to load models"
-                    : availableModels?.models.length
-                      ? "Select a model"
-                      : "Configure AWS to fetch models"
+                    : opusModels.length
+                      ? "Select Opus model"
+                      : "No Opus models available"
               }
             />
           </SelectTrigger>
           <SelectContent>
-            {availableModels?.models.map((model) => (
+            {opusModels.map((model) => (
               <SelectItem key={model.modelId} value={model.modelId}>
                 <div className="flex flex-col">
                   <span className="font-medium">{model.name}</span>
@@ -497,20 +526,90 @@ function AWSBedrockProvider() {
             ))}
           </SelectContent>
         </Select>
-        {availableModels?.models.length === 0 && !isLoadingModels && !availableModels?.error && (
-          <p className="text-xs text-muted-foreground">
-            Configure AWS credentials above, then click "Refresh Models" to fetch available Bedrock models.
-          </p>
-        )}
-        {availableModels?.error && (
-          <p className="text-xs text-destructive">{availableModels.error}</p>
-        )}
-        {availableModels?.models.length && (
-          <p className="text-xs text-muted-foreground">
-            {availableModels.models.length} models available in {bedrockRegion}
-          </p>
-        )}
       </div>
+
+      {/* Sonnet Model Selection */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Sonnet Model</Label>
+        <Select
+          value={sonnetModelId}
+          onValueChange={setSonnetModelId}
+          disabled={!availableModels?.models.length && !isLoadingModels}
+        >
+          <SelectTrigger>
+            <SelectValue
+              placeholder={
+                isLoadingModels
+                  ? "Loading models..."
+                  : availableModels?.error
+                    ? "Failed to load models"
+                    : sonnetModels.length
+                      ? "Select Sonnet model"
+                      : "No Sonnet models available"
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {sonnetModels.map((model) => (
+              <SelectItem key={model.modelId} value={model.modelId}>
+                <div className="flex flex-col">
+                  <span className="font-medium">{model.name}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{model.modelId}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Haiku Model Selection */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Haiku Model</Label>
+        <Select
+          value={haikuModelId}
+          onValueChange={setHaikuModelId}
+          disabled={!availableModels?.models.length && !isLoadingModels}
+        >
+          <SelectTrigger>
+            <SelectValue
+              placeholder={
+                isLoadingModels
+                  ? "Loading models..."
+                  : availableModels?.error
+                    ? "Failed to load models"
+                    : haikuModels.length
+                      ? "Select Haiku model"
+                      : "No Haiku models available"
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {haikuModels.map((model) => (
+              <SelectItem key={model.modelId} value={model.modelId}>
+                <div className="flex flex-col">
+                  <span className="font-medium">{model.name}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{model.modelId}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Status Messages */}
+      {availableModels?.models.length === 0 && !isLoadingModels && !availableModels?.error && (
+        <p className="text-xs text-muted-foreground">
+          Configure AWS credentials below, then click "Refresh Models" to fetch available Bedrock models.
+        </p>
+      )}
+      {availableModels?.error && (
+        <p className="text-xs text-destructive">{availableModels.error}</p>
+      )}
+      {availableModels?.models.length && (
+        <p className="text-xs text-muted-foreground">
+          {availableModels.models.length} models available in {bedrockRegion} ({opusModels.length} Opus, {sonnetModels.length} Sonnet, {haikuModels.length} Haiku)
+        </p>
+      )}
 
       <AwsSsoSection
         bedrockRegion={bedrockRegion}
@@ -525,6 +624,9 @@ function AWSBedrockProvider() {
             awsProfileName: connectionMethod === "profile" ? awsProfileName : null,
             maxMcpOutputTokens,
             maxThinkingTokens,
+            bedrockOpusModel: opusModelId || null,
+            bedrockSonnetModel: sonnetModelId || null,
+            bedrockHaikuModel: haikuModelId || null,
           })
         }}
         isSaving={updateSettings.isPending}
@@ -541,75 +643,6 @@ function AWSBedrockProvider() {
         maxThinkingTokens={maxThinkingTokens}
         onMaxThinkingTokensChange={setMaxThinkingTokens}
       />
-
-      {/* Advanced Settings - Collapsible */}
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="flex items-center justify-between w-full py-2 text-sm font-medium text-foreground hover:text-foreground/80"
-        >
-          <span>Advanced Model Configuration</span>
-          {showAdvanced ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          )}
-        </button>
-
-        {showAdvanced && (
-          <div className="bg-background rounded-lg border border-border overflow-hidden">
-            <div className="p-4 space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Override default model IDs for specific Bedrock deployments.
-              </p>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Opus Model ID</Label>
-                <Input
-                  value={claudeSettings?.bedrockOpusModel || ""}
-                  onChange={(e) => {
-                    // Update locally first, then save on button click
-                  }}
-                  placeholder="global.anthropic.claude-opus-4-6-v1:0"
-                  className="font-mono"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Sonnet Model ID</Label>
-                <Input
-                  value={claudeSettings?.bedrockSonnetModel || ""}
-                  onChange={() => {}}
-                  placeholder="us.anthropic.claude-sonnet-4-5-20250929-v1:0"
-                  className="font-mono"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Haiku Model ID</Label>
-                <Input
-                  value={claudeSettings?.bedrockHaikuModel || ""}
-                  onChange={() => {}}
-                  placeholder="us.anthropic.claude-haiku-4-5-20251001-v1:0"
-                  className="font-mono"
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    toast.success("Advanced settings are saved via the main Save button above")
-                  }}
-                >
-                  Done
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   )
 }

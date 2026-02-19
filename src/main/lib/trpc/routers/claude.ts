@@ -426,12 +426,6 @@ export const claudeRouter = router({
     // Available models (simplified - SDK resolves actual versions)
     const availableModels = [
       {
-        id: 'opus-team',
-        name: 'Claude Opus Team',
-        description: 'Team mode with parallel sub-agents for complex tasks',
-        modelId: 'opus',
-      },
-      {
         id: 'opus',
         name: 'Claude Opus',
         description: 'Most capable model for complex tasks',
@@ -901,11 +895,6 @@ export const claudeRouter = router({
             // This allows users to switch models per-chat from the dropdown
             const resolvedModel = input.model || finalCustomConfig?.model
 
-            // Check if this is an Opus Team request (from UI selection)
-            // The UI passes the original model ID before mapping, so we check input.model
-            const isOpusTeam = input.model === "opus-team" ||
-              (input.model?.includes("team") && resolvedModel === "opus")
-
             // Agent teams is always enabled - set team mode metadata so the UI
             // uses AgentTeamGroup to display parallel Task tool calls
             metadata.isTeamMode = true
@@ -936,18 +925,10 @@ export const claudeRouter = router({
             }
 
             // System prompt config - use preset for both modes
-            // For team mode, append guidance to encourage team creation
-            // The "claude_code" preset includes built-in team coordination when delegate mode is active
-            const systemPromptConfig = isOpusTeam
-              ? {
-                  type: "preset" as const,
-                  preset: "claude_code" as const,
-                  append: `For complex tasks with 2+ independent work streams, proactively create an agent team rather than doing everything yourself. Spawn teammates with distinct roles and break work into a shared task list. Parallel teammates are more effective than sequential work for research, review, and multi-module changes.`,
-                }
-              : {
-                  type: "preset" as const,
-                  preset: "claude_code" as const,
-                }
+            const systemPromptConfig = {
+              type: "preset" as const,
+              preset: "claude_code" as const,
+            }
 
             const queryOptions = {
               prompt,
@@ -963,11 +944,9 @@ export const claudeRouter = router({
                 permissionMode:
                   input.mode === "plan"
                     ? ("plan" as const)
-                    : isOpusTeam
-                      ? ("delegate" as const)
-                      : ("bypassPermissions" as const),
+                    : ("bypassPermissions" as const),
                 // allowDangerouslySkipPermissions is only required for bypassPermissions mode
-                ...(input.mode !== "plan" && !isOpusTeam && {
+                ...(input.mode !== "plan" && {
                   allowDangerouslySkipPermissions: true,
                 }),
                 includePartialMessages: true,
@@ -1690,12 +1669,7 @@ export const claudeRouter = router({
                   }
                   // Detect result finish chunk
                   if (chunk.type === "finish") {
-                    // In team/delegate mode, don't break on finish — the SDK will yield
-                    // more messages (teammate messages, status updates, subsequent turns).
-                    // The for-await loop should run until the SDK's stream naturally ends.
-                    if (!isOpusTeam) {
-                      resultReceived = true
-                    }
+                    resultReceived = true
 
                     // Handle SDK errors from result message
                     if (chunk.messageMetadata?.resultSubtype === "error_during_execution") {

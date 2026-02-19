@@ -213,7 +213,6 @@ export const isPlanModeAtom = atom(
 
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
-  "opus-team": "opus",  // Team mode uses opus + custom system prompt
   opus: "opus",
   sonnet: "sonnet",
   haiku: "haiku",
@@ -784,6 +783,16 @@ export const gsdSidebarWidthAtom = atomWithStorage<number>(
   undefined,
   { getOnInit: true },
 )
+
+// ============================================
+// PROJECT DETAIL VIEW
+// ============================================
+
+/**
+ * ID of the project currently being viewed in detail
+ * null = no project detail view open
+ */
+export const selectedProjectDetailIdAtom = atom<string | null>(null)
 
 // ============================================
 // CLEANUP - Release localStorage on chat deletion
