@@ -184,6 +184,11 @@ export const claudeSettingsRouter = router({
         // AWS connection method
         bedrockConnectionMethod: z.enum(["sso", "profile"]).optional(),
         awsProfileName: z.string().nullable().optional(),
+        // Background session models (for utility tasks)
+        anthropicBackgroundModel: z.string().optional(),
+        bedrockBackgroundModel: z.string().nullable().optional(),
+        ollamaBackgroundModel: z.string().nullable().optional(),
+        customApiBackgroundModel: z.string().nullable().optional(),
       })
     )
     .mutation(({ input }) => {
@@ -272,6 +277,19 @@ export const claudeSettingsRouter = router({
             ...(input.awsProfileName !== undefined && {
               awsProfileName: input.awsProfileName,
             }),
+            // Background session models
+            ...(input.anthropicBackgroundModel !== undefined && {
+              anthropicBackgroundModel: input.anthropicBackgroundModel,
+            }),
+            ...(input.bedrockBackgroundModel !== undefined && {
+              bedrockBackgroundModel: input.bedrockBackgroundModel,
+            }),
+            ...(input.ollamaBackgroundModel !== undefined && {
+              ollamaBackgroundModel: input.ollamaBackgroundModel,
+            }),
+            ...(input.customApiBackgroundModel !== undefined && {
+              customApiBackgroundModel: input.customApiBackgroundModel,
+            }),
             updatedAt: new Date(),
           })
           .where(eq(claudeCodeSettings.id, "default"))
@@ -302,6 +320,11 @@ export const claudeSettingsRouter = router({
             // AWS connection method
             bedrockConnectionMethod: input.bedrockConnectionMethod ?? "profile",
             awsProfileName: input.awsProfileName ?? null,
+            // Background session models
+            anthropicBackgroundModel: input.anthropicBackgroundModel ?? "haiku",
+            bedrockBackgroundModel: input.bedrockBackgroundModel ?? null,
+            ollamaBackgroundModel: input.ollamaBackgroundModel ?? null,
+            customApiBackgroundModel: input.customApiBackgroundModel ?? null,
             ...(input.authMode === "apiKey" && input.apiKey && {
               apiKey: encryptApiKey(input.apiKey),
             }),

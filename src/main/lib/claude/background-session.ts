@@ -153,20 +153,46 @@ export async function initBackgroundSession(
       }),
     }
 
-    // Check if using Ollama/custom API and get model from settings
+    // Get background model from settings based on active provider
     let resolvedModel = config?.model || "haiku"
     try {
       const db = getDatabase()
       const settings = db.select().from(claudeCodeSettings).where(eq(claudeCodeSettings.id, "default")).get()
-      if (settings?.customEnvVars) {
-        const customEnv = JSON.parse(settings.customEnvVars)
-        if (customEnv.ANTHROPIC_MODEL) {
-          resolvedModel = customEnv.ANTHROPIC_MODEL
-          console.log("[background-session] Using model from settings:", resolvedModel)
+
+      if (settings) {
+        // Determine active provider from authMode
+        const authMode = settings.authMode || "oauth"
+
+        // Get background model based on provider
+        if (authMode === "oauth" && settings.anthropicBackgroundModel) {
+          resolvedModel = settings.anthropicBackgroundModel
+          console.log("[background-session] Using Anthropic OAuth background model:", resolvedModel)
+        } else if (authMode === "aws" && settings.bedrockBackgroundModel) {
+          resolvedModel = settings.bedrockBackgroundModel
+          console.log("[background-session] Using Bedrock background model:", resolvedModel)
+        } else if (settings.customEnvVars) {
+          // Check for Ollama/Custom API in custom env vars
+          const customEnv = JSON.parse(settings.customEnvVars)
+          const isOllama = customEnv.ANTHROPIC_AUTH_TOKEN === "ollama" ||
+                          customEnv.ANTHROPIC_BASE_URL?.includes("ollama")
+          const isCustomApi = customEnv.ANTHROPIC_BASE_URL && !isOllama
+
+          if (isOllama && settings.ollamaBackgroundModel) {
+            resolvedModel = settings.ollamaBackgroundModel
+            console.log("[background-session] Using Ollama background model:", resolvedModel)
+          } else if (isCustomApi && settings.customApiBackgroundModel) {
+            resolvedModel = settings.customApiBackgroundModel
+            console.log("[background-session] Using Custom API background model:", resolvedModel)
+          } else if (customEnv.ANTHROPIC_MODEL) {
+            // Fallback to legacy ANTHROPIC_MODEL env var
+            resolvedModel = customEnv.ANTHROPIC_MODEL
+            console.log("[background-session] Using model from legacy ANTHROPIC_MODEL env:", resolvedModel)
+          }
         }
       }
     } catch (e) {
-      // Ignore errors, use default
+      console.error("[background-session] Error reading background model settings:", e)
+      // Use default on error
     }
 
     // Get bundled Claude binary path

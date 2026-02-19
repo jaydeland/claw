@@ -117,10 +117,25 @@ function ClaudeCodeProvider() {
   const [authCode, setAuthCode] = useState("")
   const [copied, setCopied] = useState(false)
   const [anthropicModel, setAnthropicModel] = useAtom(anthropicModelAtom)
+  const [anthropicBackgroundModel, setAnthropicBackgroundModel] = useState("haiku")
 
   const utils = trpc.useUtils()
 
   const { data: integration, isLoading, refetch } = trpc.claudeCode.getIntegration.useQuery()
+  const { data: claudeSettings } = trpc.claudeSettings.getSettings.useQuery()
+
+  // Sync background model from settings
+  useEffect(() => {
+    if (claudeSettings?.anthropicBackgroundModel) {
+      setAnthropicBackgroundModel(claudeSettings.anthropicBackgroundModel)
+    }
+  }, [claudeSettings])
+
+  const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
+    onSuccess: () => {
+      toast.success("Background model updated")
+    },
+  })
 
   const startAuth = trpc.claudeCode.startAuth.useMutation({
     onSuccess: (data: { sandboxId: string; sandboxUrl: string; sessionId: string }) => {
@@ -274,6 +289,45 @@ function ClaudeCodeProvider() {
             </p>
           </div>
 
+          {/* Background Model Selection */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Background Model</Label>
+            <Select
+              value={anthropicBackgroundModel}
+              onValueChange={(value) => {
+                setAnthropicBackgroundModel(value)
+                updateSettings.mutate({ anthropicBackgroundModel: value })
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="opus">
+                  <div className="flex flex-col">
+                    <span className="font-medium">Claude Opus</span>
+                    <span className="text-xs text-muted-foreground">Most capable, higher cost</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="sonnet">
+                  <div className="flex flex-col">
+                    <span className="font-medium">Claude Sonnet</span>
+                    <span className="text-xs text-muted-foreground">Balanced performance</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="haiku">
+                  <div className="flex flex-col">
+                    <span className="font-medium">Claude Haiku</span>
+                    <span className="text-xs text-muted-foreground">Fast and cost-effective (recommended)</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Used for utility tasks like MCP queries and title generation.
+            </p>
+          </div>
+
           <Button
             variant="outline"
             onClick={() => disconnect.mutate()}
@@ -400,6 +454,7 @@ function AWSBedrockProvider() {
   const [opusModelId, setOpusModelId] = useState("")
   const [sonnetModelId, setSonnetModelId] = useState("")
   const [haikuModelId, setHaikuModelId] = useState("")
+  const [bedrockBackgroundModel, setBedrockBackgroundModel] = useState("")
 
   const { data: claudeSettings, refetch: refetchSettings } = trpc.claudeSettings.getSettings.useQuery()
 
@@ -440,6 +495,7 @@ function AWSBedrockProvider() {
       setOpusModelId(claudeSettings.bedrockOpusModel || "")
       setSonnetModelId(claudeSettings.bedrockSonnetModel || "")
       setHaikuModelId(claudeSettings.bedrockHaikuModel || "")
+      setBedrockBackgroundModel(claudeSettings.bedrockBackgroundModel || "")
     }
   }, [claudeSettings])
 
@@ -611,6 +667,41 @@ function AWSBedrockProvider() {
         </p>
       )}
 
+      {/* Background Model Selection */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Background Model</Label>
+        <Select
+          value={bedrockBackgroundModel}
+          onValueChange={setBedrockBackgroundModel}
+          disabled={!availableModels?.models.length && !isLoadingModels}
+        >
+          <SelectTrigger>
+            <SelectValue
+              placeholder={
+                isLoadingModels
+                  ? "Loading models..."
+                  : availableModels?.models.length
+                    ? "Select background model"
+                    : "Configure models above first"
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {availableModels?.models.map((model) => (
+              <SelectItem key={model.modelId} value={model.modelId}>
+                <div className="flex flex-col">
+                  <span className="font-medium">{model.name}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{model.modelId}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Used for utility tasks like MCP queries and title generation. Recommended: Use a Haiku model for cost efficiency.
+        </p>
+      </div>
+
       <AwsSsoSection
         bedrockRegion={bedrockRegion}
         onBedrockRegionChange={setBedrockRegion}
@@ -627,6 +718,7 @@ function AWSBedrockProvider() {
             bedrockOpusModel: opusModelId || null,
             bedrockSonnetModel: sonnetModelId || null,
             bedrockHaikuModel: haikuModelId || null,
+            bedrockBackgroundModel: bedrockBackgroundModel || null,
           })
         }}
         isSaving={updateSettings.isPending}
@@ -670,7 +762,23 @@ function OllamaProvider() {
   const [token, setToken] = useState(storedConfig.token)
   const [ollamaApiKey, setOllamaApiKey] = useState(storedConfig.ollamaApiKey || "")
   const [ollamaMode, setOllamaMode] = useState<OllamaMode>(null)
+  const [ollamaBackgroundModel, setOllamaBackgroundModel] = useState("")
   const hasCorrectedUrl = useRef(false)
+
+  const { data: claudeSettings } = trpc.claudeSettings.getSettings.useQuery()
+
+  // Sync background model from settings
+  useEffect(() => {
+    if (claudeSettings?.ollamaBackgroundModel) {
+      setOllamaBackgroundModel(claudeSettings.ollamaBackgroundModel)
+    }
+  }, [claudeSettings])
+
+  const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
+    onSuccess: () => {
+      toast.success("Background model updated")
+    },
+  })
 
   useEffect(() => {
     // Auto-correct old Ollama cloud URL to new one (only once)
@@ -875,6 +983,44 @@ function OllamaProvider() {
             <p className="text-xs text-muted-foreground">Usually set to &quot;ollama&quot;</p>
           </div>
 
+          {/* Background Model Selection */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Background Model</Label>
+            <Select
+              value={ollamaBackgroundModel}
+              onValueChange={(value) => {
+                setOllamaBackgroundModel(value)
+                updateSettings.mutate({ ollamaBackgroundModel: value })
+              }}
+              disabled={!modelOptions.length}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    isLoadingModels
+                      ? "Loading models..."
+                      : modelOptions.length
+                        ? "Select background model"
+                        : "No models available"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{m.name}</span>
+                      <span className="text-xs text-muted-foreground">{m.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Used for utility tasks like MCP queries and title generation.
+            </p>
+          </div>
+
           {/* Save Button */}
           <div className="flex justify-end gap-2 pt-2">
             <Button
@@ -922,6 +1068,22 @@ function CustomApiProvider() {
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
   const [token, setToken] = useState(storedConfig.token)
   const [apiKey, setApiKey] = useState(storedConfig.apiKey || "")
+  const [customApiBackgroundModel, setCustomApiBackgroundModel] = useState("")
+
+  const { data: claudeSettings } = trpc.claudeSettings.getSettings.useQuery()
+
+  // Sync background model from settings
+  useEffect(() => {
+    if (claudeSettings?.customApiBackgroundModel) {
+      setCustomApiBackgroundModel(claudeSettings.customApiBackgroundModel)
+    }
+  }, [claudeSettings])
+
+  const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
+    onSuccess: () => {
+      toast.success("Background model updated")
+    },
+  })
 
   // Sync mutation for Custom API config
   const syncCustomConfig = trpc.claudeSettings.syncCustomConfig.useMutation({
@@ -1019,6 +1181,24 @@ function CustomApiProvider() {
           className="font-mono"
         />
         <p className="text-xs text-muted-foreground">Optional additional API key</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Background Model (optional)</Label>
+        <Input
+          value={customApiBackgroundModel}
+          onChange={(e) => {
+            setCustomApiBackgroundModel(e.target.value)
+            if (e.target.value.trim()) {
+              updateSettings.mutate({ customApiBackgroundModel: e.target.value.trim() })
+            }
+          }}
+          placeholder="model-name (leave empty to use main model)"
+          className="font-mono"
+        />
+        <p className="text-xs text-muted-foreground">
+          Model for utility tasks like MCP queries and title generation. Leave empty to use the main model configured above.
+        </p>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">

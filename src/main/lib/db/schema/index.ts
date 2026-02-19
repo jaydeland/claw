@@ -169,6 +169,12 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   // Experimental features (SDK 0.2.34+)
   enableAgentTeams: integer("enable_agent_teams", { mode: "boolean" }).notNull().default(false), // Enable multi-agent collaboration (experimental)
   maxBudgetUsd: integer("max_budget_usd"), // Max USD cost per query (null = unlimited)
+
+  // Background session models (for utility tasks like MCP queries, title generation, etc.)
+  anthropicBackgroundModel: text("anthropic_background_model").default("haiku"), // "opus" | "sonnet" | "haiku"
+  bedrockBackgroundModel: text("bedrock_background_model"), // Bedrock model ID (null = use bedrockHaikuModel)
+  ollamaBackgroundModel: text("ollama_background_model"), // Ollama model name (null = use default config model)
+  customApiBackgroundModel: text("custom_api_background_model"), // Custom API model (null = use default config model)
 })
 
 // ============ MCP SERVER CREDENTIALS ============
