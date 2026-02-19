@@ -253,6 +253,13 @@
       "when": 1770400200000,
       "tag": "0035_add_is_transient",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1770400300000,
+      "tag": "0036_add_background_model_fields",
+      "breakpoints": true
     }
   ]
 }

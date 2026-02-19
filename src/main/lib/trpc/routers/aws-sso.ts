@@ -9,7 +9,7 @@ import { promisify } from "util"
 import * as https from "https"
 import * as http from "http"
 import { URL } from "url"
-import { BedrockClient, ListFoundationModelsCommand } from "@aws-sdk/client-bedrock"
+import { BedrockClient, ListFoundationModelsCommand, ListInferenceProfilesCommand, InferenceProfileType } from "@aws-sdk/client-bedrock"
 
 const dnsLookup = promisify(lookup)
 
@@ -755,29 +755,55 @@ export const awsSsoRouter = router({
         credentials,
       })
 
-      const command = new ListFoundationModelsCommand({
-        provider: "anthropic",
-      })
+      const tierOrder = (id: string) => {
+        if (id.includes("opus")) return 0
+        if (id.includes("sonnet")) return 1
+        if (id.includes("haiku")) return 2
+        return 3
+      }
 
-      const response = await client.send(command)
+      // Prefer system-defined cross-region inference profiles — these are the IDs
+      // required for on-demand invocation of newer Claude models on Bedrock.
+      // Foundation model IDs (e.g. "anthropic.claude-sonnet-4-6") cannot be used
+      // for on-demand throughput on newer models.
+      let models: Array<{ modelId: string; name: string; supportedStreamingModes: string[] }> = []
 
-      const models = (response.modelSummaries || [])
-        .filter((m) => m.modelId?.includes("claude"))
-        .map((m) => ({
-          modelId: m.modelId || "",
-          name: m.modelName || m.modelId?.split(".").pop() || "Unknown",
-          supportedStreamingModes: m.supportedStreamingModes || [],
-        }))
-        .sort((a, b) => {
-          // Sort by model tier: Opus > Sonnet > Haiku
-          const tierOrder = (id: string) => {
-            if (id.includes("opus")) return 0
-            if (id.includes("sonnet")) return 1
-            if (id.includes("haiku")) return 2
-            return 3
-          }
-          return tierOrder(a.modelId) - tierOrder(b.modelId)
-        })
+      try {
+        const profilesResponse = await client.send(
+          new ListInferenceProfilesCommand({ typeEquals: InferenceProfileType.SYSTEM_DEFINED })
+        )
+        const profiles = (profilesResponse.inferenceProfileSummaries || [])
+          .filter((p) => p.inferenceProfileId?.toLowerCase().includes("claude"))
+          .map((p) => ({
+            modelId: p.inferenceProfileId || "",
+            name: p.inferenceProfileName || p.inferenceProfileId?.split(".").pop() || "Unknown",
+            supportedStreamingModes: [] as string[],
+          }))
+          .sort((a, b) => tierOrder(a.modelId) - tierOrder(b.modelId))
+
+        if (profiles.length > 0) {
+          models = profiles
+          console.log("[bedrock] Found inference profiles:", profiles.length)
+        }
+      } catch (profileErr: any) {
+        console.warn("[bedrock] ListInferenceProfiles failed, falling back to foundation models:", profileErr.message)
+      }
+
+      // Fall back to foundation models if inference profiles returned nothing
+      if (models.length === 0) {
+        const foundationResponse = await client.send(
+          new ListFoundationModelsCommand({ provider: "anthropic" })
+        )
+        models = (foundationResponse.modelSummaries || [])
+          .filter((m) => m.modelId?.includes("claude"))
+          .map((m) => ({
+            modelId: m.modelId || "",
+            name: m.modelName || m.modelId?.split(".").pop() || "Unknown",
+            supportedStreamingModes: m.supportedStreamingModes || [],
+          }))
+          .sort((a, b) => tierOrder(a.modelId) - tierOrder(b.modelId))
+        console.log("[bedrock] Found foundation models:", models.length)
+      }
 
       // Update cache
       bedrockModelsCache = {
@@ -785,7 +811,6 @@ export const awsSsoRouter = router({
         expiresAt: Date.now() + CACHE_TTL_MS,
       }
 
-      console.log("[bedrock] Found available models:", models.length)
       return { models }
     } catch (error: any) {
       console.error("[bedrock] Failed to list models:", error)
