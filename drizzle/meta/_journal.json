@@ -232,6 +232,27 @@
       "when": 1770396852124,
       "tag": "0032_new_madame_web",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1770400000000,
+      "tag": "0033_fix_bedrock_thinking_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1770400100000,
+      "tag": "0034_add_analysis_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1770400200000,
+      "tag": "0035_add_is_transient",
+      "breakpoints": true
     }
   ]
 }

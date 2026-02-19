@@ -10,7 +10,7 @@ SET max_thinking_tokens = 60000,
     max_mcp_output_tokens = 150000
 WHERE id = 'default'
   AND max_thinking_tokens >= 200000; -- Only fix if still using old bad defaults
-
+--> statement-breakpoint
 -- Clear all existing session IDs to force fresh starts with correct token limits
 -- Sessions created with old token limits will fail on server with "No conversation found"
 UPDATE sub_chats

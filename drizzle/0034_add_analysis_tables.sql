@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS "analysis_diagrams" (
   "created_at" INTEGER DEFAULT (unixepoch() * 1000),
   "updated_at" INTEGER DEFAULT (unixepoch() * 1000)
 );
-
+--> statement-breakpoint
 -- Analysis jobs table - tracks in-progress analysis tasks
 CREATE TABLE IF NOT EXISTS "analysis_jobs" (
   "id" TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -32,14 +32,19 @@ CREATE TABLE IF NOT EXISTS "analysis_jobs" (
   "started_at" INTEGER DEFAULT (unixepoch() * 1000),
   "completed_at" INTEGER
 );
-
+--> statement-breakpoint
 -- Indexes for analysis_diagrams
 CREATE INDEX IF NOT EXISTS "analysis_diagrams_project_id_idx" ON "analysis_diagrams"("project_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "analysis_diagrams_type_idx" ON "analysis_diagrams"("type");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "analysis_diagrams_project_type_idx" ON "analysis_diagrams"("project_id", "type");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "analysis_diagrams_status_idx" ON "analysis_diagrams"("status");
-
+--> statement-breakpoint
 -- Indexes for analysis_jobs
 CREATE INDEX IF NOT EXISTS "analysis_jobs_project_id_idx" ON "analysis_jobs"("project_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "analysis_jobs_diagram_id_idx" ON "analysis_jobs"("diagram_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "analysis_jobs_status_idx" ON "analysis_jobs"("status");
