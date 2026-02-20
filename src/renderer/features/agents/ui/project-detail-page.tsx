@@ -109,14 +109,16 @@ export function ProjectDetailPage({ className }: ProjectDetailPageProps) {
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto p-4">
         {activeTab === "worktree" && (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl space-y-8">
             <ProjectWorktreeSettings projectId={project.id} />
           </div>
         )}
         {activeTab === "worktrees" && (
-          <ProjectWorktreesList projectId={project.id} />
+          <div className="max-w-3xl">
+            <ProjectWorktreesList projectId={project.id} />
+          </div>
         )}
       </div>
     </div>
