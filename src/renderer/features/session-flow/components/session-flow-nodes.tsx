@@ -562,7 +562,7 @@ export const TeamGroupNode = memo(function TeamGroupNode({
           <div className={`flex items-center gap-1.5 mb-1.5 ${headerColor}`}>
             <Users className="h-3.5 w-3.5 flex-shrink-0" />
             <span className="text-[10px] font-semibold">
-              {hasAnyRunning ? "Running Team" : "Team"}
+              {hasAnyRunning ? "Running Agents" : "Agents"}
             </span>
             <span className="text-[9px] opacity-70 ml-auto">
               {completedCount}/{data.agents.length}
@@ -598,7 +598,7 @@ export const TeamGroupNode = memo(function TeamGroupNode({
         <div className="text-xs">
           <div className="font-semibold mb-1 flex items-center gap-1.5">
             <Users className="h-3.5 w-3.5 text-purple-400" />
-            Team ({data.agents.length} agents)
+            Agents ({data.agents.length})
           </div>
           <div className="text-muted-foreground">
             Completed: {completedCount}/{data.agents.length}

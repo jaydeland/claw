@@ -721,7 +721,6 @@ function AWSBedrockProvider() {
             bedrockOpusModel: opusModelId || null,
             bedrockSonnetModel: sonnetModelId || null,
             bedrockHaikuModel: haikuModelId || null,
-            bedrockBackgroundModel: bedrockBackgroundModel || null,
           })
         }}
         isSaving={updateSettings.isPending}
@@ -1190,11 +1189,10 @@ function CustomApiProvider() {
         <Label className="text-sm font-medium">Background Model (optional)</Label>
         <Input
           value={customApiBackgroundModel}
-          onChange={(e) => {
-            setCustomApiBackgroundModel(e.target.value)
-            if (e.target.value.trim()) {
-              updateSettings.mutate({ customApiBackgroundModel: e.target.value.trim() })
-            }
+          onChange={(e) => setCustomApiBackgroundModel(e.target.value)}
+          onBlur={(e) => {
+            const trimmed = e.target.value.trim()
+            updateSettings.mutate({ customApiBackgroundModel: trimmed || null })
           }}
           placeholder="model-name (leave empty to use main model)"
           className="font-mono"

@@ -195,12 +195,12 @@ function validateSkillFrontmatter(data: Record<string, any>, _content: string): 
         field: "name",
         message: "'name' must be a string",
       })
-    } else if (!/^[a-z][a-z0-9-]*$/.test(data.name)) {
-      const suggestedName = data.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-")
+    } else if (!/^[a-z][a-z0-9.-]*$/.test(data.name)) {
+      const suggestedName = data.name.toLowerCase().replace(/[^a-z0-9.-]/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-")
       diagnostics.push({
         severity: "warning",
         field: "name",
-        message: "'name' should use lowercase letters, numbers, and hyphens only",
+        message: "'name' should use lowercase letters, numbers, hyphens, and dots only",
         suggestion: suggestedName,
         fixable: true,
         fix: (content: string) => {
@@ -402,12 +402,12 @@ function validateAgentFrontmatter(data: Record<string, any>, _content: string): 
       field: "name",
       message: "'name' must be a string",
     })
-  } else if (!/^[a-z][a-z0-9-]*$/.test(data.name)) {
-    const suggestedName = data.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-")
+  } else if (!/^[a-z][a-z0-9.-]*$/.test(data.name)) {
+    const suggestedName = data.name.toLowerCase().replace(/[^a-z0-9.-]/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-")
     diagnostics.push({
       severity: "warning",
       field: "name",
-      message: "'name' should use lowercase letters, numbers, and hyphens only",
+      message: "'name' should use lowercase letters, numbers, hyphens, and dots only",
       suggestion: suggestedName,
       fixable: true,
       fix: (content: string) => {

@@ -79,22 +79,23 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       }))
   }, [sessionInfo?.slashCommands])
 
-  // Fetch combined skills and commands from filesystem if SDK hasn't provided them yet
+  // Fetch combined skills and commands from filesystem (always — skills are not exposed by SDK)
   const { data: combinedItems = [], isLoading } = trpc.skills.listCombined.useQuery(
     { cwd: projectPath },
     {
-      enabled: isOpen && !sessionInfo?.slashCommands?.length,
+      enabled: isOpen,
       staleTime: 30_000,
       refetchOnWindowFocus: false,
     },
   )
 
-  // Transform combined items to SlashCommandOption (fallback)
+  // Transform combined items to SlashCommandOption
   // Includes both skills and commands (excluding GSD items which are handled separately)
+  // Deduplicates against SDK commands so the same name doesn't appear twice
   const fallbackCommands: SlashCommandOption[] = useMemo(() => {
-    if (sessionInfo?.slashCommands?.length) return [] // Use SDK commands if available
+    const sdkNames = new Set(sdkCommands.map((c) => c.name))
     return combinedItems
-      .filter((item) => item.name && typeof item.name === 'string' && !item.name.startsWith("gsd:"))
+      .filter((item) => item.name && typeof item.name === 'string' && !item.name.startsWith("gsd:") && !sdkNames.has(item.name))
       .map((item) => ({
         id: `${item.type}:${item.source}:${item.name}`,
         name: item.name,
@@ -104,10 +105,10 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         path: item.path,
         type: item.type,
       }))
-  }, [combinedItems, sessionInfo?.slashCommands])
+  }, [combinedItems, sdkCommands])
 
-  // Use SDK commands or fallback to filesystem commands (skills + commands combined)
-  const customCommands = sessionInfo?.slashCommands?.length ? sdkCommands : fallbackCommands
+  // Merge SDK commands and filesystem commands (skills always come from filesystem)
+  const customCommands = [...sdkCommands, ...fallbackCommands]
 
   // Fetch bundled GSD commands (skills with gsd: prefix come from combined list)
   const { data: bundledGsdCommands = [], isLoading: gsdCommandsLoading } = trpc.gsd.listCommands.useQuery(undefined, {
@@ -123,22 +124,18 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     const seenNames = new Set<string>()
 
     // Add GSD items from combined list (skills with gsd: prefix and any gsd: commands)
-    // These are already in fallbackCommands if using filesystem fallback
-    if (!sessionInfo?.slashCommands?.length) {
-      // Using filesystem fallback - extract GSD items from combined list
-      for (const item of combinedItems) {
-        if (item.name.startsWith("gsd:")) {
-          if (!seenNames.has(item.name)) {
-            seenNames.add(item.name)
-            items.push({
-              id: `gsd:${item.type}:${item.name}`,
-              name: item.name,
-              command: `/${item.name}`,
-              description: item.description || "",
-              category: "gsd",
-              source: item.type,
-            })
-          }
+    for (const item of combinedItems) {
+      if (item.name.startsWith("gsd:")) {
+        if (!seenNames.has(item.name)) {
+          seenNames.add(item.name)
+          items.push({
+            id: `gsd:${item.type}:${item.name}`,
+            name: item.name,
+            command: `/${item.name}`,
+            description: item.description || "",
+            category: "gsd",
+            source: item.type,
+          })
         }
       }
     }
@@ -159,7 +156,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     }
 
     return items
-  }, [combinedItems, bundledGsdCommands, sessionInfo?.slashCommands])
+  }, [combinedItems, bundledGsdCommands])
 
   // State for loading command content
   const [isLoadingContent, setIsLoadingContent] = useState(false)
