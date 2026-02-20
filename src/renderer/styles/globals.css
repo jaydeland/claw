@@ -382,3 +382,36 @@
   border: none !important;
   padding: 0 !important;
 }
+
+/* React Flow edge styling */
+.react-flow__edges {
+  pointer-events: all;
+  z-index: 1;
+}
+
+.react-flow__edge {
+  pointer-events: all;
+}
+
+.react-flow__edge-path {
+  stroke: hsl(var(--muted-foreground)) !important;
+  stroke-width: 2 !important;
+  fill: none !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: hsl(var(--primary)) !important;
+}
+
+/* React Flow arrow markers */
+.react-flow__arrowhead,
+.react-flow__arrowhead g,
+.react-flow__arrowhead path {
+  fill: hsl(var(--muted-foreground)) !important;
+  stroke: none !important;
+}
+
+/* React Flow marker definitions in SVG defs */
+.react-flow__marker {
+  fill: hsl(var(--muted-foreground)) !important;
+}

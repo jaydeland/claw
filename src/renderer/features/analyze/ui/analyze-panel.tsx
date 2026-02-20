@@ -110,6 +110,12 @@ const nodeTypes = {
   default: AnalysisNode,
   input: AnalysisNode,
   output: AnalysisNode,
+  start: AnalysisNode,
+  end: AnalysisNode,
+  process: AnalysisNode,
+  decision: AnalysisNode,
+  data: AnalysisNode,
+  subprocess: AnalysisNode,
 }
 
 function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
@@ -165,31 +171,51 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
         })
 
         // Transform to React Flow format
-        const flowNodes: Node[] = nodes.map((n) => ({
-          id: n.id,
-          type: n.type || "default",
-          position: n.position,
-          data: n.data,
-          width: n.width,
-          height: n.height,
-        }))
+        const flowNodes: Node[] = nodes.map((n) => {
+          // Handle multiple node data formats - type might be in different places
+          const nodeType = n.type || (n.data?.type as string) || (n.data?.flowType as string) || "default"
+          return {
+            id: n.id,
+            type: nodeType,
+            position: n.position,
+            data: n.data,
+            width: n.width,
+            height: n.height,
+          }
+        })
 
-        const flowEdges: Edge[] = edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          type: e.type || "smoothstep",
-          label: e.label,
-          data: e.data,
-          animated: e.data?.critical || false,
-          style: {
-            stroke: e.data?.critical ? "#ef4444" : "#64748b",
-            strokeWidth: 2,
-          },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-          },
-        }))
+        const strokeColor = "#64748b"
+        const flowEdges: Edge[] = edges
+          .map((e) => {
+            // Handle multiple edge data formats
+            const source = e.source || (e as Record<string, unknown>).from as string || (e as Record<string, unknown>).sourceNode as string
+            const target = e.target || (e as Record<string, unknown>).to as string || (e as Record<string, unknown>).targetNode as string
+
+            if (!source || !target) {
+              console.warn("Edge missing source/target:", e)
+              return null
+            }
+
+            const color = e.data?.critical ? "#ef4444" : strokeColor
+            return {
+              id: e.id,
+              source,
+              target,
+              type: e.type || "smoothstep",
+              label: e.label,
+              data: e.data,
+              animated: e.data?.critical || false,
+              style: {
+                stroke: color,
+                strokeWidth: 2,
+              },
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: color,
+              },
+            }
+          })
+          .filter((e): e is Edge => e !== null)
 
         setNodes(flowNodes)
         setEdges(flowEdges)
@@ -387,6 +413,11 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
                 onEdgesChange={onEdgesChange}
                 onNodeClick={onNodeClick}
                 nodeTypes={nodeTypes}
+                defaultEdgeOptions={{
+                  type: "smoothstep",
+                  style: { stroke: "#64748b", strokeWidth: 2 },
+                  markerEnd: { type: MarkerType.ArrowClosed, color: "#64748b" },
+                }}
                 minZoom={0.1}
                 maxZoom={2}
                 fitView
