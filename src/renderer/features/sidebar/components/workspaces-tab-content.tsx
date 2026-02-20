@@ -15,6 +15,7 @@ import {
   Archive,
   Trash2,
   FolderPlus,
+  Settings,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -26,6 +27,7 @@ import {
   expandedWorkspaceIdsAtom,
   selectedDraftIdAtom,
   cleanupChatLocalStorage,
+  selectedProjectDetailIdAtom,
 } from "../../agents/atoms"
 import { ChatStatusBadge } from "./chat-status-badge"
 import { useChatStatuses } from "../hooks/use-chat-status"
@@ -51,6 +53,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
+  const setSelectedProjectDetailId = useSetAtom(selectedProjectDetailIdAtom)
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useAtom(expandedWorkspaceIdsAtom)
   const setSelectedWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
@@ -174,6 +177,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
   // Handle chat click
   const handleChatClick = useCallback((chat: any, projectId: string) => {
+    // Clear project detail view when selecting a chat
+    setSelectedProjectDetailId(null)
+
     // Set the project and chat
     const project = projects?.find(p => p.id === projectId)
     if (project) {
@@ -198,7 +204,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     setSelectedClustersCategory(null)
     // Clear GSD category when chat is selected
     setSelectedGsdCategory(null)
-  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory])
+  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory, setSelectedProjectDetailId])
 
   // Handle workspace click
   const handleWorkspaceClick = useCallback((workspace: any) => {
@@ -215,8 +221,28 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     })
   }, [toggleWorkspaceExpanded, setSelectedProject])
 
+  // Handle settings icon click - open project detail page
+  const handleProjectSettingsClick = useCallback((workspace: any, e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Set as selected project first
+    setSelectedProject({
+      id: workspace.id,
+      name: workspace.name,
+      path: workspace.path,
+      gitRemoteUrl: workspace.gitRemoteUrl,
+      gitProvider: workspace.gitProvider as "github" | "gitlab" | "bitbucket" | null,
+      gitOwner: workspace.gitOwner,
+      gitRepo: workspace.gitRepo,
+    })
+    // Then open project detail page
+    setSelectedProjectDetailId(workspace.id)
+  }, [setSelectedProject, setSelectedProjectDetailId])
+
   // Handle new chat
   const handleNewChat = useCallback((workspaceId: string) => {
+    // Clear project detail view when starting new chat
+    setSelectedProjectDetailId(null)
+
     const project = projects?.find(p => p.id === workspaceId)
     if (project) {
       setSelectedProject({
@@ -240,7 +266,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     setSelectedClustersCategory(null)
     // Clear GSD category when creating new chat
     setSelectedGsdCategory(null)
-  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory])
+  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory, setSelectedProjectDetailId])
 
   // Group chats by project and filter by search
   const workspacesWithChats = useMemo(() => {
@@ -378,7 +404,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                       type="button"
                       onClick={() => handleWorkspaceClick(project)}
                       className={cn(
-                        "w-full flex items-center gap-1.5 pl-2 pr-7 py-1.5 rounded-md text-left transition-colors",
+                        "w-full flex items-center gap-1.5 pl-2 pr-16 py-1.5 rounded-md text-left transition-colors",
                         isSelected
                           ? "bg-foreground/10 text-foreground"
                           : "hover:bg-foreground/10 text-foreground",
@@ -405,6 +431,16 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                       </span>
                     </button>
 
+                    {/* Settings icon - visible on hover */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleProjectSettingsClick(project, e)}
+                      className="absolute right-7 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-all"
+                      title="Project Settings"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                    </button>
+
                     {/* Workspace context menu - always visible after count */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -417,6 +453,13 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem
+                          className="text-xs"
+                          onClick={() => handleProjectSettingsClick(project, { stopPropagation: () => {} } as React.MouseEvent)}
+                        >
+                          <Settings className="h-3.5 w-3.5 mr-2" />
+                          Project Settings
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-xs"
                           onClick={() => handleNewChat(project.id)}

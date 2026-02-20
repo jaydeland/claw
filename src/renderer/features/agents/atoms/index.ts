@@ -721,6 +721,13 @@ export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
   { getOnInit: true },
 )
 
+/**
+ * Selected project ID for project detail view
+ * When set, shows project settings page in main content area instead of chat
+ * null = show chat view (default)
+ */
+export const selectedProjectDetailIdAtom = atom<string | null>(null)
+
 // ============================================
 // HISTORY TAB
 // ============================================

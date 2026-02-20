@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
   activeProviderAtom,
-  customClaudeConfigAtom,
+  ollamaConfigAtom,
   type AIProvider,
   type OllamaModelConfig,
 } from "../../../lib/atoms"
@@ -126,7 +126,7 @@ function getModelsForProvider(provider: AIProvider, ollamaModels?: typeof OLLAMA
 
 export function AgentsModelsTab() {
   const [activeProvider] = useAtom(activeProviderAtom)
-  const [customConfig, setCustomConfig] = useAtom(customClaudeConfigAtom)
+  const [ollamaConfig, setOllamaConfig] = useAtom(ollamaConfigAtom)
   const isNarrowScreen = useIsNarrowScreen()
 
   // Get version info
@@ -135,11 +135,11 @@ export function AgentsModelsTab() {
   // Fetch Ollama models when Ollama is the active provider
   const { data: ollamaModelsData, isLoading: isLoadingOllamaModels } = trpc.claude.getOllamaModels.useQuery(
     {
-      baseUrl: customConfig.baseUrl || "http://localhost:11434",
-      apiKey: customConfig.ollamaApiKey,
+      baseUrl: ollamaConfig.baseUrl || "http://localhost:11434",
+      apiKey: ollamaConfig.ollamaApiKey,
     },
     {
-      enabled: activeProvider === "ollama" && !!customConfig.baseUrl,
+      enabled: activeProvider === "ollama" && !!ollamaConfig.baseUrl,
       staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     }
   )
@@ -180,17 +180,17 @@ export function AgentsModelsTab() {
   }, [claudeSettings])
 
   // Determine current model being used
-  const currentModel = customConfig.model || "claude-sonnet-4-5-20250929"
+  const currentModel = ollamaConfig.model || "claude-sonnet-4-5-20250929"
 
   const providerInfo = getProviderInfo(activeProvider)
 
   // Determine Ollama mode from base URL
-  const isOllamaCloud = customConfig.baseUrl === "https://ollama.com" ||
-    customConfig.baseUrl?.includes("api.ollama.com") ||
-    customConfig.baseUrl?.includes("ollama.com")
+  const isOllamaCloud = ollamaConfig.baseUrl === "https://ollama.com" ||
+    ollamaConfig.baseUrl?.includes("api.ollama.com") ||
+    ollamaConfig.baseUrl?.includes("ollama.com")
 
   // Get user's selected Ollama models from config
-  const userOllamaModels = customConfig.ollamaModels || []
+  const userOllamaModels = ollamaConfig.ollamaModels || []
 
   // Get available cloud models (fetched models not already in user's list)
   const availableCloudModels = ollamaModelsData?.success && ollamaModelsData.models
@@ -218,9 +218,9 @@ export function AgentsModelsTab() {
       isPulled: true,
     }
 
-    setCustomConfig({
-      ...customConfig,
-      ollamaModels: [...(customConfig.ollamaModels || []), newModel],
+    setOllamaConfig({
+      ...ollamaConfig,
+      ollamaModels: [...(ollamaConfig.ollamaModels || []), newModel],
     })
 
     setAddingModelId(null)
@@ -230,11 +230,11 @@ export function AgentsModelsTab() {
   // Remove an Ollama model from user's list
   const handleRemoveModel = (modelId: string) => {
     const updatedModels = userOllamaModels.filter((m) => m.id !== modelId)
-    setCustomConfig({
-      ...customConfig,
+    setOllamaConfig({
+      ...ollamaConfig,
       ollamaModels: updatedModels,
       // If the removed model was the default, clear it
-      model: customConfig.model === modelId ? "" : customConfig.model,
+      model: ollamaConfig.model === modelId ? "" : ollamaConfig.model,
     })
     toast.success(`Model "${modelId}" removed from your list`)
   }

@@ -462,6 +462,7 @@ export const claudeRouter = router({
       z.object({
         baseUrl: z.string(),
         apiKey: z.string().optional(),
+        filterRemote: z.boolean().optional(), // When true, only return remote/cloud models (for local endpoints)
       })
     )
     .query(async ({ input }) => {
@@ -472,9 +473,7 @@ export const claudeRouter = router({
           url = url.slice(0, -1)
         }
 
-        // Handle Ollama Cloud vs Local
-        const isOllamaCloud = url.includes('ollama.com')
-        const apiUrl = isOllamaCloud ? `${url}/api/tags` : `${url}/api/tags`
+        const apiUrl = `${url}/api/tags`
 
         const headers: Record<string, string> = {
           'Accept': 'application/json',
@@ -502,12 +501,28 @@ export const claudeRouter = router({
 
         const data = await response.json()
 
-        // Ollama API returns { models: Array<{ name: string, model?: string, ... }> }
-        const models = (data.models || []).map((model: any) => ({
+        // Detect if this is a cloud endpoint (ollama.com or similar)
+        const isCloudEndpoint = url.includes('ollama.com') || !url.includes('localhost') && !url.includes('127.0.0.1')
+
+        // Ollama API returns { models: Array<{ name: string, model?: string, remote_model?: string, ... }> }
+        // - Cloud endpoint: All models are cloud models, no remote_model field
+        // - Local endpoint: Models pulled from cloud have remote_model/remote_host fields
+        let rawModels = data.models || []
+
+        // Filter to only remote models if requested AND this is a local endpoint
+        // (Cloud endpoints already return only cloud models)
+        if (input.filterRemote && !isCloudEndpoint) {
+          rawModels = rawModels.filter((model: any) => model.remote_model || model.remote_host)
+        }
+
+        const models = rawModels.map((model: any) => ({
           id: model.model || model.name,
           name: model.name,
-          description: model.details?.description || `${model.details?.parameter_size || ''} ${model.details?.family || ''}`.trim() || 'Local model',
+          // For remote models on local endpoint, use the remote_model name if available (cleaner display)
+          displayName: model.remote_model || model.name,
+          description: model.details?.description || `${model.details?.parameter_size || ''} ${model.details?.family || ''}`.trim() || (model.remote_model ? 'Cloud model' : 'Cloud model'),
           size: model.size,
+          isRemote: isCloudEndpoint || !!(model.remote_model || model.remote_host),
         }))
 
         return {

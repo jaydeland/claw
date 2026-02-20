@@ -553,6 +553,7 @@ export function NewChatForm({
   }, [lastSelectedRepo, repos, readyRepos, setLastSelectedRepo])
 
   // Desktop: fetch branches from local git repository
+  // Debug: Log query state to help diagnose branch loading issues
   const branchesQuery = trpc.changes.getBranches.useQuery(
     { worktreePath: validatedProject?.path || "" },
     {
@@ -560,6 +561,16 @@ export function NewChatForm({
       staleTime: 30_000, // Cache for 30 seconds
     },
   )
+
+  // Debug logging for branch query
+  console.log("[NewChatForm] Branch query state:", {
+    enabled: !!validatedProject?.path,
+    path: validatedProject?.path,
+    isLoading: branchesQuery.isLoading,
+    isError: branchesQuery.isError,
+    error: branchesQuery.error?.message,
+    dataExists: !!branchesQuery.data,
+  })
 
   // Transform branch data to match web app format
   const branches = useMemo(() => {
@@ -1590,6 +1601,19 @@ export function NewChatForm({
                         </button>
                       </PopoverTrigger>
                       <PopoverContent className="w-80 p-0" align="start">
+                        {/* Loading/Error state */}
+                        {branchesQuery.isLoading && (
+                          <div className="py-6 text-center text-sm text-muted-foreground">
+                            Loading branches...
+                          </div>
+                        )}
+                        {branchesQuery.isError && (
+                          <div className="py-6 text-center text-sm text-red-500">
+                            Error loading branches: {branchesQuery.error?.message}
+                          </div>
+                        )}
+                        {!branchesQuery.isLoading && !branchesQuery.isError && (
+                        <>
                         {/* Search input with Create button */}
                         <div className="flex items-center gap-1.5 h-7 px-1.5 mx-1 my-1 rounded-md bg-muted/50">
                           <SearchIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -1691,6 +1715,8 @@ export function NewChatForm({
                                 })}
                             </div>
                           </div>
+                        )}
+                        </>
                         )}
                       </PopoverContent>
                     </Popover>

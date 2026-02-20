@@ -195,39 +195,14 @@ export function AgentsSettingsDialog({
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
   const isNarrowScreen = useIsNarrowScreen()
 
-  // Get projects list for dynamic tabs
-  const { data: projects } = trpc.projects.list.useQuery()
-
-  // Generate dynamic project tabs
-  const projectTabs = useMemo(() => {
-    if (!projects || projects.length === 0) {
-      return []
-    }
-
-    return projects.map((project) => ({
-      id: `project-${project.id}` as SettingsTab,
-      label: project.name,
-      icon: (project.gitOwner && project.gitProvider === 'github')
-        ? (() => {
-            const GitHubIcon = ({ className }: { className?: string }) => (
-              <img
-                src={`https://github.com/${project.gitOwner}.png?size=64`}
-                alt={project.gitOwner ?? ''}
-                className={cn("rounded-sm flex-shrink-0", className)}
-              />
-            )
-            return GitHubIcon
-          })()
-        : FolderOpen,
-      description: `Worktree setup for ${project.name}`,
-      projectId: project.id,
-    }))
-  }, [projects])
+  // Note: Project-specific settings are now in the project detail page
+  // accessed via clicking the gear icon on a workspace in the sidebar
 
   // All tabs combined for lookups
+  // Note: Project-specific tabs are now in the project detail page (not in settings dialog)
   const ALL_TABS = useMemo(
-    () => [...MAIN_TABS, ...ADVANCED_TABS, ...projectTabs],
-    [projectTabs]
+    () => [...MAIN_TABS, ...ADVANCED_TABS],
+    []
   )
 
   // Helper to get tab label from tab id
@@ -280,12 +255,6 @@ export function AgentsSettingsDialog({
   }
 
   const renderTabContent = () => {
-    // Handle dynamic project tabs
-    if (activeTab.startsWith('project-')) {
-      const projectId = activeTab.replace('project-', '')
-      return <AgentsProjectWorktreeTab projectId={projectId} />
-    }
-
     // Handle static tabs
     switch (activeTab) {
       case "profile":
@@ -346,26 +315,6 @@ export function AgentsSettingsDialog({
           />
         ))}
       </div>
-
-      {/* Project tabs */}
-      {projectTabs.length > 0 && (
-        <>
-          {/* Separator */}
-          <div className="border-t border-border/50 mx-2" />
-
-          <div className="space-y-1">
-            {projectTabs.map((tab) => (
-              <TabButton
-                key={tab.id}
-                tab={tab}
-                isActive={activeTab === tab.id}
-                onClick={() => handleTabClick(tab.id)}
-                isNarrow={isNarrowScreen}
-              />
-            ))}
-          </div>
-        </>
-      )}
     </div>
   )
 
@@ -500,25 +449,6 @@ export function AgentsSettingsDialog({
                       />
                     ))}
                   </div>
-
-                  {/* Project Tabs */}
-                  {projectTabs.length > 0 && (
-                    <>
-                      {/* Separator */}
-                      <div className="border-t border-border/50 mx-2" />
-
-                      <div className="space-y-1">
-                        {projectTabs.map((tab) => (
-                          <TabButton
-                            key={tab.id}
-                            tab={tab}
-                            isActive={activeTab === tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )}
                 </div>
 
                 {/* Right Content Area */}

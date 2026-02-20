@@ -11,7 +11,7 @@ import {
   isFullscreenAtom,
   customHotkeysAtom,
 } from "../../lib/atoms"
-import { selectedAgentChatIdAtom, selectedProjectAtom, selectedSidebarTabAtom, sidebarContentCollapsedAtom } from "../agents/atoms"
+import { selectedAgentChatIdAtom, selectedProjectAtom, selectedSidebarTabAtom, sidebarContentCollapsedAtom, selectedProjectDetailIdAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
@@ -98,6 +98,7 @@ export function AgentsLayout() {
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const isContentCollapsed = useAtomValue(sidebarContentCollapsedAtom)
+  const selectedProjectDetailId = useAtomValue(selectedProjectDetailIdAtom)
 
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
