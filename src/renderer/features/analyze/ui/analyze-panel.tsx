@@ -261,12 +261,21 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
   // Empty state
   if (!selectedType) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-        <div className="text-muted-foreground mb-4">
-          Select an analysis type from the tabs below to get started
+      <TooltipProvider>
+        <div className="h-full flex flex-col bg-background">
+          {/* Main content area */}
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <div className="text-muted-foreground mb-4">
+              Select an analysis type from the tabs below to get started
+            </div>
+          </div>
+
+          {/* Bottom panel with tabs */}
+          <div className="border-t border-border">
+            <AnalysisTypeTabs projectId={projectId} />
+          </div>
         </div>
-        <AnalysisTypeTabs />
-      </div>
+      </TooltipProvider>
     )
   }
 

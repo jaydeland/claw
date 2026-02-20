@@ -11,7 +11,7 @@ const TABS: { type: AnalysisType; icon: React.ElementType; label: string; descri
   {
     type: "codeflow",
     icon: GitBranch,
-    label: "Code Flow",
+    label: "Code",
     description: "Module dependencies and function relationships",
   },
   {
