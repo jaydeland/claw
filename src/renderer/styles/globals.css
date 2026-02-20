@@ -387,6 +387,7 @@
 .react-flow__edges {
   pointer-events: all;
   z-index: 1;
+  overflow: visible;
 }
 
 .react-flow__edge {
@@ -397,6 +398,7 @@
   stroke: hsl(var(--muted-foreground)) !important;
   stroke-width: 2 !important;
   fill: none !important;
+  visibility: visible !important;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
@@ -409,9 +411,11 @@
 .react-flow__arrowhead path {
   fill: hsl(var(--muted-foreground)) !important;
   stroke: none !important;
+  visibility: visible !important;
 }
 
 /* React Flow marker definitions in SVG defs */
 .react-flow__marker {
   fill: hsl(var(--muted-foreground)) !important;
+  visibility: visible !important;
 }

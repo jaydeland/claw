@@ -60,9 +60,44 @@ export function parseAnalysisResult(responseText: string, toolOutput?: string): 
       throw new Error("Missing or invalid 'edges' array")
     }
 
+    // Build a set of valid node IDs for edge validation
+    const validNodeIds = new Set(data.nodes.map((n: { id: string }) => n.id))
+
+    // Filter and validate edges
+    const validEdges = data.edges.filter((edge: { source?: string; target?: string; id?: string }, index: number) => {
+      const source = edge.source
+      const target = edge.target
+
+      // Check for missing source/target
+      if (!source || !target) {
+        console.warn(`[parseAnalysisResult] Edge ${index} (${edge.id || 'no-id'}) missing source/target:`, { source, target })
+        return false
+      }
+
+      // Check for "undefined" string (common parsing error)
+      if (source === "undefined" || target === "undefined") {
+        console.warn(`[parseAnalysisResult] Edge ${index} (${edge.id || 'no-id'}) has "undefined" string`)
+        return false
+      }
+
+      // Check if source/target exist in nodes
+      if (!validNodeIds.has(source)) {
+        console.warn(`[parseAnalysisResult] Edge ${index} (${edge.id || 'no-id'}) has invalid source: "${source}" not in nodes`)
+        return false
+      }
+      if (!validNodeIds.has(target)) {
+        console.warn(`[parseAnalysisResult] Edge ${index} (${edge.id || 'no-id'}) has invalid target: "${target}" not in nodes`)
+        return false
+      }
+
+      return true
+    })
+
+    console.log(`[parseAnalysisResult] Validated ${validEdges.length}/${data.edges.length} edges`)
+
     return {
       nodes: data.nodes,
-      edges: data.edges,
+      edges: validEdges,
       summary: data.summary,
       stats: data.stats,
     }
