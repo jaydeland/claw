@@ -672,7 +672,10 @@ function AWSBedrockProvider() {
         <Label className="text-sm font-medium">Background Model</Label>
         <Select
           value={bedrockBackgroundModel}
-          onValueChange={setBedrockBackgroundModel}
+          onValueChange={(value) => {
+            setBedrockBackgroundModel(value)
+            updateSettings.mutate({ bedrockBackgroundModel: value || null })
+          }}
           disabled={!availableModels?.models.length && !isLoadingModels}
         >
           <SelectTrigger>

@@ -6,6 +6,7 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { eq } from "drizzle-orm"
+import { resetBackgroundSession } from "../../claude/background-session"
 
 /**
  * Parse JSON safely with fallback
@@ -152,6 +153,11 @@ export const claudeSettingsRouter = router({
       // AWS connection method
       bedrockConnectionMethod: (s.bedrockConnectionMethod || "profile") as "sso" | "profile",
       awsProfileName: s.awsProfileName || null,
+      // Background session models
+      anthropicBackgroundModel: s.anthropicBackgroundModel || "haiku",
+      bedrockBackgroundModel: s.bedrockBackgroundModel || null,
+      ollamaBackgroundModel: s.ollamaBackgroundModel || null,
+      customApiBackgroundModel: s.customApiBackgroundModel || null,
     }
   }),
 
@@ -331,6 +337,20 @@ export const claudeSettingsRouter = router({
             updatedAt: new Date(),
           })
           .run()
+      }
+
+      // Reset background session if a background model field changed so the
+      // new model is picked up immediately on the next utility task
+      const backgroundModelChanged =
+        input.anthropicBackgroundModel !== undefined ||
+        input.bedrockBackgroundModel !== undefined ||
+        input.ollamaBackgroundModel !== undefined ||
+        input.customApiBackgroundModel !== undefined
+
+      if (backgroundModelChanged) {
+        resetBackgroundSession().catch((err) =>
+          console.error("[claude-settings] Failed to reset background session:", err)
+        )
       }
 
       return { success: true }
