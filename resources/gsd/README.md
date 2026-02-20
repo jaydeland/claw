@@ -8,14 +8,16 @@
 
 [![npm version](https://img.shields.io/npm/v/get-shit-done-cc?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/get-shit-done-cc)
 [![npm downloads](https://img.shields.io/npm/dm/get-shit-done-cc?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/get-shit-done-cc)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/5JJgD5svVS)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/5JJgD5svVS)
+[![X (Twitter)](https://img.shields.io/badge/X-@gsd__foundation-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/gsd_foundation)
+[![$GSD Token](https://img.shields.io/badge/$GSD-Dexscreener-1C1C1C?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMCIgZmlsbD0iIzAwRkYwMCIvPjwvc3ZnPg==&logoColor=00FF00)](https://dexscreener.com/solana/dwudwjvan7bzkw9zwlbyv6kspdlvhwzrqy6ebk8xzxkv)
 [![GitHub stars](https://img.shields.io/github/stars/glittercowboy/get-shit-done?style=for-the-badge&logo=github&color=181717)](https://github.com/glittercowboy/get-shit-done)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
 <br>
 
 ```bash
-npx get-shit-done-cc
+npx get-shit-done-cc@latest
 ```
 
 **Works on Mac, Windows, and Linux.**
@@ -36,7 +38,7 @@ npx get-shit-done-cc
 
 **Trusted by engineers at Amazon, Google, Shopify, and Webflow.**
 
-[Why I Built This](#why-i-built-this) · [How It Works](#how-it-works) · [Commands](#commands) · [Why It Works](#why-it-works)
+[Why I Built This](#why-i-built-this) · [How It Works](#how-it-works) · [Commands](#commands) · [Why It Works](#why-it-works) · [User Guide](docs/USER-GUIDE.md)
 
 </div>
 
@@ -73,7 +75,7 @@ People who want to describe what they want and have it built correctly — witho
 ## Getting Started
 
 ```bash
-npx get-shit-done-cc
+npx get-shit-done-cc@latest
 ```
 
 The installer prompts you to choose:
@@ -221,7 +223,7 @@ For each area you select, it asks until you're satisfied. The output — `CONTEX
 
 The deeper you go here, the more the system builds what you actually want. Skip it and you get reasonable defaults. Use it and you get *your* vision.
 
-**Creates:** `{phase}-CONTEXT.md`
+**Creates:** `{phase_num}-CONTEXT.md`
 
 ---
 
@@ -239,7 +241,7 @@ The system:
 
 Each plan is small enough to execute in a fresh context window. No degradation, no "I'll be more concise now."
 
-**Creates:** `{phase}-RESEARCH.md`, `{phase}-{N}-PLAN.md`
+**Creates:** `{phase_num}-RESEARCH.md`, `{phase_num}-{N}-PLAN.md`
 
 ---
 
@@ -258,7 +260,39 @@ The system:
 
 Walk away, come back to completed work with clean git history.
 
-**Creates:** `{phase}-{N}-SUMMARY.md`, `{phase}-VERIFICATION.md`
+**How Wave Execution Works:**
+
+Plans are grouped into "waves" based on dependencies. Within each wave, plans run in parallel. Waves run sequentially.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE EXECUTION                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  WAVE 1 (parallel)          WAVE 2 (parallel)          WAVE 3       │
+│  ┌─────────┐ ┌─────────┐    ┌─────────┐ ┌─────────┐    ┌─────────┐ │
+│  │ Plan 01 │ │ Plan 02 │ →  │ Plan 03 │ │ Plan 04 │ →  │ Plan 05 │ │
+│  │         │ │         │    │         │ │         │    │         │ │
+│  │ User    │ │ Product │    │ Orders  │ │ Cart    │    │ Checkout│ │
+│  │ Model   │ │ Model   │    │ API     │ │ API     │    │ UI      │ │
+│  └─────────┘ └─────────┘    └─────────┘ └─────────┘    └─────────┘ │
+│       │           │              ↑           ↑              ↑       │
+│       └───────────┴──────────────┴───────────┘              │       │
+│              Dependencies: Plan 03 needs Plan 01            │       │
+│                          Plan 04 needs Plan 02              │       │
+│                          Plan 05 needs Plans 03 + 04        │       │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Why waves matter:**
+- Independent plans → Same wave → Run in parallel
+- Dependent plans → Later wave → Wait for dependencies
+- File conflicts → Sequential plans or same plan
+
+This is why "vertical slices" (Plan 01: User feature end-to-end) parallelize better than "horizontal layers" (Plan 01: All models, Plan 02: All APIs).
+
+**Creates:** `{phase_num}-{N}-SUMMARY.md`, `{phase_num}-VERIFICATION.md`
 
 ---
 
@@ -281,7 +315,7 @@ The system:
 
 If everything passes, you move on. If something's broken, you don't manually debug — you just run `/gsd:execute-phase` again with the fix plans it created.
 
-**Creates:** `{phase}-UAT.md`, fix plans if issues found
+**Creates:** `{phase_num}-UAT.md`, fix plans if issues found
 
 ---
 
@@ -422,8 +456,8 @@ You're never locked in. The system adapts.
 | Command | What it does |
 |---------|--------------|
 | `/gsd:new-project [--auto]` | Full initialization: questions → research → requirements → roadmap |
-| `/gsd:discuss-phase [N]` | Capture implementation decisions before planning |
-| `/gsd:plan-phase [N]` | Research + plan + verify for a phase |
+| `/gsd:discuss-phase [N] [--auto]` | Capture implementation decisions before planning |
+| `/gsd:plan-phase [N] [--auto]` | Research + plan + verify for a phase |
 | `/gsd:execute-phase <N>` | Execute all plans in parallel waves, verify when complete |
 | `/gsd:verify-work [N]` | Manual user acceptance testing ¹ |
 | `/gsd:audit-milestone` | Verify milestone achieved its definition of done |
@@ -471,7 +505,8 @@ You're never locked in. The system adapts.
 | `/gsd:add-todo [desc]` | Capture idea for later |
 | `/gsd:check-todos` | List pending todos |
 | `/gsd:debug [desc]` | Systematic debugging with persistent state |
-| `/gsd:quick` | Execute ad-hoc task with GSD guarantees |
+| `/gsd:quick [--full]` | Execute ad-hoc task with GSD guarantees (`--full` adds plan-checking and verification) |
+| `/gsd:health [--repair]` | Validate `.planning/` directory integrity, auto-repair with `--repair` |
 
 <sup>¹ Contributed by reddit user OracleGreyBeard</sup>
 
@@ -479,7 +514,7 @@ You're never locked in. The system adapts.
 
 ## Configuration
 
-GSD stores project settings in `.planning/config.json`. Configure during `/gsd:new-project` or update later with `/gsd:settings`.
+GSD stores project settings in `.planning/config.json`. Configure during `/gsd:new-project` or update later with `/gsd:settings`. For the full config schema, workflow toggles, git branching options, and per-agent model breakdown, see the [User Guide](docs/USER-GUIDE.md#configuration-reference).
 
 ### Core Settings
 
@@ -514,6 +549,7 @@ These spawn additional agents during planning/execution. They improve quality bu
 | `workflow.research` | `true` | Researches domain before planning each phase |
 | `workflow.plan_check` | `true` | Verifies plans achieve phase goals before execution |
 | `workflow.verifier` | `true` | Confirms must-haves were delivered after execution |
+| `workflow.auto_advance` | `false` | Auto-chain discuss → plan → execute without stopping |
 
 Use `/gsd:settings` to toggle these, or override per-invocation:
 - `/gsd:plan-phase --skip-research`
