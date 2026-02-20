@@ -66,6 +66,12 @@ Output format - respond with ONLY a JSON object:
   "stats": { "nodeCount": 15 }
 }
 
+CRITICAL EDGE REQUIREMENTS:
+- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
+- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
+- NEVER use "undefined", null, or empty strings for source or target
+- Every source/target ID must match a node id exactly (case-sensitive)
+
 FLOWCHART NODE TYPES:
 - "start" - Entry point (rounded, green) - ONE per diagram at top
 - "end" - Exit point (rounded, green) - Use for success/error endings
@@ -122,6 +128,12 @@ Output format - respond with ONLY a JSON object:
   "summary": "Database interaction flow overview",
   "stats": { "nodeCount": 12 }
 }
+
+CRITICAL EDGE REQUIREMENTS:
+- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
+- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
+- NEVER use "undefined", null, or empty strings for source or target
+- Every source/target ID must match a node id exactly (case-sensitive)
 
 FLOWCHART NODE TYPES:
 - "start" - User action/trigger (rounded, green)
@@ -182,6 +194,12 @@ Output format - respond with ONLY a JSON object:
   "stats": { "nodeCount": 14 }
 }
 
+CRITICAL EDGE REQUIREMENTS:
+- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
+- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
+- NEVER use "undefined", null, or empty strings for source or target
+- Every source/target ID must match a node id exactly (case-sensitive)
+
 FLOWCHART NODE TYPES:
 - "start" - User/client request (rounded, green)
 - "end" - Response returned (rounded, green)
@@ -239,6 +257,12 @@ Output format - respond with ONLY a JSON object:
   "summary": "Build pipeline flow overview",
   "stats": { "nodeCount": 13 }
 }
+
+CRITICAL EDGE REQUIREMENTS:
+- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
+- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
+- NEVER use "undefined", null, or empty strings for source or target
+- Every source/target ID must match a node id exactly (case-sensitive)
 
 FLOWCHART NODE TYPES:
 - "start" - Build triggered (rounded, green)

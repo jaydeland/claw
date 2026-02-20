@@ -162,6 +162,16 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
         const edges = JSON.parse(diagram.edges) as FlowEdge[]
         const viewport = diagram.viewport ? JSON.parse(diagram.viewport) : null
 
+        // Debug: log raw edge data to understand structure
+        if (edges.length > 0) {
+          console.log("Raw edge data sample:", edges[0])
+          console.log("Raw node data sample:", nodes[0])
+        }
+
+        // Debug: log raw data structure
+        console.log("Diagram nodes sample:", nodes[0])
+        console.log("Diagram edges sample:", edges[0])
+
         setDiagramData({
           nodes,
           edges,
@@ -186,19 +196,25 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
 
         const strokeColor = "#64748b"
         const flowEdges: Edge[] = edges
-          .map((e) => {
+          .map((e, index) => {
             // Handle multiple edge data formats
-            const source = e.source || (e as Record<string, unknown>).from as string || (e as Record<string, unknown>).sourceNode as string
-            const target = e.target || (e as Record<string, unknown>).to as string || (e as Record<string, unknown>).targetNode as string
+            // Try various property names for source/target
+            const rawEdge = e as Record<string, unknown>
+            let source = e.source || rawEdge.from as string || rawEdge.sourceNode as string || rawEdge.start as string
+            let target = e.target || rawEdge.to as string || rawEdge.targetNode as string || rawEdge.end as string
+
+            // Filter out the string "undefined" which can happen from JSON parsing
+            if (source === "undefined") source = undefined
+            if (target === "undefined") target = undefined
 
             if (!source || !target) {
-              console.warn("Edge missing source/target:", e)
+              console.warn(`Edge ${index} missing source/target:`, e, { source, target })
               return null
             }
 
             const color = e.data?.critical ? "#ef4444" : strokeColor
             return {
-              id: e.id,
+              id: e.id || `edge-${index}`,
               source,
               target,
               type: e.type || "smoothstep",

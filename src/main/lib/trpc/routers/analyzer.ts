@@ -643,6 +643,12 @@ Output format - respond with ONLY a JSON object:
   "stats": { "fileCount": 10, "functionCount": 50, "classCount": 5 }
 }
 
+CRITICAL REQUIREMENTS FOR EDGES:
+- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
+- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
+- NEVER use "undefined", null, or empty strings for source or target
+- Double-check that every node id referenced in edges exists in the nodes array
+
 Use the following node types for different elements:
 - "input" for entry points
 - "output" for exports/public APIs
@@ -691,6 +697,12 @@ Output format - respond with ONLY a JSON object:
   "stats": { "tableCount": 5, "relationshipCount": 3 }
 }
 
+CRITICAL REQUIREMENTS FOR EDGES:
+- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
+- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
+- NEVER use "undefined", null, or empty strings for source or target
+- Double-check that every node id referenced in edges exists in the nodes array
+
 Position related tables near each other. Use smoothstep edges for relationships.`,
 
       architecture: `Analyze this codebase and generate a React Flow diagram showing the high-level system architecture.
@@ -729,6 +741,12 @@ Output format - respond with ONLY a JSON object:
   "summary": "System architecture overview",
   "stats": { "componentCount": 8, "externalServices": 3 }
 }
+
+CRITICAL REQUIREMENTS FOR EDGES:
+- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
+- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
+- NEVER use "undefined", null, or empty strings for source or target
+- Double-check that every node id referenced in edges exists in the nodes array
 
 Use a layered layout:
 - Frontend/Client at top
@@ -774,6 +792,12 @@ Output format - respond with ONLY a JSON object:
   "summary": "Build system overview",
   "stats": { "scriptCount": 8, "dependencyCount": 50, "devDependencyCount": 30 }
 }
+
+CRITICAL REQUIREMENTS FOR EDGES:
+- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
+- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
+- NEVER use "undefined", null, or empty strings for source or target
+- Double-check that every node id referenced in edges exists in the nodes array
 
 Layout as a pipeline from left to right:
 - Source files on left

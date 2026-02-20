@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef } from "react"
+import { useCallback, useRef, useEffect } from "react"
 import { useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import type { AnalysisType } from "../../../../main/lib/trpc/routers/analyzer"
@@ -41,16 +41,77 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
   const setActiveJobs = useSetAtom(activeAnalysisJobsAtom)
 
   const utils = trpc.useUtils()
-  const activeJobIdsRef = useRef<Set<string>>(new Set())
+  const activeJobIdsRef = useRef<Map<string, AnalysisType>>(new Map()) // Track jobId -> type
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Mutations for generating analysis
   const generateViaBackgroundMutation = trpc.analyzer.generateViaBackground.useMutation()
   const generateAllViaBackgroundMutation = trpc.analyzer.generateAllViaBackground.useMutation()
   const cancelBackgroundMutation = trpc.analyzer.cancelBackground.useMutation()
 
+  // Check status of active jobs via polling (fallback if subscription fails)
+  const checkActiveJobsStatus = useCallback(async () => {
+    if (activeJobIdsRef.current.size === 0) return
+
+    try {
+      const activeTasks = await utils.analyzer.getActiveBackgroundAnalyses.fetch()
+
+      // Check if any of our active jobs are no longer in the active tasks
+      for (const [jobId, type] of activeJobIdsRef.current) {
+        const stillActive = activeTasks.some((task: { jobId: string }) => task.jobId === jobId)
+        if (!stillActive) {
+          // Job is no longer active - it must have completed or failed
+          console.log(`[useAnalysisService] Job ${jobId} no longer active, assuming complete`)
+          activeJobIdsRef.current.delete(jobId)
+
+          // Invalidate to refresh diagram data
+          utils.analyzer.get.invalidate({ projectId, type })
+          utils.analyzer.list.invalidate({ projectId })
+
+          // Update active jobs
+          setActiveJobs((prev) => {
+            const next = new Map(prev)
+            next.delete(jobId)
+            return next
+          })
+        }
+      }
+
+      // If all jobs are done, clear loading states
+      if (activeJobIdsRef.current.size === 0) {
+        setIsGenerating(false)
+        setIsLoading(false)
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+      }
+    } catch (err) {
+      console.error("[useAnalysisService] Error checking job status:", err)
+    }
+  }, [projectId, utils, setActiveJobs, setIsGenerating, setIsLoading])
+
+  // Start polling when we have active jobs
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) return // Already polling
+
+    pollingIntervalRef.current = setInterval(checkActiveJobsStatus, 3000) // Poll every 3 seconds
+  }, [checkActiveJobsStatus])
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
+
   // Subscribe to background progress updates
   const progressSubscription = trpc.analyzer.subscribeBackgroundProgress.useSubscription(undefined, {
     onData: (update: AnalysisProgressUpdate) => {
+      console.log("[useAnalysisService] Received progress update:", update)
+
       // Only handle updates for our project
       if (!update.jobId) return
 
@@ -71,6 +132,10 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
           if (activeJobIdsRef.current.size === 0) {
             setIsGenerating(false)
             setIsLoading(false)
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+              pollingIntervalRef.current = null
+            }
           }
         } else {
           // Update or add active job
@@ -96,6 +161,8 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
     },
     onError: (err) => {
       console.error("[useAnalysisService] Progress subscription error:", err)
+      // Start polling as fallback when subscription fails
+      startPolling()
     },
   })
 

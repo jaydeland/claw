@@ -28,6 +28,9 @@ npm-debug.log*
 # electron-vite temp files
 electron.vite.config.*.mjs
 
+# Test/development output
+flowchart.json
+
 # Claude binary (downloaded at build time)
 resources/bin/
 
