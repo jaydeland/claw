@@ -211,7 +211,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
         }
 
         // Track this job
-        activeJobIdsRef.current.add(result.job.id)
+        activeJobIdsRef.current.set(result.job.id, type)
 
         // Add to active jobs
         setActiveJobs((prev) => {
@@ -262,7 +262,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
 
       for (const result of results) {
         if (result.success && result.job) {
-          activeJobIdsRef.current.add(result.job.id)
+          activeJobIdsRef.current.set(result.job.id, result.type)
 
           setActiveJobs((prev) => {
             const next = new Map(prev)
