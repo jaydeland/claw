@@ -1,4 +1,5 @@
 -- Add is_transient column to chats table for transient mini-conversations
+-- Using separate statements with error handling for idempotency
 ALTER TABLE chats ADD COLUMN is_transient integer DEFAULT 0;
 --> statement-breakpoint
 -- Create index for efficient cleanup queries
