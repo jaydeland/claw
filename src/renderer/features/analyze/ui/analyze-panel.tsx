@@ -213,7 +213,9 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
             }
 
             const color = e.data?.critical ? "#ef4444" : strokeColor
-            return {
+
+            // Build edge object, excluding undefined handle properties
+            const edge: Edge = {
               id: e.id || `edge-${index}`,
               source,
               target,
@@ -230,6 +232,18 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
                 color: color,
               },
             }
+
+            // Only add handles if they are valid strings (not undefined or "undefined")
+            const sourceHandle = rawEdge.sourceHandle as string | undefined
+            const targetHandle = rawEdge.targetHandle as string | undefined
+            if (sourceHandle && sourceHandle !== "undefined") {
+              edge.sourceHandle = sourceHandle
+            }
+            if (targetHandle && targetHandle !== "undefined") {
+              edge.targetHandle = targetHandle
+            }
+
+            return edge
           })
           .filter((e): e is Edge => e !== null)
 
