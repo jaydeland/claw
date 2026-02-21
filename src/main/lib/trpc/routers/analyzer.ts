@@ -118,6 +118,8 @@ const flowEdgeSchema = z.object({
   id: z.string(),
   source: z.string(),
   target: z.string(),
+  sourceHandle: z.string().nullable().optional(),
+  targetHandle: z.string().nullable().optional(),
   type: z.string().optional(),
   label: z.string().optional(),
   data: z.record(z.unknown()).optional(),
@@ -635,6 +637,8 @@ Output format - respond with ONLY a JSON object:
       "id": "edge-1",
       "source": "source-node-id",
       "target": "target-node-id",
+      "sourceHandle": null,
+      "targetHandle": null,
       "label": "imports|calls|extends",
       "type": "default|smoothstep|straight"
     }
@@ -689,6 +693,8 @@ Output format - respond with ONLY a JSON object:
       "id": "rel-1",
       "source": "users",
       "target": "posts",
+      "sourceHandle": null,
+      "targetHandle": null,
       "label": "1:N",
       "type": "smoothstep"
     }
@@ -734,6 +740,8 @@ Output format - respond with ONLY a JSON object:
       "id": "conn-1",
       "source": "frontend",
       "target": "api",
+      "sourceHandle": null,
+      "targetHandle": null,
       "label": "HTTP/REST",
       "type": "smoothstep"
     }
@@ -785,6 +793,8 @@ Output format - respond with ONLY a JSON object:
       "id": "dep-1",
       "source": "source",
       "target": "build",
+      "sourceHandle": null,
+      "targetHandle": null,
       "label": "depends on",
       "type": "smoothstep"
     }

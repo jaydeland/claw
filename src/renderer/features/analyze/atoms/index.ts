@@ -62,6 +62,8 @@ export interface FlowEdge {
   id: string
   source: string
   target: string
+  sourceHandle?: string | null
+  targetHandle?: string | null
   type?: string
   label?: string
   data?: Record<string, unknown>
