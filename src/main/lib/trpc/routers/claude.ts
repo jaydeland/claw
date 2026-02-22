@@ -157,6 +157,19 @@ function getClaudeCodeToken(): string | null {
   }
 }
 
+// Cache for Ollama model context windows (keyed by baseUrl + modelName)
+const ollamaContextWindowCache = new Map<string, { contextWindow: number; timestamp: number }>()
+const CONTEXT_WINDOW_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+
+// Cache for Ollama models list (keyed by baseUrl)
+let ollamaModelsListCache: {
+  baseUrl: string
+  filterRemote: boolean
+  models: any[]
+  expiresAt: number
+} | null = null
+const OLLAMA_MODELS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
 // Dynamic import for ESM module - CACHED to avoid re-importing on every message
 let cachedClaudeQuery: typeof import("@anthropic-ai/claude-agent-sdk").query | null = null
 const getClaudeQuery = async () => {
@@ -473,7 +486,23 @@ export const claudeRouter = router({
           url = url.slice(0, -1)
         }
 
-        const apiUrl = `${url}/api/tags`
+        // Check cache first
+        const filterRemote = input.filterRemote ?? false
+        const now = Date.now()
+        if (
+          ollamaModelsListCache &&
+          ollamaModelsListCache.baseUrl === url &&
+          ollamaModelsListCache.filterRemote === filterRemote &&
+          ollamaModelsListCache.expiresAt > now
+        ) {
+          console.log('[claude] Using cached Ollama models list')
+          return {
+            success: true,
+            models: ollamaModelsListCache.models,
+          }
+        }
+
+        const apiTagsUrl = `${url}/api/tags`
 
         const headers: Record<string, string> = {
           'Accept': 'application/json',
@@ -484,7 +513,7 @@ export const claudeRouter = router({
           headers['Authorization'] = `Bearer ${input.apiKey}`
         }
 
-        const response = await fetch(apiUrl, {
+        const response = await fetch(apiTagsUrl, {
           method: 'GET',
           headers,
         })
@@ -515,6 +544,49 @@ export const claudeRouter = router({
           rawModels = rawModels.filter((model: any) => model.remote_model || model.remote_host)
         }
 
+        // Fetch context window for each model using /api/show endpoint (with caching)
+        const fetchContextWindow = async (modelName: string): Promise<number | undefined> => {
+          const cacheKey = `${url}:${modelName}`
+          const cached = ollamaContextWindowCache.get(cacheKey)
+          if (cached && Date.now() - cached.timestamp < CONTEXT_WINDOW_CACHE_TTL) {
+            return cached.contextWindow
+          }
+
+          try {
+            const showUrl = `${url}/api/show`
+            const showResponse = await fetch(showUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: modelName }),
+            })
+            if (showResponse.ok) {
+              const showData = await showResponse.json()
+              // context_length is returned in the model_info
+              const contextWindow = showData.model_info?.['llama.context_length']?.int ||
+                     showData.model_info?.['glm.context_length']?.int ||
+                     showData.context_length
+              if (contextWindow) {
+                ollamaContextWindowCache.set(cacheKey, { contextWindow, timestamp: Date.now() })
+              }
+              return contextWindow
+            }
+          } catch (err) {
+            console.warn(`[claude] Failed to get context window for ${modelName}:`, err)
+          }
+          return undefined
+        }
+
+        // Fetch all model details in parallel
+        const modelDetails = await Promise.all(
+          rawModels.map(async (model: any) => {
+            const modelId = model.model || model.name
+            const contextWindow = await fetchContextWindow(modelId)
+            return { modelId, contextWindow }
+          })
+        )
+
+        const contextWindowMap = new Map(modelDetails.map(m => [m.modelId, m.contextWindow]))
+
         const models = rawModels.map((model: any) => ({
           id: model.model || model.name,
           name: model.name,
@@ -523,7 +595,17 @@ export const claudeRouter = router({
           description: model.details?.description || `${model.details?.parameter_size || ''} ${model.details?.family || ''}`.trim() || (model.remote_model ? 'Cloud model' : 'Cloud model'),
           size: model.size,
           isRemote: isCloudEndpoint || !!(model.remote_model || model.remote_host),
+          // Include context window if available
+          contextWindow: contextWindowMap.get(model.model || model.name),
         }))
+
+        // Update cache
+        ollamaModelsListCache = {
+          baseUrl: url,
+          filterRemote,
+          models,
+          expiresAt: Date.now() + OLLAMA_MODELS_CACHE_TTL,
+        }
 
         return {
           success: true,
@@ -538,6 +620,16 @@ export const claudeRouter = router({
         }
       }
     }),
+
+  /**
+   * Clear Ollama models cache (both list and context window caches)
+   */
+  clearOllamaModelsCache: publicProcedure.mutation(() => {
+    ollamaModelsListCache = null
+    ollamaContextWindowCache.clear()
+    console.log('[claude] Ollama models cache cleared')
+    return { success: true }
+  }),
 
   /**
    * Stream chat with Claude - single subscription handles everything
@@ -1215,8 +1307,11 @@ export const claudeRouter = router({
                   console.error(`[claude] SDK ERROR: ${sdkError}`)
                   console.error(`[claude] Full error object:`, JSON.stringify(msgAny, null, 2))
 
-                  // Check for token limit errors - clear session ID from DB
+                  // Log message content for context length errors
                   const errorText = msgAny.message?.content?.[0]?.text || sdkError
+                  console.log(`[claude] Error text for detection: "${errorText.slice(0, 200)}"`)
+
+                  // Check for token limit errors - clear session ID from DB
                   if (errorText.includes("maximum tokens") && errorText.includes("exceeds the model limit")) {
                     console.log(`[claude] Token limit error - clearing session ID from database`)
                     // Clear from database to start fresh on next message
@@ -1225,6 +1320,96 @@ export const claudeRouter = router({
                       .where(eq(subChats.id, input.subChatId))
                       .run()
                     console.log(`[claude] Cleared session ID from subChat ${input.subChatId}`)
+                  }
+
+                  // Check for context length errors ("prompt too long", "context", etc.)
+                  let compacted = false
+                  const isContextError =
+                    errorText.toLowerCase().includes("prompt too long") ||
+                    errorText.toLowerCase().includes("exceeded max context") ||
+                    errorText.toLowerCase().includes("context length") ||
+                    errorText.toLowerCase().includes("context_limit") ||
+                    errorText.toLowerCase().includes("maximum context")
+                  if (isContextError) {
+                    console.log(`[claude] Context length error detected - attempting automatic compaction`)
+
+                    try {
+                      // 1. Get existing messages from DB
+                      const existing = db
+                        .select()
+                        .from(subChats)
+                        .where(eq(subChats.id, input.subChatId))
+                        .get()
+                      const existingMessages: any[] = JSON.parse(existing?.messages || "[]")
+
+                      if (existingMessages.length > 10) {
+                        // 2. Split into recent (keep) and older (summarize)
+                        const recentMessages = existingMessages.slice(-20) // keep last 20 messages
+                        const olderMessages = existingMessages.slice(0, -20)
+
+                        // Only compact if there are actually older messages to summarize
+                        if (olderMessages.length > 0) {
+                          // 3. Create a summary of older messages (simple concatenation for now)
+                          const olderSummary = olderMessages
+                            .map((m: any) => `${m.role}: ${m.parts?.[0]?.text || m.content || "[content]"}`)
+                            .join("\n\n")
+
+                          // 4. Create summary message
+                          const summaryMessage = {
+                            id: crypto.randomUUID(),
+                            role: "system",
+                            parts: [{ type: "text", text: `[Previous conversation summarized: ${olderSummary.slice(0, 3000)}]` }],
+                          }
+
+                          // 5. Create new message list with summary replacing older messages
+                          const truncatedMessages = [summaryMessage, ...recentMessages]
+
+                          // 6. Clear session ID and update DB with truncated messages
+                          db.update(subChats)
+                            .set({
+                              messages: JSON.stringify(truncatedMessages),
+                              sessionId: null, // Clear session since context changed
+                            })
+                            .where(eq(subChats.id, input.subChatId))
+                            .run()
+
+                          console.log(`[claude] Compacted ${olderMessages.length} messages into summary`)
+
+                          // Emit compaction event to UI
+                          safeEmit({
+                            type: "system-Compact",
+                            toolCallId: `compact-${Date.now()}`,
+                            state: "input-streaming",
+                          } as UIMessageChunk)
+                          safeEmit({
+                            type: "system-Compact",
+                            toolCallId: `compact-${Date.now()}`,
+                            state: "output-available",
+                          } as UIMessageChunk)
+
+                          // Emit info message about compaction
+                          safeEmit({
+                            type: "message",
+                            message: {
+                              id: crypto.randomUUID(),
+                              role: "assistant",
+                              parts: [{ type: "text", text: "I automatically summarized earlier parts of our conversation to fit within the context limit. You can continue asking me questions!" }],
+                            },
+                          } as unknown as UIMessageChunk)
+
+                          // Mark as compacted and clear the error to allow retry
+                          compacted = true
+                          lastError = null
+                          console.log(`[claude] Compaction complete - caller should retry the request`)
+                        } else {
+                          console.log(`[claude] Not enough older messages to compact (only ${existingMessages.length} total)`)
+                        }
+                      } else {
+                        console.log(`[claude] Not enough messages to compact (${existingMessages.length})`)
+                      }
+                    } catch (compactionError) {
+                      console.error(`[claude] Error during compaction:`, compactionError)
+                    }
                   }
 
                   // Categorize SDK-level errors
@@ -1256,31 +1441,45 @@ export const claudeRouter = router({
                   ) {
                     errorCategory = "OVERLOADED_SDK"
                     errorContext = "Claude is overloaded, try again later"
+                  } else if (isContextError) {
+                    // Fallback category if compaction wasn't triggered or failed
+                    errorCategory = "CONTEXT_LENGTH"
+                    errorContext = "Conversation exceeds context limit"
                   }
 
                   // Emit auth-error for authentication failures, regular error otherwise
-                  if (errorCategory === "AUTH_FAILED_SDK") {
-                    safeEmit({
-                      type: "auth-error",
-                      errorText: errorContext,
-                    } as UIMessageChunk)
-                  } else {
-                    safeEmit({
-                      type: "error",
-                      errorText: errorContext,
-                      debugInfo: {
-                        category: errorCategory,
-                        sdkError: sdkError,
-                        sessionId: msgAny.session_id,
-                        messageId: msgAny.message?.id,
-                      },
-                    } as UIMessageChunk)
-                  }
+                  // Skip if compaction was successful (we emitted a message instead)
+                  if (!compacted) {
+                    if (errorCategory === "AUTH_FAILED_SDK") {
+                      safeEmit({
+                        type: "auth-error",
+                        errorText: errorContext,
+                      } as UIMessageChunk)
+                    } else {
+                      safeEmit({
+                        type: "error",
+                        errorText: errorContext,
+                        debugInfo: {
+                          category: errorCategory,
+                          sdkError: sdkError,
+                          sessionId: msgAny.session_id,
+                          messageId: msgAny.message?.id,
+                        },
+                      } as UIMessageChunk)
+                    }
 
-                  console.log(`[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`)
-                  safeEmit({ type: "finish" } as UIMessageChunk)
-                  safeComplete()
-                  return
+                    console.log(`[SD] M:END sub=${subId} reason=sdk_error cat=${errorCategory} n=${chunkCount}`)
+                    safeEmit({ type: "finish" } as UIMessageChunk)
+                    safeComplete()
+                    return
+                  } else {
+                    // Compaction was successful - don't emit error, just finish this turn
+                    // The caller should retry with the compacted context
+                    console.log(`[SD] M:END sub=${subId} reason=compacted n=${chunkCount}`)
+                    safeEmit({ type: "finish" } as UIMessageChunk)
+                    safeComplete()
+                    return
+                  }
                 }
 
                 // Track sessionId and uuid for rollback support (available on all messages)

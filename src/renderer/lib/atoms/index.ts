@@ -187,6 +187,7 @@ export interface OllamaModelConfig {
   name: string
   description?: string
   size?: string
+  contextWindow?: number // Context window size in tokens
   isPulled?: boolean // Whether the model has been pulled locally
 }
 
@@ -204,6 +205,7 @@ export type OllamaConfig = {
   token: string
   ollamaApiKey?: string
   ollamaModels?: OllamaModelConfig[] // User's selected/favorite Ollama models
+  contextWindow?: number // Context window size in tokens (e.g., 189000 for glm-5)
 }
 
 /**
@@ -215,6 +217,7 @@ export type CustomApiConfig = {
   baseUrl: string
   token: string
   apiKey?: string
+  contextWindow?: number // Context window size in tokens
 }
 
 /**

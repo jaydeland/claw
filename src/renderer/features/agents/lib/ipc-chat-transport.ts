@@ -102,6 +102,11 @@ const ERROR_TOAST_CONFIG: Record<
     title: "Authentication failed",
     description: "Your session may have expired. Try logging in again.",
   },
+  CONTEXT_LENGTH: {
+    title: "Conversation too long",
+    description:
+      "The conversation has exceeded the context limit. Starting a new chat is recommended.",
+  },
 }
 
 type UIMessageChunk = any // Inferred from subscription
