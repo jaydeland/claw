@@ -61,6 +61,11 @@ function detectChanges(
   oldTodos: TodoItem[],
   newTodos: TodoItem[],
 ): DetectedChanges {
+  // Guard against invalid input
+  if (!Array.isArray(newTodos) || newTodos.length === 0) {
+    return { type: "creation", items: [] }
+  }
+
   // If no old todos, this is a creation - show full list ONCE
   if (!oldTodos || oldTodos.length === 0) {
     return {
@@ -561,7 +566,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
 
   // FULL MODE: Creation - render as expandable list
   // Use syncedTodos to show the current state (synced with all updates)
-  const displayTodos = syncedTodos.length > 0 ? syncedTodos : newTodos
+  const displayTodos = Array.isArray(syncedTodos) && syncedTodos.length > 0 ? syncedTodos : (Array.isArray(newTodos) ? newTodos : [])
   const completedCount = displayTodos.filter(
     (t) => t.status === "completed",
   ).length

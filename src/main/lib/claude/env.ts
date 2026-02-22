@@ -538,16 +538,33 @@ export function buildClaudeEnv(options?: {
         if (isOllamaMode) {
           // For Ollama Cloud, the ANTHROPIC_AUTH_TOKEN is the actual API key (not "ollama" marker)
           const isCloudMode = customEnv.ANTHROPIC_BASE_URL && !customEnv.ANTHROPIC_BASE_URL.includes("localhost")
+
+          // CRITICAL: Set context window limits for Ollama
+          // Ollama defaults to only 2048 tokens - must be increased for large system prompts
+          const contextWindow = customEnv.CONTEXT_WINDOW || 189000 // Default to glm-5's 189k
+          env.OLLAMA_NUM_CTX = String(contextWindow)
+
+          // Also set SDK-side limits for MCP tools (50% of context for tools)
+          env.MAX_MCP_OUTPUT_TOKENS = String(Math.floor(contextWindow * 0.5))
+          env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 60000)
+
           console.log("[claude-env] Using Ollama configuration:", {
             baseUrl: customEnv.ANTHROPIC_BASE_URL,
             mode: isCloudMode ? "cloud" : "local",
+            contextWindow,
             hasOllamaApiKey: !!customEnv.OLLAMA_API_KEY,
             model: customEnv.ANTHROPIC_MODEL || "not set",
           })
         } else {
+          // For Custom API, also set context limits
+          const contextWindow = customEnv.CONTEXT_WINDOW || 200000 // Default to 200k
+          env.MAX_MCP_OUTPUT_TOKENS = String(Math.floor(contextWindow * 0.5))
+          env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 60000)
+
           console.log("[claude-env] Using Custom API configuration:", {
             baseUrl: customEnv.ANTHROPIC_BASE_URL,
             hasApiKey: !!customEnv.ANTHROPIC_API_KEY,
+            contextWindow,
             model: customEnv.ANTHROPIC_MODEL || "not set",
           })
         }
