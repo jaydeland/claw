@@ -13,6 +13,7 @@ import {
   ChevronsRight,
   FolderOpen,
   Rocket,
+  Github,
 } from "lucide-react"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
 import {
@@ -38,6 +39,7 @@ const tabs: TabItem[] = [
   { id: "chats", label: "Workspaces", icon: FolderOpen },
   { id: "clusters", label: "Clusters", icon: Server },
   { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
+  { id: "github", label: "GitHub", icon: Github },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },

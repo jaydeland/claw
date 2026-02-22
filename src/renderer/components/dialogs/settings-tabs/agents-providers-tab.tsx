@@ -763,6 +763,7 @@ function OllamaProvider() {
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
   const [token, setToken] = useState(storedConfig.token)
   const [ollamaApiKey, setOllamaApiKey] = useState(storedConfig.ollamaApiKey || "")
+  const [contextWindow, setContextWindow] = useState(storedConfig.contextWindow || 189000) // Default to glm-5's 189k
   const [ollamaMode, setOllamaMode] = useState<OllamaMode>(null)
   const [ollamaBackgroundModel, setOllamaBackgroundModel] = useState("")
   const hasCorrectedUrl = useRef(false)
@@ -806,6 +807,7 @@ function OllamaProvider() {
     setBaseUrl(correctedBaseUrl)
     setToken(storedConfig.token)
     setOllamaApiKey(storedConfig.ollamaApiKey || "")
+    setContextWindow(storedConfig.contextWindow || 189000)
   }, [storedConfig])
 
   // Fetch Ollama models dynamically
@@ -865,6 +867,7 @@ function OllamaProvider() {
       token: token.trim(),
       baseUrl: baseUrl.trim(),
       ollamaApiKey: ollamaApiKey.trim() || undefined,
+      contextWindow: contextWindow || 189000,
     }
     setStoredConfig(config)
     // Sync to backend for background session (uses legacy format for compatibility)
@@ -873,6 +876,7 @@ function OllamaProvider() {
       token: config.token,
       baseUrl: config.baseUrl,
       ollamaApiKey: config.ollamaApiKey,
+      contextWindow: config.contextWindow,
     })
     toast.success("Ollama configuration saved")
   }
@@ -985,6 +989,22 @@ function OllamaProvider() {
             <p className="text-xs text-muted-foreground">Usually set to &quot;ollama&quot;</p>
           </div>
 
+          {/* Context Window */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Context Window (tokens)</Label>
+            <Input
+              type="number"
+              value={contextWindow}
+              onChange={(e) => setContextWindow(parseInt(e.target.value) || 189000)}
+              placeholder="189000"
+              className="font-mono"
+            />
+            <p className="text-xs text-muted-foreground">
+              Maximum context size for the model. glm-5: 189k, kimi-k2.5: 128k, qwen3: 128k.
+              Increase if you get &quot;prompt too long&quot; errors.
+            </p>
+          </div>
+
           {/* Background Model Selection */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">Background Model</Label>
@@ -1070,6 +1090,7 @@ function CustomApiProvider() {
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
   const [token, setToken] = useState(storedConfig.token)
   const [apiKey, setApiKey] = useState(storedConfig.apiKey || "")
+  const [contextWindow, setContextWindow] = useState(storedConfig.contextWindow || 200000) // Default to 200k
   const [customApiBackgroundModel, setCustomApiBackgroundModel] = useState("")
 
   const { data: claudeSettings } = trpc.claudeSettings.getSettings.useQuery()
@@ -1100,6 +1121,7 @@ function CustomApiProvider() {
     setBaseUrl(storedConfig.baseUrl)
     setToken(storedConfig.token)
     setApiKey(storedConfig.apiKey || "")
+    setContextWindow(storedConfig.contextWindow || 200000)
   }, [storedConfig])
 
   const handleSave = () => {
@@ -1112,6 +1134,7 @@ function CustomApiProvider() {
       token: token.trim(),
       baseUrl: baseUrl.trim(),
       apiKey: apiKey.trim() || undefined,
+      contextWindow: contextWindow || 200000,
     }
     setStoredConfig(config)
     // Sync to backend for background session (uses legacy format for compatibility)
@@ -1120,6 +1143,7 @@ function CustomApiProvider() {
       token: config.token,
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
+      contextWindow: config.contextWindow,
     })
     toast.success("Custom API configuration saved")
   }
@@ -1183,6 +1207,20 @@ function CustomApiProvider() {
           className="font-mono"
         />
         <p className="text-xs text-muted-foreground">Optional additional API key</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Context Window (tokens)</Label>
+        <Input
+          type="number"
+          value={contextWindow}
+          onChange={(e) => setContextWindow(parseInt(e.target.value) || 200000)}
+          placeholder="200000"
+          className="font-mono"
+        />
+        <p className="text-xs text-muted-foreground">
+          Maximum context size for the model. Increase if you get &quot;prompt too long&quot; errors.
+        </p>
       </div>
 
       <div className="space-y-2">

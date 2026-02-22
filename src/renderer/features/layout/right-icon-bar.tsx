@@ -2,7 +2,7 @@
 
 import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check, FileStack, Rocket, BarChart3 } from "lucide-react"
+import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check, FileStack, Rocket } from "lucide-react"
 import { IconSidePeek, IconCenterPeek, IconFullPage } from "../../components/ui/icons"
 import {
   Tooltip,
@@ -35,11 +35,6 @@ import {
   loadedContextSidebarOpenAtom,
   loadedContextSidebarOpenRuntimeAtom,
 } from "../loaded-context/atoms"
-import {
-  analyzeDisplayModeAtom,
-  analyzeSidebarOpenAtom,
-  analyzeSidebarOpenRuntimeAtom,
-} from "../analyze/atoms"
 import { workflowPanelOpenAtom } from "../workflows/atoms"
 import { rightIconBarExpandedAtom } from "./atoms"
 import { trpc } from "../../lib/trpc"
@@ -159,11 +154,6 @@ export function RightIconBar({ className }: RightIconBarProps) {
   const [isGsdOpen, setIsGsdOpen] = useAtom(gsdChatSidebarOpenAtom)
   const [gsdRuntimeOpen, setGsdRuntimeOpen] = useAtom(gsdChatSidebarOpenRuntimeAtom)
 
-  // Analyze display mode and state
-  const [analyzeDisplayMode, setAnalyzeDisplayMode] = useAtom(analyzeDisplayModeAtom)
-  const [isAnalyzeOpen, setIsAnalyzeOpen] = useAtom(analyzeSidebarOpenAtom)
-  const [analyzeRuntimeOpen, setAnalyzeRuntimeOpen] = useAtom(analyzeSidebarOpenRuntimeAtom)
-
   // Determine which session flow open state to use based on display mode
   const effectiveSessionFlowOpen = sessionFlowDisplayMode === "side-peek"
     ? isSessionFlowOpen
@@ -176,9 +166,6 @@ export function RightIconBar({ className }: RightIconBarProps) {
 
   // Determine which GSD open state to use based on display mode
   const effectiveGsdOpen = gsdDisplayMode === "side-peek" ? isGsdOpen : gsdRuntimeOpen
-
-  // Determine which Analyze open state to use based on display mode
-  const effectiveAnalyzeOpen = analyzeDisplayMode === "side-peek" ? isAnalyzeOpen : analyzeRuntimeOpen
 
   // Auto-close Changes panel when switching to non-git repos
   useEffect(() => {
@@ -267,31 +254,6 @@ export function RightIconBar({ className }: RightIconBarProps) {
       setIsGsdOpen(!isGsdOpen)
     } else {
       setGsdRuntimeOpen(!gsdRuntimeOpen)
-    }
-  }
-
-  const handleAnalyzeClick = () => {
-    // Toggle Analyze based on display mode
-    const currentlyOpen = effectiveAnalyzeOpen
-
-    if (!currentlyOpen) {
-      // Close other panels when opening Analyze
-      if (selectedChatId) {
-        setIsDiffOpen(false)
-      }
-      setIsSessionFlowOpen(false)
-      setIsLoadedContextOpen(false)
-      setIsGsdOpen(false)
-      if (workflowPanelOpen !== null) {
-        setWorkflowPanelOpen(null)
-      }
-    }
-
-    // Toggle the appropriate state based on display mode
-    if (analyzeDisplayMode === "side-peek") {
-      setIsAnalyzeOpen(!isAnalyzeOpen)
-    } else {
-      setAnalyzeRuntimeOpen(!analyzeRuntimeOpen)
     }
   }
 
@@ -466,41 +428,6 @@ export function RightIconBar({ className }: RightIconBarProps) {
           </TooltipTrigger>
           <TooltipContent side="left">
             GSD Planning
-          </TooltipContent>
-        </Tooltip>
-      )}
-
-      {/* Analyze Button - always show when chat is selected */}
-      {selectedChatId && (
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleAnalyzeClick}
-              className={cn(
-                "flex items-center rounded-md transition-all duration-150 ease-out h-8",
-                isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
-                effectiveAnalyzeOpen
-                  ? "bg-foreground/10 text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
-              )}
-              aria-label="Analyze"
-              aria-pressed={effectiveAnalyzeOpen}
-            >
-              <BarChart3 className="h-4 w-4 flex-shrink-0" />
-              {isExpanded && (
-                <>
-                  <span className="text-sm flex-1 text-left">Analyze</span>
-                  <LayoutModeSelector
-                    mode={analyzeDisplayMode}
-                    onModeChange={setAnalyzeDisplayMode}
-                  />
-                </>
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">
-            Analyze
           </TooltipContent>
         </Tooltip>
       )}

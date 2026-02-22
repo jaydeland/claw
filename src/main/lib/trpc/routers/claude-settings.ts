@@ -473,6 +473,7 @@ export const claudeSettingsRouter = router({
         baseUrl: z.string(),
         apiKey: z.string().optional(),
         ollamaApiKey: z.string().optional(),
+        contextWindow: z.number().optional(), // Context window size in tokens (e.g., 189000 for glm-5)
       })
     )
     .mutation(async ({ input }) => {
@@ -500,6 +501,9 @@ export const claudeSettingsRouter = router({
         ANTHROPIC_MODEL: input.model,
         ...(input.apiKey && { ANTHROPIC_API_KEY: input.apiKey }),
         ...(input.ollamaApiKey && { OLLAMA_API_KEY: input.ollamaApiKey }),
+        // Store context window for Ollama (critical for large system prompts)
+        // Default to 189000 (glm-5's context window) if not specified
+        ...(input.contextWindow && { CONTEXT_WINDOW: String(input.contextWindow) }),
       }
 
       // Check if settings exist
