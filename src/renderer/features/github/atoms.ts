@@ -306,3 +306,15 @@ export const githubDiagramLoadingAtom = atom<boolean>(false)
 
 // Diagram error state
 export const githubDiagramErrorAtom = atom<string | null>(null)
+
+// ============ BRANCH STATE ============
+
+/**
+ * Selected branch by project path
+ */
+export const githubSelectedBranchAtom = atomWithStorage<Record<string, string>>(
+  "github:selectedBranch",
+  {},
+  undefined,
+  { getOnInit: true }
+)

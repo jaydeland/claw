@@ -1,11 +1,18 @@
 "use client"
 
 import { memo, useState, useCallback, useRef, useEffect } from "react"
-import { useAtomValue } from "jotai"
-import { PanelLeftClose, PanelLeft, GripVertical } from "lucide-react"
+import { useAtom, useAtomValue } from "jotai"
+import { PanelLeftClose, PanelLeft, GripVertical, GitBranch, ChevronDown, Loader2 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu"
 import { cn } from "../../../lib/utils"
-import { githubTreeWidthAtom, githubSelectionAtom } from "../atoms"
+import { trpc } from "../../../lib/trpc"
+import { githubTreeWidthAtom, githubSelectionAtom, githubSelectedBranchAtom } from "../atoms"
 import { GitHubTreePane } from "./github-tree-pane"
 import { GitHubContentPane } from "./github-content-pane"
 import { GitHubChatPane } from "./github-chat-pane"
@@ -17,6 +24,19 @@ interface GitHubViewProps {
 
 export const GitHubView = memo(function GitHubView({ projectId, projectPath }: GitHubViewProps) {
   const selection = useAtomValue(githubSelectionAtom)
+  const [selectedBranches, setSelectedBranches] = useAtom(githubSelectedBranchAtom)
+
+  // Fetch branches
+  const { data: branchData, isLoading: isLoadingBranches } = trpc.gsd.getBranches.useQuery(
+    { projectPath },
+    { enabled: !!projectPath }
+  )
+
+  const currentBranch = selectedBranches[projectPath] || branchData?.current || "main"
+
+  const handleBranchSelect = useCallback((branch: string) => {
+    setSelectedBranches((prev) => ({ ...prev, [projectPath]: branch }))
+  }, [projectPath, setSelectedBranches])
 
   // Panel widths (as percentages for responsive layout)
   const [treeWidth, setTreeWidth] = useState(20) // percentage
@@ -84,7 +104,46 @@ export const GitHubView = memo(function GitHubView({ projectId, projectPath }: G
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <h2 className="text-lg font-semibold">GitHub</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold">GitHub</h2>
+
+          {/* Branch Selector */}
+          {projectPath && (
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <span className="text-xs">/</span>
+              {isLoadingBranches ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : branchData?.branches.length ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-1 text-xs hover:text-foreground transition-colors">
+                      <GitBranch className="h-3 w-3" />
+                      <span>{currentBranch}</span>
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {branchData.branches.map((branch) => (
+                      <DropdownMenuItem
+                        key={branch}
+                        onClick={() => handleBranchSelect(branch)}
+                        className={cn("text-xs", branch === currentBranch && "bg-accent")}
+                      >
+                        <GitBranch className="h-3 w-3 mr-2" />
+                        {branch}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <span className="flex items-center gap-1 text-xs">
+                  <GitBranch className="h-3 w-3" />
+                  {currentBranch}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {/* Action buttons can go here */}
         </div>

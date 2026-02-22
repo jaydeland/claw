@@ -22,6 +22,7 @@ import {
 import { cn } from "../../../lib/utils"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
+import { trpc } from "../../../lib/trpc"
 import {
   githubSelectionAtom,
   githubExpandedReposAtom,
@@ -56,7 +57,33 @@ export const GitHubTreePane = memo(function GitHubTreePane({
   const [selection, setSelection] = useAtom(githubSelectionAtom)
   const prs = useAtomValue(githubPRsAtom)
   const issues = useAtomValue(githubIssuesAtom)
-  const files = useAtomValue(githubFilesAtom)
+  const [files, setFiles] = useAtom(githubFilesAtom)
+
+  // Fetch files when the code section is expanded
+  const isRepoExpanded = expandedRepos.has(projectId)
+  const isCodeExpanded = expandedSections.has("code")
+
+  const { data: filesData, isLoading: isLoadingFiles, refetch: refetchFiles } = trpc.files.search.useQuery(
+    { projectPath, query: "", limit: 100 },
+    {
+      enabled: isRepoExpanded && isCodeExpanded && !!projectPath,
+      staleTime: 30 * 1000, // 30 seconds
+    }
+  )
+
+  // Update files atom when data changes
+  useEffect(() => {
+    if (filesData) {
+      setFiles((prev) => {
+        const next = new Map(prev)
+        next.set(projectId, filesData.map((f) => ({
+          path: f.path,
+          type: f.type === "folder" ? "dir" : "file",
+        })))
+        return next
+      })
+    }
+  }, [filesData, projectId, setFiles])
 
   // For now, we'll use a single repo from the project path
   // In the future, this could support multiple repos
@@ -111,8 +138,6 @@ export const GitHubTreePane = memo(function GitHubTreePane({
     architecture: Layers,
     build: Wrench,
   }
-
-  const isRepoExpanded = expandedRepos.has(currentRepo.id)
 
   return (
     <div className="h-full flex flex-col bg-muted/30">
