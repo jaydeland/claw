@@ -2,7 +2,7 @@ import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
 import * as fs from "fs/promises"
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync, statSync, appendFileSync, readdirSync } from "fs"
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync, statSync, appendFileSync, readdirSync, rmSync } from "fs"
 import * as os from "os"
 import path, { dirname, join } from "path"
 import { z } from "zod"
@@ -1314,12 +1314,42 @@ export const claudeRouter = router({
                   // Check for token limit errors - clear session ID from DB
                   if (errorText.includes("maximum tokens") && errorText.includes("exceeds the model limit")) {
                     console.log(`[claude] Token limit error - clearing session ID from database`)
-                    // Clear from database to start fresh on next message
                     db.update(subChats)
                       .set({ sessionId: null })
                       .where(eq(subChats.id, input.subChatId))
                       .run()
                     console.log(`[claude] Cleared session ID from subChat ${input.subChatId}`)
+                  }
+
+                  // Check for thinking signature error - happens when session files predate the
+                  // thinking.signature API requirement. Fix: wipe stale session files + clear DB session ID.
+                  if (errorText.includes("thinking.signature")) {
+                    console.log(`[claude] Thinking signature error - clearing stale session files and DB session ID`)
+                    try {
+                      if (existsSync(isolatedConfigDir)) {
+                        rmSync(isolatedConfigDir, { recursive: true, force: true })
+                        console.log(`[claude] Removed stale session dir: ${isolatedConfigDir}`)
+                      }
+                    } catch (rmErr) {
+                      console.error(`[claude] Failed to remove session dir:`, rmErr)
+                    }
+                    db.update(subChats)
+                      .set({ sessionId: null })
+                      .where(eq(subChats.id, input.subChatId))
+                      .run()
+                    console.log(`[claude] Cleared session ID for subChat ${input.subChatId}`)
+
+                    safeEmit({
+                      type: "message",
+                      message: {
+                        id: crypto.randomUUID(),
+                        role: "assistant",
+                        parts: [{ type: "text", text: "Your session contained extended thinking blocks from an older format that is no longer compatible. The session has been reset — please resend your message to continue." }],
+                      },
+                    } as unknown as UIMessageChunk)
+                    safeEmit({ type: "finish" } as UIMessageChunk)
+                    safeComplete()
+                    return
                   }
 
                   // Check for context length errors ("prompt too long", "context", etc.)

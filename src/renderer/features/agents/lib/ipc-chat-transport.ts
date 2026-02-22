@@ -2,13 +2,11 @@ import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
   activeProviderAtom,
+  activeConfigAtom,
   agentsLoginModalOpenAtom,
-  customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
   sessionInfoAtom,
-  type CustomClaudeConfig,
-  normalizeCustomClaudeConfig,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
@@ -157,10 +155,12 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       ? selectedModelId
       : MODEL_ID_MAP[selectedModelId]
 
-    const storedCustomConfig = appStore.get(
-      customClaudeConfigAtom,
-    ) as CustomClaudeConfig
-    const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
+    // For anthropic-oauth and aws-bedrock, auth is handled via env/token — no custom config needed.
+    // For ollama/custom-api, activeConfigAtom returns the properly normalized config.
+    const customConfig =
+      activeProvider === "anthropic-oauth" || activeProvider === "aws-bedrock"
+        ? undefined
+        : appStore.get(activeConfigAtom)
 
     const currentMode =
       useAgentSubChatStore

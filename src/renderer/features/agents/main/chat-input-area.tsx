@@ -465,8 +465,12 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
-  // Only disable model dropdown for custom API, not Ollama
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig) && activeProvider !== "ollama"
+  // Only disable model dropdown for legacy custom API config — not for Ollama, OAuth, or AWS
+  const hasCustomClaudeConfig =
+    Boolean(normalizedCustomClaudeConfig) &&
+    activeProvider !== "ollama" &&
+    activeProvider !== "anthropic-oauth" &&
+    activeProvider !== "aws-bedrock"
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
