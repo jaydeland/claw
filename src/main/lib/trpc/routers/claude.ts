@@ -653,6 +653,7 @@ export const claudeRouter = router({
             ollamaApiKey: z.string().optional(),
           })
           .optional(),
+        maxTokens: z.number().optional(), // Maximum output tokens
         maxThinkingTokens: z.number().optional(), // Enable extended thinking
         images: z.array(imageAttachmentSchema).optional(), // Image attachments
         historyEnabled: z.boolean().optional(),
@@ -962,6 +963,10 @@ export const claudeRouter = router({
               }),
               // Re-enable CLAUDE_CONFIG_DIR now that we properly map MCP configs
               CLAUDE_CONFIG_DIR: isolatedConfigDir,
+              // Pass max_tokens if specified
+              ...(input.maxTokens && {
+                CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(input.maxTokens),
+              }),
             }
 
             // Get bundled Claude binary path
@@ -1310,10 +1315,49 @@ export const claudeRouter = router({
                   // Log message content for context length errors
                   const errorText = msgAny.message?.content?.[0]?.text || sdkError
                   console.log(`[claude] Error text for detection: "${errorText.slice(0, 200)}"`)
+                  console.log(`[claude] SDK error type: "${sdkError}"`)
+                  console.log(`[claude] Checking context error: prompt too long = ${errorText.toLowerCase().includes("prompt too long")}`)
+
+                  // Check for corrupted session errors (malformed tool_use, missing fields, etc.)
+                  // These require wiping the session and starting fresh
+                  const isCorruptedSessionError =
+                    errorText.includes("tool_use block missing required") ||
+                    errorText.includes("missing required 'name' field") ||
+                    errorText.includes("invalid_request_error") && errorText.includes("tool_use")
+
+                  if (isCorruptedSessionError) {
+                    console.log(`[claude] Corrupted session error detected - clearing session files and DB session ID`)
+                    try {
+                      if (existsSync(isolatedConfigDir)) {
+                        rmSync(isolatedConfigDir, { recursive: true, force: true })
+                        console.log(`[claude] Removed corrupted session dir: ${isolatedConfigDir}`)
+                      }
+                    } catch (rmErr) {
+                      console.error(`[claude] Failed to remove session dir:`, rmErr)
+                    }
+                    db.update(subChats)
+                      .set({ sessionId: null })
+                      .where(eq(subChats.id, input.subChatId))
+                      .run()
+                    console.log(`[claude] Cleared session ID for subChat ${input.subChatId}`)
+
+                    safeEmit({
+                      type: "message",
+                      message: {
+                        id: crypto.randomUUID(),
+                        role: "assistant",
+                        parts: [{ type: "text", text: "Your session had corrupted data that couldn't be processed. The session has been reset — please resend your message to continue." }],
+                      },
+                    } as unknown as UIMessageChunk)
+                    safeEmit({ type: "finish" } as UIMessageChunk)
+                    safeComplete()
+                    return
+                  }
 
                   // Check for token limit errors - clear session ID from DB
                   if (errorText.includes("maximum tokens") && errorText.includes("exceeds the model limit")) {
                     console.log(`[claude] Token limit error - clearing session ID from database`)
+                    // Clear from database to start fresh on next message
                     db.update(subChats)
                       .set({ sessionId: null })
                       .where(eq(subChats.id, input.subChatId))
@@ -1360,6 +1404,7 @@ export const claudeRouter = router({
                     errorText.toLowerCase().includes("context length") ||
                     errorText.toLowerCase().includes("context_limit") ||
                     errorText.toLowerCase().includes("maximum context")
+                  console.log(`[claude] isContextError = ${isContextError}`)
                   if (isContextError) {
                     console.log(`[claude] Context length error detected - attempting automatic compaction`)
 

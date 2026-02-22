@@ -116,6 +116,7 @@ type IPCChatTransportConfig = {
   projectPath?: string // Original project path for MCP config lookup (when using worktrees)
   mode: "plan" | "agent" | "swarm"
   model?: string
+  maxTokens?: number // Maximum output tokens for the response
 }
 
 // Image attachment type matching the tRPC schema
@@ -184,6 +185,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             cwd: this.config.cwd,
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
+            ...(this.config.maxTokens && { maxTokens: this.config.maxTokens }),
             ...(maxThinkingTokens && { maxThinkingTokens }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
