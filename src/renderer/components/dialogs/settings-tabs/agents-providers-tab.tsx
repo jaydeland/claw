@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select"
-import { Check, X, Server, Settings, Cloud, RefreshCw } from "lucide-react"
+import { Check, X, Copy, ExternalLink, Server, Settings, Cloud, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { AwsSsoSection } from "../../../features/agents/components/aws-sso-section"
@@ -101,13 +101,21 @@ function ProviderCard({
 }
 
 // ============================================
-// Claude Code Provider
+// Claude Code OAuth Provider
 // ============================================
 
+type AuthFlowState =
+  | { step: "idle" }
+  | { step: "starting" }
+  | { step: "waiting_url"; sandboxId: string; sandboxUrl: string; sessionId: string }
+  | { step: "has_url"; sandboxId: string; oauthUrl: string; sandboxUrl: string; sessionId: string }
+  | { step: "submitting" }
+  | { step: "error"; message: string }
+
 function ClaudeCodeProvider() {
-  const [showManualInput, setShowManualInput] = useState(false)
-  const [manualToken, setManualToken] = useState("")
-  const [importError, setImportError] = useState<string | null>(null)
+  const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
+  const [authCode, setAuthCode] = useState("")
+  const [copied, setCopied] = useState(false)
   const [anthropicModel, setAnthropicModel] = useAtom(anthropicModelAtom)
   const [anthropicBackgroundModel, setAnthropicBackgroundModel] = useState("haiku")
 
@@ -116,6 +124,7 @@ function ClaudeCodeProvider() {
   const { data: integration, isLoading, refetch } = trpc.claudeCode.getIntegration.useQuery()
   const { data: claudeSettings } = trpc.claudeSettings.getSettings.useQuery()
 
+  // Sync background model from settings
   useEffect(() => {
     if (claudeSettings?.anthropicBackgroundModel) {
       setAnthropicBackgroundModel(claudeSettings.anthropicBackgroundModel)
@@ -128,30 +137,44 @@ function ClaudeCodeProvider() {
     },
   })
 
-  const importSystemToken = trpc.claudeCode.importSystemToken.useMutation({
-    onSuccess: () => {
-      toast.success("Claude Code connected successfully!")
-      setImportError(null)
-      refetch()
-      utils.claudeCode.getIntegration.invalidate()
+  const startAuth = trpc.claudeCode.startAuth.useMutation({
+    onSuccess: (data: { sandboxId: string; sandboxUrl: string; sessionId: string }) => {
+      setFlowState({
+        step: "waiting_url",
+        sandboxId: data.sandboxId,
+        sandboxUrl: data.sandboxUrl,
+        sessionId: data.sessionId,
+      })
     },
     onError: (error) => {
-      setImportError(error.message || "No Claude Code CLI token found")
-      setShowManualInput(true)
+      setFlowState({ step: "error", message: error.message })
+      toast.error(error.message || "Failed to start authentication")
     },
   })
 
-  const importToken = trpc.claudeCode.importToken.useMutation({
+  const { data: authStatus } = trpc.claudeCode.pollStatus.useQuery(
+    {
+      sandboxUrl: flowState.step === "waiting_url" ? flowState.sandboxUrl : "",
+      sessionId: flowState.step === "waiting_url" ? flowState.sessionId : "",
+    },
+    {
+      enabled: flowState.step === "waiting_url",
+      refetchInterval: 1500,
+      refetchIntervalInBackground: true,
+    }
+  )
+
+  const submitCode = trpc.claudeCode.submitCode.useMutation({
     onSuccess: () => {
       toast.success("Claude Code connected successfully!")
-      setImportError(null)
-      setShowManualInput(false)
-      setManualToken("")
+      setFlowState({ step: "idle" })
+      setAuthCode("")
       refetch()
       utils.claudeCode.getIntegration.invalidate()
     },
     onError: (error) => {
-      setImportError(error.message || "Failed to import token")
+      setFlowState({ step: "error", message: error.message })
+      toast.error(error.message || "Failed to complete authentication")
     },
   })
 
@@ -166,8 +189,45 @@ function ClaudeCodeProvider() {
     },
   })
 
+  const openOAuthUrl = trpc.claudeCode.openOAuthUrl.useMutation()
+
+  useEffect(() => {
+    if (flowState.step === "waiting_url" && authStatus?.oauthUrl) {
+      const currentState = flowState as Extract<AuthFlowState, { step: "waiting_url" }>
+      setFlowState({
+        step: "has_url",
+        sandboxId: currentState.sandboxId,
+        oauthUrl: authStatus.oauthUrl,
+        sandboxUrl: currentState.sandboxUrl,
+        sessionId: currentState.sessionId,
+      })
+    }
+  }, [authStatus, flowState])
+
+  const handleStartAuth = () => {
+    setFlowState({ step: "starting" })
+    startAuth.mutate()
+  }
+
+  const handleSubmitCode = () => {
+    if (!authCode.trim() || flowState.step !== "has_url") return
+    const currentState = flowState as Extract<AuthFlowState, { step: "has_url" }>
+    setFlowState({ step: "submitting" })
+    submitCode.mutate({
+      sandboxUrl: currentState.sandboxUrl,
+      sessionId: currentState.sessionId,
+      code: authCode.trim(),
+    })
+  }
+
+  const handleCopyUrl = async (url: string) => {
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    toast.success("URL copied to clipboard")
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const isConnected = integration?.isConnected
-  const isImporting = importSystemToken.isPending || importToken.isPending
 
   if (isLoading) {
     return (
@@ -180,7 +240,7 @@ function ClaudeCodeProvider() {
   return (
     <div className="space-y-4">
       {/* Connected State */}
-      {isConnected && (
+      {isConnected && flowState.step === "idle" && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
             <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -281,7 +341,7 @@ function ClaudeCodeProvider() {
       )}
 
       {/* Not Connected */}
-      {!isConnected && (
+      {!isConnected && flowState.step === "idle" && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
             <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center">
@@ -289,78 +349,87 @@ function ClaudeCodeProvider() {
             </div>
             <p className="text-sm text-muted-foreground">Not connected</p>
           </div>
+          <Button onClick={handleStartAuth}>Connect with Claude</Button>
+        </div>
+      )}
 
-          {/* Error */}
-          {importError && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-              <p className="text-sm text-destructive">{importError}</p>
-            </div>
-          )}
+      {/* Starting / Waiting */}
+      {(flowState.step === "starting" || flowState.step === "waiting_url") && (
+        <div className="flex items-center gap-3 py-4">
+          <IconSpinner className="h-5 w-5" />
+          <p className="text-sm text-muted-foreground">Preparing authentication...</p>
+        </div>
+      )}
 
-          {/* Manual token input */}
-          {showManualInput ? (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Paste your Claude OAuth token below. You can find it in{" "}
-                <span className="font-mono">~/.claude/.credentials.json</span>
-              </p>
-              <Input
-                value={manualToken}
-                onChange={(e) => setManualToken(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" &&
-                  manualToken.trim() &&
-                  importToken.mutate({ token: manualToken.trim() })
-                }
-                placeholder="Paste token here..."
-                className="font-mono text-xs"
-                autoFocus
-                disabled={isImporting}
-              />
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setShowManualInput(false)
-                    setImportError(null)
-                    setManualToken("")
-                  }}
-                  disabled={isImporting}
-                >
-                  Back
-                </Button>
-                <Button
-                  className="flex-1"
-                  onClick={() => importToken.mutate({ token: manualToken.trim() })}
-                  disabled={!manualToken.trim() || isImporting}
-                >
-                  {isImporting ? <IconSpinner className="h-4 w-4" /> : "Import"}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <Button
-                onClick={() => importSystemToken.mutate()}
-                disabled={isImporting}
-                className="w-full"
-              >
-                {isImporting ? (
-                  <IconSpinner className="h-4 w-4" />
-                ) : (
-                  "Import from Claude Code CLI"
-                )}
-              </Button>
-              <button
-                type="button"
-                onClick={() => setShowManualInput(true)}
-                className="text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground w-full text-center"
-              >
-                Enter token manually
-              </button>
-            </>
-          )}
+      {/* Has URL - Auth Flow */}
+      {flowState.step === "has_url" && (
+        <div className="space-y-4">
+          {(() => {
+            const urlState = flowState as Extract<AuthFlowState, { step: "has_url" }>
+            return (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-sm">1. Open this URL to authenticate</Label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 p-2 bg-muted rounded-md text-xs font-mono truncate">
+                      {urlState.oauthUrl}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleCopyUrl(urlState.oauthUrl)}>
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                    <Button size="sm" onClick={() => openOAuthUrl.mutate(urlState.oauthUrl)}>
+                      <ExternalLink className="h-4 w-4 mr-1" />
+                      Open
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )
+          })()}
+
+          <div className="space-y-2">
+            <Label className="text-sm">2. Paste the authentication code</Label>
+            <Input
+              value={authCode}
+              onChange={(e) => setAuthCode(e.target.value)}
+              placeholder="Paste code here..."
+              className="font-mono"
+              onKeyDown={(e) => e.key === "Enter" && handleSubmitCode()}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFlowState({ step: "idle" })
+                setAuthCode("")
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitCode} disabled={!authCode.trim()}>
+              Submit Code
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Submitting */}
+      {flowState.step === "submitting" && (
+        <div className="flex items-center gap-3 py-4">
+          <IconSpinner className="h-5 w-5" />
+          <p className="text-sm text-muted-foreground">Verifying...</p>
+        </div>
+      )}
+
+      {/* Error */}
+      {flowState.step === "error" && (
+        <div className="space-y-4">
+          <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+            <p className="text-sm text-destructive">{flowState.message}</p>
+          </div>
+          <Button onClick={handleStartAuth}>Try Again</Button>
         </div>
       )}
     </div>
@@ -678,12 +747,12 @@ function AWSBedrockProvider() {
 
 // Fallback models if API fetch fails
 const OLLAMA_FALLBACK_MODELS = [
-  { id: "glm-5", name: "GLM 5", description: "Latest GLM model", contextWindow: 189000 },
-  { id: "kimi-k2.5:cloud", name: "Kimi K2.5 Cloud", description: "Cloud-based Kimi model", contextWindow: 128000 },
-  { id: "qwen3-coder", name: "Qwen 3 Coder", description: "Strong coding performance", contextWindow: 128000 },
-  { id: "glm-4.7", name: "GLM 4.7", description: "General purpose", contextWindow: 128000 },
-  { id: "gpt-oss:20b", name: "GPT-OSS 20B", description: "20B parameter model", contextWindow: 32768 },
-  { id: "gpt-oss:120b", name: "GPT-OSS 120B", description: "120B parameter model", contextWindow: 32768 },
+  { id: "glm-5", name: "GLM 5", description: "Latest GLM model" },
+  { id: "kimi-k2.5:cloud", name: "Kimi K2.5 Cloud", description: "Cloud-based Kimi model" },
+  { id: "qwen3-coder", name: "Qwen 3 Coder", description: "Strong coding performance" },
+  { id: "glm-4.7", name: "GLM 4.7", description: "General purpose" },
+  { id: "gpt-oss:20b", name: "GPT-OSS 20B", description: "20B parameter model" },
+  { id: "gpt-oss:120b", name: "GPT-OSS 120B", description: "120B parameter model" },
 ]
 
 type OllamaMode = "local" | "cloud" | null
@@ -694,19 +763,12 @@ function OllamaProvider() {
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
   const [token, setToken] = useState(storedConfig.token)
   const [ollamaApiKey, setOllamaApiKey] = useState(storedConfig.ollamaApiKey || "")
-  const [contextWindow, setContextWindow] = useState(storedConfig.contextWindow || 189000)
+  const [contextWindow, setContextWindow] = useState(storedConfig.contextWindow || 189000) // Default to glm-5's 189k
   const [ollamaMode, setOllamaMode] = useState<OllamaMode>(null)
   const [ollamaBackgroundModel, setOllamaBackgroundModel] = useState("")
   const hasCorrectedUrl = useRef(false)
 
   const { data: claudeSettings } = trpc.claudeSettings.getSettings.useQuery()
-
-  // Clear Ollama cache mutation
-  const clearOllamaCache = trpc.claude.clearOllamaModelsCache.useMutation({
-    onSuccess: () => {
-      refetchOllamaModels()
-    },
-  })
 
   // Sync background model from settings
   useEffect(() => {
@@ -751,7 +813,7 @@ function OllamaProvider() {
   // Fetch Ollama models dynamically
   // For local mode, filter to show only remote/cloud models
   // For cloud mode, all models are already remote so no filtering needed
-  const { data: ollamaModelsData, isLoading: isLoadingModels, refetch: refetchOllamaModels } = trpc.claude.getOllamaModels.useQuery(
+  const { data: ollamaModelsData, isLoading: isLoadingModels } = trpc.claude.getOllamaModels.useQuery(
     {
       baseUrl: baseUrl || "http://localhost:11434",
       apiKey: ollamaApiKey,
@@ -770,7 +832,6 @@ function OllamaProvider() {
         id: m.id,
         name: m.displayName || m.name,
         description: m.description || 'Ollama model',
-        contextWindow: m.contextWindow, // Pass through for auto-population
       }))
     }
     // Fallback to hardcoded list if API fails
@@ -856,40 +917,8 @@ function OllamaProvider() {
         <>
           {/* Model Selection */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Model</Label>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (ollamaModelsData?.models?.length) {
-                    refetchOllamaModels()
-                  } else {
-                    clearOllamaCache.mutate()
-                  }
-                }}
-                disabled={isLoadingModels}
-                className="h-6 px-2 text-xs"
-              >
-                {isLoadingModels ? (
-                  <IconSpinner className="h-3 w-3 mr-1" />
-                ) : (
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                )}
-                Refresh
-              </Button>
-            </div>
-            <Select
-              value={model}
-              onValueChange={(value) => {
-                setModel(value)
-                // Auto-populate context window from model metadata
-                const selectedModel = modelOptions.find(m => m.id === value)
-                if (selectedModel?.contextWindow) {
-                  setContextWindow(selectedModel.contextWindow)
-                }
-              }}
-            >
+            <Label className="text-sm font-medium">Model</Label>
+            <Select value={model} onValueChange={setModel}>
               <SelectTrigger>
                 <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select a model..."} />
               </SelectTrigger>
@@ -903,10 +932,7 @@ function OllamaProvider() {
                     <SelectItem key={m.id} value={m.id}>
                       <div className="flex flex-col">
                         <span className="font-medium">{m.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {m.description}
-                          {m.contextWindow && ` - ${Math.round(m.contextWindow / 1000)}k ctx`}
-                        </span>
+                        <span className="text-xs text-muted-foreground">{m.description}</span>
                       </div>
                     </SelectItem>
                   ))
@@ -974,7 +1000,8 @@ function OllamaProvider() {
               className="font-mono"
             />
             <p className="text-xs text-muted-foreground">
-              Maximum context window size for the model. glm-5 supports 189k tokens. Increase this if you get context length errors.
+              Maximum context size for the model. glm-5: 189k, kimi-k2.5: 128k, qwen3: 128k.
+              Increase if you get &quot;prompt too long&quot; errors.
             </p>
           </div>
 
@@ -1063,7 +1090,7 @@ function CustomApiProvider() {
   const [baseUrl, setBaseUrl] = useState(storedConfig.baseUrl)
   const [token, setToken] = useState(storedConfig.token)
   const [apiKey, setApiKey] = useState(storedConfig.apiKey || "")
-  const [contextWindow, setContextWindow] = useState(storedConfig.contextWindow || 200000)
+  const [contextWindow, setContextWindow] = useState(storedConfig.contextWindow || 200000) // Default to 200k
   const [customApiBackgroundModel, setCustomApiBackgroundModel] = useState("")
 
   const { data: claudeSettings } = trpc.claudeSettings.getSettings.useQuery()
@@ -1192,13 +1219,8 @@ function CustomApiProvider() {
           className="font-mono"
         />
         <p className="text-xs text-muted-foreground">
-          Maximum context window size for the model. Default is 200k tokens. Adjust based on your model&apos;s capabilities.
+          Maximum context size for the model. Increase if you get &quot;prompt too long&quot; errors.
         </p>
-        {contextWindow < 4096 && (
-          <p className="text-xs text-yellow-600 dark:text-yellow-400">
-            Warning: Context window is very small. Consider increasing for better results.
-          </p>
-        )}
       </div>
 
       <div className="space-y-2">

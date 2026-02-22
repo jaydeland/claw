@@ -51,6 +51,7 @@ import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { ClustersContent } from "../../clusters/ui/clusters-content"
 import { selectedGsdCategoryAtom } from "../../gsd/atoms"
 import { GsdContent } from "../../gsd/ui/gsd-content"
+import { GitHubView } from "../../github/components/github-view"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { HistoryChatView } from "../../history"
@@ -843,7 +844,8 @@ export function AgentsContent() {
   const showMcpView = selectedMcpCategory === "mcp"
   const showWorkflowsView = !!selectedWorkflowCategory
   const showProjectDetail = !!selectedProjectDetailId
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail
+  const showGitHubView = selectedSidebarTab === "github"
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView
 
   return (
     <>
@@ -865,6 +867,16 @@ export function AgentsContent() {
       {showProjectDetail && (
         <div className="flex-1 h-full overflow-hidden">
           <ProjectDetailPage />
+        </div>
+      )}
+
+      {/* GitHub view */}
+      {showGitHubView && (
+        <div className="flex-1 h-full overflow-hidden">
+          <GitHubView
+            projectId={selectedChatId && chatData ? (chatData as any).project?.id || "" : projects?.[0]?.id || ""}
+            projectPath={selectedChatId && chatData ? (chatData as any).project?.path || (chatData as any).worktreePath || projects?.[0]?.path || "" : projects?.[0]?.path || ""}
+          />
         </div>
       )}
 
