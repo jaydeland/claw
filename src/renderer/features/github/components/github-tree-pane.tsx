@@ -15,7 +15,6 @@ import {
   Search,
   Loader2,
   Folder,
-  FolderOpen,
   File,
   RefreshCw,
 } from "lucide-react"
@@ -322,7 +321,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
             )}
           </SectionTreeItem>
 
-          {/* Code section */}
+          {/* Code section - shows only files, not folders */}
           <SectionTreeItem
             id="code"
             label="Code"
@@ -330,33 +329,32 @@ const RepoTreeItem = memo(function RepoTreeItem({
             isExpanded={expandedSections.has("code")}
             onToggle={() => onToggleSection("code")}
           >
-            {files.slice(0, 20).map((file) => (
-              <button
-                key={file.path}
-                type="button"
-                onClick={() =>
-                  onSelect({
-                    type: "code",
-                    repoId: repo.id,
-                    repoName: repo.name,
-                    path: file.path,
-                  })
-                }
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  selection?.type === "code" && selection.path === file.path && "bg-accent"
-                )}
-              >
-                {file.type === "dir" ? (
-                  <Folder className="h-4 w-4 text-muted-foreground" />
-                ) : (
+            {files
+              .filter((file) => file.type === "file")
+              .slice(0, 50)
+              .map((file) => (
+                <button
+                  key={file.path}
+                  type="button"
+                  onClick={() =>
+                    onSelect({
+                      type: "code",
+                      repoId: repo.id,
+                      repoName: repo.name,
+                      path: file.path,
+                    })
+                  }
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
+                    "hover:bg-accent hover:text-accent-foreground",
+                    selection?.type === "code" && selection.path === file.path && "bg-accent"
+                  )}
+                >
                   <File className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="truncate">{file.path}</span>
-              </button>
-            ))}
-            {files.length === 0 && (
+                  <span className="truncate">{file.path}</span>
+                </button>
+              ))}
+            {files.filter((f) => f.type === "file").length === 0 && (
               <span className="px-6 py-1 text-sm text-muted-foreground">No files</span>
             )}
           </SectionTreeItem>

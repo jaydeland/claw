@@ -170,7 +170,45 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       return
     }
 
-    // For other types, clear chat and set context (existing behavior)
+    // For code type, start an "Explain Code" chat
+    if (selection.type === "code") {
+      const userMessage: GitHubChatMessage = {
+        id: Date.now().toString(),
+        role: "user",
+        content: `Explain the code in \`${selection.path}\``,
+        timestamp: new Date(),
+      }
+
+      const assistantMessage: GitHubChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: `I'll analyze and explain the code in \`${selection.path}\`. Let me read the file first...`,
+        timestamp: new Date(),
+      }
+
+      setMessages([userMessage, assistantMessage])
+      setChatContext({
+        type: "code",
+        repoId: selection.repoId,
+        repoName: selection.repoName,
+        filePath: selection.path,
+      })
+
+      // TODO: Wire up with Claude SDK to get actual response
+      // For now, show a placeholder response after a delay
+      setTimeout(() => {
+        const responseMessage: GitHubChatMessage = {
+          id: (Date.now() + 2).toString(),
+          role: "assistant",
+          content: `📄 **File:** \`${selection.path}\`\n\nThis file has been loaded in the content pane. You can ask specific questions about the code, such as:\n\n• What does this code do?\n• How does this function work?\n• What are the key patterns used?\n\nThe chat integration with Claude will be available soon!`,
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, responseMessage])
+      }, 500)
+      return
+    }
+
+    // For PR and Issue types, clear chat and set context
     setMessages([])
     setChatContext({
       type: selection.type,
@@ -178,12 +216,11 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       repoName: selection.repoName,
       prNumber: selection.type === "pr" ? selection.prNumber : undefined,
       issueNumber: selection.type === "issue" ? selection.issueNumber : undefined,
-      filePath: selection.type === "code" ? selection.path : undefined,
     })
 
     // TODO: Start the appropriate chat session with context
     // This will be wired up with Claude SDK integration
-  }, [selection, setMessages, setChatContext, projectId, projectPath, generateMutation, refetchDiagram])
+  }, [selection, setMessages, setChatContext, projectId, projectPath, generateMutation])
 
   const handleSend = useCallback(() => {
     if (!input.trim() || isLoading) return

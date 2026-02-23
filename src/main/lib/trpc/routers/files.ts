@@ -347,6 +347,7 @@ export const filesRouter = router({
         const content = await readFile(fullPath, "utf-8")
 
         // Detect language from file extension
+        // Only use languages supported by shiki (see shiki-theme-loader.ts SUPPORTED_LANGUAGES)
         const ext = relativePath.split(".").pop()?.toLowerCase() || ""
         const languageMap: Record<string, string> = {
           ts: "typescript",
@@ -378,7 +379,7 @@ export const filesRouter = router({
           yml: "yaml",
           toml: "toml",
           md: "markdown",
-          mdx: "mdx",
+          mdx: "markdown",
           sh: "bash",
           bash: "bash",
           zsh: "bash",

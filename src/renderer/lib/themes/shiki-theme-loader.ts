@@ -58,20 +58,55 @@ const highlightCache = new LRUCache<string, string>(HIGHLIGHT_CACHE_MAX_SIZE)
 
 /**
  * Languages supported by the highlighter
+ * These are bundled with shiki and available immediately
  */
 const SUPPORTED_LANGUAGES: shiki.BundledLanguage[] = [
+  // JavaScript/TypeScript
   "typescript",
   "javascript",
   "tsx",
   "jsx",
+  // Web
   "html",
   "css",
+  "scss",
+  "less",
+  "vue",
+  "svelte",
+  // Data formats
   "json",
+  "yaml",
+  "toml",
+  "xml",
+  // Scripting
   "python",
+  "ruby",
+  "php",
+  "perl",
+  "lua",
+  // Systems
   "go",
   "rust",
+  "c",
+  "cpp",
+  "java",
+  "kotlin",
+  "swift",
+  "csharp",
+  // Shell
   "bash",
+  "shell",
+  "docker",
+  // Markup
   "markdown",
+  "mdx",
+  // Query
+  "sql",
+  "graphql",
+  // Config
+  "dockerfile",
+  "make",
+  "cmake",
 ]
 
 /**
