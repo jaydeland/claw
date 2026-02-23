@@ -242,6 +242,9 @@ interface RepoTreeItemProps {
   onSelect: (selection: GitHubSelection) => void
   analysisLabels: Record<AnalysisType, string>
   analysisIcons: Record<AnalysisType, React.ComponentType<{ className?: string }>>
+  isLoading?: boolean
+  error?: string | null
+  isGitHub?: boolean
 }
 
 const RepoTreeItem = memo(function RepoTreeItem({
@@ -257,6 +260,9 @@ const RepoTreeItem = memo(function RepoTreeItem({
   onSelect,
   analysisLabels,
   analysisIcons,
+  isLoading,
+  error,
+  isGitHub,
 }: RepoTreeItemProps) {
   const openPRs = prs.filter((pr) => pr.state === "open").length
   const openIssues = issues.filter((i) => i.state === "open").length
@@ -280,7 +286,18 @@ const RepoTreeItem = memo(function RepoTreeItem({
         )}
         <Folder className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium truncate">{repo.name}</span>
+        {isLoading && (
+          <Loader2 className="h-3 w-3 animate-spin ml-auto text-muted-foreground" />
+        )}
       </button>
+
+      {/* Error message */}
+      {error && isExpanded && (
+        <div className="ml-8 px-2 py-1 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded">
+          <AlertCircle className="h-3 w-3 inline mr-1" />
+          {error}
+        </div>
+      )}
 
       {/* Repo contents */}
       {isExpanded && (

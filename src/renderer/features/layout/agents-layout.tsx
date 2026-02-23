@@ -275,8 +275,8 @@ export function AgentsLayout() {
           )}
 
           {/* Sidebar Content Panel - shows list/navigation for selected tab */}
-          {/* Note: clusters/gsd/github tabs don't show sidebar content - they have their own navigation */}
-          {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && selectedSidebarTab !== "github" && (
+          {/* Note: clusters/gsd/github/gitnexus tabs don't show sidebar content - they have their own navigation */}
+          {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && selectedSidebarTab !== "github" && selectedSidebarTab !== "gitnexus" && (
             <div className="w-64 flex-shrink-0 border-r border-border/50 bg-muted/50 overflow-hidden">
               {selectedSidebarTab === "history" ? (
                 <HistoryTabContent className="h-full" />
