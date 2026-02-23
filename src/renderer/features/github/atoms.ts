@@ -189,6 +189,12 @@ export const githubIssuesAtom = atom<Map<string, GitHubIssue[]>>(new Map())
  */
 export const githubFilesAtom = atom<Map<string, GitHubFile[]>>(new Map())
 
+/**
+ * Expanded folders in the code tree (set of folder paths)
+ * Not persisted — Set doesn't round-trip through JSON, and expand state is ephemeral UI state
+ */
+export const githubExpandedFoldersAtom = atom<Set<string>>(new Set<string>())
+
 // ============ CONTENT STATE ============
 
 export interface PRDetail extends GitHubPR {
