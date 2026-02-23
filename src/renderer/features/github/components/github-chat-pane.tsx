@@ -11,6 +11,8 @@ import {
   FileCode,
   GitBranch,
   RefreshCw,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
@@ -52,28 +54,136 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Check if diagram exists for visualize selection
-  const { data: existingDiagram } = trpc.analyzer.get.useQuery(
+  // Track analysis generation state
+  const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState<string | null>(null)
+
+  // tRPC mutations and queries
+  const generateMutation = trpc.analyzer.generateViaBackground.useMutation()
+  const { data: existingDiagram, refetch: refetchDiagram } = trpc.analyzer.get.useQuery(
     { projectId, type: (selection as { analysisType: AnalysisType })?.analysisType || "codeflow" },
     { enabled: selection?.type === "visualize" && !!projectId }
   )
 
-  const handleActionClick = useCallback(() => {
-    // Clear chat and set context
+  // Subscribe to background analysis progress
+  trpc.analyzer.subscribeBackgroundProgress.useSubscription(undefined, {
+    onData: (update: { jobId: string; type: AnalysisType; status: string; progress?: number; message?: string; error?: string }) => {
+      // Only handle updates for our project/type
+      if (!update.jobId || update.type !== isGeneratingAnalysis) return
+
+      if (update.status === "completed") {
+        // Add completion message
+        const assistantMessage: GitHubChatMessage = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `✅ ${ANALYSIS_LABELS[update.type]} analysis completed! The diagram has been updated.`,
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+        setIsGeneratingAnalysis(null)
+        refetchDiagram()
+      } else if (update.status === "failed") {
+        // Add error message
+        const errorMessage: GitHubChatMessage = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `❌ Analysis failed: ${update.error || "Unknown error"}`,
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, errorMessage])
+        setIsGeneratingAnalysis(null)
+      } else if (update.status === "running" && update.message) {
+        // Update the last assistant message with progress
+        setMessages((prev) => {
+          const last = prev[prev.length - 1]
+          if (last?.role === "assistant" && last.content.startsWith("🔄")) {
+            return [...prev.slice(0, -1), { ...last, content: `🔄 ${update.message}` }]
+          }
+          return prev
+        })
+      }
+    },
+    onError: (err) => {
+      console.error("[GitHubChatPane] Progress subscription error:", err)
+    },
+  })
+
+  const handleActionClick = useCallback(async () => {
+    if (!selection) return
+
+    // For visualize type, trigger diagram generation via chat
+    if (selection.type === "visualize") {
+      const analysisType = selection.analysisType
+      const label = ANALYSIS_LABELS[analysisType]
+
+      // Clear previous messages and add context
+      const userMessage: GitHubChatMessage = {
+        id: Date.now().toString(),
+        role: "user",
+        content: `Generate ${label} analysis diagram`,
+        timestamp: new Date(),
+      }
+
+      const assistantMessage: GitHubChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: `🔄 Starting ${label} analysis...`,
+        timestamp: new Date(),
+      }
+
+      setMessages([userMessage, assistantMessage])
+      setChatContext({
+        type: "visualize",
+        repoId: selection.repoId,
+        repoName: selection.repoName,
+        analysisType,
+      })
+      setIsGeneratingAnalysis(analysisType)
+
+      try {
+        const result = await generateMutation.mutateAsync({
+          projectId,
+          projectPath,
+          type: analysisType,
+        })
+
+        if (!result.success) {
+          const errorMessage: GitHubChatMessage = {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: `❌ Failed to start analysis: ${result.error || "Unknown error"}`,
+            timestamp: new Date(),
+          }
+          setMessages((prev) => [...prev, errorMessage])
+          setIsGeneratingAnalysis(null)
+        }
+        // Success will be handled by the subscription
+      } catch (error) {
+        const errorMessage: GitHubChatMessage = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `❌ Error: ${error instanceof Error ? error.message : "Failed to start analysis"}`,
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, errorMessage])
+        setIsGeneratingAnalysis(null)
+      }
+      return
+    }
+
+    // For other types, clear chat and set context (existing behavior)
     setMessages([])
     setChatContext({
-      type: selection?.type || "pr",
-      repoId: selection?.repoId || "",
-      repoName: selection?.repoName || "",
-      prNumber: selection?.type === "pr" ? selection.prNumber : undefined,
-      issueNumber: selection?.type === "issue" ? selection.issueNumber : undefined,
-      filePath: selection?.type === "code" ? selection.path : undefined,
-      analysisType: selection?.type === "visualize" ? selection.analysisType : undefined,
+      type: selection.type,
+      repoId: selection.repoId,
+      repoName: selection.repoName,
+      prNumber: selection.type === "pr" ? selection.prNumber : undefined,
+      issueNumber: selection.type === "issue" ? selection.issueNumber : undefined,
+      filePath: selection.type === "code" ? selection.path : undefined,
     })
 
     // TODO: Start the appropriate chat session with context
     // This will be wired up with Claude SDK integration
-  }, [selection, setMessages, setChatContext])
+  }, [selection, setMessages, setChatContext, projectId, projectPath, generateMutation, refetchDiagram])
 
   const handleSend = useCallback(() => {
     if (!input.trim() || isLoading) return
@@ -94,6 +204,8 @@ export const GitHubChatPane = memo(function GitHubChatPane({
 
   const getActionButton = () => {
     if (!selection) return null
+
+    const isCurrentlyGenerating = isGeneratingAnalysis !== null
 
     switch (selection.type) {
       case "pr":
@@ -119,9 +231,19 @@ export const GitHubChatPane = memo(function GitHubChatPane({
         )
       case "visualize":
         const hasDiagram = existingDiagram && existingDiagram.nodes && existingDiagram.nodes !== "[]"
+
         return (
-          <Button onClick={handleActionClick} className="w-full">
-            {hasDiagram ? (
+          <Button
+            onClick={handleActionClick}
+            className="w-full"
+            disabled={isCurrentlyGenerating}
+          >
+            {isCurrentlyGenerating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Generating {ANALYSIS_LABELS[selection.analysisType]}...
+              </>
+            ) : hasDiagram ? (
               <>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Regenerate {ANALYSIS_LABELS[selection.analysisType]}

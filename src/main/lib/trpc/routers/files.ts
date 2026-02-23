@@ -304,6 +304,125 @@ export const filesRouter = router({
     }),
 
   /**
+   * Read a file from the project directory
+   * Returns file content with language detection for syntax highlighting
+   */
+  readProjectFile: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        relativePath: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const { projectPath, relativePath } = input
+
+      try {
+        // Resolve the full path
+        const fullPath = join(projectPath, relativePath)
+
+        // Security check: ensure the resolved path is within the project directory
+        const resolvedPath = await import("node:path").then(p => p.resolve(fullPath))
+        const resolvedProject = await import("node:path").then(p => p.resolve(projectPath))
+
+        if (!resolvedPath.startsWith(resolvedProject)) {
+          return {
+            success: false,
+            content: "",
+            error: "Access denied: path is outside project directory",
+          }
+        }
+
+        // Check if file exists
+        const pathStat = await stat(fullPath)
+        if (!pathStat.isFile()) {
+          return {
+            success: false,
+            content: "",
+            error: "Not a file",
+          }
+        }
+
+        // Read file content
+        const content = await readFile(fullPath, "utf-8")
+
+        // Detect language from file extension
+        const ext = relativePath.split(".").pop()?.toLowerCase() || ""
+        const languageMap: Record<string, string> = {
+          ts: "typescript",
+          tsx: "tsx",
+          js: "javascript",
+          jsx: "jsx",
+          py: "python",
+          go: "go",
+          rs: "rust",
+          java: "java",
+          kt: "kotlin",
+          swift: "swift",
+          c: "c",
+          cpp: "cpp",
+          h: "c",
+          hpp: "cpp",
+          cs: "csharp",
+          rb: "ruby",
+          php: "php",
+          html: "html",
+          htm: "html",
+          css: "css",
+          scss: "scss",
+          sass: "sass",
+          less: "less",
+          json: "json",
+          xml: "xml",
+          yaml: "yaml",
+          yml: "yaml",
+          toml: "toml",
+          md: "markdown",
+          mdx: "mdx",
+          sh: "bash",
+          bash: "bash",
+          zsh: "bash",
+          sql: "sql",
+          graphql: "graphql",
+          gql: "graphql",
+          prisma: "prisma",
+          vue: "vue",
+          svelte: "svelte",
+          dockerfile: "dockerfile",
+          makefile: "makefile",
+          cmake: "cmake",
+          r: "r",
+          lua: "lua",
+          perl: "perl",
+          pl: "perl",
+          pm: "perl",
+        }
+
+        const language = languageMap[ext] || "plaintext"
+
+        // Get file size info
+        const lineCount = content.split("\n").length
+        const sizeBytes = pathStat.size
+
+        return {
+          success: true,
+          content,
+          language,
+          lineCount,
+          sizeBytes,
+          path: relativePath,
+        }
+      } catch (error: any) {
+        console.error(`[files] Error reading file:`, error)
+        return {
+          success: false,
+          content: "",
+          error: error.message || "Failed to read file",
+        }
+      }
+    }),
+
+  /**
    * Check if a background task is still running by checking its output file
    */
   checkTaskStatus: publicProcedure
