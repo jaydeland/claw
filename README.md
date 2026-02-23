@@ -223,8 +223,8 @@ bun run icon:generate:win  # Windows only (ICO)
 - **UI:** React 19, TypeScript 5.4.5, Tailwind CSS 3.4, Radix UI, Motion 11
 - **State Management:** Jotai (UI state), Zustand (persistence), React Query (server state)
 - **Backend IPC:** tRPC 11 with trpc-electron for type-safe communication
-- **Database:** Drizzle ORM 0.45 + better-sqlite3 11.8
-- **AI SDK:** @anthropic-ai/claude-code 0.2.12
+- **Database:** Drizzle ORM 0.45 + better-sqlite3 12.6
+- **AI SDK:** @anthropic-ai/claude-agent-sdk 0.2.50
 - **Terminal:** xterm.js 5.3 with canvas, fit, search, weblinks addons
 - **Git:** simple-git 3.28, native git commands
 - **Kubernetes:** kubernetesjs 0.7.6, AWS SDK for EKS
