@@ -6,8 +6,50 @@ import { promisify } from "node:util"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { app } from "electron"
+import * as http from "node:http"
 
 const execAsync = promisify(exec)
+
+// GitNexus API base URL
+const GITNEXUS_API_URL = "http://127.0.0.1:4747"
+
+// GitNexus repo type
+interface GitNexusRepo {
+  name: string
+  path: string
+  indexedAt: string
+  lastCommit: string
+  stats: {
+    files: number
+    nodes: number
+    edges: number
+    communities: number
+    processes: number
+  }
+}
+
+// Fetch repos from GitNexus API
+async function fetchRepos(): Promise<GitNexusRepo[]> {
+  return new Promise((resolve) => {
+    const req = http.get(`${GITNEXUS_API_URL}/api/repos`, (res) => {
+      let data = ""
+      res.on("data", (chunk) => (data += chunk))
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data)
+          resolve(parsed.repos || [])
+        } catch {
+          resolve([])
+        }
+      })
+    })
+    req.on("error", () => resolve([]))
+    req.setTimeout(2000, () => {
+      req.destroy()
+      resolve([])
+    })
+  })
+}
 
 // Module-level ephemeral process state (not persisted — resets on app restart)
 let serveProcess: ReturnType<typeof spawn> | null = null
@@ -18,6 +60,14 @@ function getToolsDir(): string {
 }
 
 export const gitnexusRouter = router({
+  /**
+   * List indexed repos from GitNexus API
+   */
+  listRepos: publicProcedure.query(async () => {
+    const repos = await fetchRepos()
+    return repos
+  }),
+
   /**
    * Check installation and server status
    */

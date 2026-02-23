@@ -1,11 +1,12 @@
 "use client"
 
 import { memo } from "react"
-import { useAtomValue } from "jotai"
-import { FileCode, GitPullRequest, CircleDot, GitBranch, Database, Layers, Wrench, Loader2, AlertCircle } from "lucide-react"
+import { useAtomValue, useSetAtom } from "jotai"
+import { FileCode, GitPullRequest, CircleDot, GitBranch, Database, Layers, Wrench, Loader2, AlertCircle, MessageSquare, Sparkles } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { type GitHubSelection, type AnalysisType } from "../atoms"
+import { Button } from "../../../components/ui/button"
+import { type GitHubSelection, type AnalysisType, githubStartChatAtom } from "../atoms"
 import { VisualizeView } from "./visualize-view"
 import { CodeBlock } from "../../agents/ui/code-block"
 
@@ -141,13 +142,34 @@ const CodeView = memo(function CodeView({ path, repoName, projectPath }: CodeVie
     md: "text-gray-500",
   }[ext] || "text-muted-foreground"
 
+  // Function to start explain chat
+  const setStartChat = useSetAtom(githubStartChatAtom)
+
+  const handleExplainCode = () => {
+    setStartChat({
+      message: `Explain this code file: ${path}\n\nFocus on:\n- What the code does\n- Key functions and their purposes\n- How it fits into the larger project`,
+      type: "explain",
+    })
+  }
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <FileCode className={cn("h-5 w-5", iconColor)} />
-          <h2 className="text-lg font-semibold truncate">{path}</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileCode className={cn("h-5 w-5", iconColor)} />
+            <h2 className="text-lg font-semibold truncate">{path}</h2>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExplainCode}
+            className="flex items-center gap-1.5"
+          >
+            <Sparkles className="h-4 w-4" />
+            Explain Code
+          </Button>
         </div>
         <div className="flex items-center gap-2 mt-1">
           <p className="text-sm text-muted-foreground">{repoName}</p>

@@ -123,6 +123,12 @@ export const githubChatContextAtom = atom<GitHubChatContext | null>(null)
  */
 export const githubChatLoadingAtom = atom<boolean>(false)
 
+/**
+ * Signal to start a chat with a specific message
+ * Set this to trigger a new chat in the GitHub view chat pane
+ */
+export const githubStartChatAtom = atom<{ message: string; type: "explain" | "diagram" } | null>(null)
+
 // ============ DATA STATE ============
 
 export interface GitHubRepo {

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { Network, Play, Square, RefreshCw, Plus, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { Network, Play, Square, RefreshCw, Plus, CheckCircle, XCircle, Loader2, ChevronDown, Folder } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -13,6 +13,7 @@ import {
   gitnexusAnalyzeProgressAtom,
   gitnexusAnalyzingAtom,
   gitnexusInstallingAtom,
+  gitnexusSelectedRepoAtom,
 } from "../atoms"
 
 interface GitNexusViewProps {
@@ -40,6 +41,8 @@ export function GitNexusView({ projectPath }: GitNexusViewProps) {
   const [analyzeProgress, setAnalyzeProgress] = useAtom(gitnexusAnalyzeProgressAtom)
   const [isAnalyzing, setIsAnalyzing] = useAtom(gitnexusAnalyzingAtom)
   const [isInstalling, setIsInstalling] = useAtom(gitnexusInstallingAtom)
+  const [selectedRepo, setSelectedRepo] = useAtom(gitnexusSelectedRepoAtom)
+  const [repoDropdownOpen, setRepoDropdownOpen] = useState(false)
 
   // Whether subscriptions should be active
   const [installActive, setInstallActive] = useState(false)
@@ -51,6 +54,15 @@ export function GitNexusView({ projectPath }: GitNexusViewProps) {
   const { data: status, refetch: refetchStatus } = trpc.gitnexus.checkStatus.useQuery(
     { projectPath },
     { refetchInterval: 3000 }
+  )
+
+  // Fetch indexed repos when API server is running
+  const { data: repos = [], refetch: refetchRepos } = trpc.gitnexus.listRepos.useQuery(
+    undefined,
+    {
+      enabled: status?.apiServerRunning,
+      refetchInterval: 10000, // Refresh every 10 seconds
+    }
   )
 
   const startServersMutation = trpc.gitnexus.startServers.useMutation({
@@ -156,6 +168,17 @@ export function GitNexusView({ projectPath }: GitNexusViewProps) {
     }
   }
 
+  // Derived state - must be before any early returns
+  const serversRunning = status?.apiServerRunning && status?.webServerRunning
+  const anyServerRunning = status?.apiServerRunning || status?.webServerRunning
+
+  // Auto-select first repo if none selected and repos are available
+  useEffect(() => {
+    if (repos.length > 0 && !selectedRepo) {
+      setSelectedRepo(repos[0].name)
+    }
+  }, [repos, selectedRepo, setSelectedRepo])
+
   // Not installed state
   if (!status?.repoCloned || !status?.webDepsInstalled) {
     return (
@@ -208,8 +231,10 @@ export function GitNexusView({ projectPath }: GitNexusViewProps) {
     )
   }
 
-  const serversRunning = status.apiServerRunning && status.webServerRunning
-  const anyServerRunning = status.apiServerRunning || status.webServerRunning
+  // Build iframe URL with selected repo
+  const iframeUrl = selectedRepo
+    ? `http://127.0.0.1:5173?repo=${encodeURIComponent(selectedRepo)}`
+    : "http://127.0.0.1:5173"
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -225,6 +250,56 @@ export function GitNexusView({ projectPath }: GitNexusViewProps) {
           <StatusDot running={status.apiServerRunning} label="API" />
           <StatusDot running={status.webServerRunning} label="Web UI" />
         </div>
+
+        {/* Repo selector dropdown */}
+        {serversRunning && repos.length > 0 && (
+          <div className="relative ml-2">
+            <button
+              type="button"
+              onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
+              className="flex items-center gap-1.5 px-2 py-1 text-sm bg-muted/50 hover:bg-muted rounded-md border border-border"
+            >
+              <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="max-w-[150px] truncate">{selectedRepo || "Select repo"}</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {repoDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setRepoDropdownOpen(false)}
+                />
+                <div className="absolute top-full left-0 mt-1 w-64 bg-popover border border-border rounded-md shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
+                  {repos.map((repo) => (
+                    <button
+                      key={repo.name}
+                      type="button"
+                      onClick={() => {
+                        setSelectedRepo(repo.name)
+                        setRepoDropdownOpen(false)
+                      }}
+                      className={cn(
+                        "w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2",
+                        selectedRepo === repo.name && "bg-muted"
+                      )}
+                    >
+                      <Folder className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{repo.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {repo.stats.files} files • {repo.stats.nodes} nodes
+                        </div>
+                      </div>
+                      {selectedRepo === repo.name && (
+                        <CheckCircle className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="flex-1" />
 
@@ -300,7 +375,8 @@ export function GitNexusView({ projectPath }: GitNexusViewProps) {
       <div className="flex-1 overflow-hidden">
         {serversRunning ? (
           <iframe
-            src="http://127.0.0.1:5173"
+            key={selectedRepo || "default"}
+            src={iframeUrl}
             className="w-full h-full border-0"
             title="GitNexus"
           />

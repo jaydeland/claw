@@ -4,6 +4,9 @@ import { atomWithStorage } from "jotai/utils"
 // Persisted: whether to auto-start servers when GitNexus tab is opened
 export const gitnexusAutoStartAtom = atomWithStorage<boolean>("gitnexus:autoStart", true)
 
+// Persisted: selected repo name for GitNexus
+export const gitnexusSelectedRepoAtom = atomWithStorage<string | null>("gitnexus:selectedRepo", null)
+
 // Runtime only: progress lines from install subscription
 export const gitnexusInstallProgressAtom = atom<string[]>([])
 

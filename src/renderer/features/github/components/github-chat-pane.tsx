@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   Send,
@@ -21,6 +21,7 @@ import {
   githubChatMessagesAtom,
   githubChatContextAtom,
   githubChatLoadingAtom,
+  githubStartChatAtom,
   type GitHubSelection,
   type GitHubChatMessage,
   type AnalysisType,
@@ -51,8 +52,18 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   const isLoading = useAtomValue(githubChatLoadingAtom)
   const setMessages = useSetAtom(githubChatMessagesAtom)
   const setChatContext = useSetAtom(githubChatContextAtom)
+  const startChat = useAtomValue(githubStartChatAtom)
+  const setStartChat = useSetAtom(githubStartChatAtom)
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Handle start chat signal (from Explain Code button or diagram generation)
+  useEffect(() => {
+    if (startChat) {
+      setInput(startChat.message)
+      setStartChat(null)
+    }
+  }, [startChat, setStartChat])
 
   // Track analysis generation state
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState<string | null>(null)
