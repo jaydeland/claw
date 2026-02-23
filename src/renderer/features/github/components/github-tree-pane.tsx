@@ -77,9 +77,9 @@ export const GitHubTreePane = memo(function GitHubTreePane({
     }
   )
 
-  // Fetch files
+  // Fetch files - no limit to show complete file tree
   const { data: filesData, isLoading: isLoadingFiles, refetch: refetchFiles } = trpc.files.search.useQuery(
-    { projectPath, query: "", limit: 100 },
+    { projectPath, query: "" },
     {
       enabled: isRepoExpanded && isCodeExpanded && !!projectPath,
       staleTime: 30 * 1000, // 30 seconds
@@ -357,7 +357,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
 
     if (node.type === "dir") {
       return (
-        <div style={{ paddingLeft: depth * 12 }}>
+        <div style={{ paddingLeft: depth * 8 }}>
           <button
             type="button"
             onClick={() => onToggleFolder(node.path)}
@@ -396,7 +396,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
             path: node.path,
           })
         }
-        style={{ paddingLeft: depth * 12 + 20 }}
+        style={{ paddingLeft: depth * 8 + 16 }}
         className={cn(
           "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
           "hover:bg-accent hover:text-accent-foreground",
@@ -443,7 +443,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
 
       {/* Repo contents */}
       {isExpanded && (
-        <div className="ml-4 space-y-0.5">
+        <div className="ml-2 space-y-0.5">
           {/* PRs section */}
           <SectionTreeItem
             id="prs"
@@ -636,7 +636,7 @@ const SectionTreeItem = memo(function SectionTreeItem({
           </span>
         )}
       </button>
-      {isExpanded && <div className="ml-2 mt-0.5 space-y-0.5">{children}</div>}
+      {isExpanded && <div className="ml-1 mt-0.5 space-y-0.5">{children}</div>}
     </div>
   )
 })
