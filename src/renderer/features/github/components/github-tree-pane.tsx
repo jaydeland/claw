@@ -17,6 +17,7 @@ import {
   Folder,
   File,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../../components/ui/button"
@@ -57,11 +58,24 @@ export const GitHubTreePane = memo(function GitHubTreePane({
   const prs = useAtomValue(githubPRsAtom)
   const issues = useAtomValue(githubIssuesAtom)
   const [files, setFiles] = useAtom(githubFilesAtom)
+  const setPRs = useSetAtom(githubPRsAtom)
+  const setIssues = useSetAtom(githubIssuesAtom)
 
   // Fetch files when the code section is expanded
   const isRepoExpanded = expandedRepos.has(projectId)
   const isCodeExpanded = expandedSections.has("code")
 
+  // Fetch GitHub data (PRs and Issues) when repo is expanded
+  const { data: githubData, isLoading: isLoadingGitHub, error: githubError, refetch: refetchGitHub } = trpc.github.getData.useQuery(
+    { projectPath },
+    {
+      enabled: isRepoExpanded && !!projectPath,
+      staleTime: 60 * 1000, // 1 minute
+      retry: false,
+    }
+  )
+
+  // Fetch files
   const { data: filesData, isLoading: isLoadingFiles, refetch: refetchFiles } = trpc.files.search.useQuery(
     { projectPath, query: "", limit: 100 },
     {
@@ -69,6 +83,41 @@ export const GitHubTreePane = memo(function GitHubTreePane({
       staleTime: 30 * 1000, // 30 seconds
     }
   )
+
+  // Update atoms when GitHub data changes
+  useEffect(() => {
+    if (githubData?.success) {
+      setPRs((prev) => {
+        const next = new Map(prev)
+        next.set(projectId, githubData.prs.map((pr) => ({
+          number: pr.number,
+          title: pr.title,
+          state: pr.state as "open" | "closed" | "merged",
+          author: pr.author,
+          headBranch: pr.headBranch,
+          baseBranch: pr.baseBranch,
+          draft: pr.draft,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })))
+        return next
+      })
+      setIssues((prev) => {
+        const next = new Map(prev)
+        next.set(projectId, githubData.issues.map((issue) => ({
+          number: issue.number,
+          title: issue.title,
+          state: issue.state as "open" | "closed",
+          author: issue.author,
+          labels: issue.labels,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          assignees: [],
+        })))
+        return next
+      })
+    }
+  }, [githubData, projectId, setPRs, setIssues])
 
   // Update files atom when data changes
   useEffect(() => {
@@ -88,10 +137,10 @@ export const GitHubTreePane = memo(function GitHubTreePane({
   // In the future, this could support multiple repos
   const currentRepo: GitHubRepo = {
     id: projectId,
-    name: projectPath.split("/").pop() || "repo",
-    fullName: projectPath.split("/").pop() || "repo",
-    owner: "",
-    url: "",
+    name: githubData?.success ? `${githubData.owner}/${githubData.repo}` : (projectPath.split("/").pop() || "repo"),
+    fullName: githubData?.success ? `${githubData.owner}/${githubData.repo}` : (projectPath.split("/").pop() || "repo"),
+    owner: githubData?.success ? githubData.owner : "",
+    url: githubData?.success ? `https://github.com/${githubData.owner}/${githubData.repo}` : "",
     localPath: projectPath,
     projectId,
   }
@@ -170,6 +219,9 @@ export const GitHubTreePane = memo(function GitHubTreePane({
             onSelect={handleSelect}
             analysisLabels={analysisLabels}
             analysisIcons={analysisIcons}
+            isLoading={isLoadingGitHub}
+            error={githubError?.message || (githubData && !githubData.success ? githubData.error : null)}
+            isGitHub={githubData?.success ? githubData.isGitHub : true}
           />
         </div>
       </div>

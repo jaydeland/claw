@@ -59,6 +59,7 @@ const highlightCache = new LRUCache<string, string>(HIGHLIGHT_CACHE_MAX_SIZE)
 /**
  * Languages supported by the highlighter
  * These are bundled with shiki and available immediately
+ * Only use languages that are definitely in shiki's bundled set
  */
 const SUPPORTED_LANGUAGES: shiki.BundledLanguage[] = [
   // JavaScript/TypeScript
@@ -95,18 +96,16 @@ const SUPPORTED_LANGUAGES: shiki.BundledLanguage[] = [
   "csharp",
   // Shell
   "bash",
-  "shell",
-  "docker",
+  "shellscript",
+  "dockerfile",
   // Markup
   "markdown",
   "mdx",
   // Query
   "sql",
   "graphql",
-  // Config
-  "dockerfile",
+  // Make
   "make",
-  "cmake",
 ]
 
 /**
