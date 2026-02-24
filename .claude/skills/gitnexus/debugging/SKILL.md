@@ -68,6 +68,21 @@ MATCH path = (a)-[:CodeRelation {type: 'CALLS'}*1..2]->(b:Function {name: "valid
 RETURN [n IN nodes(path) | n.name] AS chain
 ```
 
+**gitnexus_detect_changes** — map uncommitted changes to affected flows:
+```
+gitnexus_detect_changes({scope: "all"})
+→ Changed: 5 symbols in 3 files
+→ Affected processes: PaymentFlow, ErrorHandling
+→ Risk: MEDIUM
+```
+
+**gitnexus_impact** — understand what depends on a suspect:
+```
+gitnexus_impact({target: "validatePayment", direction: "upstream"})
+→ d=1: processCheckout, webhookHandler (WILL BREAK if this fails)
+→ d=2: PaymentAPI, OrderService (LIKELY AFFECTED)
+```
+
 ## Example: "Payment endpoint returns 500 intermittently"
 
 ```
