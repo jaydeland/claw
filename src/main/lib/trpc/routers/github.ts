@@ -464,6 +464,37 @@ export const githubRouter = router({
     }),
 
   /**
+   * Merge a pull request
+   */
+  mergePR: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        prNumber: z.number(),
+        method: z.enum(["merge", "squash", "rebase"]).default("squash"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const ghCheck = await checkGhAvailable()
+      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+
+      try {
+        await execAsync(
+          `gh pr merge ${input.prNumber} --repo ${remote.owner}/${remote.repo} --${input.method}`,
+          { cwd: input.projectPath }
+        )
+        return { success: true as const }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const match = msg.match(/GraphQL: (.+)|error: (.+)/s)
+        return { success: false as const, error: match ? (match[1] || match[2]).trim() : msg }
+      }
+    }),
+
+  /**
    * Submit a pull request review (approve, request changes, or leave a comment)
    */
   submitReview: publicProcedure

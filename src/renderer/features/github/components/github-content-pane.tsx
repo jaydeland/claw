@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo, useCallback } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send, Check, X, CheckCircle } from "lucide-react"
+import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send, Check, X, CheckCircle, GitMerge } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
@@ -74,6 +74,11 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
   const [reviewError, setReviewError] = useState<string | null>(null)
   const [reviewSuccess, setReviewSuccess] = useState(false)
 
+  // Merge state
+  const [mergeMode, setMergeMode] = useState(false)
+  const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash")
+  const [mergeError, setMergeError] = useState<string | null>(null)
+
   const { data, isLoading, error, refetch } = trpc.github.getPRDetail.useQuery(
     { projectPath, prNumber },
     { enabled: !!projectPath }
@@ -100,6 +105,21 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
       }
     },
     onError: (err) => setReviewError(err.message),
+  })
+
+  const mergeMutation = trpc.github.mergePR.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        setMergeMode(false)
+        setMergeError(null)
+        setReviewSuccess(true)
+        setTimeout(() => setReviewSuccess(false), 3000)
+        refetch()
+      } else {
+        setMergeError(result.error || "Failed to merge PR")
+      }
+    },
+    onError: (err) => setMergeError(err.message),
   })
 
   const setStartChat = useSetAtom(githubStartChatAtom)
@@ -158,10 +178,57 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
           {reviewSuccess ? (
             <div className="flex items-center gap-1.5 text-xs text-green-500">
               <CheckCircle className="h-3.5 w-3.5" />
-              Review submitted
+              Done
+            </div>
+          ) : mergeMode ? (
+            <div className="space-y-2">
+              {/* Merge method selector */}
+              <div className="flex items-center gap-1">
+                {(["squash", "merge", "rebase"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMergeMethod(m)}
+                    className={cn(
+                      "px-2 py-1 text-xs rounded border transition-colors capitalize",
+                      mergeMethod === m
+                        ? "border-purple-500 bg-purple-500/10 text-purple-400"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {mergeError && (
+                <p className="text-xs text-destructive">{mergeError}</p>
+              )}
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => { setMergeMode(false); setMergeError(null) }}
+                  disabled={mergeMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                  disabled={mergeMutation.isPending}
+                  onClick={() => mergeMutation.mutate({ projectPath, prNumber, method: mergeMethod })}
+                >
+                  {mergeMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : (
+                    <GitMerge className="h-3 w-3 mr-1" />
+                  )}
+                  Merge
+                </Button>
+              </div>
             </div>
           ) : reviewMode === "idle" ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-muted-foreground">Review:</span>
               <Button
                 size="sm"
@@ -180,6 +247,16 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
               >
                 <X className="h-3 w-3 mr-1" />
                 Request Changes
+              </Button>
+              <div className="w-px h-4 bg-border" />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs text-purple-400 border-purple-500/30 hover:bg-purple-500/10"
+                onClick={() => setMergeMode(true)}
+              >
+                <GitMerge className="h-3 w-3 mr-1" />
+                Merge
               </Button>
             </div>
           ) : (
