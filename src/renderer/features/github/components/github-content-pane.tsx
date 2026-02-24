@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState, useMemo } from "react"
+import { memo, useState, useMemo, useCallback } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
-import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight } from "lucide-react"
+import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
@@ -65,10 +65,32 @@ interface PRDetailViewProps {
 
 const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPath }: PRDetailViewProps) {
   const [activeTab, setActiveTab] = useState<"description" | "files" | "commits" | "comments" | "diff">("description")
-  const { data, isLoading, error } = trpc.github.getPRDetail.useQuery(
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
+
+  const { data, isLoading, error, refetch } = trpc.github.getPRDetail.useQuery(
     { projectPath, prNumber },
     { enabled: !!projectPath }
   )
+
+  const replyMutation = trpc.github.replyToComment.useMutation({
+    onSuccess: () => {
+      setReplyingTo(null)
+      refetch()
+    },
+  })
+
+  const setStartChat = useSetAtom(githubStartChatAtom)
+
+  const handleAddressWithAI = useCallback((comment: { id: string; author: string; body: string; filePath: string | null }) => {
+    const lines = [
+      `Address this code review comment on PR #${prNumber}:`,
+      comment.filePath ? `\nFile: \`${comment.filePath}\`` : "",
+      `\n**${comment.author} wrote:**\n${comment.body}`,
+      "\nAnalyze what needs to change to address this comment and show the fix.",
+    ]
+    setStartChat({ message: lines.filter(Boolean).join(""), type: "review" })
+  }, [prNumber, setStartChat])
 
   if (isLoading) {
     return (
@@ -218,8 +240,13 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                   ? { label: "Reviewed", cls: "text-blue-400 bg-blue-500/10" }
                   : null
                 : null
+              const isReplying = replyingTo === comment.id
+              const replyText = replyTexts[comment.id] || ""
+              const isSending = replyMutation.isPending && replyingTo === comment.id
+
               return (
                 <div key={comment.id} className="px-4 py-3">
+                  {/* Header */}
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className="text-xs font-medium">{comment.author}</span>
                     {reviewBadge && (
@@ -236,7 +263,74 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                       {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ""}
                     </span>
                   </div>
+
+                  {/* Body */}
                   <MemoizedMarkdown content={comment.body} id={comment.id} size="sm" />
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => setReplyingTo(isReplying ? null : comment.id)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Reply className="h-3 w-3" />
+                      Reply
+                    </button>
+                    <button
+                      onClick={() => handleAddressWithAI(comment)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Address with AI
+                    </button>
+                  </div>
+
+                  {/* Reply box */}
+                  {isReplying && (
+                    <div className="mt-3 space-y-2">
+                      <textarea
+                        value={replyText}
+                        onChange={(e) =>
+                          setReplyTexts((prev) => ({ ...prev, [comment.id]: e.target.value }))
+                        }
+                        placeholder="Write a reply..."
+                        rows={3}
+                        className="w-full text-xs rounded-md border border-border bg-background px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setReplyingTo(null)}
+                          disabled={isSending}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!replyText.trim() || isSending}
+                          onClick={() =>
+                            replyMutation.mutate({
+                              projectPath,
+                              prNumber,
+                              commentId: comment.id,
+                              body: replyText,
+                              isInline: !!comment.filePath,
+                            })
+                          }
+                        >
+                          {isSending ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <Send className="h-3 w-3 mr-1" />
+                          )}
+                          Send
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}

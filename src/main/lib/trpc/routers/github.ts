@@ -2,6 +2,9 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { exec } from "node:child_process"
 import { promisify } from "node:util"
+import * as fs from "node:fs"
+import * as path from "node:path"
+import * as os from "node:os"
 import { getDatabase, chats, subChats } from "../../db"
 import { createId } from "../../db/utils"
 
@@ -415,5 +418,48 @@ export const githubRouter = router({
       }).run()
 
       return { chatId, subChatId }
+    }),
+
+  /**
+   * Reply to a PR comment.
+   * - isInline=true  → inline review comment  (POST /pulls/{n}/comments/{id}/replies)
+   * - isInline=false → issue-level discussion (POST /issues/{n}/comments)
+   */
+  replyToComment: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        prNumber: z.number(),
+        commentId: z.string(),
+        body: z.string().min(1),
+        isInline: z.boolean(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const ghCheck = await checkGhAvailable()
+      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+
+      // Write body to a temp file to avoid shell-escaping issues with arbitrary text
+      const tmpFile = path.join(os.tmpdir(), `gh-reply-${Date.now()}.json`)
+      fs.writeFileSync(tmpFile, JSON.stringify({ body: input.body }))
+
+      try {
+        const endpoint = input.isInline
+          ? `repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/comments/${input.commentId}/replies`
+          : `repos/${remote.owner}/${remote.repo}/issues/${input.prNumber}/comments`
+
+        await execAsync(`gh api ${endpoint} --method POST --input ${tmpFile}`, {
+          cwd: input.projectPath,
+        })
+
+        return { success: true as const }
+      } catch (error) {
+        return { success: false as const, error: error instanceof Error ? error.message : String(error) }
+      } finally {
+        fs.unlinkSync(tmpFile)
+      }
     }),
 })
