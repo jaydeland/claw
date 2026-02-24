@@ -13,6 +13,7 @@ import {
   SettingsIcon,
 } from "../../icons"
 import { FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
+import { Github } from "lucide-react"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
@@ -25,6 +26,7 @@ import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-setti
 import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
 import { AgentsBackupTab } from "./settings-tabs/agents-backup-tab"
 import { AgentsProvidersTab } from "./settings-tabs/agents-providers-tab"
+import { AgentsGitHubTab } from "./settings-tabs/agents-github-tab"
 import { trpc } from "../../lib/trpc"
 
 // Hook to detect narrow screen
@@ -89,6 +91,12 @@ const MAIN_TABS = [
     label: "Kubernetes",
     icon: Server,
     description: "Kubernetes cluster configuration",
+  },
+  {
+    id: "github" as SettingsTab,
+    label: "GitHub",
+    icon: Github,
+    description: "GitHub token configuration for Claws",
   },
 ]
 
@@ -269,6 +277,8 @@ export function AgentsSettingsDialog({
         return <AgentsPreferencesTab />
       case "kubernetes":
         return <AgentsKubernetesTab />
+      case "github":
+        return <AgentsGitHubTab />
       case "advanced":
         return <AgentsAdvancedSettingsTab />
       case "worktrees":

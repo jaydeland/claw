@@ -5,10 +5,40 @@ import { promisify } from "node:util"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
-import { getDatabase, chats, subChats } from "../../db"
+import { safeStorage } from "electron"
+import { eq } from "drizzle-orm"
+import { getDatabase, chats, subChats, githubSettings } from "../../db"
 import { createId } from "../../db/utils"
 
 const execAsync = promisify(exec)
+
+/**
+ * Encrypt text using Electron's safeStorage
+ */
+function encryptText(text: string): string {
+  if (!safeStorage.isEncryptionAvailable()) {
+    console.warn("[github] Encryption not available, storing as base64")
+    return Buffer.from(text).toString("base64")
+  }
+  return safeStorage.encryptString(text).toString("base64")
+}
+
+/**
+ * Decrypt text using Electron's safeStorage
+ */
+function decryptText(encrypted: string): string | null {
+  if (!encrypted) return null
+  try {
+    if (!safeStorage.isEncryptionAvailable()) {
+      return Buffer.from(encrypted, "base64").toString("utf-8")
+    }
+    const buffer = Buffer.from(encrypted, "base64")
+    return safeStorage.decryptString(buffer)
+  } catch (error) {
+    console.error("[github] Failed to decrypt text:", error)
+    return null
+  }
+}
 
 /**
  * Check if gh CLI is available and authenticated
@@ -462,4 +492,124 @@ export const githubRouter = router({
         fs.unlinkSync(tmpFile)
       }
     }),
+
+  /**
+   * Save GitHub PAT token (encrypted)
+   */
+  saveToken: publicProcedure
+    .input(z.object({ token: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const encryptedToken = encryptText(input.token)
+
+      // Upsert the settings
+      const existing = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
+
+      if (existing) {
+        db.update(githubSettings)
+          .set({ encryptedToken, updatedAt: new Date() })
+          .where(eq(githubSettings.id, "default"))
+          .run()
+      } else {
+        db.insert(githubSettings).values({
+          id: "default",
+          encryptedToken,
+        }).run()
+      }
+
+      return { success: true as const }
+    }),
+
+  /**
+   * Check if GitHub token is configured
+   */
+  hasToken: publicProcedure.query(async () => {
+    const db = getDatabase()
+    const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
+
+    return {
+      hasToken: !!settings?.encryptedToken,
+    }
+  }),
+
+  /**
+   * Get GitHub token (decrypted) - for internal use only
+   * Note: This returns the decrypted token, use with caution
+   */
+  getToken: publicProcedure.query(async () => {
+    const db = getDatabase()
+    const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
+
+    if (!settings?.encryptedToken) {
+      return { success: false as const, error: "No token configured" }
+    }
+
+    const token = decryptText(settings.encryptedToken)
+    if (!token) {
+      return { success: false as const, error: "Failed to decrypt token" }
+    }
+
+    return { success: true as const, token }
+  }),
+
+  /**
+   * Clear GitHub token
+   */
+  clearToken: publicProcedure.mutation(async () => {
+    const db = getDatabase()
+
+    db.update(githubSettings)
+      .set({ encryptedToken: null, updatedAt: new Date() })
+      .where(eq(githubSettings.id, "default"))
+      .run()
+
+    return { success: true as const }
+  }),
+
+  /**
+   * Test GitHub token by making an API call
+   */
+  testToken: publicProcedure.query(async () => {
+    const db = getDatabase()
+    const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
+
+    if (!settings?.encryptedToken) {
+      return { success: false as const, error: "No token configured" }
+    }
+
+    const token = decryptText(settings.encryptedToken)
+    if (!token) {
+      return { success: false as const, error: "Failed to decrypt token" }
+    }
+
+    try {
+      const response = await fetch("https://api.github.com/user", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "Claw-App",
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        return { success: false as const, error: `GitHub API error: ${error}` }
+      }
+
+      const user = await response.json()
+      return {
+        success: true as const,
+        user: {
+          login: user.login,
+          name: user.name,
+          email: user.email,
+        },
+      }
+    } catch (error) {
+      return {
+        success: false as const,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }),
 })

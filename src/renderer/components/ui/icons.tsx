@@ -5781,3 +5781,25 @@ export function ThinkingIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function LobsterClawIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      {/* Lobster claw - stylized pincer design */}
+      <path d="M7 4c0-1 1-2 2.5-2S12 3 12 4v6c0 1-1 2-2.5 2S7 11 7 10V4z" />
+      <path d="M17 4c0-1-1-2-2.5-2S12 3 12 4v6c0 1 1 2 2.5 2S17 11 17 10V4z" />
+      <path d="M7 4c-2 1-4 3-4 6s2 5 4 6" />
+      <path d="M17 4c2 1 4 3 4 6s-2 5-4 6" />
+      <path d="M12 10v8" />
+      <path d="M9 18h6" />
+    </svg>
+  )
+}

@@ -173,6 +173,7 @@ export type SettingsTab =
   | "keyboard"
   | "preferences"
   | "kubernetes"
+  | "github"
   | "advanced"
   | "worktrees"
   | "backup"

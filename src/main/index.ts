@@ -13,6 +13,7 @@ import { cleanupGitWatchers } from "./lib/git/watcher"
 import { initBackgroundSession, closeBackgroundSession } from "./lib/claude/background-session"
 import { taskWatcher, taskEvents, startCleanupScheduler, stopCleanupScheduler, notifyTaskCompleted } from "./lib/background-tasks"
 import { terminalManager } from "./lib/terminal/manager"
+import { clawDaemon } from "./lib/claws"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -368,6 +369,16 @@ if (gotTheLock) {
       }, 5000)
     }
 
+    // Initialize ClawDaemon for headless agents
+    setTimeout(async () => {
+      try {
+        console.log("[App] Initializing ClawDaemon...")
+        await clawDaemon.initialize()
+      } catch (error) {
+        console.error("[App] ClawDaemon initialization failed:", error)
+      }
+    }, 6000)
+
     // macOS: Re-create window when dock icon is clicked
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -391,6 +402,7 @@ if (gotTheLock) {
     await cleanupGitWatchers()
     await terminalManager.cleanup()
     await closeBackgroundSession()
+    await clawDaemon.shutdown()
     await closeDatabase()
   })
 

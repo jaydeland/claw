@@ -369,8 +369,64 @@ export const analysisJobsRelations = relations(analysisJobs, ({ one }) => ({
   }),
 }))
 
+// ============ HEADLESS CLAWS ============
+// Stores headless agent definitions (autonomous background agents)
+export const headlessClaws = sqliteTable("headless_claws", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  name: text("name").notNull(),
+  instruction: text("instruction").notNull(), // The prompt/task passed to Claude
+  targetWorktree: text("target_worktree").notNull(), // Absolute path to the isolated Git worktree
+  triggerType: text("trigger_type", { enum: ["cron", "github_poll", "manual"] }).notNull(),
+  triggerConfig: text("trigger_config").notNull(), // JSON: cron expression or GitHub repo identifier
+  isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+})
+
+export const headlessClawsRelations = relations(headlessClaws, ({ many }) => ({
+  executions: many(clawExecutions),
+}))
+
+// ============ CLAW EXECUTIONS ============
+// Tracks the history and logs of headless agent runs
+export const clawExecutions = sqliteTable("claw_executions", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  clawId: text("claw_id")
+    .notNull()
+    .references(() => headlessClaws.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["running", "success", "failed"] }).notNull(),
+  logs: text("logs").notNull().default(""), // Standard output/error buffer
+  exitCode: integer("exit_code"), // Process exit code (null if still running)
+  startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+}, (table) => ({
+  clawIdIdx: index("claw_executions_claw_id_idx").on(table.clawId),
+  statusIdx: index("claw_executions_status_idx").on(table.status),
+  startedAtIdx: index("claw_executions_started_at_idx").on(table.startedAt),
+}))
+
+export const clawExecutionsRelations = relations(clawExecutions, ({ one }) => ({
+  claw: one(headlessClaws, {
+    fields: [clawExecutions.clawId],
+    references: [headlessClaws.id],
+  }),
+}))
+
+// ============ GITHUB SETTINGS ============
+// Secure storage for GitHub credentials
+export const githubSettings = sqliteTable("github_settings", {
+  id: text("id").primaryKey().default("default"), // Single row, always "default"
+  encryptedToken: text("encrypted_token"), // GitHub PAT encrypted via safeStorage (null if not set)
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+})
+
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
+export type ClawTriggerType = "cron" | "github_poll" | "manual"
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -402,3 +458,11 @@ export type AnalysisDiagram = typeof analysisDiagrams.$inferSelect
 export type NewAnalysisDiagram = typeof analysisDiagrams.$inferInsert
 export type AnalysisJob = typeof analysisJobs.$inferSelect
 export type NewAnalysisJob = typeof analysisJobs.$inferInsert
+
+// Headless claws types
+export type HeadlessClaw = typeof headlessClaws.$inferSelect
+export type NewHeadlessClaw = typeof headlessClaws.$inferInsert
+export type ClawExecution = typeof clawExecutions.$inferSelect
+export type NewClawExecution = typeof clawExecutions.$inferInsert
+export type GithubSettings = typeof githubSettings.$inferSelect
+export type NewGithubSettings = typeof githubSettings.$inferInsert
