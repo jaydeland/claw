@@ -9,6 +9,7 @@ import { Button } from "../../../components/ui/button"
 import { type GitHubSelection, type AnalysisType, githubStartChatAtom } from "../atoms"
 import { VisualizeView } from "./visualize-view"
 import { CodeBlock } from "../../agents/ui/code-block"
+import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
 
 interface GitHubContentPaneProps {
   projectId: string
@@ -63,7 +64,7 @@ interface PRDetailViewProps {
 }
 
 const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPath }: PRDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<"files" | "commits" | "comments">("files")
+  const [activeTab, setActiveTab] = useState<"description" | "files" | "commits" | "comments">("description")
   const { data, isLoading, error } = trpc.github.getPRDetail.useQuery(
     { projectPath, prNumber },
     { enabled: !!projectPath }
@@ -90,73 +91,79 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
   const pr = data.pr
   const stateColor = pr.state === "OPEN" ? "text-green-500 bg-green-500/10" : pr.state === "MERGED" ? "text-purple-500 bg-purple-500/10" : "text-red-500 bg-red-500/10"
 
+  const tabs = [
+    { id: "description" as const, label: "Description" },
+    { id: "files" as const, label: `Files (${pr.files.length})` },
+    { id: "commits" as const, label: `Commits (${pr.commits.length})` },
+    { id: "comments" as const, label: `Comments (${pr.comments.length})` },
+  ]
+
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex-shrink-0">
-        <div className="flex items-start gap-2">
-          <GitPullRequest className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base font-semibold">{pr.title}</h2>
-              <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", stateColor)}>
-                {pr.draft ? "Draft" : pr.state.charAt(0) + pr.state.slice(1).toLowerCase()}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-              <span>#{pr.number} by <span className="font-medium text-foreground">{pr.author}</span></span>
-              <span className="flex items-center gap-1">
-                <GitBranch className="h-3 w-3" />
-                {pr.headBranch} → {pr.baseBranch}
-              </span>
-              <span className="flex items-center gap-1">
-                <Plus className="h-3 w-3 text-green-500" />{pr.additions}
-                <Minus className="h-3 w-3 text-red-500 ml-1" />{pr.deletions}
-                <span className="ml-1">{pr.changedFiles} files</span>
-              </span>
-            </div>
-            {pr.labels.length > 0 && (
-              <div className="flex gap-1 flex-wrap mt-1.5">
-                {pr.labels.map((label) => (
-                  <span key={label} className="text-xs px-1.5 py-0.5 rounded bg-muted border border-border">{label}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Body — fixed height with always-visible scrollbar */}
-      {pr.body && (
-        <div className="flex-shrink-0 border-b border-border" style={{ height: "140px", overflowY: "scroll" }}>
-          <div className="px-4 py-3">
-            <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{pr.body}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex border-b border-border flex-shrink-0">
-        {(["files", "commits", "comments"] as const).map((tab) => (
+      {/* Tab bar — the only top-level chrome */}
+      <div className="flex border-b border-border flex-shrink-0 overflow-x-auto">
+        {tabs.map((tab) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "px-4 py-2 text-xs font-medium border-b-2 transition-colors",
-              activeTab === tab
+              "px-4 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap",
+              activeTab === tab.id
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
-            {tab === "files" && `Files (${pr.files.length})`}
-            {tab === "commits" && `Commits (${pr.commits.length})`}
-            {tab === "comments" && `Comments (${pr.comments.length})`}
+            {tab.label}
           </button>
         ))}
       </div>
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
+        {activeTab === "description" && (
+          <div className="p-4 space-y-4">
+            {/* Title + state */}
+            <div className="flex items-start gap-2">
+              <GitPullRequest className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base font-semibold">{pr.title}</h2>
+                  <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", stateColor)}>
+                    {pr.draft ? "Draft" : pr.state.charAt(0) + pr.state.slice(1).toLowerCase()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                  <span>#{pr.number} by <span className="font-medium text-foreground">{pr.author}</span></span>
+                  <span className="flex items-center gap-1">
+                    <GitBranch className="h-3 w-3" />
+                    {pr.headBranch} → {pr.baseBranch}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Plus className="h-3 w-3 text-green-500" />{pr.additions}
+                    <Minus className="h-3 w-3 text-red-500 ml-1" />{pr.deletions}
+                    <span className="ml-1">{pr.changedFiles} files</span>
+                  </span>
+                </div>
+                {pr.labels.length > 0 && (
+                  <div className="flex gap-1 flex-wrap mt-1.5">
+                    {pr.labels.map((label) => (
+                      <span key={label} className="text-xs px-1.5 py-0.5 rounded bg-muted border border-border">{label}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Body */}
+            {pr.body ? (
+              <div className="border border-border rounded-md px-4 py-3">
+                <MemoizedMarkdown content={pr.body} id={`pr-${pr.number}-body`} size="sm" />
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No description provided.</p>
+            )}
+          </div>
+        )}
+
         {activeTab === "files" && (
           <div className="divide-y divide-border">
             {pr.files.map((file) => (
@@ -202,13 +209,13 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
           <div className="divide-y divide-border">
             {pr.comments.map((comment) => (
               <div key={comment.id} className="px-4 py-3">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-2">
                   <span className="text-xs font-medium">{comment.author}</span>
                   <span className="text-xs text-muted-foreground">
                     {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ""}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{comment.body}</p>
+                <MemoizedMarkdown content={comment.body} id={comment.id} size="sm" />
               </div>
             ))}
             {pr.comments.length === 0 && (
