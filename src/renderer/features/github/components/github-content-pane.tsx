@@ -84,13 +84,20 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
 
   const handleAddressWithAI = useCallback((comment: { id: string; author: string; body: string; filePath: string | null }) => {
     const lines = [
-      `Address this code review comment on PR #${prNumber}:`,
-      comment.filePath ? `\nFile: \`${comment.filePath}\`` : "",
-      `\n**${comment.author} wrote:**\n${comment.body}`,
-      "\nAnalyze what needs to change to address this comment and show the fix.",
+      `Address this code review comment on PR #${prNumber} in the repo at \`${projectPath}\`:`,
+      "",
+      comment.filePath
+        ? `**File:** \`${comment.filePath}\``
+        : "",
+      `**${comment.author} wrote:**`,
+      comment.body,
+      "",
+      comment.filePath
+        ? `Use the Read tool to read \`${projectPath}/${comment.filePath}\`, understand the context, then explain what change is needed and make the fix.`
+        : `Use the Bash tool with \`gh pr view ${prNumber} --repo origin\` to get full context, then explain what change is needed and make the fix.`,
     ]
-    setStartChat({ message: lines.filter(Boolean).join(""), type: "review" })
-  }, [prNumber, setStartChat])
+    setStartChat({ message: lines.filter(Boolean).join("\n"), type: "explain", autoStart: true })
+  }, [prNumber, projectPath, setStartChat])
 
   if (isLoading) {
     return (

@@ -198,13 +198,25 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     },
   })
 
-  // Handle start chat signal (from Explain Code button in content pane)
+  // Handle start chat signal (from content pane buttons)
   useEffect(() => {
-    if (startChat) {
+    if (!startChat) return
+    setStartChat(null)
+
+    if (startChat.autoStart) {
+      // Clear prior state then fire immediately
+      setMessages([])
+      setSession(null)
+      setPendingPrompt(null)
+      streamingTextRef.current = ""
+      setStreamingContent("")
+      // Use setTimeout so state resets propagate before startClaudeSession reads them
+      setTimeout(() => startClaudeSession(startChat.message, startChat.message.slice(0, 120)), 0)
+    } else {
       setInput(startChat.message)
-      setStartChat(null)
     }
-  }, [startChat, setStartChat])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startChat])
 
   // Auto-scroll on new messages
   useEffect(() => {

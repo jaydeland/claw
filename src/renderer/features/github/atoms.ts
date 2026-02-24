@@ -127,7 +127,7 @@ export const githubChatLoadingAtom = atom<boolean>(false)
  * Signal to start a chat with a specific message
  * Set this to trigger a new chat in the GitHub view chat pane
  */
-export const githubStartChatAtom = atom<{ message: string; type: "explain" | "diagram" } | null>(null)
+export const githubStartChatAtom = atom<{ message: string; type: "explain" | "diagram"; autoStart?: boolean } | null>(null)
 
 // ============ DATA STATE ============
 
