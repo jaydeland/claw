@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { Network, Play, Square, RefreshCw, Plus, CheckCircle, XCircle, Loader2, ChevronDown, Folder } from "lucide-react"
+import { Network, Play, Square, RefreshCw, Plus, CheckCircle, XCircle, Loader2, ChevronDown, Folder, FolderOpen } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -14,6 +14,7 @@ import {
   gitnexusAnalyzingAtom,
   gitnexusInstallingAtom,
   gitnexusSelectedRepoAtom,
+  gitnexusSelectedProjectIdAtom,
 } from "../atoms"
 
 interface GitNexusViewProps {
@@ -35,20 +36,33 @@ function StatusDot({ running, label }: { running: boolean; label: string }) {
   )
 }
 
-export function GitNexusView({ projectPath }: GitNexusViewProps) {
+export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewProps) {
   const autoStart = useAtomValue(gitnexusAutoStartAtom)
   const [installProgress, setInstallProgress] = useAtom(gitnexusInstallProgressAtom)
   const [analyzeProgress, setAnalyzeProgress] = useAtom(gitnexusAnalyzeProgressAtom)
   const [isAnalyzing, setIsAnalyzing] = useAtom(gitnexusAnalyzingAtom)
   const [isInstalling, setIsInstalling] = useAtom(gitnexusInstallingAtom)
   const [selectedRepo, setSelectedRepo] = useAtom(gitnexusSelectedRepoAtom)
+  const [selectedProjectId, setSelectedProjectId] = useAtom(gitnexusSelectedProjectIdAtom)
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false)
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false)
 
   // Whether subscriptions should be active
   const [installActive, setInstallActive] = useState(false)
   const [analyzeActive, setAnalyzeActive] = useState(false)
 
   const autoStartedRef = useRef(false)
+
+  // Fetch list of Claw projects
+  const { data: projects = [] } = trpc.projects.list.useQuery()
+
+  // Find the selected project or use default
+  const selectedProject = projects.find((p) => p.id === selectedProjectId) ||
+    projects.find((p) => p.path === defaultProjectPath) ||
+    projects[0]
+
+  // Use selected project path for GitNexus operations
+  const projectPath = selectedProject?.path || defaultProjectPath || ""
 
   // Poll status every 3 seconds
   const { data: status, refetch: refetchStatus } = trpc.gitnexus.checkStatus.useQuery(
@@ -250,6 +264,58 @@ export function GitNexusView({ projectPath }: GitNexusViewProps) {
           <StatusDot running={status.apiServerRunning} label="API" />
           <StatusDot running={status.webServerRunning} label="Web UI" />
         </div>
+
+        {/* Project/Workspace selector dropdown */}
+        {projects.length > 0 && (
+          <div className="relative ml-2">
+            <button
+              type="button"
+              onClick={() => setProjectDropdownOpen(!projectDropdownOpen)}
+              className="flex items-center gap-1.5 px-2 py-1 text-sm bg-muted/50 hover:bg-muted rounded-md border border-border"
+            >
+              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="max-w-[150px] truncate">{selectedProject?.name || "Select project"}</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {projectDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setProjectDropdownOpen(false)}
+                />
+                <div className="absolute top-full left-0 mt-1 w-64 bg-popover border border-border rounded-md shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
+                  {projects.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(project.id)
+                        // Reset selected repo when switching projects
+                        setSelectedRepo(null)
+                        setProjectDropdownOpen(false)
+                      }}
+                      className={cn(
+                        "w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2",
+                        selectedProject?.id === project.id && "bg-muted"
+                      )}
+                    >
+                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{project.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {project.path}
+                        </div>
+                      </div>
+                      {selectedProject?.id === project.id && (
+                        <CheckCircle className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Repo selector dropdown */}
         {serversRunning && repos.length > 0 && (

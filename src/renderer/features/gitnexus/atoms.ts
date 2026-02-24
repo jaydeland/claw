@@ -7,6 +7,9 @@ export const gitnexusAutoStartAtom = atomWithStorage<boolean>("gitnexus:autoStar
 // Persisted: selected repo name for GitNexus
 export const gitnexusSelectedRepoAtom = atomWithStorage<string | null>("gitnexus:selectedRepo", null)
 
+// Persisted: selected project ID for GitNexus (the Claw project to index)
+export const gitnexusSelectedProjectIdAtom = atomWithStorage<string | null>("gitnexus:selectedProjectId", null)
+
 // Runtime only: progress lines from install subscription
 export const gitnexusInstallProgressAtom = atom<string[]>([])
 
