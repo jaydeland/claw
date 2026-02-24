@@ -208,17 +208,33 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
 
         {activeTab === "comments" && (
           <div className="divide-y divide-border">
-            {pr.comments.map((comment) => (
-              <div key={comment.id} className="px-4 py-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-medium">{comment.author}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ""}
-                  </span>
+            {pr.comments.map((comment) => {
+              const reviewBadge = comment.reviewState
+                ? comment.reviewState === "APPROVED"
+                  ? { label: "Approved", cls: "text-green-500 bg-green-500/10" }
+                  : comment.reviewState === "CHANGES_REQUESTED"
+                  ? { label: "Changes requested", cls: "text-red-500 bg-red-500/10" }
+                  : comment.reviewState === "COMMENTED"
+                  ? { label: "Reviewed", cls: "text-blue-400 bg-blue-500/10" }
+                  : null
+                : null
+              return (
+                <div key={comment.id} className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-xs font-medium">{comment.author}</span>
+                    {reviewBadge && (
+                      <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium", reviewBadge.cls)}>
+                        {reviewBadge.label}
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ""}
+                    </span>
+                  </div>
+                  <MemoizedMarkdown content={comment.body} id={comment.id} size="sm" />
                 </div>
-                <MemoizedMarkdown content={comment.body} id={comment.id} size="sm" />
-              </div>
-            ))}
+              )
+            })}
             {pr.comments.length === 0 && (
               <p className="px-4 py-6 text-xs text-muted-foreground text-center">No comments</p>
             )}

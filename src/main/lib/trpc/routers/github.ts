@@ -253,7 +253,7 @@ export const githubRouter = router({
       try {
         const [prResult, diffResult] = await Promise.all([
           execAsync(
-            `gh pr view ${input.prNumber} --repo ${remote.owner}/${remote.repo} --json number,title,body,state,author,labels,headRefName,baseRefName,isDraft,commits,files,comments,additions,deletions,changedFiles,createdAt,updatedAt`,
+            `gh pr view ${input.prNumber} --repo ${remote.owner}/${remote.repo} --json number,title,body,state,author,labels,headRefName,baseRefName,isDraft,commits,files,comments,reviews,additions,deletions,changedFiles,createdAt,updatedAt`,
             { cwd: input.projectPath }
           ),
           execAsync(
@@ -292,12 +292,24 @@ export const githubRouter = router({
               deletions: (f.deletions as number) || 0,
               changeType: ((f.changeType || "MODIFIED") as string).toLowerCase() as "added" | "modified" | "deleted" | "renamed",
             })),
-            comments: ((pr.comments || []) as any[]).map((c: any) => ({
-              id: c.id as string,
-              author: (c.author?.login || "unknown") as string,
-              body: (c.body || "") as string,
-              createdAt: c.createdAt as string,
-            })),
+            comments: [
+              ...((pr.comments || []) as any[]).map((c: any) => ({
+                id: c.id as string,
+                author: (c.author?.login || "unknown") as string,
+                body: (c.body || "") as string,
+                createdAt: c.createdAt as string,
+                reviewState: null as string | null,
+              })),
+              ...((pr.reviews || []) as any[])
+                .filter((r: any) => r.body && r.body.trim())
+                .map((r: any) => ({
+                  id: (r.id || r.submittedAt) as string,
+                  author: (r.author?.login || "unknown") as string,
+                  body: (r.body || "") as string,
+                  createdAt: (r.submittedAt || "") as string,
+                  reviewState: (r.state || null) as string | null,
+                })),
+            ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
             diff: diffResult.stdout as string,
           },
         }
