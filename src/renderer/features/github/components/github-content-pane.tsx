@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useMemo } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "../../../lib/utils"
@@ -233,21 +233,48 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
   )
 })
 
-// Renders a unified diff with per-line coloring
-const DiffView = memo(function DiffView({ diff }: { diff: string }) {
-  if (!diff) {
-    return <p className="px-4 py-6 text-xs text-muted-foreground text-center">No diff available</p>
+// Parse a unified diff string into per-file sections
+interface DiffFile {
+  path: string
+  lines: string[]
+  additions: number
+  deletions: number
+}
+
+function parseDiff(diff: string): DiffFile[] {
+  const files: DiffFile[] = []
+  // Split on each "diff --git" header, keeping the delimiter
+  const parts = diff.split(/(?=^diff --git )/m).filter(Boolean)
+
+  for (const part of parts) {
+    const lines = part.split("\n")
+    const header = lines[0]
+    // Extract b/path from "diff --git a/foo b/foo"
+    const match = header.match(/diff --git a\/.+ b\/(.+)/)
+    const path = match ? match[1] : header
+
+    let additions = 0
+    let deletions = 0
+    for (const line of lines) {
+      if (line.startsWith("+") && !line.startsWith("+++")) additions++
+      else if (line.startsWith("-") && !line.startsWith("---")) deletions++
+    }
+
+    files.push({ path, lines, additions, deletions })
   }
 
-  const lines = diff.split("\n")
+  return files
+}
 
+// Renders colored lines for one file's diff
+function DiffLines({ lines }: { lines: string[] }) {
   return (
     <div className="font-mono text-xs leading-5 overflow-x-auto">
       {lines.map((line, i) => {
         let bg = ""
         let text = "text-foreground"
         if (line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("--- ") || line.startsWith("+++ ")) {
-          bg = "bg-muted/60"
+          bg = "bg-muted/40"
           text = "text-muted-foreground"
         } else if (line.startsWith("@@")) {
           bg = "bg-blue-500/10"
@@ -265,6 +292,71 @@ const DiffView = memo(function DiffView({ diff }: { diff: string }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// Renders a unified diff split into collapsible per-file sections
+const DiffView = memo(function DiffView({ diff }: { diff: string }) {
+  const files = useMemo(() => parseDiff(diff), [diff])
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  if (!diff || files.length === 0) {
+    return <p className="px-4 py-6 text-xs text-muted-foreground text-center">No diff available</p>
+  }
+
+  const allCollapsed = collapsed.size === files.length
+
+  const toggleFile = (path: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      next.has(path) ? next.delete(path) : next.add(path)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    setCollapsed(allCollapsed ? new Set() : new Set(files.map((f) => f.path)))
+  }
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border sticky top-0 bg-background z-10">
+        <span className="text-xs text-muted-foreground">{files.length} file{files.length !== 1 ? "s" : ""} changed</span>
+        <button
+          onClick={toggleAll}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {allCollapsed ? "Expand all" : "Collapse all"}
+        </button>
+      </div>
+
+      {/* Per-file sections */}
+      <div className="divide-y divide-border">
+        {files.map((file) => {
+          const isCollapsed = collapsed.has(file.path)
+          return (
+            <div key={file.path}>
+              {/* File header — click to toggle */}
+              <button
+                onClick={() => toggleFile(file.path)}
+                className="w-full flex items-center gap-2 px-4 py-2 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+              >
+                <ChevronRight
+                  className={cn("h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform", !isCollapsed && "rotate-90")}
+                />
+                <span className="text-xs font-mono flex-1 truncate">{file.path}</span>
+                <span className="text-xs font-mono text-green-400 flex-shrink-0">+{file.additions}</span>
+                <span className="text-xs font-mono text-red-400 flex-shrink-0 ml-1">-{file.deletions}</span>
+              </button>
+
+              {/* Diff lines */}
+              {!isCollapsed && <DiffLines lines={file.lines} />}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 })
