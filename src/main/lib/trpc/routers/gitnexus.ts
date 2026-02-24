@@ -220,11 +220,11 @@ export const gitnexusRouter = router({
    */
   startServers: publicProcedure
     .input(z.object({ projectPath: z.string() }))
-    .mutation(({ input }) => {
+    .mutation(async ({ input }) => {
       const toolsDir = getToolsDir()
 
       try {
-        // Kill existing processes if any
+        // Kill tracked processes first (best effort)
         if (serveProcess && serveProcess.exitCode === null) {
           serveProcess.kill()
           serveProcess = null
@@ -233,6 +233,10 @@ export const gitnexusRouter = router({
           webProcess.kill()
           webProcess = null
         }
+
+        // Kill any orphaned processes still holding our ports (shell:true leaves orphans)
+        await execAsync("lsof -ti tcp:4747 | xargs kill -9").catch(() => {})
+        await execAsync("lsof -ti tcp:5173 | xargs kill -9").catch(() => {})
 
         const env = buildEnv()
 
@@ -260,9 +264,9 @@ export const gitnexusRouter = router({
           serveProcess = null
         })
 
-        // Start web dev server
+        // Start web dev server on fixed port 5173 (-- --port passes arg through to vite)
         const webDir = path.join(toolsDir, "gitnexus-web")
-        webProcess = spawn("npm", ["run", "dev"], {
+        webProcess = spawn("npm", ["run", "dev", "--", "--port", "5173"], {
           cwd: webDir,
           stdio: "pipe",
           shell: true,
@@ -296,7 +300,7 @@ export const gitnexusRouter = router({
   /**
    * Stop both servers
    */
-  stopServers: publicProcedure.mutation(() => {
+  stopServers: publicProcedure.mutation(async () => {
     if (serveProcess && serveProcess.exitCode === null) {
       serveProcess.kill()
       serveProcess = null
@@ -305,6 +309,9 @@ export const gitnexusRouter = router({
       webProcess.kill()
       webProcess = null
     }
+    // Also kill by port to handle orphans from shell:true spawning
+    await execAsync("lsof -ti tcp:4747 | xargs kill -9").catch(() => {})
+    await execAsync("lsof -ti tcp:5173 | xargs kill -9").catch(() => {})
     return { success: true }
   }),
 
