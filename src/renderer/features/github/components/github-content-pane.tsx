@@ -1,8 +1,8 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
-import { FileCode, GitPullRequest, CircleDot, GitBranch, Database, Layers, Wrench, Loader2, AlertCircle, MessageSquare, Sparkles } from "lucide-react"
+import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
@@ -37,9 +37,9 @@ export const GitHubContentPane = memo(function GitHubContentPane({
   // Render based on selection type
   switch (selection.type) {
     case "pr":
-      return <PRDetailView prNumber={selection.prNumber} repoName={selection.repoName} />
+      return <PRDetailView prNumber={selection.prNumber} repoName={selection.repoName} projectPath={projectPath} />
     case "issue":
-      return <IssueDetailView issueNumber={selection.issueNumber} repoName={selection.repoName} />
+      return <IssueDetailView issueNumber={selection.issueNumber} repoName={selection.repoName} projectPath={projectPath} />
     case "code":
       return <CodeView path={selection.path} repoName={selection.repoName} projectPath={projectPath} />
     case "visualize":
@@ -56,28 +56,166 @@ export const GitHubContentPane = memo(function GitHubContentPane({
   }
 })
 
-// Placeholder components - will be implemented fully later
-
 interface PRDetailViewProps {
   prNumber: number
   repoName: string
+  projectPath: string
 }
 
-const PRDetailView = memo(function PRDetailView({ prNumber, repoName }: PRDetailViewProps) {
+const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPath }: PRDetailViewProps) {
+  const [activeTab, setActiveTab] = useState<"files" | "commits" | "comments">("files")
+  const { data, isLoading, error } = trpc.github.getPRDetail.useQuery(
+    { projectPath, prNumber },
+    { enabled: !!projectPath }
+  )
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  if (error || !data?.success) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
+        <AlertCircle className="h-8 w-8 mb-2 text-destructive" />
+        <p className="text-sm text-destructive">Failed to load PR</p>
+        <p className="text-xs mt-1">{error?.message || (data as any)?.error}</p>
+      </div>
+    )
+  }
+
+  const pr = data.pr
+  const stateColor = pr.state === "OPEN" ? "text-green-500 bg-green-500/10" : pr.state === "MERGED" ? "text-purple-500 bg-purple-500/10" : "text-red-500 bg-red-500/10"
+
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <GitPullRequest className="h-5 w-5 text-green-500" />
-          <h2 className="text-lg font-semibold">PR #{prNumber}</h2>
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-border flex-shrink-0">
+        <div className="flex items-start gap-2">
+          <GitPullRequest className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-semibold">{pr.title}</h2>
+              <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", stateColor)}>
+                {pr.draft ? "Draft" : pr.state.charAt(0) + pr.state.slice(1).toLowerCase()}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+              <span>#{pr.number} by <span className="font-medium text-foreground">{pr.author}</span></span>
+              <span className="flex items-center gap-1">
+                <GitBranch className="h-3 w-3" />
+                {pr.headBranch} → {pr.baseBranch}
+              </span>
+              <span className="flex items-center gap-1">
+                <Plus className="h-3 w-3 text-green-500" />{pr.additions}
+                <Minus className="h-3 w-3 text-red-500 ml-1" />{pr.deletions}
+                <span className="ml-1">{pr.changedFiles} files</span>
+              </span>
+            </div>
+            {pr.labels.length > 0 && (
+              <div className="flex gap-1 flex-wrap mt-1.5">
+                {pr.labels.map((label) => (
+                  <span key={label} className="text-xs px-1.5 py-0.5 rounded bg-muted border border-border">{label}</span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground mt-1">{repoName}</p>
       </div>
-      <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        <div className="text-center">
-          <p className="text-sm">Pull request details will appear here</p>
-          <p className="text-xs mt-1">Implement with gh CLI integration</p>
+
+      {/* Body — fixed height with always-visible scrollbar */}
+      {pr.body && (
+        <div className="flex-shrink-0 border-b border-border" style={{ height: "140px", overflowY: "scroll" }}>
+          <div className="px-4 py-3">
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{pr.body}</p>
+          </div>
         </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex border-b border-border flex-shrink-0">
+        {(["files", "commits", "comments"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              "px-4 py-2 text-xs font-medium border-b-2 transition-colors",
+              activeTab === tab
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab === "files" && `Files (${pr.files.length})`}
+            {tab === "commits" && `Commits (${pr.commits.length})`}
+            {tab === "comments" && `Comments (${pr.comments.length})`}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === "files" && (
+          <div className="divide-y divide-border">
+            {pr.files.map((file) => (
+              <div key={file.path} className="px-4 py-2 flex items-center gap-3">
+                <span className={cn(
+                  "text-xs font-mono w-4 text-center",
+                  file.changeType === "added" ? "text-green-500" :
+                  file.changeType === "deleted" ? "text-red-500" : "text-yellow-500"
+                )}>
+                  {file.changeType === "added" ? "A" : file.changeType === "deleted" ? "D" : "M"}
+                </span>
+                <span className="text-xs font-mono flex-1 truncate">{file.path}</span>
+                <span className="text-xs text-green-500 font-mono">+{file.additions}</span>
+                <span className="text-xs text-red-500 font-mono">-{file.deletions}</span>
+              </div>
+            ))}
+            {pr.files.length === 0 && (
+              <p className="px-4 py-6 text-xs text-muted-foreground text-center">No files changed</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === "commits" && (
+          <div className="divide-y divide-border">
+            {pr.commits.map((commit) => (
+              <div key={commit.sha} className="px-4 py-2 flex items-start gap-3">
+                <GitCommit className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs truncate">{commit.message}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    <code className="font-mono">{commit.sha}</code> · {commit.author}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {pr.commits.length === 0 && (
+              <p className="px-4 py-6 text-xs text-muted-foreground text-center">No commits</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === "comments" && (
+          <div className="divide-y divide-border">
+            {pr.comments.map((comment) => (
+              <div key={comment.id} className="px-4 py-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-medium">{comment.author}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ""}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{comment.body}</p>
+              </div>
+            ))}
+            {pr.comments.length === 0 && (
+              <p className="px-4 py-6 text-xs text-muted-foreground text-center">No comments</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -86,23 +224,103 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName }: PRDetail
 interface IssueDetailViewProps {
   issueNumber: number
   repoName: string
+  projectPath: string
 }
 
-const IssueDetailView = memo(function IssueDetailView({ issueNumber, repoName }: IssueDetailViewProps) {
+const IssueDetailView = memo(function IssueDetailView({ issueNumber, repoName, projectPath }: IssueDetailViewProps) {
+  const { data, isLoading, error } = trpc.github.getIssueDetail.useQuery(
+    { projectPath, issueNumber },
+    { enabled: !!projectPath }
+  )
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  if (error || !data?.success) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
+        <AlertCircle className="h-8 w-8 mb-2 text-destructive" />
+        <p className="text-sm text-destructive">Failed to load issue</p>
+        <p className="text-xs mt-1">{error?.message || (data as any)?.error}</p>
+      </div>
+    )
+  }
+
+  const issue = data.issue
+  const stateColor = issue.state === "OPEN" ? "text-green-500 bg-green-500/10" : "text-red-500 bg-red-500/10"
+
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <CircleDot className="h-5 w-5 text-green-500" />
-          <h2 className="text-lg font-semibold">Issue #{issueNumber}</h2>
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-border flex-shrink-0">
+        <div className="flex items-start gap-2">
+          <CircleDot className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-semibold">{issue.title}</h2>
+              <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", stateColor)}>
+                {issue.state.charAt(0) + issue.state.slice(1).toLowerCase()}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+              <span>#{issue.number} by <span className="font-medium text-foreground">{issue.author}</span></span>
+              {issue.milestone && <span>Milestone: {issue.milestone}</span>}
+              {issue.assignees.length > 0 && (
+                <span>Assigned to: {issue.assignees.join(", ")}</span>
+              )}
+            </div>
+            {issue.labels.length > 0 && (
+              <div className="flex gap-1 flex-wrap mt-1.5">
+                {issue.labels.map((label) => (
+                  <span key={label} className="text-xs px-1.5 py-0.5 rounded bg-muted border border-border">{label}</span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground mt-1">{repoName}</p>
       </div>
-      <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        <div className="text-center">
-          <p className="text-sm">Issue details will appear here</p>
-          <p className="text-xs mt-1">Implement with gh CLI integration</p>
-        </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto">
+        {issue.body && (
+          <div className="px-4 py-3 border-b border-border">
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{issue.body}</p>
+          </div>
+        )}
+
+        {/* Comments */}
+        {issue.comments.length > 0 && (
+          <div>
+            <div className="px-4 py-2 flex items-center gap-1 text-xs font-medium text-muted-foreground border-b border-border">
+              <MessageSquare className="h-3 w-3" />
+              {issue.comments.length} comment{issue.comments.length !== 1 ? "s" : ""}
+            </div>
+            <div className="divide-y divide-border">
+              {issue.comments.map((comment) => (
+                <div key={comment.id} className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium">{comment.author}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ""}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{comment.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!issue.body && issue.comments.length === 0 && (
+          <div className="h-full flex items-center justify-center text-muted-foreground">
+            <p className="text-sm">No description provided</p>
+          </div>
+        )}
       </div>
     </div>
   )

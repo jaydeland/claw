@@ -11,8 +11,6 @@ import {
   FileCode,
   GitBranch,
   RefreshCw,
-  CheckCircle,
-  AlertCircle,
 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
@@ -48,7 +46,6 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   selection,
 }: GitHubChatPaneProps) {
   const messages = useAtomValue(githubChatMessagesAtom)
-  const chatContext = useAtomValue(githubChatContextAtom)
   const isLoading = useAtomValue(githubChatLoadingAtom)
   const setMessages = useSetAtom(githubChatMessagesAtom)
   const setChatContext = useSetAtom(githubChatContextAtom)
@@ -57,32 +54,116 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Handle start chat signal (from Explain Code button or diagram generation)
-  useEffect(() => {
-    if (startChat) {
-      setInput(startChat.message)
-      setStartChat(null)
-    }
-  }, [startChat, setStartChat])
+  // Claude session state
+  const [session, setSession] = useState<{ chatId: string; subChatId: string } | null>(null)
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingContent, setStreamingContent] = useState("")
+  const streamingTextRef = useRef("")
 
   // Track analysis generation state
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState<string | null>(null)
 
   // tRPC mutations and queries
+  const createSessionMutation = trpc.github.createChatSession.useMutation()
   const generateMutation = trpc.analyzer.generateViaBackground.useMutation()
   const { data: existingDiagram, refetch: refetchDiagram } = trpc.analyzer.get.useQuery(
     { projectId, type: (selection as { analysisType: AnalysisType })?.analysisType || "codeflow" },
     { enabled: selection?.type === "visualize" && !!projectId }
   )
 
-  // Subscribe to background analysis progress
+  // Clear session and messages when selection changes
+  useEffect(() => {
+    setSession(null)
+    setPendingPrompt(null)
+    setIsStreaming(false)
+    setStreamingContent("")
+    streamingTextRef.current = ""
+    setMessages([])
+  }, [selection?.type,
+    (selection as any)?.prNumber,
+    (selection as any)?.issueNumber,
+    (selection as any)?.path,
+    (selection as any)?.analysisType,
+    setMessages,
+  ])
+
+  // Subscribe to Claude chat stream
+  trpc.claude.chat.useSubscription(
+    {
+      subChatId: session?.subChatId ?? "__none__",
+      chatId: session?.chatId ?? "__none__",
+      prompt: pendingPrompt ?? "",
+      cwd: projectPath,
+      projectPath,
+      mode: "agent",
+    },
+    {
+      enabled: !!session && !!pendingPrompt,
+      onData: (chunk) => {
+        if (chunk.type === "text-delta") {
+          streamingTextRef.current += chunk.delta
+          setStreamingContent(streamingTextRef.current)
+        } else if (chunk.type === "finish") {
+          // Finalize the streaming message
+          if (streamingTextRef.current) {
+            const finalContent = streamingTextRef.current
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: Date.now().toString(),
+                role: "assistant" as const,
+                content: finalContent,
+                timestamp: new Date(),
+              },
+            ])
+          }
+          streamingTextRef.current = ""
+          setStreamingContent("")
+          setPendingPrompt(null)
+          setIsStreaming(false)
+        } else if (chunk.type === "error" || chunk.type === "auth-error") {
+          const errorMsg = (chunk as any).errorText || "An error occurred"
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now().toString(),
+              role: "assistant" as const,
+              content: `Error: ${errorMsg}`,
+              timestamp: new Date(),
+            },
+          ])
+          streamingTextRef.current = ""
+          setStreamingContent("")
+          setPendingPrompt(null)
+          setIsStreaming(false)
+        }
+      },
+      onError: (err) => {
+        console.error("[GitHubChatPane] Chat subscription error:", err)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            role: "assistant" as const,
+            content: `Error: ${err.message}`,
+            timestamp: new Date(),
+          },
+        ])
+        streamingTextRef.current = ""
+        setStreamingContent("")
+        setPendingPrompt(null)
+        setIsStreaming(false)
+      },
+    }
+  )
+
+  // Subscribe to background analysis progress (for visualize type)
   trpc.analyzer.subscribeBackgroundProgress.useSubscription(undefined, {
     onData: (update: { jobId: string; type: AnalysisType; status: string; progress?: number; message?: string; error?: string }) => {
-      // Only handle updates for our project/type
       if (!update.jobId || update.type !== isGeneratingAnalysis) return
 
       if (update.status === "completed") {
-        // Add completion message
         const assistantMessage: GitHubChatMessage = {
           id: Date.now().toString(),
           role: "assistant",
@@ -93,7 +174,6 @@ export const GitHubChatPane = memo(function GitHubChatPane({
         setIsGeneratingAnalysis(null)
         refetchDiagram()
       } else if (update.status === "failed") {
-        // Add error message
         const errorMessage: GitHubChatMessage = {
           id: Date.now().toString(),
           role: "assistant",
@@ -103,7 +183,6 @@ export const GitHubChatPane = memo(function GitHubChatPane({
         setMessages((prev) => [...prev, errorMessage])
         setIsGeneratingAnalysis(null)
       } else if (update.status === "running" && update.message) {
-        // Update the last assistant message with progress
         setMessages((prev) => {
           const last = prev[prev.length - 1]
           if (last?.role === "assistant" && last.content.startsWith("🔄")) {
@@ -118,22 +197,90 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     },
   })
 
+  // Handle start chat signal (from Explain Code button in content pane)
+  useEffect(() => {
+    if (startChat) {
+      setInput(startChat.message)
+      setStartChat(null)
+    }
+  }, [startChat, setStartChat])
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages, streamingContent])
+
+  // Build initial prompt based on selection type
+  const buildInitialPrompt = useCallback((sel: NonNullable<GitHubSelection>): string => {
+    switch (sel.type) {
+      case "code":
+        return `Please explain the code in \`${sel.path}\`. The full path is: ${projectPath}/${sel.path}\n\nFocus on:\n- What the code does\n- Key functions and classes\n- How it fits into the project\n- Any notable patterns or design decisions`
+      case "pr":
+        return `Please review pull request #${sel.prNumber} in the repository at ${projectPath}.\n\nUse the Bash tool with \`gh pr view ${sel.prNumber}\` and \`gh pr diff ${sel.prNumber}\` to get the PR details and diff.\n\nProvide:\n- Overall assessment\n- Potential issues or concerns\n- Suggestions for improvement`
+      case "issue":
+        return `Help me plan the implementation of issue #${sel.issueNumber} in the repository at ${projectPath}.\n\nUse the Bash tool with \`gh issue view ${sel.issueNumber}\` to get the issue details.\n\nProvide:\n- Implementation approach\n- Files to modify\n- Step-by-step plan`
+      default:
+        return ""
+    }
+  }, [projectPath])
+
+  const startClaudeSession = useCallback(async (prompt: string, displayMessage: string) => {
+    if (!selection || selection.type === "visualize") return
+
+    const userMessage: GitHubChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: displayMessage,
+      timestamp: new Date(),
+    }
+    setMessages([userMessage])
+    setChatContext({
+      type: selection.type,
+      repoId: selection.repoId,
+      repoName: selection.repoName,
+      prNumber: selection.type === "pr" ? selection.prNumber : undefined,
+      issueNumber: selection.type === "issue" ? selection.issueNumber : undefined,
+      filePath: selection.type === "code" ? selection.path : undefined,
+    })
+
+    try {
+      const { chatId, subChatId } = await createSessionMutation.mutateAsync({
+        projectId,
+        name: displayMessage.slice(0, 60),
+        mode: "agent",
+      })
+      setSession({ chatId, subChatId })
+      streamingTextRef.current = ""
+      setStreamingContent("")
+      setIsStreaming(true)
+      setPendingPrompt(prompt)
+    } catch (err) {
+      const errorMessage: GitHubChatMessage = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `Failed to start session: ${err instanceof Error ? err.message : "Unknown error"}`,
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, errorMessage])
+    }
+  }, [selection, projectId, createSessionMutation, setMessages, setChatContext])
+
   const handleActionClick = useCallback(async () => {
     if (!selection) return
 
-    // For visualize type, trigger diagram generation via chat
+    // For visualize type, trigger diagram generation
     if (selection.type === "visualize") {
       const analysisType = selection.analysisType
       const label = ANALYSIS_LABELS[analysisType]
 
-      // Clear previous messages and add context
       const userMessage: GitHubChatMessage = {
         id: Date.now().toString(),
         role: "user",
         content: `Generate ${label} analysis diagram`,
         timestamp: new Date(),
       }
-
       const assistantMessage: GitHubChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -151,12 +298,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       setIsGeneratingAnalysis(analysisType)
 
       try {
-        const result = await generateMutation.mutateAsync({
-          projectId,
-          projectPath,
-          type: analysisType,
-        })
-
+        const result = await generateMutation.mutateAsync({ projectId, projectPath, type: analysisType })
         if (!result.success) {
           const errorMessage: GitHubChatMessage = {
             id: Date.now().toString(),
@@ -167,7 +309,6 @@ export const GitHubChatPane = memo(function GitHubChatPane({
           setMessages((prev) => [...prev, errorMessage])
           setIsGeneratingAnalysis(null)
         }
-        // Success will be handled by the subscription
       } catch (error) {
         const errorMessage: GitHubChatMessage = {
           id: Date.now().toString(),
@@ -181,111 +322,65 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       return
     }
 
-    // For code type, start an "Explain Code" chat
-    if (selection.type === "code") {
-      const userMessage: GitHubChatMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        content: `Explain the code in \`${selection.path}\``,
-        timestamp: new Date(),
-      }
+    // For code/pr/issue: start a real Claude session
+    const prompt = buildInitialPrompt(selection)
+    let displayMessage = ""
+    if (selection.type === "code") displayMessage = `Explain the code in \`${selection.path}\``
+    else if (selection.type === "pr") displayMessage = `Review PR #${selection.prNumber}`
+    else if (selection.type === "issue") displayMessage = `Plan issue #${selection.issueNumber}`
 
-      const assistantMessage: GitHubChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `I'll analyze and explain the code in \`${selection.path}\`. Let me read the file first...`,
-        timestamp: new Date(),
-      }
+    await startClaudeSession(prompt, displayMessage)
+  }, [selection, projectId, projectPath, generateMutation, buildInitialPrompt, startClaudeSession, setMessages, setChatContext])
 
-      setMessages([userMessage, assistantMessage])
-      setChatContext({
-        type: "code",
-        repoId: selection.repoId,
-        repoName: selection.repoName,
-        filePath: selection.path,
-      })
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || isStreaming || !session) return
 
-      // TODO: Wire up with Claude SDK to get actual response
-      // For now, show a placeholder response after a delay
-      setTimeout(() => {
-        const responseMessage: GitHubChatMessage = {
-          id: (Date.now() + 2).toString(),
-          role: "assistant",
-          content: `📄 **File:** \`${selection.path}\`\n\nThis file has been loaded in the content pane. You can ask specific questions about the code, such as:\n\n• What does this code do?\n• How does this function work?\n• What are the key patterns used?\n\nThe chat integration with Claude will be available soon!`,
-          timestamp: new Date(),
-        }
-        setMessages((prev) => [...prev, responseMessage])
-      }, 500)
-      return
-    }
-
-    // For PR and Issue types, clear chat and set context
-    setMessages([])
-    setChatContext({
-      type: selection.type,
-      repoId: selection.repoId,
-      repoName: selection.repoName,
-      prNumber: selection.type === "pr" ? selection.prNumber : undefined,
-      issueNumber: selection.type === "issue" ? selection.issueNumber : undefined,
-    })
-
-    // TODO: Start the appropriate chat session with context
-    // This will be wired up with Claude SDK integration
-  }, [selection, setMessages, setChatContext, projectId, projectPath, generateMutation])
-
-  const handleSend = useCallback(() => {
-    if (!input.trim() || isLoading) return
+    const userInput = input.trim()
+    setInput("")
 
     const userMessage: GitHubChatMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: input.trim(),
+      content: userInput,
       timestamp: new Date(),
     }
-
     setMessages((prev) => [...prev, userMessage])
-    setInput("")
-
-    // TODO: Send to Claude and get response
-    // This will be wired up with Claude SDK integration
-  }, [input, isLoading, setMessages])
+    streamingTextRef.current = ""
+    setStreamingContent("")
+    setIsStreaming(true)
+    setPendingPrompt(userInput)
+  }, [input, isStreaming, session, setMessages])
 
   const getActionButton = () => {
     if (!selection) return null
-
-    const isCurrentlyGenerating = isGeneratingAnalysis !== null
+    const isCurrentlyGenerating = isGeneratingAnalysis !== null || isStreaming
 
     switch (selection.type) {
       case "pr":
         return (
-          <Button onClick={handleActionClick} className="w-full">
-            <Sparkles className="h-4 w-4 mr-2" />
+          <Button onClick={handleActionClick} className="w-full" disabled={isCurrentlyGenerating}>
+            {isCurrentlyGenerating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
             Review with AI
           </Button>
         )
       case "issue":
         return (
-          <Button onClick={handleActionClick} className="w-full">
-            <Sparkles className="h-4 w-4 mr-2" />
+          <Button onClick={handleActionClick} className="w-full" disabled={isCurrentlyGenerating}>
+            {isCurrentlyGenerating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
             Plan Issue
           </Button>
         )
       case "code":
         return (
-          <Button onClick={handleActionClick} className="w-full">
-            <Sparkles className="h-4 w-4 mr-2" />
+          <Button onClick={handleActionClick} className="w-full" disabled={isCurrentlyGenerating}>
+            {isCurrentlyGenerating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
             Explain Code
           </Button>
         )
-      case "visualize":
+      case "visualize": {
         const hasDiagram = existingDiagram && existingDiagram.nodes && existingDiagram.nodes !== "[]"
-
         return (
-          <Button
-            onClick={handleActionClick}
-            className="w-full"
-            disabled={isCurrentlyGenerating}
-          >
+          <Button onClick={handleActionClick} className="w-full" disabled={isCurrentlyGenerating}>
             {isCurrentlyGenerating ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -304,6 +399,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
             )}
           </Button>
         )
+      }
       default:
         return null
     }
@@ -346,16 +442,43 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     }
   }
 
+  const canSendMessage = !!session && !isStreaming
+
+  // Reset chat and start a new review
+  const handleReviewReset = useCallback(() => {
+    setSession(null)
+    setPendingPrompt(null)
+    setIsStreaming(false)
+    setStreamingContent("")
+    streamingTextRef.current = ""
+    setMessages([])
+    // Trigger the action after state clears (next tick)
+    setTimeout(() => handleActionClick(), 0)
+  }, [handleActionClick, setMessages])
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Header with selection info */}
       <div className="px-4 py-2 border-b border-border">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">{getSelectionTitle()}</div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm text-muted-foreground min-w-0 flex-1">{getSelectionTitle()}</div>
+          {/* Persistent action button for PR/issue/code when chat is active */}
+          {selection && messages.length > 0 && selection.type !== "visualize" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReviewReset}
+              disabled={isStreaming}
+              className="flex-shrink-0 text-xs h-7 px-2"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              {selection.type === "pr" ? "Re-review" : selection.type === "issue" ? "Re-plan" : "Re-explain"}
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Action button area */}
+      {/* Action button area — shown only when no messages yet */}
       {selection && messages.length === 0 && (
         <div className="p-4 border-b border-border">
           {getActionButton()}
@@ -382,10 +505,10 @@ export const GitHubChatPane = memo(function GitHubChatPane({
             >
               <div
                 className={cn(
-                  "max-w-[80%] rounded-lg px-3 py-2 text-sm",
+                  "max-w-[85%] rounded-lg px-3 py-2 text-sm",
                   message.role === "user"
                     ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
+                    : "bg-muted whitespace-pre-wrap"
                 )}
               >
                 {message.content}
@@ -393,10 +516,15 @@ export const GitHubChatPane = memo(function GitHubChatPane({
             </div>
           ))}
 
-          {isLoading && (
+          {/* Streaming message */}
+          {isStreaming && (
             <div className="flex justify-start">
-              <div className="bg-muted rounded-lg px-3 py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-muted">
+                {streamingContent ? (
+                  <span className="whitespace-pre-wrap">{streamingContent}</span>
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
               </div>
             </div>
           )}
@@ -411,14 +539,14 @@ export const GitHubChatPane = memo(function GitHubChatPane({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask Claude..."
+            placeholder={canSendMessage ? "Ask a follow-up question..." : "Ask Claude..."}
             className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            disabled={isLoading || messages.length === 0}
+            disabled={!canSendMessage}
           />
           <Button
             size="icon"
             onClick={handleSend}
-            disabled={!input.trim() || isLoading || messages.length === 0}
+            disabled={!input.trim() || !canSendMessage}
           >
             <Send className="h-4 w-4" />
           </Button>

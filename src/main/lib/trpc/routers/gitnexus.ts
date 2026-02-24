@@ -51,6 +51,38 @@ async function fetchRepos(): Promise<GitNexusRepo[]> {
   })
 }
 
+// Probe whether a port is accepting HTTP connections
+async function isPortReady(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${port}`, (res) => {
+      res.resume() // discard body
+      resolve(true)
+    })
+    req.on("error", () => resolve(false))
+    req.setTimeout(1000, () => {
+      req.destroy()
+      resolve(false)
+    })
+  })
+}
+
+// Build a PATH that includes common locations for node/npm/npx on macOS/Linux
+function buildEnv(): NodeJS.ProcessEnv {
+  const home = process.env.HOME || ""
+  const extraPaths = [
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    `${home}/.nvm/versions/node/current/bin`,
+    `${home}/.fnm/current/bin`,
+    `${home}/.volta/bin`,
+  ].filter(Boolean)
+  return {
+    ...process.env,
+    PATH: [...extraPaths, process.env.PATH].filter(Boolean).join(":"),
+  }
+}
+
 // Module-level ephemeral process state (not persisted — resets on app restart)
 let serveProcess: ReturnType<typeof spawn> | null = null
 let webProcess: ReturnType<typeof spawn> | null = null
@@ -73,12 +105,12 @@ export const gitnexusRouter = router({
    */
   checkStatus: publicProcedure
     .input(z.object({ projectPath: z.string() }))
-    .query(({ input }) => {
+    .query(async ({ input }) => {
       const toolsDir = getToolsDir()
       const repoCloned = fs.existsSync(toolsDir)
       const webDepsInstalled = fs.existsSync(path.join(toolsDir, "gitnexus-web", "node_modules"))
-      const apiServerRunning = serveProcess !== null && serveProcess.exitCode === null
-      const webServerRunning = webProcess !== null && webProcess.exitCode === null
+      const apiServerRunning = await isPortReady(4747)
+      const webServerRunning = await isPortReady(5173)
       const projectIndexed = input.projectPath
         ? fs.existsSync(path.join(input.projectPath, ".gitnexus"))
         : false
@@ -202,19 +234,29 @@ export const gitnexusRouter = router({
           webProcess = null
         }
 
+        const env = buildEnv()
+
         // Start API server
         serveProcess = spawn("npx", ["-y", "gitnexus@latest", "serve"], {
           cwd: input.projectPath,
           stdio: "pipe",
-          shell: process.platform === "win32",
+          shell: true,
           detached: false,
+          env,
         })
 
+        serveProcess.stdout?.on("data", (data: Buffer) => {
+          console.log("[GitNexus] API:", data.toString().trim())
+        })
+        serveProcess.stderr?.on("data", (data: Buffer) => {
+          console.error("[GitNexus] API err:", data.toString().trim())
+        })
         serveProcess.on("error", (err) => {
           console.error("[GitNexus] API server error:", err)
           serveProcess = null
         })
-        serveProcess.on("close", () => {
+        serveProcess.on("close", (code) => {
+          console.log("[GitNexus] API server exited with code", code)
           serveProcess = null
         })
 
@@ -223,15 +265,24 @@ export const gitnexusRouter = router({
         webProcess = spawn("npm", ["run", "dev"], {
           cwd: webDir,
           stdio: "pipe",
-          shell: process.platform === "win32",
+          shell: true,
           detached: false,
+          env,
+        })
+
+        webProcess.stdout?.on("data", (data: Buffer) => {
+          console.log("[GitNexus] Web:", data.toString().trim())
+        })
+        webProcess.stderr?.on("data", (data: Buffer) => {
+          console.error("[GitNexus] Web err:", data.toString().trim())
         })
 
         webProcess.on("error", (err) => {
           console.error("[GitNexus] Web server error:", err)
           webProcess = null
         })
-        webProcess.on("close", () => {
+        webProcess.on("close", (code) => {
+          console.log("[GitNexus] Web server exited with code", code)
           webProcess = null
         })
 
