@@ -25,6 +25,7 @@ import {
   type AnalysisType,
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
+import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
 
 // Analysis labels
 const ANALYSIS_LABELS: Record<AnalysisType, string> = {
@@ -508,10 +509,14 @@ export const GitHubChatPane = memo(function GitHubChatPane({
                   "max-w-[85%] rounded-lg px-3 py-2 text-sm",
                   message.role === "user"
                     ? "bg-primary text-primary-foreground"
-                    : "bg-muted whitespace-pre-wrap"
+                    : "bg-muted"
                 )}
               >
-                {message.content}
+                {message.role === "assistant" ? (
+                  <MemoizedMarkdown content={message.content} id={message.id} size="sm" />
+                ) : (
+                  message.content
+                )}
               </div>
             </div>
           ))}
@@ -521,7 +526,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
             <div className="flex justify-start">
               <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-muted">
                 {streamingContent ? (
-                  <span className="whitespace-pre-wrap">{streamingContent}</span>
+                  <MemoizedMarkdown content={streamingContent} id="streaming" size="sm" />
                 ) : (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 )}
