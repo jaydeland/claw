@@ -462,4 +462,143 @@ export const githubRouter = router({
         fs.unlinkSync(tmpFile)
       }
     }),
+<<<<<<< Updated upstream
+=======
+
+  /**
+   * Submit a pull request review (approve, request changes, or leave a comment)
+   */
+  submitReview: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        prNumber: z.number(),
+        event: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]),
+        body: z.string().default(""),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const ghCheck = await checkGhAvailable()
+      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+
+      // Omit body from the payload when empty — the GitHub API rejects an
+      // explicit empty-string body even for APPROVE events.
+      const payload: Record<string, string> = { event: input.event }
+      if (input.body.trim()) payload.body = input.body.trim()
+
+      const tmpFile = path.join(os.tmpdir(), `gh-review-${Date.now()}.json`)
+      fs.writeFileSync(tmpFile, JSON.stringify(payload))
+
+      try {
+        await execAsync(
+          `gh api repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/reviews --method POST --input ${tmpFile}`,
+          { cwd: input.projectPath }
+        )
+        return { success: true as const }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        // Extract the human-readable part from gh CLI error output
+        const match = msg.match(/GraphQL: (.+)|HTTP \d+ .+: (.+)/s)
+        return { success: false as const, error: match ? (match[1] || match[2]).trim() : msg }
+      } finally {
+        try { fs.unlinkSync(tmpFile) } catch {}
+      }
+    }),
+
+  /**
+   * Save GitHub PAT token (encrypted)
+   */
+  saveToken: publicProcedure
+    .input(z.object({ token: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const encryptedToken = encryptText(input.token)
+
+      db.insert(githubSettings)
+        .values({ id: "default", encryptedToken, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: githubSettings.id,
+          set: { encryptedToken, updatedAt: new Date() },
+        })
+        .run()
+
+      return { success: true as const }
+    }),
+
+  /**
+   * Check if GitHub token is configured
+   */
+  hasToken: publicProcedure.query(async () => {
+    const db = getDatabase()
+    const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
+
+    return {
+      hasToken: !!settings?.encryptedToken,
+    }
+  }),
+
+  /**
+   * Clear GitHub token
+   */
+  clearToken: publicProcedure.mutation(async () => {
+    const db = getDatabase()
+
+    db.update(githubSettings)
+      .set({ encryptedToken: null, updatedAt: new Date() })
+      .where(eq(githubSettings.id, "default"))
+      .run()
+
+    return { success: true as const }
+  }),
+
+  /**
+   * Test GitHub token by making an API call
+   */
+  testToken: publicProcedure.query(async () => {
+    const db = getDatabase()
+    const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
+
+    if (!settings?.encryptedToken) {
+      return { success: false as const, error: "No token configured" }
+    }
+
+    const token = decryptText(settings.encryptedToken)
+    if (!token) {
+      return { success: false as const, error: "Failed to decrypt token" }
+    }
+
+    try {
+      const response = await fetch("https://api.github.com/user", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "Claw-App",
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        return { success: false as const, error: `GitHub API error: ${error}` }
+      }
+
+      const user = await response.json()
+      return {
+        success: true as const,
+        user: {
+          login: user.login,
+          name: user.name,
+          email: user.email,
+        },
+      }
+    } catch (error) {
+      return {
+        success: false as const,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }),
+>>>>>>> Stashed changes
 })

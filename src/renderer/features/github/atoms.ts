@@ -108,10 +108,52 @@ export interface GitHubChatContext {
 }
 
 /**
- * Chat messages for the GitHub view
- * Cleared when action buttons are clicked
+ * Chat messages for the GitHub view — persisted across reloads
  */
-export const githubChatMessagesAtom = atom<GitHubChatMessage[]>([])
+export const githubChatMessagesAtom = atomWithStorage<GitHubChatMessage[]>(
+  "github:chatMessages",
+  [],
+  {
+    getItem: (key, initialValue) => {
+      const stored = localStorage.getItem(key)
+      if (!stored) return initialValue
+      try {
+        const parsed = JSON.parse(stored) as Array<Omit<GitHubChatMessage, "timestamp"> & { timestamp: string }>
+        return parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }))
+      } catch {
+        return initialValue
+      }
+    },
+    setItem: (key, value) => {
+      localStorage.setItem(key, JSON.stringify(value))
+    },
+    removeItem: (key) => {
+      localStorage.removeItem(key)
+    },
+  },
+  { getOnInit: true }
+)
+
+/**
+ * Active Claude session for the GitHub chat pane — persisted across reloads
+ * Allows resuming a conversation after app restart
+ */
+export const githubChatSessionAtom = atomWithStorage<{ chatId: string; subChatId: string } | null>(
+  "github:chatSession",
+  null,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
+ * Active tab in the PR detail view — persisted across reloads
+ */
+export const githubPRActiveTabAtom = atomWithStorage<"description" | "files" | "commits" | "comments" | "diff">(
+  "github:prActiveTab",
+  "description",
+  undefined,
+  { getOnInit: true }
+)
 
 /**
  * Current chat context (set when action button is clicked)
