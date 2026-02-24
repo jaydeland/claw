@@ -105,6 +105,7 @@ import {
   AgentsTabContent,
   SkillsTabContent,
   McpsTabContent,
+  ClawsTabContent,
 } from "./components"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
@@ -2410,6 +2411,8 @@ export function AgentsSidebar({
             <SkillsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : selectedSidebarTab === "mcps" ? (
             <McpsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "claws" ? (
+            <ClawsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : null}
           {/* Note: clusters tab doesn't show sidebar content - cluster selection is via dropdown in main view */}
         </>

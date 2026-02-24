@@ -16,7 +16,7 @@ import {
   Github,
   Network,
 } from "lucide-react"
-import { OriginalMCPIcon } from "../../../components/ui/icons"
+import { OriginalMCPIcon, LobsterClawIcon } from "../../../components/ui/icons"
 import {
   Tooltip,
   TooltipContent,
@@ -46,6 +46,7 @@ const tabs: TabItem[] = [
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
+  { id: "claws", label: "Claws", icon: LobsterClawIcon },
 ]
 
 interface SidebarTabBarProps {
