@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo, useCallback } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send, Check, X, CheckCircle, GitMerge } from "lucide-react"
+import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send, Check, X, CheckCircle, GitMerge, ExternalLink } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
@@ -106,6 +106,8 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
     },
     onError: (err) => setReviewError(err.message),
   })
+
+  const openInBrowserMutation = trpc.github.openPRInBrowser.useMutation()
 
   const mergeMutation = trpc.github.mergePR.useMutation({
     onSuccess: (result) => {
@@ -258,6 +260,14 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                 <GitMerge className="h-3 w-3 mr-1" />
                 Merge
               </Button>
+              <div className="w-px h-4 bg-border" />
+              <button
+                onClick={() => openInBrowserMutation.mutate({ projectPath, prNumber })}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open
+              </button>
             </div>
           ) : (
             <div className="space-y-2">

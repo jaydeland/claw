@@ -5,6 +5,7 @@ import { promisify } from "node:util"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
+import { shell } from "electron"
 import { getDatabase, chats, subChats } from "../../db"
 import { createId } from "../../db/utils"
 
@@ -461,6 +462,19 @@ export const githubRouter = router({
       } finally {
         fs.unlinkSync(tmpFile)
       }
+    }),
+
+  /**
+   * Open a pull request in the system browser
+   */
+  openPRInBrowser: publicProcedure
+    .input(z.object({ projectPath: z.string(), prNumber: z.number() }))
+    .mutation(async ({ input }) => {
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+      const url = `https://github.com/${remote.owner}/${remote.repo}/pull/${input.prNumber}`
+      await shell.openExternal(url)
+      return { success: true as const }
     }),
 
   /**
