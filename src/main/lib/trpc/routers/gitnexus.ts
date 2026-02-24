@@ -5,6 +5,7 @@ import { spawn, exec } from "node:child_process"
 import { promisify } from "node:util"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import * as os from "node:os"
 import { app } from "electron"
 import * as http from "node:http"
 
@@ -91,6 +92,101 @@ function getToolsDir(): string {
   return path.join(app.getPath("userData"), "tools", "gitnexus")
 }
 
+/**
+ * Spawn both the GitNexus API server (port 4747) and web UI server (port 5175).
+ * Kills any previously tracked or orphaned processes on those ports first.
+ */
+async function spawnServers(projectPath: string): Promise<{ success: boolean; error?: string }> {
+  const toolsDir = getToolsDir()
+
+  try {
+    // Kill tracked processes first (best effort)
+    if (serveProcess && serveProcess.exitCode === null) {
+      serveProcess.kill()
+      serveProcess = null
+    }
+    if (webProcess && webProcess.exitCode === null) {
+      webProcess.kill()
+      webProcess = null
+    }
+
+    // Kill any orphaned processes still holding our ports
+    await execAsync("lsof -ti tcp:4747 | xargs kill -9").catch(() => {})
+    await execAsync("lsof -ti tcp:5175 | xargs kill -9").catch(() => {})
+
+    const env = buildEnv()
+
+    // Start API server
+    serveProcess = spawn("npx", ["-y", "gitnexus@latest", "serve"], {
+      cwd: projectPath,
+      stdio: "pipe",
+      shell: true,
+      detached: false,
+      env,
+    })
+    serveProcess.stdout?.on("data", (data: Buffer) => console.log("[GitNexus] API:", data.toString().trim()))
+    serveProcess.stderr?.on("data", (data: Buffer) => console.error("[GitNexus] API err:", data.toString().trim()))
+    serveProcess.on("error", (err) => { console.error("[GitNexus] API server error:", err); serveProcess = null })
+    serveProcess.on("close", (code) => { console.log("[GitNexus] API server exited with code", code); serveProcess = null })
+
+    // Start web dev server
+    const webDir = path.join(toolsDir, "gitnexus-web")
+    webProcess = spawn("npm", ["run", "dev", "--", "--port", "5175"], {
+      cwd: webDir,
+      stdio: "pipe",
+      shell: true,
+      detached: false,
+      env,
+    })
+    webProcess.stdout?.on("data", (data: Buffer) => console.log("[GitNexus] Web:", data.toString().trim()))
+    webProcess.stderr?.on("data", (data: Buffer) => console.error("[GitNexus] Web err:", data.toString().trim()))
+    webProcess.on("error", (err) => { console.error("[GitNexus] Web server error:", err); webProcess = null })
+    webProcess.on("close", (code) => { console.log("[GitNexus] Web server exited with code", code); webProcess = null })
+
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/**
+ * Auto-start GitNexus servers at app startup if:
+ * - GitNexus is installed (repo cloned + web deps present)
+ * - At least one project has been indexed (has a .gitnexus directory)
+ * - Servers aren't already running
+ */
+export async function autoStartGitNexusIfNeeded(): Promise<void> {
+  const toolsDir = getToolsDir()
+
+  // Check installation
+  if (!fs.existsSync(toolsDir)) return
+  if (!fs.existsSync(path.join(toolsDir, "gitnexus-web", "node_modules"))) return
+
+  // Check if servers are already up
+  const [apiRunning, webRunning] = await Promise.all([isPortReady(4747), isPortReady(5175)])
+  if (apiRunning && webRunning) {
+    console.log("[GitNexus] Servers already running, skipping auto-start")
+    return
+  }
+
+  // Find the best cwd: prefer an indexed project, fall back to any project, then home dir
+  const { getDatabase, projects } = await import("../../db")
+  const db = getDatabase()
+  const allProjects = db.select().from(projects).all()
+
+  const indexedProject = allProjects.find((p) =>
+    p.path && fs.existsSync(path.join(p.path, ".gitnexus"))
+  )
+  const anyProject = allProjects.find((p) => p.path)
+  const cwd = indexedProject?.path ?? anyProject?.path ?? os.homedir()
+
+  console.log(`[GitNexus] Auto-starting servers (cwd: ${cwd})`)
+  const result = await spawnServers(cwd)
+  if (!result.success) {
+    console.error("[GitNexus] Auto-start failed:", result.error)
+  }
+}
+
 export const gitnexusRouter = router({
   /**
    * List indexed repos from GitNexus API
@@ -110,7 +206,7 @@ export const gitnexusRouter = router({
       const repoCloned = fs.existsSync(toolsDir)
       const webDepsInstalled = fs.existsSync(path.join(toolsDir, "gitnexus-web", "node_modules"))
       const apiServerRunning = await isPortReady(4747)
-      const webServerRunning = await isPortReady(5173)
+      const webServerRunning = await isPortReady(5175)
       const projectIndexed = input.projectPath
         ? fs.existsSync(path.join(input.projectPath, ".gitnexus"))
         : false
@@ -216,85 +312,12 @@ export const gitnexusRouter = router({
   }),
 
   /**
-   * Start both the API server (port 4747) and web server (port 5173)
+   * Start both the API server (port 4747) and web server (port 5175)
    */
   startServers: publicProcedure
     .input(z.object({ projectPath: z.string() }))
     .mutation(async ({ input }) => {
-      const toolsDir = getToolsDir()
-
-      try {
-        // Kill tracked processes first (best effort)
-        if (serveProcess && serveProcess.exitCode === null) {
-          serveProcess.kill()
-          serveProcess = null
-        }
-        if (webProcess && webProcess.exitCode === null) {
-          webProcess.kill()
-          webProcess = null
-        }
-
-        // Kill any orphaned processes still holding our ports (shell:true leaves orphans)
-        await execAsync("lsof -ti tcp:4747 | xargs kill -9").catch(() => {})
-        await execAsync("lsof -ti tcp:5173 | xargs kill -9").catch(() => {})
-
-        const env = buildEnv()
-
-        // Start API server
-        serveProcess = spawn("npx", ["-y", "gitnexus@latest", "serve"], {
-          cwd: input.projectPath,
-          stdio: "pipe",
-          shell: true,
-          detached: false,
-          env,
-        })
-
-        serveProcess.stdout?.on("data", (data: Buffer) => {
-          console.log("[GitNexus] API:", data.toString().trim())
-        })
-        serveProcess.stderr?.on("data", (data: Buffer) => {
-          console.error("[GitNexus] API err:", data.toString().trim())
-        })
-        serveProcess.on("error", (err) => {
-          console.error("[GitNexus] API server error:", err)
-          serveProcess = null
-        })
-        serveProcess.on("close", (code) => {
-          console.log("[GitNexus] API server exited with code", code)
-          serveProcess = null
-        })
-
-        // Start web dev server on fixed port 5173 (-- --port passes arg through to vite)
-        const webDir = path.join(toolsDir, "gitnexus-web")
-        webProcess = spawn("npm", ["run", "dev", "--", "--port", "5173"], {
-          cwd: webDir,
-          stdio: "pipe",
-          shell: true,
-          detached: false,
-          env,
-        })
-
-        webProcess.stdout?.on("data", (data: Buffer) => {
-          console.log("[GitNexus] Web:", data.toString().trim())
-        })
-        webProcess.stderr?.on("data", (data: Buffer) => {
-          console.error("[GitNexus] Web err:", data.toString().trim())
-        })
-
-        webProcess.on("error", (err) => {
-          console.error("[GitNexus] Web server error:", err)
-          webProcess = null
-        })
-        webProcess.on("close", (code) => {
-          console.log("[GitNexus] Web server exited with code", code)
-          webProcess = null
-        })
-
-        return { success: true }
-      } catch (err) {
-        const error = err instanceof Error ? err.message : String(err)
-        return { success: false, error }
-      }
+      return spawnServers(input.projectPath)
     }),
 
   /**
@@ -311,7 +334,7 @@ export const gitnexusRouter = router({
     }
     // Also kill by port to handle orphans from shell:true spawning
     await execAsync("lsof -ti tcp:4747 | xargs kill -9").catch(() => {})
-    await execAsync("lsof -ti tcp:5173 | xargs kill -9").catch(() => {})
+    await execAsync("lsof -ti tcp:5175 | xargs kill -9").catch(() => {})
     return { success: true }
   }),
 

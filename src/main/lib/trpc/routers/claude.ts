@@ -1091,11 +1091,32 @@ export const claudeRouter = router({
                   }
                   if (toolName === "AskUserQuestion") {
                     const { toolUseID } = options
+
+                    // Coerce questions format: model sometimes emits options as strings
+                    // instead of { label, description } objects, failing SDK validation.
+                    const rawQuestions = (toolInput as any).questions
+                    const coercedQuestions = Array.isArray(rawQuestions)
+                      ? rawQuestions.map((q: any) => {
+                          if (typeof q === "string") {
+                            return { question: q, header: q.slice(0, 12), options: [], multiSelect: false }
+                          }
+                          const opts = Array.isArray(q.options)
+                            ? q.options.map((o: any) =>
+                                typeof o === "string" ? { label: o, description: o } : o
+                              )
+                            : []
+                          return { ...q, options: opts }
+                        })
+                      : rawQuestions
+
+                    // Update toolInput with coerced questions for SDK validation
+                    ;(toolInput as any).questions = coercedQuestions
+
                     // Emit to UI (safely in case observer is closed)
                     safeEmit({
                       type: "ask-user-question",
                       toolUseId: toolUseID,
-                      questions: (toolInput as any).questions,
+                      questions: coercedQuestions,
                     } as UIMessageChunk)
 
                     // Wait for response (no timeout - question remains open until user responds)
@@ -1152,6 +1173,22 @@ export const claudeRouter = router({
                     return {
                       behavior: "allow",
                       updatedInput: response.updatedInput,
+                    }
+                  }
+                  // Coerce ExitPlanMode's allowedPrompts: model sometimes emits
+                  // strings instead of { tool, prompt } objects, failing SDK validation.
+                  if (toolName === "ExitPlanMode") {
+                    const raw = toolInput.allowedPrompts
+                    if (Array.isArray(raw)) {
+                      const coerced = raw.map((item) =>
+                        typeof item === "string"
+                          ? { tool: "Bash", prompt: item }
+                          : item
+                      )
+                      return {
+                        behavior: "allow",
+                        updatedInput: { ...toolInput, allowedPrompts: coerced },
+                      }
                     }
                   }
                   return {

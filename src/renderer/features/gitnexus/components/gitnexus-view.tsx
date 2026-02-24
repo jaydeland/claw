@@ -226,7 +226,7 @@ export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewPr
             </p>
             <ul className="text-xs text-muted-foreground text-left space-y-1 bg-muted/50 rounded-md p-4">
               <li>• Local API server on port 4747</li>
-              <li>• Web UI at 127.0.0.1:5173</li>
+              <li>• Web UI at 127.0.0.1:5175</li>
               <li>• MCP server for Claude agents</li>
             </ul>
 
@@ -259,8 +259,8 @@ export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewPr
 
   // Build iframe URL with selected repo
   const iframeUrl = selectedRepo
-    ? `http://127.0.0.1:5173?repo=${encodeURIComponent(selectedRepo)}`
-    : "http://127.0.0.1:5173"
+    ? `http://127.0.0.1:5175?repo=${encodeURIComponent(selectedRepo)}`
+    : "http://127.0.0.1:5175"
 
   return (
     <div className="h-full flex flex-col bg-background">

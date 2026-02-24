@@ -13,6 +13,7 @@ import { agentsRouter } from "./agents"
 import { workflowsRouter } from "./workflows"
 import { mcpRouter } from "./mcp"
 import { worktreeConfigRouter } from "./worktree-config"
+import { worktreesRouter } from "./worktrees"
 import { commandsRouter } from "./commands"
 import { awsSsoRouter } from "./aws-sso"
 import { configManagementRouter } from "./config-management"
@@ -49,6 +50,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     workflows: workflowsRouter,
     mcp: mcpRouter,
     worktreeConfig: worktreeConfigRouter,
+    worktrees: worktreesRouter,
     commands: commandsRouter,
     awsSso: awsSsoRouter,
     configManagement: configManagementRouter,

@@ -344,6 +344,16 @@ if (gotTheLock) {
       }, 5000)
     }
 
+    // Auto-start GitNexus servers if a project has been indexed
+    setTimeout(async () => {
+      try {
+        const { autoStartGitNexusIfNeeded } = await import("./lib/trpc/routers/gitnexus")
+        await autoStartGitNexusIfNeeded()
+      } catch (error) {
+        console.error("[App] GitNexus auto-start failed:", error)
+      }
+    }, 2000)
+
     // Warm up MCP cache 3 seconds after startup (background, non-blocking)
     // This populates the cache so all future sessions can use filtered MCP servers
     setTimeout(async () => {
