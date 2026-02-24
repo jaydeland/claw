@@ -5,7 +5,7 @@ import { promisify } from "node:util"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
-import { safeStorage } from "electron"
+import { safeStorage, shell } from "electron"
 import { eq } from "drizzle-orm"
 import { getDatabase, chats, subChats, githubSettings } from "../../db"
 import { createId } from "../../db/utils"
@@ -490,6 +490,90 @@ export const githubRouter = router({
         return { success: false as const, error: error instanceof Error ? error.message : String(error) }
       } finally {
         fs.unlinkSync(tmpFile)
+      }
+    }),
+
+  /**
+   * Open a pull request in the system browser
+   */
+  openPRInBrowser: publicProcedure
+    .input(z.object({ projectPath: z.string(), prNumber: z.number() }))
+    .mutation(async ({ input }) => {
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+      const url = `https://github.com/${remote.owner}/${remote.repo}/pull/${input.prNumber}`
+      await shell.openExternal(url)
+      return { success: true as const }
+    }),
+
+  /**
+   * Merge a pull request
+   */
+  mergePR: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        prNumber: z.number(),
+        method: z.enum(["merge", "squash", "rebase"]).default("squash"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const ghCheck = await checkGhAvailable()
+      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+
+      try {
+        await execAsync(
+          `gh pr merge ${input.prNumber} --repo ${remote.owner}/${remote.repo} --${input.method}`,
+          { cwd: input.projectPath }
+        )
+        return { success: true as const }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const match = msg.match(/GraphQL: (.+)|error: (.+)/s)
+        return { success: false as const, error: match ? (match[1] || match[2]).trim() : msg }
+      }
+    }),
+
+  /**
+   * Submit a pull request review (approve, request changes, or leave a comment)
+   */
+  submitReview: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        prNumber: z.number(),
+        event: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]),
+        body: z.string().default(""),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const ghCheck = await checkGhAvailable()
+      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+
+      const payload: Record<string, string> = { event: input.event }
+      if (input.body.trim()) payload.body = input.body.trim()
+
+      const tmpFile = path.join(os.tmpdir(), `gh-review-${Date.now()}.json`)
+      fs.writeFileSync(tmpFile, JSON.stringify(payload))
+
+      try {
+        await execAsync(
+          `gh api repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/reviews --method POST --input ${tmpFile}`,
+          { cwd: input.projectPath }
+        )
+        return { success: true as const }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const match = msg.match(/GraphQL: (.+)|HTTP \d+ .+: (.+)/s)
+        return { success: false as const, error: match ? (match[1] || match[2]).trim() : msg }
+      } finally {
+        try { fs.unlinkSync(tmpFile) } catch {}
       }
     }),
 
