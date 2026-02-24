@@ -64,7 +64,7 @@ interface PRDetailViewProps {
 }
 
 const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPath }: PRDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<"description" | "files" | "commits" | "comments">("description")
+  const [activeTab, setActiveTab] = useState<"description" | "files" | "commits" | "comments" | "diff">("description")
   const { data, isLoading, error } = trpc.github.getPRDetail.useQuery(
     { projectPath, prNumber },
     { enabled: !!projectPath }
@@ -96,6 +96,7 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
     { id: "files" as const, label: `Files (${pr.files.length})` },
     { id: "commits" as const, label: `Commits (${pr.commits.length})` },
     { id: "comments" as const, label: `Comments (${pr.comments.length})` },
+    { id: "diff" as const, label: "Diff" },
   ]
 
   return (
@@ -223,7 +224,47 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
             )}
           </div>
         )}
+
+        {activeTab === "diff" && (
+          <DiffView diff={pr.diff} />
+        )}
       </div>
+    </div>
+  )
+})
+
+// Renders a unified diff with per-line coloring
+const DiffView = memo(function DiffView({ diff }: { diff: string }) {
+  if (!diff) {
+    return <p className="px-4 py-6 text-xs text-muted-foreground text-center">No diff available</p>
+  }
+
+  const lines = diff.split("\n")
+
+  return (
+    <div className="font-mono text-xs leading-5 overflow-x-auto">
+      {lines.map((line, i) => {
+        let bg = ""
+        let text = "text-foreground"
+        if (line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("--- ") || line.startsWith("+++ ")) {
+          bg = "bg-muted/60"
+          text = "text-muted-foreground"
+        } else if (line.startsWith("@@")) {
+          bg = "bg-blue-500/10"
+          text = "text-blue-400"
+        } else if (line.startsWith("+")) {
+          bg = "bg-green-500/10"
+          text = "text-green-400"
+        } else if (line.startsWith("-")) {
+          bg = "bg-red-500/10"
+          text = "text-red-400"
+        }
+        return (
+          <div key={i} className={cn("px-4 whitespace-pre", bg, text)}>
+            {line || " "}
+          </div>
+        )
+      })}
     </div>
   )
 })
