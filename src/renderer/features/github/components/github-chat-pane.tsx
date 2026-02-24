@@ -17,6 +17,7 @@ import { cn } from "../../../lib/utils"
 import {
   githubSelectionAtom,
   githubChatMessagesAtom,
+  githubChatSessionAtom,
   githubChatContextAtom,
   githubChatLoadingAtom,
   githubStartChatAtom,
@@ -55,8 +56,8 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Claude session state
-  const [session, setSession] = useState<{ chatId: string; subChatId: string } | null>(null)
+  // Claude session state — session persisted to survive app reloads
+  const [session, setSession] = useAtom(githubChatSessionAtom)
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState("")
@@ -64,6 +65,9 @@ export const GitHubChatPane = memo(function GitHubChatPane({
 
   // Track analysis generation state
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState<string | null>(null)
+
+  // Skip clearing on first mount so restored session/messages survive a reload
+  const isFirstMount = useRef(true)
 
   // tRPC mutations and queries
   const createSessionMutation = trpc.github.createChatSession.useMutation()
@@ -73,8 +77,13 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     { enabled: selection?.type === "visualize" && !!projectId }
   )
 
-  // Clear session and messages when selection changes
+  // Clear session and messages when selection changes.
+  // Skip on first mount so a restored session/messages survive an app reload.
   useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false
+      return
+    }
     setSession(null)
     setPendingPrompt(null)
     setIsStreaming(false)
@@ -87,6 +96,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     (selection as any)?.path,
     (selection as any)?.analysisType,
     setMessages,
+    setSession,
   ])
 
   // Subscribe to Claude chat stream
@@ -361,8 +371,21 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     streamingTextRef.current = ""
     setStreamingContent("")
     setIsStreaming(true)
-    setPendingPrompt(userInput)
-  }, [input, isStreaming, session, setMessages])
+
+    // For follow-up messages, include the conversation history explicitly so
+    // Claude has context even when session resumption fails (e.g. session
+    // expiry, config directory cleanup). The session mechanism remains the
+    // primary path; this is a reliable fallback.
+    let prompt = userInput
+    if (messages.length > 0) {
+      const historyText = messages
+        .map((m) => `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`)
+        .join("\n\n")
+      prompt = `<conversation_history>\n${historyText}\n</conversation_history>\n\nHuman: ${userInput}`
+    }
+
+    setPendingPrompt(prompt)
+  }, [input, isStreaming, session, setMessages, messages])
 
   const getActionButton = () => {
     if (!selection) return null

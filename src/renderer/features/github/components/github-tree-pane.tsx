@@ -216,7 +216,10 @@ export const GitHubTreePane = memo(function GitHubTreePane({
             selection={selection}
             prs={prs.get(currentRepo.id) || []}
             issues={issues.get(currentRepo.id) || []}
-            files={files.get(currentRepo.id) || []}
+            files={filesData?.map((f) => ({
+              path: f.path,
+              type: f.type === "folder" ? "dir" : "file" as "file" | "dir",
+            })) || []}
             onToggleRepo={() => toggleRepo(currentRepo.id)}
             onToggleSection={toggleSection}
             onToggleFolder={(path) => {

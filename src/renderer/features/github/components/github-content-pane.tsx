@@ -1,12 +1,12 @@
 "use client"
 
 import { memo, useState, useMemo, useCallback } from "react"
-import { useAtomValue, useSetAtom } from "jotai"
-import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send } from "lucide-react"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send, Check, X, CheckCircle, GitMerge, ExternalLink } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
-import { type GitHubSelection, type AnalysisType, githubStartChatAtom } from "../atoms"
+import { type GitHubSelection, type AnalysisType, githubStartChatAtom, githubPRActiveTabAtom } from "../atoms"
 import { VisualizeView } from "./visualize-view"
 import { CodeBlock } from "../../agents/ui/code-block"
 import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
@@ -64,9 +64,20 @@ interface PRDetailViewProps {
 }
 
 const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPath }: PRDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<"description" | "files" | "commits" | "comments" | "diff">("description")
+  const [activeTab, setActiveTab] = useAtom(githubPRActiveTabAtom)
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
+
+  // Review submission state
+  const [reviewMode, setReviewMode] = useState<"idle" | "approve" | "request_changes">("idle")
+  const [reviewBody, setReviewBody] = useState("")
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [reviewSuccess, setReviewSuccess] = useState(false)
+
+  // Merge state
+  const [mergeMode, setMergeMode] = useState(false)
+  const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash")
+  const [mergeError, setMergeError] = useState<string | null>(null)
 
   const { data, isLoading, error, refetch } = trpc.github.getPRDetail.useQuery(
     { projectPath, prNumber },
@@ -78,6 +89,39 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
       setReplyingTo(null)
       refetch()
     },
+  })
+
+  const submitReviewMutation = trpc.github.submitReview.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        setReviewMode("idle")
+        setReviewBody("")
+        setReviewError(null)
+        setReviewSuccess(true)
+        setTimeout(() => setReviewSuccess(false), 3000)
+        refetch()
+      } else {
+        setReviewError(result.error || "Failed to submit review")
+      }
+    },
+    onError: (err) => setReviewError(err.message),
+  })
+
+  const openInBrowserMutation = trpc.github.openPRInBrowser.useMutation()
+
+  const mergeMutation = trpc.github.mergePR.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        setMergeMode(false)
+        setMergeError(null)
+        setReviewSuccess(true)
+        setTimeout(() => setReviewSuccess(false), 3000)
+        refetch()
+      } else {
+        setMergeError(result.error || "Failed to merge PR")
+      }
+    },
+    onError: (err) => setMergeError(err.message),
   })
 
   const setStartChat = useSetAtom(githubStartChatAtom)
@@ -93,8 +137,8 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
       comment.body,
       "",
       comment.filePath
-        ? `Use the Read tool to read \`${projectPath}/${comment.filePath}\`, understand the context, then explain what change is needed and make the fix.`
-        : `Use the Bash tool with \`gh pr view ${prNumber} --repo origin\` to get full context, then explain what change is needed and make the fix.`,
+        ? `Use the Read tool to read \`${projectPath}/${comment.filePath}\`, understand the context, then explain what change is needed and show your proposed fix. Do not make any changes until you have presented the fix and received explicit approval.`
+        : `Use the Bash tool with \`gh pr view ${prNumber} --repo origin\` to get full context, then explain what change is needed and show your proposed fix. Do not make any changes until you have presented the fix and received explicit approval.`,
     ]
     setStartChat({ message: lines.filter(Boolean).join("\n"), type: "explain", autoStart: true })
   }, [prNumber, projectPath, setStartChat])
@@ -130,6 +174,163 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
 
   return (
     <div className="h-full flex flex-col">
+      {/* Review action bar — only for open, non-draft PRs */}
+      {pr.state === "OPEN" && !pr.draft && (
+        <div className="px-4 py-2 border-b border-border flex-shrink-0">
+          {reviewSuccess ? (
+            <div className="flex items-center gap-1.5 text-xs text-green-500">
+              <CheckCircle className="h-3.5 w-3.5" />
+              Done
+            </div>
+          ) : mergeMode ? (
+            <div className="space-y-2">
+              {/* Merge method selector */}
+              <div className="flex items-center gap-1">
+                {(["squash", "merge", "rebase"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMergeMethod(m)}
+                    className={cn(
+                      "px-2 py-1 text-xs rounded border transition-colors capitalize",
+                      mergeMethod === m
+                        ? "border-purple-500 bg-purple-500/10 text-purple-400"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {mergeError && (
+                <p className="text-xs text-destructive">{mergeError}</p>
+              )}
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => { setMergeMode(false); setMergeError(null) }}
+                  disabled={mergeMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                  disabled={mergeMutation.isPending}
+                  onClick={() => mergeMutation.mutate({ projectPath, prNumber, method: mergeMethod })}
+                >
+                  {mergeMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : (
+                    <GitMerge className="h-3 w-3 mr-1" />
+                  )}
+                  Merge
+                </Button>
+              </div>
+            </div>
+          ) : reviewMode === "idle" ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground">Review:</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs text-green-500 border-green-500/30 hover:bg-green-500/10"
+                onClick={() => setReviewMode("approve")}
+              >
+                <Check className="h-3 w-3 mr-1" />
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/10"
+                onClick={() => setReviewMode("request_changes")}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Request Changes
+              </Button>
+              <div className="w-px h-4 bg-border" />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs text-purple-400 border-purple-500/30 hover:bg-purple-500/10"
+                onClick={() => setMergeMode(true)}
+              >
+                <GitMerge className="h-3 w-3 mr-1" />
+                Merge
+              </Button>
+              <div className="w-px h-4 bg-border" />
+              <button
+                onClick={() => openInBrowserMutation.mutate({ projectPath, prNumber })}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <textarea
+                value={reviewBody}
+                onChange={(e) => setReviewBody(e.target.value)}
+                placeholder={
+                  reviewMode === "approve"
+                    ? "Leave a comment (optional)..."
+                    : "Describe what changes are needed..."
+                }
+                rows={2}
+                className="w-full text-xs rounded-md border border-border bg-background px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+              />
+              {reviewError && (
+                <p className="text-xs text-destructive">{reviewError}</p>
+              )}
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => { setReviewMode("idle"); setReviewBody(""); setReviewError(null) }}
+                  disabled={submitReviewMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className={cn(
+                    "h-7 text-xs",
+                    reviewMode === "approve"
+                      ? "bg-green-600 hover:bg-green-700 text-white"
+                      : "bg-yellow-600 hover:bg-yellow-700 text-white"
+                  )}
+                  disabled={
+                    (reviewMode === "request_changes" && !reviewBody.trim()) ||
+                    submitReviewMutation.isPending
+                  }
+                  onClick={() =>
+                    submitReviewMutation.mutate({
+                      projectPath,
+                      prNumber,
+                      event: reviewMode === "approve" ? "APPROVE" : "REQUEST_CHANGES",
+                      body: reviewBody,
+                    })
+                  }
+                >
+                  {submitReviewMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : reviewMode === "approve" ? (
+                    <Check className="h-3 w-3 mr-1" />
+                  ) : (
+                    <X className="h-3 w-3 mr-1" />
+                  )}
+                  {reviewMode === "approve" ? "Approve" : "Request Changes"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tab bar — the only top-level chrome */}
       <div className="flex border-b border-border flex-shrink-0 overflow-x-auto">
         {tabs.map((tab) => (
@@ -622,34 +823,13 @@ const CodeView = memo(function CodeView({ path, repoName, projectPath }: CodeVie
     md: "text-gray-500",
   }[ext] || "text-muted-foreground"
 
-  // Function to start explain chat
-  const setStartChat = useSetAtom(githubStartChatAtom)
-
-  const handleExplainCode = () => {
-    setStartChat({
-      message: `Explain this code file: ${path}\n\nFocus on:\n- What the code does\n- Key functions and their purposes\n- How it fits into the larger project`,
-      type: "explain",
-    })
-  }
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileCode className={cn("h-5 w-5", iconColor)} />
-            <h2 className="text-lg font-semibold truncate">{path}</h2>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExplainCode}
-            className="flex items-center gap-1.5"
-          >
-            <Sparkles className="h-4 w-4" />
-            Explain Code
-          </Button>
+        <div className="flex items-center gap-2">
+          <FileCode className={cn("h-5 w-5", iconColor)} />
+          <h2 className="text-lg font-semibold truncate">{path}</h2>
         </div>
         <div className="flex items-center gap-2 mt-1">
           <p className="text-sm text-muted-foreground">{repoName}</p>

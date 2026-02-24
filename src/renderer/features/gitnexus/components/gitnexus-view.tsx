@@ -1,14 +1,13 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom } from "jotai"
 import { Network, Play, Square, RefreshCw, Plus, CheckCircle, XCircle, Loader2, ChevronDown, Folder, FolderOpen } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
 import {
-  gitnexusAutoStartAtom,
   gitnexusInstallProgressAtom,
   gitnexusAnalyzeProgressAtom,
   gitnexusAnalyzingAtom,
@@ -37,7 +36,6 @@ function StatusDot({ running, label }: { running: boolean; label: string }) {
 }
 
 export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewProps) {
-  const autoStart = useAtomValue(gitnexusAutoStartAtom)
   const [installProgress, setInstallProgress] = useAtom(gitnexusInstallProgressAtom)
   const [analyzeProgress, setAnalyzeProgress] = useAtom(gitnexusAnalyzeProgressAtom)
   const [isAnalyzing, setIsAnalyzing] = useAtom(gitnexusAnalyzingAtom)
@@ -46,6 +44,7 @@ export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewPr
   const [selectedProjectId, setSelectedProjectId] = useAtom(gitnexusSelectedProjectIdAtom)
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false)
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false)
+  const [isStarting, setIsStarting] = useState(false)
 
   // Whether subscriptions should be active
   const [installActive, setInstallActive] = useState(false)
@@ -150,17 +149,32 @@ export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewPr
     }
   )
 
-  // Auto-start servers on mount if enabled
+  // Derived state
+  const serversRunning = status?.apiServerRunning && status?.webServerRunning
+  const anyServerRunning = status?.apiServerRunning || status?.webServerRunning
+
+  // Reset auto-start flag when project changes so each project triggers its own auto-start
   useEffect(() => {
-    if (!autoStart) return
+    autoStartedRef.current = false
+  }, [projectPath])
+
+  // Auto-start servers whenever the project is indexed and servers aren't running
+  useEffect(() => {
     if (!status) return
     if (autoStartedRef.current) return
     if (!status.repoCloned || !status.webDepsInstalled) return
+    if (!status.projectIndexed) return
     if (status.apiServerRunning && status.webServerRunning) return
 
     autoStartedRef.current = true
+    setIsStarting(true)
     startServersMutation.mutate({ projectPath })
-  }, [autoStart, status, projectPath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [status, projectPath]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear starting state once both servers are confirmed running
+  useEffect(() => {
+    if (serversRunning) setIsStarting(false)
+  }, [serversRunning])
 
   const handleInstall = () => {
     setInstallProgress([])
@@ -176,15 +190,13 @@ export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewPr
 
   const handleToggleServers = () => {
     if (status?.apiServerRunning || status?.webServerRunning) {
+      setIsStarting(false)
       stopServersMutation.mutate()
     } else {
+      setIsStarting(true)
       startServersMutation.mutate({ projectPath })
     }
   }
-
-  // Derived state - must be before any early returns
-  const serversRunning = status?.apiServerRunning && status?.webServerRunning
-  const anyServerRunning = status?.apiServerRunning || status?.webServerRunning
 
   // Auto-select first repo if none selected and repos are available
   useEffect(() => {
@@ -214,7 +226,7 @@ export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewPr
             </p>
             <ul className="text-xs text-muted-foreground text-left space-y-1 bg-muted/50 rounded-md p-4">
               <li>• Local API server on port 4747</li>
-              <li>• Web UI at 127.0.0.1:5173</li>
+              <li>• Web UI at 127.0.0.1:5175</li>
               <li>• MCP server for Claude agents</li>
             </ul>
 
@@ -247,8 +259,8 @@ export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewPr
 
   // Build iframe URL with selected repo
   const iframeUrl = selectedRepo
-    ? `http://127.0.0.1:5173?repo=${encodeURIComponent(selectedRepo)}`
-    : "http://127.0.0.1:5173"
+    ? `http://127.0.0.1:5175?repo=${encodeURIComponent(selectedRepo)}`
+    : "http://127.0.0.1:5175"
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -449,17 +461,26 @@ export function GitNexusView({ projectPath: defaultProjectPath }: GitNexusViewPr
         ) : (
           <div className="h-full flex items-center justify-center">
             <div className="text-center space-y-3 text-muted-foreground">
-              <Network className="h-10 w-10 mx-auto opacity-40" />
-              <p className="text-sm">Start servers to open the GitNexus UI</p>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleToggleServers}
-                disabled={startServersMutation.isPending}
-              >
-                <Play className="h-3.5 w-3.5 mr-1.5" />
-                Start Servers
-              </Button>
+              {isStarting ? (
+                <>
+                  <Loader2 className="h-10 w-10 mx-auto animate-spin opacity-40" />
+                  <p className="text-sm">Starting GitNexus servers...</p>
+                </>
+              ) : (
+                <>
+                  <Network className="h-10 w-10 mx-auto opacity-40" />
+                  <p className="text-sm">Start servers to open the GitNexus UI</p>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleToggleServers}
+                    disabled={startServersMutation.isPending}
+                  >
+                    <Play className="h-3.5 w-3.5 mr-1.5" />
+                    Start Servers
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}
