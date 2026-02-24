@@ -227,6 +227,11 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                         {reviewBadge.label}
                       </span>
                     )}
+                    {comment.filePath && (
+                      <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded truncate max-w-[200px]">
+                        {comment.filePath}
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground">
                       {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ""}
                     </span>

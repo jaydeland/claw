@@ -251,7 +251,7 @@ export const githubRouter = router({
       if (!remote) return { success: false as const, error: "No GitHub remote found" }
 
       try {
-        const [prResult, diffResult] = await Promise.all([
+        const [prResult, diffResult, inlineCommentsResult] = await Promise.all([
           execAsync(
             `gh pr view ${input.prNumber} --repo ${remote.owner}/${remote.repo} --json number,title,body,state,author,labels,headRefName,baseRefName,isDraft,commits,files,comments,reviews,additions,deletions,changedFiles,createdAt,updatedAt`,
             { cwd: input.projectPath }
@@ -260,9 +260,16 @@ export const githubRouter = router({
             `gh pr diff ${input.prNumber} --repo ${remote.owner}/${remote.repo}`,
             { cwd: input.projectPath }
           ).catch(() => ({ stdout: "" })),
+          // Inline review comments (code-level) live at the REST pulls/comments endpoint
+          execAsync(
+            `gh api repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/comments --paginate`,
+            { cwd: input.projectPath }
+          ).catch(() => ({ stdout: "[]" })),
         ])
 
         const pr = JSON.parse(prResult.stdout)
+        const inlineComments: any[] = JSON.parse(inlineCommentsResult.stdout || "[]")
+
         return {
           success: true as const,
           pr: {
@@ -293,23 +300,42 @@ export const githubRouter = router({
               changeType: ((f.changeType || "MODIFIED") as string).toLowerCase() as "added" | "modified" | "deleted" | "renamed",
             })),
             comments: [
+              // General discussion comments
               ...((pr.comments || []) as any[]).map((c: any) => ({
-                id: c.id as string,
+                id: String(c.id),
                 author: (c.author?.login || "unknown") as string,
                 body: (c.body || "") as string,
                 createdAt: c.createdAt as string,
                 reviewState: null as string | null,
+                filePath: null as string | null,
               })),
+              // Review submissions with a non-empty body (e.g. "LGTM, approved")
               ...((pr.reviews || []) as any[])
                 .filter((r: any) => r.body && r.body.trim())
                 .map((r: any) => ({
-                  id: (r.id || r.submittedAt) as string,
+                  id: String(r.id || r.submittedAt),
                   author: (r.author?.login || "unknown") as string,
                   body: (r.body || "") as string,
                   createdAt: (r.submittedAt || "") as string,
                   reviewState: (r.state || null) as string | null,
+                  filePath: null as string | null,
                 })),
-            ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+              // Inline code review comments (REST API: pulls/{number}/comments)
+              ...inlineComments
+                .filter((c: any) => c.body && c.body.trim())
+                .map((c: any) => ({
+                  id: String(c.id),
+                  author: (c.user?.login || "unknown") as string,
+                  body: (c.body || "") as string,
+                  createdAt: (c.created_at || "") as string,
+                  reviewState: null as string | null,
+                  filePath: (c.path || null) as string | null,
+                })),
+            ].sort((a, b) => {
+              const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+              const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+              return ta - tb
+            }),
             diff: diffResult.stdout as string,
           },
         }
