@@ -99,7 +99,7 @@ export const GitHubView = memo(function GitHubView({ projectId, projectPath }: G
   return (
     <div
       ref={containerRef}
-      className="h-full flex flex-col bg-background select-none"
+      className="h-full flex flex-col bg-background"
       style={{ userSelect: isDraggingTree || isDraggingContent ? "none" : "auto" }}
     >
       {/* Header */}

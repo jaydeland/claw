@@ -2,6 +2,8 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { exec } from "node:child_process"
 import { promisify } from "node:util"
+import { getDatabase, chats, subChats } from "../../db"
+import { createId } from "../../db/utils"
 
 const execAsync = promisify(exec)
 
@@ -234,5 +236,146 @@ export const githubRouter = router({
         const message = error instanceof Error ? error.message : String(error)
         return { success: false, error: message, prs: [], issues: [] }
       }
+    }),
+
+  /**
+   * Fetch full PR detail including body, commits, files changed, comments, and diff
+   */
+  getPRDetail: publicProcedure
+    .input(z.object({ projectPath: z.string(), prNumber: z.number() }))
+    .query(async ({ input }) => {
+      const ghCheck = await checkGhAvailable()
+      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+
+      try {
+        const [prResult, diffResult] = await Promise.all([
+          execAsync(
+            `gh pr view ${input.prNumber} --repo ${remote.owner}/${remote.repo} --json number,title,body,state,author,labels,headRefName,baseRefName,isDraft,commits,files,comments,additions,deletions,changedFiles,createdAt,updatedAt`,
+            { cwd: input.projectPath }
+          ),
+          execAsync(
+            `gh pr diff ${input.prNumber} --repo ${remote.owner}/${remote.repo}`,
+            { cwd: input.projectPath }
+          ).catch(() => ({ stdout: "" })),
+        ])
+
+        const pr = JSON.parse(prResult.stdout)
+        return {
+          success: true as const,
+          pr: {
+            number: pr.number as number,
+            title: pr.title as string,
+            body: (pr.body as string) || "",
+            state: pr.state as string,
+            author: (pr.author?.login as string) || "unknown",
+            labels: ((pr.labels || []) as any[]).map((l: any) => l.name as string),
+            headBranch: pr.headRefName as string,
+            baseBranch: pr.baseRefName as string,
+            draft: (pr.isDraft as boolean) || false,
+            additions: (pr.additions as number) || 0,
+            deletions: (pr.deletions as number) || 0,
+            changedFiles: (pr.changedFiles as number) || 0,
+            createdAt: pr.createdAt as string,
+            updatedAt: pr.updatedAt as string,
+            commits: ((pr.commits || []) as any[]).map((c: any) => ({
+              sha: ((c.oid || c.sha || "") as string).slice(0, 7),
+              message: (c.messageHeadline || c.message || "") as string,
+              author: (c.authors?.[0]?.login || c.author?.login || "unknown") as string,
+              date: (c.committedDate || c.date || "") as string,
+            })),
+            files: ((pr.files || []) as any[]).map((f: any) => ({
+              path: f.path as string,
+              additions: (f.additions as number) || 0,
+              deletions: (f.deletions as number) || 0,
+              changeType: ((f.changeType || "MODIFIED") as string).toLowerCase() as "added" | "modified" | "deleted" | "renamed",
+            })),
+            comments: ((pr.comments || []) as any[]).map((c: any) => ({
+              id: c.id as string,
+              author: (c.author?.login || "unknown") as string,
+              body: (c.body || "") as string,
+              createdAt: c.createdAt as string,
+            })),
+            diff: diffResult.stdout as string,
+          },
+        }
+      } catch (error) {
+        return { success: false as const, error: error instanceof Error ? error.message : String(error) }
+      }
+    }),
+
+  /**
+   * Fetch full issue detail including body and comments
+   */
+  getIssueDetail: publicProcedure
+    .input(z.object({ projectPath: z.string(), issueNumber: z.number() }))
+    .query(async ({ input }) => {
+      const ghCheck = await checkGhAvailable()
+      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) return { success: false as const, error: "No GitHub remote found" }
+
+      try {
+        const { stdout } = await execAsync(
+          `gh issue view ${input.issueNumber} --repo ${remote.owner}/${remote.repo} --json number,title,body,state,author,labels,assignees,comments,createdAt,updatedAt,milestone`,
+          { cwd: input.projectPath }
+        )
+
+        const issue = JSON.parse(stdout)
+        return {
+          success: true as const,
+          issue: {
+            number: issue.number as number,
+            title: issue.title as string,
+            body: (issue.body as string) || "",
+            state: issue.state as string,
+            author: (issue.author?.login as string) || "unknown",
+            labels: ((issue.labels || []) as any[]).map((l: any) => l.name as string),
+            assignees: ((issue.assignees || []) as any[]).map((a: any) => a.login as string),
+            milestone: (issue.milestone?.title as string) || null,
+            createdAt: issue.createdAt as string,
+            updatedAt: issue.updatedAt as string,
+            comments: ((issue.comments || []) as any[]).map((c: any) => ({
+              id: c.id as string,
+              author: (c.author?.login || "unknown") as string,
+              body: (c.body || "") as string,
+              createdAt: c.createdAt as string,
+            })),
+          },
+        }
+      } catch (error) {
+        return { success: false as const, error: error instanceof Error ? error.message : String(error) }
+      }
+    }),
+
+  /**
+   * Create a new chat + sub_chat in the DB for a GitHub context conversation
+   */
+  createChatSession: publicProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+        name: z.string(),
+        mode: z.enum(["plan", "agent"]).default("agent"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const chatId = createId()
+      const subChatId = createId()
+
+      db.insert(chats).values({ id: chatId, name: input.name, projectId: input.projectId }).run()
+      db.insert(subChats).values({
+        id: subChatId,
+        name: input.name,
+        chatId,
+        mode: input.mode,
+        messages: "[]",
+      }).run()
+
+      return { chatId, subChatId }
     }),
 })
