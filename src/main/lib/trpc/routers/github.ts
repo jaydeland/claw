@@ -462,8 +462,6 @@ export const githubRouter = router({
         fs.unlinkSync(tmpFile)
       }
     }),
-<<<<<<< Updated upstream
-=======
 
   /**
    * Submit a pull request review (approve, request changes, or leave a comment)
@@ -600,5 +598,4 @@ export const githubRouter = router({
       }
     }
   }),
->>>>>>> Stashed changes
 })
