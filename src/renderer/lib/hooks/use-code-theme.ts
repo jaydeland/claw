@@ -26,5 +26,7 @@ export function useCodeTheme(): string {
   }
 
   // Fallback to legacy code-only theme selection
-  return resolvedTheme === "light" ? lightTheme : darkTheme
+  // Default to dark theme if resolvedTheme is undefined (before hydration)
+  const theme = resolvedTheme === "light" ? lightTheme : darkTheme
+  return theme || "github-dark"
 }

@@ -353,7 +353,7 @@ npm version patch --no-git-tag-version  # 0.0.27 -> 0.0.28
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **wt-claw-11** (4700 symbols, 11819 relationships, 300 execution flows).
+This project is indexed by GitNexus as **claw** (5376 symbols, 12691 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 

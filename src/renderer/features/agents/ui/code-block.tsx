@@ -48,7 +48,7 @@ export const CodeBlock = memo(function CodeBlock({
   if (!highlightedCode) {
     return (
       <pre className={cn(
-        "font-mono text-xs p-4",
+        "font-mono text-xs p-4 select-text",
         wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre overflow-x-auto",
         className
       )}>
@@ -59,7 +59,7 @@ export const CodeBlock = memo(function CodeBlock({
 
   return (
     <pre className={cn(
-      "font-mono text-xs",
+      "font-mono text-xs select-text",
       wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre overflow-x-auto",
       className
     )}>

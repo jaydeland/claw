@@ -108,10 +108,52 @@ export interface GitHubChatContext {
 }
 
 /**
- * Chat messages for the GitHub view
- * Cleared when action buttons are clicked
+ * Chat messages for the GitHub view — persisted across reloads
  */
-export const githubChatMessagesAtom = atom<GitHubChatMessage[]>([])
+export const githubChatMessagesAtom = atomWithStorage<GitHubChatMessage[]>(
+  "github:chatMessages",
+  [],
+  {
+    getItem: (key, initialValue) => {
+      const stored = localStorage.getItem(key)
+      if (!stored) return initialValue
+      try {
+        const parsed = JSON.parse(stored) as Array<Omit<GitHubChatMessage, "timestamp"> & { timestamp: string }>
+        return parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }))
+      } catch {
+        return initialValue
+      }
+    },
+    setItem: (key, value) => {
+      localStorage.setItem(key, JSON.stringify(value))
+    },
+    removeItem: (key) => {
+      localStorage.removeItem(key)
+    },
+  },
+  { getOnInit: true }
+)
+
+/**
+ * Active Claude session for the GitHub chat pane — persisted across reloads
+ * Allows resuming a conversation after app restart
+ */
+export const githubChatSessionAtom = atomWithStorage<{ chatId: string; subChatId: string } | null>(
+  "github:chatSession",
+  null,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
+ * Active tab in the PR detail view — persisted across reloads
+ */
+export const githubPRActiveTabAtom = atomWithStorage<"description" | "files" | "commits" | "comments" | "diff">(
+  "github:prActiveTab",
+  "description",
+  undefined,
+  { getOnInit: true }
+)
 
 /**
  * Current chat context (set when action button is clicked)
@@ -122,6 +164,12 @@ export const githubChatContextAtom = atom<GitHubChatContext | null>(null)
  * Whether the chat is currently loading/generating
  */
 export const githubChatLoadingAtom = atom<boolean>(false)
+
+/**
+ * Signal to start a chat with a specific message
+ * Set this to trigger a new chat in the GitHub view chat pane
+ */
+export const githubStartChatAtom = atom<{ message: string; type: "explain" | "diagram"; autoStart?: boolean } | null>(null)
 
 // ============ DATA STATE ============
 
@@ -188,6 +236,12 @@ export const githubIssuesAtom = atom<Map<string, GitHubIssue[]>>(new Map())
  * Files by repo ID
  */
 export const githubFilesAtom = atom<Map<string, GitHubFile[]>>(new Map())
+
+/**
+ * Expanded folders in the code tree (set of folder paths)
+ * Not persisted — Set doesn't round-trip through JSON, and expand state is ephemeral UI state
+ */
+export const githubExpandedFoldersAtom = atom<Set<string>>(new Set<string>())
 
 // ============ CONTENT STATE ============
 

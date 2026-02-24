@@ -260,6 +260,20 @@
       "when": 1770400300000,
       "tag": "0036_add_background_model_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1770400400000,
+      "tag": "0037_add_claws_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1770400500000,
+      "tag": "0019_remove_swarm_mode",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,7 @@ import {
   Folder,
   File,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../../components/ui/button"
@@ -31,6 +32,7 @@ import {
   githubPRsAtom,
   githubIssuesAtom,
   githubFilesAtom,
+  githubExpandedFoldersAtom,
   type GitHubRepo,
   type GitHubSelection,
   type AnalysisType,
@@ -53,22 +55,71 @@ export const GitHubTreePane = memo(function GitHubTreePane({
   const loading = useAtomValue(githubReposLoadingAtom)
   const [expandedRepos, setExpandedRepos] = useAtom(githubExpandedReposAtom)
   const [expandedSections, setExpandedSections] = useAtom(githubExpandedSectionsAtom)
+  const [expandedFolders, setExpandedFolders] = useAtom(githubExpandedFoldersAtom)
   const [selection, setSelection] = useAtom(githubSelectionAtom)
   const prs = useAtomValue(githubPRsAtom)
   const issues = useAtomValue(githubIssuesAtom)
   const [files, setFiles] = useAtom(githubFilesAtom)
+  const setPRs = useSetAtom(githubPRsAtom)
+  const setIssues = useSetAtom(githubIssuesAtom)
 
   // Fetch files when the code section is expanded
   const isRepoExpanded = expandedRepos.has(projectId)
   const isCodeExpanded = expandedSections.has("code")
 
+  // Fetch GitHub data (PRs and Issues) when repo is expanded
+  const { data: githubData, isLoading: isLoadingGitHub, error: githubError, refetch: refetchGitHub } = trpc.github.getData.useQuery(
+    { projectPath },
+    {
+      enabled: isRepoExpanded && !!projectPath,
+      staleTime: 60 * 1000, // 1 minute
+      retry: false,
+    }
+  )
+
+  // Fetch files - no limit to show complete file tree
   const { data: filesData, isLoading: isLoadingFiles, refetch: refetchFiles } = trpc.files.search.useQuery(
-    { projectPath, query: "", limit: 100 },
+    { projectPath, query: "" },
     {
       enabled: isRepoExpanded && isCodeExpanded && !!projectPath,
       staleTime: 30 * 1000, // 30 seconds
     }
   )
+
+  // Update atoms when GitHub data changes
+  useEffect(() => {
+    if (githubData?.success) {
+      setPRs((prev) => {
+        const next = new Map(prev)
+        next.set(projectId, githubData.prs.map((pr) => ({
+          number: pr.number,
+          title: pr.title,
+          state: pr.state as "open" | "closed" | "merged",
+          author: pr.author,
+          headBranch: pr.headBranch,
+          baseBranch: pr.baseBranch,
+          draft: pr.draft,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })))
+        return next
+      })
+      setIssues((prev) => {
+        const next = new Map(prev)
+        next.set(projectId, githubData.issues.map((issue) => ({
+          number: issue.number,
+          title: issue.title,
+          state: issue.state as "open" | "closed",
+          author: issue.author,
+          labels: issue.labels,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          assignees: [],
+        })))
+        return next
+      })
+    }
+  }, [githubData, projectId, setPRs, setIssues])
 
   // Update files atom when data changes
   useEffect(() => {
@@ -88,10 +139,10 @@ export const GitHubTreePane = memo(function GitHubTreePane({
   // In the future, this could support multiple repos
   const currentRepo: GitHubRepo = {
     id: projectId,
-    name: projectPath.split("/").pop() || "repo",
-    fullName: projectPath.split("/").pop() || "repo",
-    owner: "",
-    url: "",
+    name: githubData?.success ? `${githubData.owner}/${githubData.repo}` : (projectPath.split("/").pop() || "repo"),
+    fullName: githubData?.success ? `${githubData.owner}/${githubData.repo}` : (projectPath.split("/").pop() || "repo"),
+    owner: githubData?.success ? githubData.owner : "",
+    url: githubData?.success ? `https://github.com/${githubData.owner}/${githubData.repo}` : "",
     localPath: projectPath,
     projectId,
   }
@@ -161,15 +212,28 @@ export const GitHubTreePane = memo(function GitHubTreePane({
             repo={currentRepo}
             isExpanded={isRepoExpanded}
             expandedSections={expandedSections}
+            expandedFolders={expandedFolders}
             selection={selection}
             prs={prs.get(currentRepo.id) || []}
             issues={issues.get(currentRepo.id) || []}
-            files={files.get(currentRepo.id) || []}
+            files={filesData?.map((f) => ({
+              path: f.path,
+              type: f.type === "folder" ? "dir" : "file" as "file" | "dir",
+            })) || []}
             onToggleRepo={() => toggleRepo(currentRepo.id)}
             onToggleSection={toggleSection}
+            onToggleFolder={(path) => {
+              const next = new Set(expandedFolders)
+              if (next.has(path)) next.delete(path)
+              else next.add(path)
+              setExpandedFolders(next)
+            }}
             onSelect={handleSelect}
             analysisLabels={analysisLabels}
             analysisIcons={analysisIcons}
+            isLoading={isLoadingGitHub}
+            error={githubError?.message || (githubData && !githubData.success ? githubData.error : null)}
+            isGitHub={githubData?.success ? githubData.isGitHub : true}
           />
         </div>
       </div>
@@ -181,33 +245,172 @@ interface RepoTreeItemProps {
   repo: GitHubRepo
   isExpanded: boolean
   expandedSections: Set<string>
+  expandedFolders: Set<string>
   selection: GitHubSelection
   prs: Array<{ number: number; title: string; state: string }>
   issues: Array<{ number: number; title: string; state: string }>
   files: Array<{ path: string; type: "file" | "dir" }>
   onToggleRepo: () => void
   onToggleSection: (section: string) => void
+  onToggleFolder: (folderPath: string) => void
   onSelect: (selection: GitHubSelection) => void
   analysisLabels: Record<AnalysisType, string>
   analysisIcons: Record<AnalysisType, React.ComponentType<{ className?: string }>>
+  isLoading?: boolean
+  error?: string | null
+  isGitHub?: boolean
 }
 
 const RepoTreeItem = memo(function RepoTreeItem({
   repo,
   isExpanded,
   expandedSections,
+  expandedFolders,
   selection,
   prs,
   issues,
   files,
   onToggleRepo,
   onToggleSection,
+  onToggleFolder,
   onSelect,
   analysisLabels,
   analysisIcons,
+  isLoading,
+  error,
+  isGitHub,
 }: RepoTreeItemProps) {
   const openPRs = prs.filter((pr) => pr.state === "open").length
   const openIssues = issues.filter((i) => i.state === "open").length
+
+  // Build a tree structure from flat file list
+  interface TreeNode {
+    name: string
+    path: string
+    type: "file" | "dir"
+    children: TreeNode[]
+  }
+
+  function buildFileTree(fileList: Array<{ path: string; type: "file" | "dir" }>): TreeNode[] {
+    const root: TreeNode[] = []
+
+    for (const file of fileList) {
+      const parts = file.path.split("/")
+      let current = root
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i]
+        const isLast = i === parts.length - 1
+        const currentPath = parts.slice(0, i + 1).join("/")
+
+        let node = current.find((n) => n.name === part)
+
+        if (!node) {
+          node = {
+            name: part,
+            path: currentPath,
+            type: isLast ? file.type : "dir",
+            children: [],
+          }
+          current.push(node)
+        }
+
+        if (!isLast) {
+          current = node.children
+        }
+      }
+    }
+
+    // Sort: directories first, then files, alphabetically
+    function sortNodes(nodes: TreeNode[]): TreeNode[] {
+      return nodes.sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === "dir" ? -1 : 1
+        }
+        return a.name.localeCompare(b.name)
+      })
+    }
+
+    function sortTree(nodes: TreeNode[]): TreeNode[] {
+      const sorted = sortNodes(nodes)
+      for (const node of sorted) {
+        if (node.children.length > 0) {
+          node.children = sortTree(node.children)
+        }
+      }
+      return sorted
+    }
+
+    return sortTree(root)
+  }
+
+  const fileTree = buildFileTree(files)
+
+  // Recursive component to render tree nodes
+  function FileTreeNode({
+    node,
+    depth = 0,
+  }: {
+    node: TreeNode
+    depth?: number
+  }) {
+    const isFolderExpanded = expandedFolders.has(node.path)
+    const isSelected = selection?.type === "code" && selection.path === node.path
+    const hasChildren = node.children.length > 0
+
+    if (node.type === "dir") {
+      return (
+        <div style={{ paddingLeft: depth * 8 }}>
+          <button
+            type="button"
+            onClick={() => onToggleFolder(node.path)}
+            className={cn(
+              "w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-sm",
+              "hover:bg-accent hover:text-accent-foreground"
+            )}
+          >
+            {isFolderExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+            <Folder className="h-4 w-4 text-yellow-500" />
+            <span className="truncate">{node.name}</span>
+          </button>
+          {isFolderExpanded && hasChildren && (
+            <div>
+              {node.children.map((child) => (
+                <FileTreeNode key={child.path} node={child} depth={depth + 1} />
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() =>
+          onSelect({
+            type: "code",
+            repoId: repo.id,
+            repoName: repo.name,
+            path: node.path,
+          })
+        }
+        style={{ paddingLeft: depth * 8 + 16 }}
+        className={cn(
+          "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
+          "hover:bg-accent hover:text-accent-foreground",
+          isSelected && "bg-accent"
+        )}
+      >
+        <File className="h-4 w-4 text-muted-foreground" />
+        <span className="truncate">{node.name}</span>
+      </button>
+    )
+  }
 
   return (
     <div className="space-y-0.5">
@@ -228,11 +431,22 @@ const RepoTreeItem = memo(function RepoTreeItem({
         )}
         <Folder className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium truncate">{repo.name}</span>
+        {isLoading && (
+          <Loader2 className="h-3 w-3 animate-spin ml-auto text-muted-foreground" />
+        )}
       </button>
+
+      {/* Error message */}
+      {error && isExpanded && (
+        <div className="ml-8 px-2 py-1 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded">
+          <AlertCircle className="h-3 w-3 inline mr-1" />
+          {error}
+        </div>
+      )}
 
       {/* Repo contents */}
       {isExpanded && (
-        <div className="ml-4 space-y-0.5">
+        <div className="ml-2 space-y-0.5">
           {/* PRs section */}
           <SectionTreeItem
             id="prs"
@@ -321,7 +535,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
             )}
           </SectionTreeItem>
 
-          {/* Code section - shows only files, not folders */}
+          {/* Code section - shows files with expandable folders */}
           <SectionTreeItem
             id="code"
             label="Code"
@@ -329,32 +543,13 @@ const RepoTreeItem = memo(function RepoTreeItem({
             isExpanded={expandedSections.has("code")}
             onToggle={() => onToggleSection("code")}
           >
-            {files
-              .filter((file) => file.type === "file")
-              .slice(0, 50)
-              .map((file) => (
-                <button
-                  key={file.path}
-                  type="button"
-                  onClick={() =>
-                    onSelect({
-                      type: "code",
-                      repoId: repo.id,
-                      repoName: repo.name,
-                      path: file.path,
-                    })
-                  }
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
-                    "hover:bg-accent hover:text-accent-foreground",
-                    selection?.type === "code" && selection.path === file.path && "bg-accent"
-                  )}
-                >
-                  <File className="h-4 w-4 text-muted-foreground" />
-                  <span className="truncate">{file.path}</span>
-                </button>
-              ))}
-            {files.filter((f) => f.type === "file").length === 0 && (
+            {files.length > 0 ? (
+              <div>
+                {fileTree.map((node) => (
+                  <FileTreeNode key={node.path} node={node} />
+                ))}
+              </div>
+            ) : (
               <span className="px-6 py-1 text-sm text-muted-foreground">No files</span>
             )}
           </SectionTreeItem>
@@ -444,7 +639,7 @@ const SectionTreeItem = memo(function SectionTreeItem({
           </span>
         )}
       </button>
-      {isExpanded && <div className="ml-2 mt-0.5 space-y-0.5">{children}</div>}
+      {isExpanded && <div className="ml-1 mt-0.5 space-y-0.5">{children}</div>}
     </div>
   )
 })

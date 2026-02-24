@@ -36,7 +36,7 @@ export const chatsRouter = router({
     .input(z.object({ projectId: z.string().optional() }))
     .query(({ input }) => {
       const db = getDatabase()
-      const conditions = [isNull(chats.archivedAt)]
+      const conditions = [isNull(chats.archivedAt), eq(chats.isTransient, false)]
       if (input.projectId) {
         conditions.push(eq(chats.projectId, input.projectId))
       }

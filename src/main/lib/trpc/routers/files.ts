@@ -143,7 +143,7 @@ async function getEntryList(projectPath: string): Promise<FileEntry[]> {
 function filterEntries(
   entries: FileEntry[],
   query: string,
-  limit: number
+  limit?: number
 ): Array<{ id: string; label: string; path: string; repository: string; type: "file" | "folder" }> {
   const queryLower = query.toLowerCase()
 
@@ -175,7 +175,7 @@ function filterEntries(
       const bStarts = bName.startsWith(queryLower)
       if (aStarts && !bStarts) return -1
       if (!aStarts && bStarts) return 1
-      
+
       // Priority 3: If both start with query, shorter name = better match
       if (aStarts && bStarts) {
         if (aName.length !== bName.length) {
@@ -194,8 +194,8 @@ function filterEntries(
     return aName.localeCompare(bName)
   })
 
-  // Limit results
-  const limited = filtered.slice(0, Math.min(limit, 200))
+  // Apply limit if specified
+  const limited = limit ? filtered.slice(0, limit) : filtered
 
   // Map to expected format with type
   return limited.map((entry) => ({
@@ -216,7 +216,7 @@ export const filesRouter = router({
       z.object({
         projectPath: z.string(),
         query: z.string().default(""),
-        limit: z.number().min(1).max(200).default(50),
+        limit: z.number().min(1).max(10000).optional(),
       })
     )
     .query(async ({ input }) => {

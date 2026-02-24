@@ -13,6 +13,7 @@ import { agentsRouter } from "./agents"
 import { workflowsRouter } from "./workflows"
 import { mcpRouter } from "./mcp"
 import { worktreeConfigRouter } from "./worktree-config"
+import { worktreesRouter } from "./worktrees"
 import { commandsRouter } from "./commands"
 import { awsSsoRouter } from "./aws-sso"
 import { configManagementRouter } from "./config-management"
@@ -24,6 +25,8 @@ import { devspaceRouter } from "./devspace"
 import { loadedContextRouter } from "./loaded-context"
 import { analyzerRouter } from "./analyzer"
 import { transientChatRouter } from "./transient-chat"
+import { githubRouter } from "./github"
+import { gitnexusRouter } from "./gitnexus"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -47,6 +50,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     workflows: workflowsRouter,
     mcp: mcpRouter,
     worktreeConfig: worktreeConfigRouter,
+    worktrees: worktreesRouter,
     commands: commandsRouter,
     awsSso: awsSsoRouter,
     configManagement: configManagementRouter,
@@ -58,6 +62,8 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     loadedContext: loadedContextRouter,
     analyzer: analyzerRouter,
     transientChat: transientChatRouter,
+    github: githubRouter,
+    gitnexus: gitnexusRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

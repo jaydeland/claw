@@ -17,6 +17,7 @@ import {
   agentsSidebarOpenAtom,
   selectedSidebarTabAtom,
   selectedProjectDetailIdAtom,
+  selectedProjectAtom,
 } from "../atoms"
 import {
   selectedTeamIdAtom,
@@ -52,6 +53,7 @@ import { ClustersContent } from "../../clusters/ui/clusters-content"
 import { selectedGsdCategoryAtom } from "../../gsd/atoms"
 import { GsdContent } from "../../gsd/ui/gsd-content"
 import { GitHubView } from "../../github/components/github-view"
+import { GitNexusView } from "../../gitnexus/components/gitnexus-view"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { HistoryChatView } from "../../history"
@@ -64,6 +66,7 @@ export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const selectedProjectDetailId = useAtomValue(selectedProjectDetailIdAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
@@ -845,7 +848,8 @@ export function AgentsContent() {
   const showWorkflowsView = !!selectedWorkflowCategory
   const showProjectDetail = !!selectedProjectDetailId
   const showGitHubView = selectedSidebarTab === "github"
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView
+  const showGitNexusView = selectedSidebarTab === "gitnexus"
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showGitNexusView
 
   return (
     <>
@@ -870,12 +874,19 @@ export function AgentsContent() {
         </div>
       )}
 
-      {/* GitHub view */}
-      {showGitHubView && (
+      {/* GitHub view - kept mounted to preserve streaming state */}
+      <div className={showGitHubView ? "flex-1 h-full overflow-hidden" : "hidden"}>
+        <GitHubView
+          projectId={selectedProject?.id || projects?.[0]?.id || ""}
+          projectPath={selectedProject?.path || projects?.[0]?.path || ""}
+        />
+      </div>
+
+      {/* GitNexus view */}
+      {showGitNexusView && (
         <div className="flex-1 h-full overflow-hidden">
-          <GitHubView
-            projectId={selectedChatId && chatData ? (chatData as any).project?.id || "" : projects?.[0]?.id || ""}
-            projectPath={selectedChatId && chatData ? (chatData as any).project?.path || (chatData as any).worktreePath || projects?.[0]?.path || "" : projects?.[0]?.path || ""}
+          <GitNexusView
+            projectPath={selectedProject?.path || projects?.[0]?.path || ""}
           />
         </div>
       )}
