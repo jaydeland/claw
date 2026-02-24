@@ -1024,7 +1024,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[220px]">
+                      <DropdownMenuContent align="start" className="w-[220px] max-h-[50vh] overflow-y-auto">
                         {availableModels.models.map((model) => {
                           const isSelected = selectedModel?.id === model.id
                           return (

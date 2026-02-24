@@ -93,8 +93,8 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
       comment.body,
       "",
       comment.filePath
-        ? `Use the Read tool to read \`${projectPath}/${comment.filePath}\`, understand the context, then explain what change is needed and make the fix.`
-        : `Use the Bash tool with \`gh pr view ${prNumber} --repo origin\` to get full context, then explain what change is needed and make the fix.`,
+        ? `Use the Read tool to read \`${projectPath}/${comment.filePath}\`, understand the context, then explain what change is needed and show your proposed fix. Do not make any changes until you have presented the fix and received explicit approval.`
+        : `Use the Bash tool with \`gh pr view ${prNumber} --repo origin\` to get full context, then explain what change is needed and show your proposed fix. Do not make any changes until you have presented the fix and received explicit approval.`,
     ]
     setStartChat({ message: lines.filter(Boolean).join("\n"), type: "explain", autoStart: true })
   }, [prNumber, projectPath, setStartChat])

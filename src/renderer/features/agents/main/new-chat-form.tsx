@@ -1479,7 +1479,7 @@ export function NewChatForm({
                             <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-[200px]">
+                        <DropdownMenuContent align="start" className="w-[200px] max-h-[50vh] overflow-y-auto">
                           {availableModels.models.map((model) => {
                             const isSelected = selectedModel?.id === model.id
                             return (

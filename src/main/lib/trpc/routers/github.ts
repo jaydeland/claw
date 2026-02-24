@@ -408,7 +408,7 @@ export const githubRouter = router({
       const chatId = createId()
       const subChatId = createId()
 
-      db.insert(chats).values({ id: chatId, name: input.name, projectId: input.projectId }).run()
+      db.insert(chats).values({ id: chatId, name: input.name, projectId: input.projectId, isTransient: true }).run()
       db.insert(subChats).values({
         id: subChatId,
         name: input.name,

@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, projects, chats, claudeCodeSettings } from "../../db"
-import { eq, desc } from "drizzle-orm"
+import { eq, desc, ne } from "drizzle-orm"
 import { dialog, BrowserWindow, app } from "electron"
 import { basename, join } from "path"
 import { exec } from "node:child_process"
@@ -32,7 +32,12 @@ export const projectsRouter = router({
    */
   list: publicProcedure.query(() => {
     const db = getDatabase()
-    return db.select().from(projects).orderBy(desc(projects.updatedAt)).all()
+    return db
+      .select()
+      .from(projects)
+      .where(ne(projects.path, "__transient__"))
+      .orderBy(desc(projects.updatedAt))
+      .all()
   }),
 
   /**
