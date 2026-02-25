@@ -274,6 +274,41 @@
       "when": 1770400500000,
       "tag": "0019_remove_swarm_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1770486000000,
+      "tag": "0038_add_slack_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1770486060000,
+      "tag": "0038_add_system_prompts",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1770486120000,
+      "tag": "0041_add_whatsapp_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1770486130000,
+      "tag": "0042_add_system_prompts_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1770486140000,
+      "tag": "0043_add_system_prompts_key_index",
+      "breakpoints": true
     }
   ]
 }

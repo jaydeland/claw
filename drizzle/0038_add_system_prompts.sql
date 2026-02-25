@@ -11,7 +11,3 @@ CREATE TABLE IF NOT EXISTS system_prompts (
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
-
--- Indexes for common query patterns
-CREATE INDEX IF NOT EXISTS system_prompts_category_idx ON system_prompts(category);
-CREATE INDEX IF NOT EXISTS system_prompts_key_idx ON system_prompts(key);

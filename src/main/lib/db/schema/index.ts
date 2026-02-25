@@ -471,51 +471,51 @@ export const systemPrompts = sqliteTable("system_prompts", {
 export type SubChatMode = "plan" | "agent"
 export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
 
-export type Project = typeof projects.\$inferSelect
-export type NewProject = typeof projects.\$inferInsert
-export type Chat = typeof chats.\$inferSelect
-export type NewChat = typeof chats.\$inferInsert
-export type SubChat = typeof subChats.\$inferSelect
-export type NewSubChat = typeof subChats.\$inferInsert
-export type ClaudeCodeCredential = typeof claudeCodeCredentials.\$inferSelect
-export type NewClaudeCodeCredential = typeof claudeCodeCredentials.\$inferInsert
-export type ClaudeCodeSettings = typeof claudeCodeSettings.\$inferSelect
-export type NewClaudeCodeSettings = typeof claudeCodeSettings.\$inferInsert
-export type McpCredential = typeof mcpCredentials.\$inferSelect
-export type NewMcpCredential = typeof mcpCredentials.\$inferInsert
-export type ConfigSource = typeof configSources.\$inferSelect
-export type NewConfigSource = typeof configSources.\$inferInsert
-export type BackgroundTask = typeof backgroundTasks.\$inferSelect
-export type NewBackgroundTask = typeof backgroundTasks.\$inferInsert
-export type AppSettings = typeof appSettings.\$inferSelect
-export type NewAppSettings = typeof appSettings.\$inferInsert
-export type DevspaceSettings = typeof devspaceSettings.\$inferSelect
-export type NewDevspaceSettings = typeof devspaceSettings.\$inferInsert
-export type DevspaceStartedProcess = typeof devspaceStartedProcesses.\$inferSelect
-export type NewDevspaceStartedProcess = typeof devspaceStartedProcesses.\$inferInsert
-export type McpToolCache = typeof mcpToolCache.\$inferSelect
-export type NewMcpToolCache = typeof mcpToolCache.\$inferInsert
+export type Project = typeof projects.$inferSelect
+export type NewProject = typeof projects.$inferInsert
+export type Chat = typeof chats.$inferSelect
+export type NewChat = typeof chats.$inferInsert
+export type SubChat = typeof subChats.$inferSelect
+export type NewSubChat = typeof subChats.$inferInsert
+export type ClaudeCodeCredential = typeof claudeCodeCredentials.$inferSelect
+export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
+export type ClaudeCodeSettings = typeof claudeCodeSettings.$inferSelect
+export type NewClaudeCodeSettings = typeof claudeCodeSettings.$inferInsert
+export type McpCredential = typeof mcpCredentials.$inferSelect
+export type NewMcpCredential = typeof mcpCredentials.$inferInsert
+export type ConfigSource = typeof configSources.$inferSelect
+export type NewConfigSource = typeof configSources.$inferInsert
+export type BackgroundTask = typeof backgroundTasks.$inferSelect
+export type NewBackgroundTask = typeof backgroundTasks.$inferInsert
+export type AppSettings = typeof appSettings.$inferSelect
+export type NewAppSettings = typeof appSettings.$inferInsert
+export type DevspaceSettings = typeof devspaceSettings.$inferSelect
+export type NewDevspaceSettings = typeof devspaceSettings.$inferInsert
+export type DevspaceStartedProcess = typeof devspaceStartedProcesses.$inferSelect
+export type NewDevspaceStartedProcess = typeof devspaceStartedProcesses.$inferInsert
+export type McpToolCache = typeof mcpToolCache.$inferSelect
+export type NewMcpToolCache = typeof mcpToolCache.$inferInsert
 
 // Analysis diagram types
-export type AnalysisDiagram = typeof analysisDiagrams.\$inferSelect
-export type NewAnalysisDiagram = typeof analysisDiagrams.\$inferInsert
-export type AnalysisJob = typeof analysisJobs.\$inferSelect
-export type NewAnalysisJob = typeof analysisJobs.\$inferInsert
+export type AnalysisDiagram = typeof analysisDiagrams.$inferSelect
+export type NewAnalysisDiagram = typeof analysisDiagrams.$inferInsert
+export type AnalysisJob = typeof analysisJobs.$inferSelect
+export type NewAnalysisJob = typeof analysisJobs.$inferInsert
 
 // Headless claws types
-export type HeadlessClaw = typeof headlessClaws.\$inferSelect
-export type NewHeadlessClaw = typeof headlessClaws.\$inferInsert
-export type ClawExecution = typeof clawExecutions.\$inferSelect
-export type NewClawExecution = typeof clawExecutions.\$inferInsert
-export type GithubSettings = typeof githubSettings.\$inferSelect
-export type NewGithubSettings = typeof githubSettings.\$inferInsert
+export type HeadlessClaw = typeof headlessClaws.$inferSelect
+export type NewHeadlessClaw = typeof headlessClaws.$inferInsert
+export type ClawExecution = typeof clawExecutions.$inferSelect
+export type NewClawExecution = typeof clawExecutions.$inferInsert
+export type GithubSettings = typeof githubSettings.$inferSelect
+export type NewGithubSettings = typeof githubSettings.$inferInsert
 
 // Chat platform integration types
-export type SlackSettings = typeof slackSettings.\$inferSelect
-export type NewSlackSettings = typeof slackSettings.\$inferInsert
-export type WhatsappSettings = typeof whatsappSettings.\$inferSelect
-export type NewWhatsappSettings = typeof whatsappSettings.\$inferInsert
+export type SlackSettings = typeof slackSettings.$inferSelect
+export type NewSlackSettings = typeof slackSettings.$inferInsert
+export type WhatsappSettings = typeof whatsappSettings.$inferSelect
+export type NewWhatsappSettings = typeof whatsappSettings.$inferInsert
 
 // System prompts types
-export type SystemPrompt = typeof systemPrompts.\$inferSelect
-export type NewSystemPrompt = typeof systemPrompts.\$inferInsert
+export type SystemPrompt = typeof systemPrompts.$inferSelect
+export type NewSystemPrompt = typeof systemPrompts.$inferInsert

@@ -1,11 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
 import { Textarea } from "../../../components/ui/textarea"
-import { ScrollText, Save, RotateCcw, Edit3, Eye, EyeOff } from "lucide-react"
+import { ScrollText, Save, RotateCcw, Bot } from "lucide-react"
 import { cn } from "../../../lib/utils"
+import {
+  TransientChat,
+  TransientChatMessages,
+  TransientChatInput,
+} from "../../../components/ai-assistant-dialog/transient-chat"
 
 interface Prompt {
   id: string
@@ -23,17 +28,15 @@ interface Prompt {
 export function PromptsView() {
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null)
   const [editedContent, setEditedContent] = useState<string>("")
-  const [showPreview, setShowPreview] = useState(true)
+  const [splitPosition, setSplitPosition] = useState(55)
+  const isDragging = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const utils = trpc.useUtils()
 
-  // Fetch all prompts
   const { data: promptsData, isLoading } = trpc.prompts.list.useQuery()
-
-  // Fetch categories
   const { data: categoriesData } = trpc.prompts.getCategories.useQuery()
 
-  // Update mutation
   const updateMutation = trpc.prompts.update.useMutation({
     onSuccess: () => {
       utils.prompts.list.invalidate()
@@ -42,7 +45,6 @@ export function PromptsView() {
     },
   })
 
-  // Reset mutation
   const resetMutation = trpc.prompts.resetToDefault.useMutation({
     onSuccess: () => {
       utils.prompts.list.invalidate()
@@ -52,7 +54,6 @@ export function PromptsView() {
   const handleSelectPrompt = (prompt: Prompt) => {
     setSelectedPrompt(prompt)
     setEditedContent(prompt.content)
-    setShowPreview(true)
   }
 
   const handleSave = () => {
@@ -70,6 +71,34 @@ export function PromptsView() {
     }
   }
 
+  const handleMouseDown = () => {
+    isDragging.current = true
+  }
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging.current || !containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const pos = ((e.clientX - rect.left) / rect.width) * 100
+    setSplitPosition(Math.min(Math.max(pos, 25), 75))
+  }, [])
+
+  const handleMouseUp = useCallback(() => {
+    isDragging.current = false
+  }, [])
+
+  // Build AI context from selected prompt
+  const promptContext = selectedPrompt
+    ? `You are reviewing the following system prompt:\n\nName: ${selectedPrompt.name}\nKey: ${selectedPrompt.key}\nCategory: ${selectedPrompt.category}\n${selectedPrompt.description ? `Description: ${selectedPrompt.description}\n` : ""}\n---\n\n${selectedPrompt.content}`
+    : ""
+
+  const chat = TransientChat({
+    systemPromptType: "review",
+    promptContext,
+    placeholder: "Ask about this prompt...",
+    hint: "Chat with AI about this prompt",
+    contextKey: selectedPrompt?.id,
+  })
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -81,7 +110,6 @@ export function PromptsView() {
   const prompts = promptsData?.prompts ?? []
   const categories = categoriesData?.categories ?? []
 
-  // Group prompts by category
   const promptsByCategory = categories.reduce(
     (acc, category) => {
       acc[category] = prompts.filter((p) => p.category === category)
@@ -93,7 +121,7 @@ export function PromptsView() {
   return (
     <div className="flex h-full">
       {/* Sidebar - Prompt List */}
-      <div className="w-72 border-r border-border flex flex-col">
+      <div className="w-72 border-r border-border flex flex-col flex-shrink-0">
         <div className="p-4 border-b border-border">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <ScrollText className="h-5 w-5" />
@@ -134,7 +162,6 @@ export function PromptsView() {
             </div>
           ))}
 
-          {/* Uncategorized prompts */}
           {prompts
             .filter((p) => !p.category)
             .map((prompt) => (
@@ -159,60 +186,52 @@ export function PromptsView() {
         </div>
       </div>
 
-      {/* Main Content - Prompt Editor */}
-      <div className="flex-1 flex flex-col">
-        {selectedPrompt ? (
-          <>
-            <div className="p-4 border-b border-border">
+      {/* Split area: Editor + AI Chat */}
+      {selectedPrompt ? (
+        <div
+          ref={containerRef}
+          className="flex-1 flex overflow-hidden select-none"
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          {/* Editor panel */}
+          <div
+            className="flex flex-col overflow-hidden"
+            style={{ width: `${splitPosition}%` }}
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-border flex-shrink-0">
               <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">{selectedPrompt.name}</h3>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold truncate">{selectedPrompt.name}</h3>
                   {selectedPrompt.description && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground truncate">
                       {selectedPrompt.description}
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowPreview(!showPreview)}
-                  >
-                    {showPreview ? (
-                      <>
-                        <EyeOff className="h-4 w-4 mr-1" />
-                        Hide Preview
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-4 w-4 mr-1" />
-                        Show Preview
-                      </>
-                    )}
-                  </Button>
-                  {selectedPrompt.isEditable && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleReset}
-                        disabled={resetMutation.isPending}
-                      >
-                        <RotateCcw className="h-4 w-4 mr-1" />
-                        Reset
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSave}
-                        disabled={updateMutation.isPending || editedContent === selectedPrompt.content}
-                      >
-                        <Save className="h-4 w-4 mr-1" />
-                        Save
-                      </Button>
-                    </>
-                  )}
-                </div>
+                {selectedPrompt.isEditable && (
+                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleReset}
+                      disabled={resetMutation.isPending}
+                    >
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Reset
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSave}
+                      disabled={updateMutation.isPending || editedContent === selectedPrompt.content}
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                  </div>
+                )}
               </div>
               {!selectedPrompt.isEditable && (
                 <p className="text-xs text-muted-foreground mt-2">
@@ -221,6 +240,7 @@ export function PromptsView() {
               )}
             </div>
 
+            {/* Content */}
             <div className="flex-1 overflow-hidden p-4">
               {selectedPrompt.isEditable ? (
                 <div className="h-full flex flex-col">
@@ -230,18 +250,13 @@ export function PromptsView() {
                     className="flex-1 font-mono text-sm resize-none"
                     placeholder="Enter prompt content..."
                   />
-                  <div className="mt-2 text-xs text-muted-foreground flex justify-between">
-                    <span>
-                      {editedContent.length} characters
-                      {editedContent.length !== selectedPrompt.content.length && (
-                        <span className="ml-2 text-amber-500">
-                          (modified: {editedContent.length - selectedPrompt.content.length > 0 ? "+" : ""}
-                          {editedContent.length - selectedPrompt.content.length} chars)
-                        </span>
-                      )}
-                    </span>
-                    {showPreview && (
-                      <span className="text-blue-500">Preview mode on</span>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {editedContent.length} characters
+                    {editedContent.length !== selectedPrompt.content.length && (
+                      <span className="ml-2 text-amber-500">
+                        (modified: {editedContent.length - selectedPrompt.content.length > 0 ? "+" : ""}
+                        {editedContent.length - selectedPrompt.content.length} chars)
+                      </span>
                     )}
                   </div>
                 </div>
@@ -253,16 +268,52 @@ export function PromptsView() {
                 </div>
               )}
             </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center">
-              <ScrollText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Select a prompt to view or edit</p>
-            </div>
           </div>
-        )}
-      </div>
+
+          {/* Resize handle */}
+          <div
+            className="w-1 bg-border hover:bg-primary/40 cursor-col-resize flex-shrink-0 transition-colors"
+            onMouseDown={handleMouseDown}
+          />
+
+          {/* AI Chat panel */}
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            <div className="p-3 border-b border-border flex items-center gap-2 flex-shrink-0">
+              <Bot className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">AI Assistant</span>
+            </div>
+            <TransientChatMessages
+              messages={chat.messages}
+              messagesEndRef={chat.messagesEndRef}
+              error={chat.error}
+              setError={chat.setError}
+              detectedResult={chat.detectedResult}
+              renderResultPreview={chat.renderResultPreview}
+              onUseResult={chat.handleUseResult}
+              isComplete={chat.isComplete}
+            />
+            <TransientChatInput
+              inputValue={chat.inputValue}
+              setInputValue={chat.setInputValue}
+              handleKeyDown={chat.handleKeyDown}
+              handleSend={chat.handleSend}
+              isLoading={chat.isLoading}
+              isCreatingSession={chat.isCreatingSession}
+              isComplete={chat.isComplete}
+              inputRef={chat.inputRef}
+              placeholder={chat.placeholder}
+              hint={chat.hint}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <ScrollText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>Select a prompt to view or edit</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

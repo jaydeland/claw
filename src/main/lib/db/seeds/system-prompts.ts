@@ -463,7 +463,8 @@ Output format - respond with ONLY a JSON object:
       "sourceHandle": null,
       "targetHandle": null,
       "label": "HTTP/REST",
-      "type": "smoothstep"
+      "type": "smoothstep",
+      "markerEnd": { "type": "arrowclosed" }
     }
   ],
   "summary": "System architecture overview",
@@ -475,6 +476,7 @@ CRITICAL REQUIREMENTS FOR EDGES:
 - Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
 - NEVER use "undefined", null, or empty strings for source or target
 - Double-check that every node id referenced in edges exists in the nodes array
+- Every edge MUST include \`"markerEnd": { "type": "arrowclosed" }\` to render directional arrows
 
 Use a layered layout:
 - Frontend/Client at top

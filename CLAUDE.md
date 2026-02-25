@@ -227,6 +227,19 @@ When modifying the database schema, follow these steps to ensure migrations work
 - Migration files must be sequential (0017, 0018, etc.)
 - Packaged apps read migrations from `resources/migrations` (copied during build)
 
+**CRITICAL: Single Statement Per Migration File**
+Due to `better-sqlite3` limitations, each migration file can only contain **ONE SQL statement**. Files with multiple statements will fail with:
+```
+RangeError: The supplied SQL string contains more than one statement
+```
+
+If you need multiple operations (e.g., create table + create indexes), either:
+1. Use `bun run db:generate` to generate properly formatted migrations with `--> statement-breakpoint` markers
+2. Manually split into separate files: `0038_add_table.sql`, `0039_add_index1.sql`, `0040_add_index2.sql`
+3. For manually written migrations, ensure only one `CREATE TABLE`, `CREATE INDEX`, `ALTER TABLE`, etc. per file
+
+This restriction applies to all migrations in the `drizzle/` folder.
+
 **Troubleshooting:**
 ```bash
 # Check if database is locked

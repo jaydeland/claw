@@ -67,7 +67,7 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
 
   const utils = trpc.useUtils()
-  const { data: projects } = trpc.projects.getAll.useQuery()
+  const { data: projects } = trpc.projects.list.useQuery()
 
   const createMutation = trpc.claws.create.useMutation({
     onSuccess: () => {
