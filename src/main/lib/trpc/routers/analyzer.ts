@@ -31,6 +31,7 @@ import {
   type AnalysisProgressUpdate,
 } from "../../analysis/background-analysis-runner"
 import { getActiveBackgroundTasks } from "../../claude/background-session"
+import { getPromptByKey, PROMPT_KEYS } from "../../prompts/prompt-service"
 
 // ============ EVENT EMITTER FOR REAL-TIME UPDATES ============
 

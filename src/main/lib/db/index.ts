@@ -7,6 +7,8 @@ import { existsSync, mkdirSync } from "fs"
 import { homedir } from "os"
 import { eq } from "drizzle-orm"
 import * as schema from "./schema"
+import { seedSystemPrompts } from "./seeds/system-prompts"
+import { preloadPrompts } from "../prompts/prompt-service"
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 let sqlite: Database.Database | null = null
@@ -126,6 +128,12 @@ export function initDatabase() {
 
   // Clean up any orphaned transient chats from previous sessions
   cleanupTransientChats(db)
+
+  // Seed system prompts if they don't exist
+  seedSystemPrompts(db)
+
+  // Preload prompts into memory cache
+  preloadPrompts()
 
   return db
 }

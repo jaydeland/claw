@@ -27,8 +27,12 @@ import { analyzerRouter } from "./analyzer"
 import { transientChatRouter } from "./transient-chat"
 import { githubRouter } from "./github"
 import { clawsRouter } from "./claws"
+<<<<<<< HEAD
 import { slackRouter } from "./slack"
 import { whatsappRouter } from "./whatsapp"
+=======
+import { promptsRouter } from "./prompts"
+>>>>>>> ready-gecko-814f40
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -66,8 +70,12 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     transientChat: transientChatRouter,
     github: githubRouter,
     claws: clawsRouter,
+<<<<<<< HEAD
     slack: slackRouter,
     whatsapp: whatsappRouter,
+=======
+    prompts: promptsRouter,
+>>>>>>> ready-gecko-814f40
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })
