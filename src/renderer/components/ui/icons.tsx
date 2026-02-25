@@ -5818,26 +5818,16 @@ export function LobsterClawIcon(props: IconProps) {
 export function SingleClawIcon(props: IconProps) {
   return (
     <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      viewBox="0 0 48 48"
+      fill="currentColor"
       {...props}
     >
-      {/* Single open claw - matching the reference image */}
-      {/* Upper pincer (curved, open) */}
-      <path d="M10 6c2-1 4-0.5 5 1.5" />
-      <path d="M15 7.5c1 2 0.5 4-1 5" />
-      {/* Lower pincer (curved, open) */}
-      <path d="M8 8c1 2 0.5 5-1.5 7" />
-      <path d="M6.5 15c-0.5 1.5 0 3 1.5 3.5" />
-      {/* Connecting line between pincers */}
-      <path d="M10 6l-2 2" />
-      {/* Base/handle */}
-      <path d="M14 12.5l3.5 3.5" />
-      <path d="M17.5 16c1 1 1.5 2 0.5 3l-2 2c-1 1-2 0.5-3-0.5l-2-2" />
+      {/* Main claw body - 3-toed talon shape */}
+      <path d="M24 2C26 2 28 3 30 5C32 7 33 10 33 14C33 18 31 22 28 25L24 46L20 25C17 22 15 18 15 14C15 10 16 7 18 5C20 3 22 2 24 2Z" />
+      {/* Left toe */}
+      <path d="M10 12C7 10 6 6 8 3C10 0 14 0 16 3C18 6 17 10 14 12C13 13 11 13 10 12Z" />
+      {/* Right toe */}
+      <path d="M34 12C31 10 30 6 32 3C34 0 38 0 40 3C42 6 41 10 38 12C37 13 35 13 34 12Z" />
     </svg>
   )
 }
