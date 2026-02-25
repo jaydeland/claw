@@ -14,7 +14,6 @@ import {
   FolderOpen,
   Rocket,
   Github,
-  Network,
 } from "lucide-react"
 import { OriginalMCPIcon, LobsterClawIcon } from "../../../components/ui/icons"
 import {
@@ -41,7 +40,6 @@ const tabs: TabItem[] = [
   { id: "clusters", label: "Clusters", icon: Server },
   { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
   { id: "github", label: "GitHub", icon: Github },
-  { id: "gitnexus", label: "GitNexus", icon: Network },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
@@ -83,7 +81,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
       if (tabId === "gsd") {
         setGsdCategory("gsd")
         setIsContentCollapsed(true) // Collapse sidebar since GSD has its own file tree
-      } else if (tabId === "github" || tabId === "gitnexus") {
+      } else if (tabId === "github") {
         setGsdCategory(null)
         setIsContentCollapsed(true) // Full-width views — no sidebar panel needed
       } else {

@@ -53,7 +53,6 @@ import { ClustersContent } from "../../clusters/ui/clusters-content"
 import { selectedGsdCategoryAtom } from "../../gsd/atoms"
 import { GsdContent } from "../../gsd/ui/gsd-content"
 import { GitHubView } from "../../github/components/github-view"
-import { GitNexusView } from "../../gitnexus/components/gitnexus-view"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { HistoryChatView } from "../../history"
@@ -848,8 +847,7 @@ export function AgentsContent() {
   const showWorkflowsView = !!selectedWorkflowCategory
   const showProjectDetail = !!selectedProjectDetailId
   const showGitHubView = selectedSidebarTab === "github"
-  const showGitNexusView = selectedSidebarTab === "gitnexus"
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showGitNexusView
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView
 
   return (
     <>
@@ -880,15 +878,6 @@ export function AgentsContent() {
           projects={(projects ?? []).map((p) => ({ id: p.id, path: p.path, name: p.name }))}
         />
       </div>
-
-      {/* GitNexus view */}
-      {showGitNexusView && (
-        <div className="flex-1 h-full overflow-hidden">
-          <GitNexusView
-            projectPath={selectedProject?.path || projects?.[0]?.path || ""}
-          />
-        </div>
-      )}
 
       {/* Main content - chats/terminal/other */}
       <div className={showMainContent ? "flex h-full" : "hidden"}>

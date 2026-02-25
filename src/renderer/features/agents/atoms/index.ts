@@ -670,7 +670,7 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
  * - "gsd": GSD (Get Shit Done) planning framework
  * - "github": GitHub view (PRs, Issues, Code, Visualize)
  */
-export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "github" | "gitnexus" | "claws"
+export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "github" | "claws"
 
 /**
  * Currently selected sidebar tab (persisted)

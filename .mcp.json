@@ -5,14 +5,6 @@
       "args": [
         "chrome-devtools-mcp@latest"
       ]
-    },
-    "gitnexus": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "gitnexus@latest",
-        "mcp"
-      ]
     }
   }
 }
