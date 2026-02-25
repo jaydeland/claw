@@ -15,7 +15,7 @@ import {
   Rocket,
   Github,
 } from "lucide-react"
-import { OriginalMCPIcon, LobsterClawIcon } from "../../../components/ui/icons"
+import { OriginalMCPIcon, LobsterClawIcon, SingleClawIcon } from "../../../components/ui/icons"
 import {
   Tooltip,
   TooltipContent,
@@ -44,7 +44,7 @@ const tabs: TabItem[] = [
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
-  { id: "claws", label: "Claws", icon: CodeSandbox },
+  { id: "claws", label: "Claws", icon: SingleClawIcon },
 ]
 
 interface SidebarTabBarProps {
@@ -65,8 +65,12 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
 
   const handleTabClick = (tabId: SidebarTab) => {
     if (selectedTab === tabId) {
-      // Clicking same tab toggles collapse
-      setIsContentCollapsed(!isContentCollapsed)
+      // Clicking same tab toggles collapse, EXCEPT for claws which should always expand
+      if (tabId === "claws") {
+        setIsContentCollapsed(false)
+      } else {
+        setIsContentCollapsed(!isContentCollapsed)
+      }
     } else {
       // Clicking different tab switches and expands
       setSelectedTab(tabId)
