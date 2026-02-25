@@ -57,6 +57,7 @@ import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialo
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { HistoryChatView } from "../../history"
 import { ProjectDetailPage } from "./project-detail-page"
+import { PromptsView } from "../../prompts/ui/prompts-view"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -847,7 +848,8 @@ export function AgentsContent() {
   const showWorkflowsView = !!selectedWorkflowCategory
   const showProjectDetail = !!selectedProjectDetailId
   const showGitHubView = selectedSidebarTab === "github"
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView
+  const showPromptsView = selectedSidebarTab === "prompts"
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView
 
   return (
     <>
@@ -877,6 +879,11 @@ export function AgentsContent() {
         <GitHubView
           projects={(projects ?? []).map((p) => ({ id: p.id, path: p.path, name: p.name }))}
         />
+      </div>
+
+      {/* Prompts view */}
+      <div className={showPromptsView ? "flex-1 h-full overflow-hidden" : "hidden"}>
+        <PromptsView />
       </div>
 
       {/* Main content - chats/terminal/other */}

@@ -6,7 +6,7 @@ import {
   Terminal,
   TerminalSquare,
   Bot,
-  BookOpen,
+  LibraryBig,
   Server,
   History,
   ChevronsLeft,
@@ -14,6 +14,7 @@ import {
   FolderOpen,
   Rocket,
   Github,
+  ScrollText,
 } from "lucide-react"
 import { OriginalMCPIcon, LobsterClawIcon, SingleClawIcon } from "../../../components/ui/icons"
 import {
@@ -41,10 +42,11 @@ const tabs: TabItem[] = [
   { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
   { id: "github", label: "GitHub", icon: Github },
   { id: "agents", label: "Agents", icon: Bot },
-  { id: "skills", label: "Skills", icon: BookOpen },
+  { id: "skills", label: "Skills", icon: LibraryBig },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "claws", label: "Claws", icon: SingleClawIcon },
+  { id: "prompts", label: "Prompts", icon: ScrollText },
 ]
 
 interface SidebarTabBarProps {
@@ -85,7 +87,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
       if (tabId === "gsd") {
         setGsdCategory("gsd")
         setIsContentCollapsed(true) // Collapse sidebar since GSD has its own file tree
-      } else if (tabId === "github") {
+      } else if (tabId === "github" || tabId === "prompts") {
         setGsdCategory(null)
         setIsContentCollapsed(true) // Full-width views — no sidebar panel needed
       } else {
