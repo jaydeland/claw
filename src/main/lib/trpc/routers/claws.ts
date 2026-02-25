@@ -49,7 +49,13 @@ const githubPollConfigSchema = z.object({
 
 const manualConfigSchema = z.object({})
 
-const triggerConfigSchema = z.union([cronConfigSchema, githubPollConfigSchema, manualConfigSchema])
+const triggerConfigSchema = z.union([
+  cronConfigSchema,
+  githubPollConfigSchema,
+  manualConfigSchema,
+  z.object({ slackChannelFilter: z.string().optional() }),
+  z.object({ whatsappChatFilter: z.string().optional() }),
+])
 
 /**
  * Claw router for managing headless agents
@@ -102,7 +108,7 @@ export const clawsRouter = router({
         name: z.string().min(1),
         instruction: z.string().min(1),
         targetWorktree: z.string().min(1),
-        triggerType: z.enum(["cron", "github_poll", "manual"]),
+        triggerType: z.enum(["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"]),
         triggerConfig: triggerConfigSchema,
         isEnabled: z.boolean().default(true),
       })
@@ -139,7 +145,7 @@ export const clawsRouter = router({
         name: z.string().min(1).optional(),
         instruction: z.string().min(1).optional(),
         targetWorktree: z.string().min(1).optional(),
-        triggerType: z.enum(["cron", "github_poll", "manual"]).optional(),
+        triggerType: z.enum(["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"]).optional(),
         triggerConfig: triggerConfigSchema.optional(),
       })
     )
@@ -147,7 +153,7 @@ export const clawsRouter = router({
       const db = getDatabase()
       const { id, ...updates } = input
 
-      const updateData: Record<string, string | boolean | undefined> = { updatedAt: new Date() }
+      const updateData: Record<string, string | boolean | Date | undefined> = { updatedAt: new Date() }
 
       if (updates.name !== undefined) updateData.name = updates.name
       if (updates.instruction !== undefined) updateData.instruction = updates.instruction

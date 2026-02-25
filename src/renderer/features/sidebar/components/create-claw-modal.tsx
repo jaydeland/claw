@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import { Clock, Github, Play, FolderOpen, Loader2, AlertCircle } from "lucide-react"
+import { Clock, Github, Play, FolderOpen, Loader2, AlertCircle, Slack, MessageCircle } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import {
@@ -30,7 +30,7 @@ interface CreateClawModalProps {
   onOpenChange: (open: boolean) => void
 }
 
-type TriggerType = "cron" | "github_poll" | "manual"
+type TriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
 
 interface FormData {
   name: string
@@ -43,6 +43,10 @@ interface FormData {
   githubOwner: string
   githubRepo: string
   githubLabel: string
+  // Slack config
+  slackChannelFilter: string
+  // WhatsApp config
+  whatsappChatFilter: string
 }
 
 const initialFormData: FormData = {
@@ -54,6 +58,8 @@ const initialFormData: FormData = {
   githubOwner: "",
   githubRepo: "",
   githubLabel: "agent-ready",
+  slackChannelFilter: "",
+  whatsappChatFilter: "",
 }
 
 export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
@@ -107,6 +113,9 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
       }
     }
 
+    // Note: slack_mention and whatsapp_message don't require config
+    // Channel/chat filters are optional
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -123,7 +132,15 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
               repo: formData.githubRepo,
               label: formData.githubLabel,
             }
-          : {}
+          : formData.triggerType === "slack_mention"
+            ? {
+                slackChannelFilter: formData.slackChannelFilter || undefined,
+              }
+            : formData.triggerType === "whatsapp_message"
+              ? {
+                  whatsappChatFilter: formData.whatsappChatFilter || undefined,
+                }
+              : {}
 
     createMutation.mutate({
       name: formData.name,
@@ -153,6 +170,8 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
 
   const showCronConfig = formData.triggerType === "cron"
   const showGitHubConfig = formData.triggerType === "github_poll"
+  const showSlackConfig = formData.triggerType === "slack_mention"
+  const showWhatsAppConfig = formData.triggerType === "whatsapp_message"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -274,6 +293,32 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
                 <span className="text-xs">Manual</span>
               </Button>
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={formData.triggerType === "slack_mention" ? "default" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setFormData((prev) => ({ ...prev, triggerType: "slack_mention" }))
+                }
+                className="flex flex-col items-center gap-1 h-auto py-2"
+              >
+                <Slack className="h-4 w-4" />
+                <span className="text-xs">Slack</span>
+              </Button>
+              <Button
+                type="button"
+                variant={formData.triggerType === "whatsapp_message" ? "default" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setFormData((prev) => ({ ...prev, triggerType: "whatsapp_message" }))
+                }
+                className="flex flex-col items-center gap-1 h-auto py-2"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="text-xs">WhatsApp</span>
+              </Button>
+            </div>
           </div>
 
           {/* Cron Configuration */}
@@ -345,6 +390,46 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
                 {errors.githubLabel && (
                   <p className="text-xs text-destructive">{errors.githubLabel}</p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Slack Configuration */}
+          {showSlackConfig && (
+            <div className="space-y-3 p-3 bg-muted/50 rounded-md">
+              <div className="space-y-2">
+                <Label htmlFor="slack-filter">Slack Channel Filter (optional)</Label>
+                <Input
+                  id="slack-filter"
+                  placeholder="#claw-commands or leave empty for all channels"
+                  value={formData.slackChannelFilter}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, slackChannelFilter: e.target.value }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to respond to all channels. Use channel name (e.g., #claw-commands) or channel ID.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* WhatsApp Configuration */}
+          {showWhatsAppConfig && (
+            <div className="space-y-3 p-3 bg-muted/50 rounded-md">
+              <div className="space-y-2">
+                <Label htmlFor="whatsapp-filter">WhatsApp Chat Filter (optional)</Label>
+                <Input
+                  id="whatsapp-filter"
+                  placeholder="group, individual, or phone number"
+                  value={formData.whatsappChatFilter}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, whatsappChatFilter: e.target.value }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use &quot;group&quot; for groups only, &quot;individual&quot; for DMs only, phone number, or leave empty for all.
+                </p>
               </div>
             </div>
           )}

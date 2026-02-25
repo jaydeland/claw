@@ -378,8 +378,8 @@ export const headlessClaws = sqliteTable("headless_claws", {
   name: text("name").notNull(),
   instruction: text("instruction").notNull(), // The prompt/task passed to Claude
   targetWorktree: text("target_worktree").notNull(), // Absolute path to the isolated Git worktree
-  triggerType: text("trigger_type", { enum: ["cron", "github_poll", "manual"] }).notNull(),
-  triggerConfig: text("trigger_config").notNull(), // JSON: cron expression or GitHub repo identifier
+  triggerType: text("trigger_type", { enum: ["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"] }).notNull(),
+  triggerConfig: text("trigger_config").notNull(), // JSON: cron expression, GitHub repo, or chat filter
   isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
@@ -424,9 +424,28 @@ export const githubSettings = sqliteTable("github_settings", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
 
+// ============ SLACK SETTINGS ============
+// Secure storage for Slack app credentials
+export const slackSettings = sqliteTable("slack_settings", {
+  id: text("id").primaryKey().default("default"), // Single row, always "default"
+  encryptedAppToken: text("encrypted_app_token"), // xapp-... token encrypted via safeStorage
+  encryptedBotToken: text("encrypted_bot_token"), // xoxb-... token encrypted via safeStorage
+  isSocketModeEnabled: integer("is_socket_mode_enabled", { mode: "boolean" }).default(false),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+})
+
+// ============ WHATSAPP SETTINGS ============
+// Storage for WhatsApp connection status (uses QR auth, no tokens to store)
+export const whatsappSettings = sqliteTable("whatsapp_settings", {
+  id: text("id").primaryKey().default("default"), // Single row, always "default"
+  isConnected: integer("is_connected", { mode: "boolean" }).default(false),
+  sessionPath: text("session_path").default("baileys_auth"),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+})
+
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
-export type ClawTriggerType = "cron" | "github_poll" | "manual"
+export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -466,3 +485,9 @@ export type ClawExecution = typeof clawExecutions.$inferSelect
 export type NewClawExecution = typeof clawExecutions.$inferInsert
 export type GithubSettings = typeof githubSettings.$inferSelect
 export type NewGithubSettings = typeof githubSettings.$inferInsert
+
+// Chat platform integration types
+export type SlackSettings = typeof slackSettings.$inferSelect
+export type NewSlackSettings = typeof slackSettings.$inferInsert
+export type WhatsappSettings = typeof whatsappSettings.$inferSelect
+export type NewWhatsappSettings = typeof whatsappSettings.$inferInsert

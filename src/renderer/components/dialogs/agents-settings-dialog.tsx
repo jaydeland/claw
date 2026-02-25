@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { FolderOpen, Server, Download } from "lucide-react"
 import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
 import { cn } from "../../lib/utils"
-import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms"
+import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms/agents-settings-dialog"
 import {
   ProfileIconFilled,
   EyeOpenFilledIcon,
@@ -27,7 +27,10 @@ import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
 import { AgentsBackupTab } from "./settings-tabs/agents-backup-tab"
 import { AgentsProvidersTab } from "./settings-tabs/agents-providers-tab"
 import { AgentsGitHubTab } from "./settings-tabs/agents-github-tab"
+import { AgentsSlackTab } from "./settings-tabs/agents-slack-tab"
+import { AgentsWhatsAppTab } from "./settings-tabs/agents-whatsapp-tab"
 import { trpc } from "../../lib/trpc"
+import { Slack, MessageCircle } from "lucide-react"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -97,6 +100,18 @@ const MAIN_TABS = [
     label: "GitHub",
     icon: Github,
     description: "GitHub token configuration for Claws",
+  },
+  {
+    id: "slack" as SettingsTab,
+    label: "Slack",
+    icon: Slack,
+    description: "Slack Socket Mode integration for agent triggers",
+  },
+  {
+    id: "whatsapp" as SettingsTab,
+    label: "WhatsApp",
+    icon: MessageCircle,
+    description: "WhatsApp Web integration for agent triggers",
   },
 ]
 
@@ -277,8 +292,12 @@ export function AgentsSettingsDialog({
         return <AgentsPreferencesTab />
       case "kubernetes":
         return <AgentsKubernetesTab />
-      case "github":
+            case "github":
         return <AgentsGitHubTab />
+      case "slack":
+        return <AgentsSlackTab />
+      case "whatsapp":
+        return <AgentsWhatsAppTab />
       case "advanced":
         return <AgentsAdvancedSettingsTab />
       case "worktrees":

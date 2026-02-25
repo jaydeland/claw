@@ -8,11 +8,13 @@
 import { safeStorage, Notification } from "electron"
 import { spawn, ChildProcess } from "node:child_process"
 import { eq, desc } from "drizzle-orm"
-import { getDatabase, headlessClaws, clawExecutions, githubSettings, type HeadlessClaw, type ClawExecution } from "../db"
+import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, type HeadlessClaw, type ClawExecution } from "../db"
 import { createId } from "../db/utils"
+import { getSlackTrigger } from "./slack-trigger"
+import { getWhatsAppTrigger } from "./whatsapp-trigger"
 
 // Type definitions
-type TriggerType = "cron" | "github_poll" | "manual"
+type TriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
 type ExecutionStatus = "running" | "success" | "failed"
 
 interface CronConfig {
@@ -23,6 +25,14 @@ interface GitHubPollConfig {
   owner: string
   repo: string
   label: string // e.g., "agent-ready"
+}
+
+interface SlackTriggerConfig {
+  slackChannelFilter?: string // Optional channel filter (e.g., "#claw-commands")
+}
+
+interface WhatsAppTriggerConfig {
+  whatsappChatFilter?: string // Optional chat filter (e.g., "group" or phone number)
 }
 
 // Active cron jobs and polling intervals
@@ -127,6 +137,16 @@ class ClawDaemon {
       case "manual":
         // Manual triggers don't need registration - they're triggered on-demand
         console.log(`[ClawDaemon] Claw "${claw.name}" registered as manual trigger`)
+        break
+      case "slack_mention":
+        // Slack triggers are handled by SlackTrigger singleton
+        console.log(`[ClawDaemon] Claw "${claw.name}" registered for Slack mentions`)
+        // Ensure SlackTrigger is started if credentials are configured
+        await this.ensureSlackTriggerStarted()
+        break
+      case "whatsapp_message":
+        // WhatsApp triggers are handled by WhatsAppTrigger singleton
+        console.log(`[ClawDaemon] Claw "${claw.name}" registered for WhatsApp messages`)
         break
       default:
         console.warn(`[ClawDaemon] Unknown trigger type: ${claw.triggerType}`)
@@ -252,9 +272,81 @@ class ClawDaemon {
   }
 
   /**
+   * Ensure Slack trigger is started if credentials are configured
+   */
+  private async ensureSlackTriggerStarted(): Promise<void> {
+    try {
+      const slackTrigger = getSlackTrigger()
+      if (!slackTrigger.isActive()) {
+        // Check if we have credentials before trying to start
+        const db = getDatabase()
+        const settings = db.select().from(slackSettings).where(eq(slackSettings.id, "default")).get()
+        if (settings?.encryptedAppToken && settings?.encryptedBotToken && settings?.isSocketModeEnabled) {
+          await slackTrigger.start()
+        }
+      }
+    } catch (error) {
+      console.error("[ClawDaemon] Failed to start Slack trigger:", error)
+    }
+  }
+
+  /**
+   * Start Slack trigger (called from settings when enabling Socket Mode)
+   */
+  async startSlackTrigger(): Promise<void> {
+    const slackTrigger = getSlackTrigger()
+    await slackTrigger.start()
+  }
+
+  /**
+   * Stop Slack trigger (called from settings when disabling Socket Mode)
+   */
+  async stopSlackTrigger(): Promise<void> {
+    const slackTrigger = getSlackTrigger()
+    await slackTrigger.stop()
+  }
+
+  /**
+   * Start WhatsApp trigger
+   */
+  async startWhatsAppTrigger(): Promise<void> {
+    const whatsappTrigger = getWhatsAppTrigger()
+    await whatsappTrigger.start()
+  }
+
+  /**
+   * Stop WhatsApp trigger
+   */
+  async stopWhatsAppTrigger(): Promise<void> {
+    const whatsappTrigger = getWhatsAppTrigger()
+    await whatsappTrigger.stop()
+  }
+
+  /**
+   * Logout from WhatsApp and clear session
+   */
+  async logoutWhatsApp(): Promise<void> {
+    const whatsappTrigger = getWhatsAppTrigger()
+    await whatsappTrigger.logout()
+  }
+
+  /**
    * Execute a claw (trigger a run)
    */
-  async executeClaw(clawId: string, context?: { issueNumber?: number; issueTitle?: string }): Promise<string> {
+  async executeClaw(
+    clawId: string,
+    context?: {
+      issueNumber?: number
+      issueTitle?: string
+      slackChannel?: string
+      slackUser?: string
+      slackThreadTs?: string
+      whatsappFrom?: string
+      whatsappSender?: string
+      originalMessage?: string
+      triggerSource?: "slack" | "whatsapp" | "github" | "cron" | "manual"
+    }
+  ): Promise<string> {
     const db = getDatabase()
     const claw = db.select().from(headlessClaws).where(eq(headlessClaws.id, clawId)).get()
 
@@ -280,8 +372,31 @@ class ClawDaemon {
 
     // Build the instruction with context
     let instruction = claw.instruction
-    if (context?.issueNumber) {
-      instruction += `\n\nContext: Processing issue #${context.issueNumber}` + (context.issueTitle ? ` - "${context.issueTitle}"` : "")
+
+    if (context) {
+      const contextParts: string[] = []
+
+      if (context.issueNumber) {
+        contextParts.push(`Processing issue #${context.issueNumber}` + (context.issueTitle ? ` - "${context.issueTitle}"` : ""))
+      }
+
+      if (context.triggerSource === "slack") {
+        contextParts.push(`Triggered via Slack by user ${context.slackUser}`)
+        if (context.originalMessage) {
+          contextParts.push(`Original message: "${context.originalMessage}"`)
+        }
+      }
+
+      if (context.triggerSource === "whatsapp") {
+        contextParts.push(`Triggered via WhatsApp by ${context.whatsappSender} (${context.whatsappFrom})`)
+        if (context.originalMessage) {
+          contextParts.push(`Original message: "${context.originalMessage}"`)
+        }
+      }
+
+      if (contextParts.length > 0) {
+        instruction += `\n\nContext: ${contextParts.join(". ")}`
+      }
     }
 
     // Spawn Claude Code process
