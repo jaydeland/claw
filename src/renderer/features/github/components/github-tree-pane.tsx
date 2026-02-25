@@ -27,8 +27,6 @@ import {
   githubSelectionAtom,
   githubExpandedReposAtom,
   githubExpandedSectionsAtom,
-  githubReposAtom,
-  githubReposLoadingAtom,
   githubPRsAtom,
   githubIssuesAtom,
   githubFilesAtom,
@@ -42,51 +40,86 @@ import {
 const ANALYSIS_TYPES: AnalysisType[] = ["codeflow", "db", "architecture", "build"]
 
 interface GitHubTreePaneProps {
-  projectId: string
-  projectPath: string
+  projects: Array<{ id: string; path: string; name: string }>
 }
 
-export const GitHubTreePane = memo(function GitHubTreePane({
+export const GitHubTreePane = memo(function GitHubTreePane({ projects }: GitHubTreePaneProps) {
+  const [searchQuery, setSearchQuery] = useState("")
+
+  return (
+    <div className="h-full flex flex-col bg-muted/30">
+      {/* Search */}
+      <div className="p-2 border-b border-border">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8 h-8"
+          />
+        </div>
+      </div>
+
+      {/* Tree */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-2 space-y-0.5">
+          {projects.map((project) => (
+            <SingleRepoSection
+              key={project.id}
+              projectId={project.id}
+              projectPath={project.path}
+              projectName={project.name}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+})
+
+// Per-repo component — manages its own data fetching so hooks aren't called in a loop
+const SingleRepoSection = memo(function SingleRepoSection({
   projectId,
   projectPath,
-}: GitHubTreePaneProps) {
-  const [searchQuery, setSearchQuery] = useState("")
-  const repos = useAtomValue(githubReposAtom)
-  const loading = useAtomValue(githubReposLoadingAtom)
+  projectName,
+}: {
+  projectId: string
+  projectPath: string
+  projectName: string
+}) {
   const [expandedRepos, setExpandedRepos] = useAtom(githubExpandedReposAtom)
   const [expandedSections, setExpandedSections] = useAtom(githubExpandedSectionsAtom)
   const [expandedFolders, setExpandedFolders] = useAtom(githubExpandedFoldersAtom)
   const [selection, setSelection] = useAtom(githubSelectionAtom)
-  const prs = useAtomValue(githubPRsAtom)
-  const issues = useAtomValue(githubIssuesAtom)
-  const [files, setFiles] = useAtom(githubFilesAtom)
   const setPRs = useSetAtom(githubPRsAtom)
   const setIssues = useSetAtom(githubIssuesAtom)
+  const [, setFiles] = useAtom(githubFilesAtom)
+  const prs = useAtomValue(githubPRsAtom)
+  const issues = useAtomValue(githubIssuesAtom)
 
-  // Fetch files when the code section is expanded
   const isRepoExpanded = expandedRepos.has(projectId)
-  const isCodeExpanded = expandedSections.has("code")
+  // Section IDs are scoped per-repo so expanding "prs" in one repo doesn't affect others
+  const sectionKey = useCallback((section: string) => `${projectId}-${section}`, [projectId])
+  const isCodeExpanded = expandedSections.has(sectionKey("code"))
 
-  // Fetch GitHub data (PRs and Issues) when repo is expanded
-  const { data: githubData, isLoading: isLoadingGitHub, error: githubError, refetch: refetchGitHub } = trpc.github.getData.useQuery(
+  const { data: githubData, isLoading: isLoadingGitHub, error: githubError } = trpc.github.getData.useQuery(
     { projectPath },
     {
       enabled: isRepoExpanded && !!projectPath,
-      staleTime: 60 * 1000, // 1 minute
+      staleTime: 60 * 1000,
       retry: false,
     }
   )
 
-  // Fetch files - no limit to show complete file tree
-  const { data: filesData, isLoading: isLoadingFiles, refetch: refetchFiles } = trpc.files.search.useQuery(
+  const { data: filesData } = trpc.files.search.useQuery(
     { projectPath, query: "" },
     {
       enabled: isRepoExpanded && isCodeExpanded && !!projectPath,
-      staleTime: 30 * 1000, // 30 seconds
+      staleTime: 30 * 1000,
     }
   )
 
-  // Update atoms when GitHub data changes
   useEffect(() => {
     if (githubData?.success) {
       setPRs((prev) => {
@@ -121,7 +154,6 @@ export const GitHubTreePane = memo(function GitHubTreePane({
     }
   }, [githubData, projectId, setPRs, setIssues])
 
-  // Update files atom when data changes
   useEffect(() => {
     if (filesData) {
       setFiles((prev) => {
@@ -135,38 +167,30 @@ export const GitHubTreePane = memo(function GitHubTreePane({
     }
   }, [filesData, projectId, setFiles])
 
-  // For now, we'll use a single repo from the project path
-  // In the future, this could support multiple repos
   const currentRepo: GitHubRepo = {
     id: projectId,
-    name: githubData?.success ? `${githubData.owner}/${githubData.repo}` : (projectPath.split("/").pop() || "repo"),
-    fullName: githubData?.success ? `${githubData.owner}/${githubData.repo}` : (projectPath.split("/").pop() || "repo"),
+    name: githubData?.success ? `${githubData.owner}/${githubData.repo}` : projectName,
+    fullName: githubData?.success ? `${githubData.owner}/${githubData.repo}` : projectName,
     owner: githubData?.success ? githubData.owner : "",
     url: githubData?.success ? `https://github.com/${githubData.owner}/${githubData.repo}` : "",
     localPath: projectPath,
     projectId,
   }
 
-  const toggleRepo = useCallback((repoId: string) => {
+  const toggleRepo = useCallback(() => {
     setExpandedRepos((prev) => {
       const next = new Set(prev)
-      if (next.has(repoId)) {
-        next.delete(repoId)
-      } else {
-        next.add(repoId)
-      }
+      if (next.has(projectId)) next.delete(projectId)
+      else next.add(projectId)
       return next
     })
-  }, [setExpandedRepos])
+  }, [projectId, setExpandedRepos])
 
   const toggleSection = useCallback((section: string) => {
     setExpandedSections((prev) => {
       const next = new Set(prev)
-      if (next.has(section)) {
-        next.delete(section)
-      } else {
-        next.add(section)
-      }
+      if (next.has(section)) next.delete(section)
+      else next.add(section)
       return next
     })
   }, [setExpandedSections])
@@ -190,54 +214,34 @@ export const GitHubTreePane = memo(function GitHubTreePane({
   }
 
   return (
-    <div className="h-full flex flex-col bg-muted/30">
-      {/* Search */}
-      <div className="p-2 border-b border-border">
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 h-8"
-          />
-        </div>
-      </div>
-
-      {/* Tree */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-2">
-          {/* Single repo for now */}
-          <RepoTreeItem
-            repo={currentRepo}
-            isExpanded={isRepoExpanded}
-            expandedSections={expandedSections}
-            expandedFolders={expandedFolders}
-            selection={selection}
-            prs={prs.get(currentRepo.id) || []}
-            issues={issues.get(currentRepo.id) || []}
-            files={filesData?.map((f) => ({
-              path: f.path,
-              type: f.type === "folder" ? "dir" : "file" as "file" | "dir",
-            })) || []}
-            onToggleRepo={() => toggleRepo(currentRepo.id)}
-            onToggleSection={toggleSection}
-            onToggleFolder={(path) => {
-              const next = new Set(expandedFolders)
-              if (next.has(path)) next.delete(path)
-              else next.add(path)
-              setExpandedFolders(next)
-            }}
-            onSelect={handleSelect}
-            analysisLabels={analysisLabels}
-            analysisIcons={analysisIcons}
-            isLoading={isLoadingGitHub}
-            error={githubError?.message || (githubData && !githubData.success ? githubData.error : null)}
-            isGitHub={githubData?.success ? githubData.isGitHub : true}
-          />
-        </div>
-      </div>
-    </div>
+    <RepoTreeItem
+      repo={currentRepo}
+      isExpanded={isRepoExpanded}
+      expandedSections={expandedSections}
+      expandedFolders={expandedFolders}
+      selection={selection}
+      prs={prs.get(currentRepo.id) || []}
+      issues={issues.get(currentRepo.id) || []}
+      files={filesData?.map((f) => ({
+        path: f.path,
+        type: f.type === "folder" ? "dir" : "file" as "file" | "dir",
+      })) || []}
+      onToggleRepo={toggleRepo}
+      onToggleSection={toggleSection}
+      onToggleFolder={(path) => {
+        const next = new Set(expandedFolders)
+        if (next.has(path)) next.delete(path)
+        else next.add(path)
+        setExpandedFolders(next)
+      }}
+      onSelect={handleSelect}
+      analysisLabels={analysisLabels}
+      analysisIcons={analysisIcons}
+      isLoading={isLoadingGitHub}
+      error={githubError?.message || (githubData && !githubData.success ? githubData.error : null)}
+      isGitHub={githubData?.success ? githubData.isGitHub : true}
+      sectionKey={sectionKey}
+    />
   )
 })
 
@@ -259,6 +263,7 @@ interface RepoTreeItemProps {
   isLoading?: boolean
   error?: string | null
   isGitHub?: boolean
+  sectionKey: (section: string) => string
 }
 
 const RepoTreeItem = memo(function RepoTreeItem({
@@ -279,6 +284,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
   isLoading,
   error,
   isGitHub,
+  sectionKey,
 }: RepoTreeItemProps) {
   const openPRs = prs.filter((pr) => pr.state === "open").length
   const openIssues = issues.filter((i) => i.state === "open").length
@@ -449,12 +455,12 @@ const RepoTreeItem = memo(function RepoTreeItem({
         <div className="ml-2 space-y-0.5">
           {/* PRs section */}
           <SectionTreeItem
-            id="prs"
+            id={sectionKey("prs")}
             label="Pull Requests"
             icon={GitPullRequest}
             count={openPRs}
-            isExpanded={expandedSections.has("prs")}
-            onToggle={() => onToggleSection("prs")}
+            isExpanded={expandedSections.has(sectionKey("prs"))}
+            onToggle={() => onToggleSection(sectionKey("prs"))}
           >
             {prs.map((pr) => (
               <button
@@ -494,12 +500,12 @@ const RepoTreeItem = memo(function RepoTreeItem({
 
           {/* Issues section */}
           <SectionTreeItem
-            id="issues"
+            id={sectionKey("issues")}
             label="Issues"
             icon={CircleDot}
             count={openIssues}
-            isExpanded={expandedSections.has("issues")}
-            onToggle={() => onToggleSection("issues")}
+            isExpanded={expandedSections.has(sectionKey("issues"))}
+            onToggle={() => onToggleSection(sectionKey("issues"))}
           >
             {issues.map((issue) => (
               <button
@@ -537,11 +543,11 @@ const RepoTreeItem = memo(function RepoTreeItem({
 
           {/* Code section - shows files with expandable folders */}
           <SectionTreeItem
-            id="code"
+            id={sectionKey("code")}
             label="Code"
             icon={FileCode}
-            isExpanded={expandedSections.has("code")}
-            onToggle={() => onToggleSection("code")}
+            isExpanded={expandedSections.has(sectionKey("code"))}
+            onToggle={() => onToggleSection(sectionKey("code"))}
           >
             {files.length > 0 ? (
               <div>
@@ -556,11 +562,11 @@ const RepoTreeItem = memo(function RepoTreeItem({
 
           {/* Visualize section */}
           <SectionTreeItem
-            id="visualize"
+            id={sectionKey("visualize")}
             label="Visualize"
             icon={GitBranch}
-            isExpanded={expandedSections.has("visualize")}
-            onToggle={() => onToggleSection("visualize")}
+            isExpanded={expandedSections.has(sectionKey("visualize"))}
+            onToggle={() => onToggleSection(sectionKey("visualize"))}
           >
             {ANALYSIS_TYPES.map((type) => {
               const Icon = analysisIcons[type]

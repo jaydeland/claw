@@ -877,8 +877,7 @@ export function AgentsContent() {
       {/* GitHub view - kept mounted to preserve streaming state */}
       <div className={showGitHubView ? "flex-1 h-full overflow-hidden" : "hidden"}>
         <GitHubView
-          projectId={selectedProject?.id || projects?.[0]?.id || ""}
-          projectPath={selectedProject?.path || projects?.[0]?.path || ""}
+          projects={(projects ?? []).map((p) => ({ id: p.id, path: p.path, name: p.name }))}
         />
       </div>
 

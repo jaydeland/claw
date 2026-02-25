@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useCallback, useRef, useEffect } from "react"
+import { memo, useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import { PanelLeftClose, PanelLeft, GripVertical, GitBranch, ChevronDown, Loader2 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
@@ -18,25 +18,35 @@ import { GitHubContentPane } from "./github-content-pane"
 import { GitHubChatPane } from "./github-chat-pane"
 
 interface GitHubViewProps {
-  projectId: string
-  projectPath: string
+  projects: Array<{ id: string; path: string; name: string }>
 }
 
-export const GitHubView = memo(function GitHubView({ projectId, projectPath }: GitHubViewProps) {
+export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps) {
   const selection = useAtomValue(githubSelectionAtom)
   const [selectedBranches, setSelectedBranches] = useAtom(githubSelectedBranchAtom)
 
-  // Fetch branches
-  const { data: branchData, isLoading: isLoadingBranches } = trpc.gsd.getBranches.useQuery(
-    { projectPath },
-    { enabled: !!projectPath }
+  // Build a map for O(1) lookup of project by id
+  const projectsMap = useMemo(
+    () => new Map(projects.map((p) => [p.id, p])),
+    [projects]
   )
 
-  const currentBranch = selectedBranches[projectPath] || branchData?.current || "main"
+  // Derive the active project from the current selection (or fall back to first project)
+  const activeProject = (selection?.repoId ? projectsMap.get(selection.repoId) : undefined) ?? projects[0]
+  const activeProjectId = activeProject?.id ?? ""
+  const activeProjectPath = activeProject?.path ?? ""
+
+  // Fetch branches for the active project
+  const { data: branchData, isLoading: isLoadingBranches } = trpc.gsd.getBranches.useQuery(
+    { projectPath: activeProjectPath },
+    { enabled: !!activeProjectPath }
+  )
+
+  const currentBranch = selectedBranches[activeProjectPath] || branchData?.current || "main"
 
   const handleBranchSelect = useCallback((branch: string) => {
-    setSelectedBranches((prev) => ({ ...prev, [projectPath]: branch }))
-  }, [projectPath, setSelectedBranches])
+    setSelectedBranches((prev) => ({ ...prev, [activeProjectPath]: branch }))
+  }, [activeProjectPath, setSelectedBranches])
 
   // Panel widths (as percentages for responsive layout)
   const [treeWidth, setTreeWidth] = useState(20) // percentage
@@ -108,7 +118,7 @@ export const GitHubView = memo(function GitHubView({ projectId, projectPath }: G
           <h2 className="text-lg font-semibold">GitHub</h2>
 
           {/* Branch Selector */}
-          {projectPath && (
+          {activeProjectPath && (
             <div className="flex items-center gap-1 text-muted-foreground">
               <span className="text-xs">/</span>
               {isLoadingBranches ? (
@@ -156,7 +166,7 @@ export const GitHubView = memo(function GitHubView({ projectId, projectPath }: G
           className="flex-shrink-0 border-r border-border overflow-hidden"
           style={{ width: `${treeWidth}%` }}
         >
-          <GitHubTreePane projectId={projectId} projectPath={projectPath} />
+          <GitHubTreePane projects={projects} />
         </div>
 
         {/* Tree resize handle */}
@@ -178,8 +188,8 @@ export const GitHubView = memo(function GitHubView({ projectId, projectPath }: G
             style={{ width: `${contentWidth}%` }}
           >
             <GitHubContentPane
-              projectId={projectId}
-              projectPath={projectPath}
+              projectId={activeProjectId}
+              projectPath={activeProjectPath}
               selection={selection}
             />
           </div>
@@ -201,8 +211,8 @@ export const GitHubView = memo(function GitHubView({ projectId, projectPath }: G
             style={{ width: `${chatWidth}%` }}
           >
             <GitHubChatPane
-              projectId={projectId}
-              projectPath={projectPath}
+              projectId={activeProjectId}
+              projectPath={activeProjectPath}
               selection={selection}
             />
           </div>
