@@ -152,7 +152,7 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
 
   // VPN connectivity check
   vpnCheckEnabled: integer("vpn_check_enabled", { mode: "boolean" }).notNull().default(false), // Enable/disable VPN status monitoring
-  vpnCheckUrl: text("vpn_check_url"), // Internal URL to check for VPN connectivity (e.g., https://internal.company.com)
+  vpnCheckUrl: text("vpn_check_url"), // Internal URL to check for VPN connectivity (e.g. https://internal.company.com)
 
   // Default terminal start commands - JSON array of commands to run when a new project terminal is created
   // These are used as defaults for new projects
@@ -222,7 +222,7 @@ export const backgroundTasks = sqliteTable("background_tasks", {
   pid: integer("pid"), // DEPRECATED: Process ID - SDK doesn't provide PIDs, use sdkTaskId + sdkStatus instead
   sdkTaskId: text("sdk_task_id"), // The SDK's internal task identifier (NOT a PID - it's a string like "uuid-based-id")
   sdkStatus: text("sdk_status"), // Status from SDK task_notification: "completed" | "failed" | "stopped" | null (pending)
-  command: text("command"), // Command that was executed (e.g., "bun run dev")
+  command: text("command"), // Command that was executed (e.g. "bun run dev")
   description: text("description"), // Optional description of what the command does
 })
 
@@ -251,8 +251,8 @@ export const appSettings = sqliteTable("app_settings", {
 // Stores configurable settings for DevSpace integration
 export const devspaceSettings = sqliteTable("devspace_settings", {
   id: text("id").primaryKey().default("default"), // Single row, always "default"
-  reposPath: text("repos_path"), // Path to check for repos (replaces $VIDYARD_PATH)
-  configSubPath: text("config_sub_path").notNull().default("devspace.yaml"), // Sub path to check for devspace config (e.g., "devspace.yaml" or "deploy/devspace.yaml")
+  reposPath: text("repos_path"), // Path to check for repos (replaces \$VIDYARD_PATH)
+  configSubPath: text("config_sub_path").notNull().default("devspace.yaml"), // Sub path to check for devspace config (e.g. "devspace.yaml" or "deploy/devspace.yaml")
   startCommand: text("start_command").notNull().default("devspace dev"), // Command to run (defaults to "devspace dev", replaces "dy dev")
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
@@ -424,7 +424,6 @@ export const githubSettings = sqliteTable("github_settings", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
 
-<<<<<<< HEAD
 // ============ SLACK SETTINGS ============
 // Secure storage for Slack app credentials
 export const slackSettings = sqliteTable("slack_settings", {
@@ -443,14 +442,14 @@ export const whatsappSettings = sqliteTable("whatsapp_settings", {
   sessionPath: text("session_path").default("baileys_auth"),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
-=======
+
 // ============ SYSTEM PROMPTS ============
 // Stores editable system prompts for AI interactions
 export const systemPrompts = sqliteTable("system_prompts", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => createId()),
-  key: text("key").notNull().unique(), // e.g., "mcp_config", "review", "title_generation"
+  key: text("key").notNull().unique(), // e.g. "mcp_config", "review", "title_generation"
   name: text("name").notNull(), // Display name
   description: text("description").notNull(), // What this prompt is used for
   content: text("content").notNull(), // The actual prompt text
@@ -467,59 +466,56 @@ export const systemPrompts = sqliteTable("system_prompts", {
   categoryIdx: index("system_prompts_category_idx").on(table.category),
   keyIdx: index("system_prompts_key_idx").on(table.key),
 }))
->>>>>>> ready-gecko-814f40
 
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
 export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
 
-export type Project = typeof projects.$inferSelect
-export type NewProject = typeof projects.$inferInsert
-export type Chat = typeof chats.$inferSelect
-export type NewChat = typeof chats.$inferInsert
-export type SubChat = typeof subChats.$inferSelect
-export type NewSubChat = typeof subChats.$inferInsert
-export type ClaudeCodeCredential = typeof claudeCodeCredentials.$inferSelect
-export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
-export type ClaudeCodeSettings = typeof claudeCodeSettings.$inferSelect
-export type NewClaudeCodeSettings = typeof claudeCodeSettings.$inferInsert
-export type McpCredential = typeof mcpCredentials.$inferSelect
-export type NewMcpCredential = typeof mcpCredentials.$inferInsert
-export type ConfigSource = typeof configSources.$inferSelect
-export type NewConfigSource = typeof configSources.$inferInsert
-export type BackgroundTask = typeof backgroundTasks.$inferSelect
-export type NewBackgroundTask = typeof backgroundTasks.$inferInsert
-export type AppSettings = typeof appSettings.$inferSelect
-export type NewAppSettings = typeof appSettings.$inferInsert
-export type DevspaceSettings = typeof devspaceSettings.$inferSelect
-export type NewDevspaceSettings = typeof devspaceSettings.$inferInsert
-export type DevspaceStartedProcess = typeof devspaceStartedProcesses.$inferSelect
-export type NewDevspaceStartedProcess = typeof devspaceStartedProcesses.$inferInsert
-export type McpToolCache = typeof mcpToolCache.$inferSelect
-export type NewMcpToolCache = typeof mcpToolCache.$inferInsert
+export type Project = typeof projects.\$inferSelect
+export type NewProject = typeof projects.\$inferInsert
+export type Chat = typeof chats.\$inferSelect
+export type NewChat = typeof chats.\$inferInsert
+export type SubChat = typeof subChats.\$inferSelect
+export type NewSubChat = typeof subChats.\$inferInsert
+export type ClaudeCodeCredential = typeof claudeCodeCredentials.\$inferSelect
+export type NewClaudeCodeCredential = typeof claudeCodeCredentials.\$inferInsert
+export type ClaudeCodeSettings = typeof claudeCodeSettings.\$inferSelect
+export type NewClaudeCodeSettings = typeof claudeCodeSettings.\$inferInsert
+export type McpCredential = typeof mcpCredentials.\$inferSelect
+export type NewMcpCredential = typeof mcpCredentials.\$inferInsert
+export type ConfigSource = typeof configSources.\$inferSelect
+export type NewConfigSource = typeof configSources.\$inferInsert
+export type BackgroundTask = typeof backgroundTasks.\$inferSelect
+export type NewBackgroundTask = typeof backgroundTasks.\$inferInsert
+export type AppSettings = typeof appSettings.\$inferSelect
+export type NewAppSettings = typeof appSettings.\$inferInsert
+export type DevspaceSettings = typeof devspaceSettings.\$inferSelect
+export type NewDevspaceSettings = typeof devspaceSettings.\$inferInsert
+export type DevspaceStartedProcess = typeof devspaceStartedProcesses.\$inferSelect
+export type NewDevspaceStartedProcess = typeof devspaceStartedProcesses.\$inferInsert
+export type McpToolCache = typeof mcpToolCache.\$inferSelect
+export type NewMcpToolCache = typeof mcpToolCache.\$inferInsert
 
 // Analysis diagram types
-export type AnalysisDiagram = typeof analysisDiagrams.$inferSelect
-export type NewAnalysisDiagram = typeof analysisDiagrams.$inferInsert
-export type AnalysisJob = typeof analysisJobs.$inferSelect
-export type NewAnalysisJob = typeof analysisJobs.$inferInsert
+export type AnalysisDiagram = typeof analysisDiagrams.\$inferSelect
+export type NewAnalysisDiagram = typeof analysisDiagrams.\$inferInsert
+export type AnalysisJob = typeof analysisJobs.\$inferSelect
+export type NewAnalysisJob = typeof analysisJobs.\$inferInsert
 
 // Headless claws types
-export type HeadlessClaw = typeof headlessClaws.$inferSelect
-export type NewHeadlessClaw = typeof headlessClaws.$inferInsert
-export type ClawExecution = typeof clawExecutions.$inferSelect
-export type NewClawExecution = typeof clawExecutions.$inferInsert
-export type GithubSettings = typeof githubSettings.$inferSelect
-export type NewGithubSettings = typeof githubSettings.$inferInsert
+export type HeadlessClaw = typeof headlessClaws.\$inferSelect
+export type NewHeadlessClaw = typeof headlessClaws.\$inferInsert
+export type ClawExecution = typeof clawExecutions.\$inferSelect
+export type NewClawExecution = typeof clawExecutions.\$inferInsert
+export type GithubSettings = typeof githubSettings.\$inferSelect
+export type NewGithubSettings = typeof githubSettings.\$inferInsert
 
-<<<<<<< HEAD
 // Chat platform integration types
-export type SlackSettings = typeof slackSettings.$inferSelect
-export type NewSlackSettings = typeof slackSettings.$inferInsert
-export type WhatsappSettings = typeof whatsappSettings.$inferSelect
-export type NewWhatsappSettings = typeof whatsappSettings.$inferInsert
-=======
+export type SlackSettings = typeof slackSettings.\$inferSelect
+export type NewSlackSettings = typeof slackSettings.\$inferInsert
+export type WhatsappSettings = typeof whatsappSettings.\$inferSelect
+export type NewWhatsappSettings = typeof whatsappSettings.\$inferInsert
+
 // System prompts types
-export type SystemPrompt = typeof systemPrompts.$inferSelect
-export type NewSystemPrompt = typeof systemPrompts.$inferInsert
->>>>>>> ready-gecko-814f40
+export type SystemPrompt = typeof systemPrompts.\$inferSelect
+export type NewSystemPrompt = typeof systemPrompts.\$inferInsert
