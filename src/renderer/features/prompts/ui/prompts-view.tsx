@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
-import { useAtomValue } from "jotai"
+import { useState, useRef, useCallback, useEffect } from "react"
+import { useAtomValue, useAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
 import { Textarea } from "../../../components/ui/textarea"
 import { ScrollText, Save, RotateCcw } from "lucide-react"
 import { cn } from "../../../lib/utils"
-import { selectedProjectAtom } from "../../agents/atoms"
+import { selectedProjectAtom, pendingPromptNavigationAtom } from "../../agents/atoms"
 import { useContextualChat } from "../../shared/hooks/use-contextual-chat"
 import { ContextualChatPane } from "../../shared/components/contextual-chat-pane"
 
@@ -33,6 +33,7 @@ export function PromptsView() {
 
   const utils = trpc.useUtils()
   const selectedProject = useAtomValue(selectedProjectAtom)
+  const [pendingPromptNav, setPendingPromptNav] = useAtom(pendingPromptNavigationAtom)
 
   const { data: promptsData, isLoading } = trpc.prompts.list.useQuery()
   const { data: categoriesData } = trpc.prompts.getCategories.useQuery()
@@ -64,6 +65,17 @@ export function PromptsView() {
     setSelectedPrompt(prompt)
     setEditedContent(prompt.content)
   }
+
+  // Auto-select prompt when navigating from sidebar chat click
+  useEffect(() => {
+    if (!pendingPromptNav || !promptsData?.prompts?.length) return
+    const target = promptsData.prompts.find(p => p.id === pendingPromptNav)
+    if (target) {
+      handleSelectPrompt(target)
+      setPendingPromptNav(null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPromptNav, promptsData?.prompts])
 
   const handleSave = () => {
     if (selectedPrompt) {

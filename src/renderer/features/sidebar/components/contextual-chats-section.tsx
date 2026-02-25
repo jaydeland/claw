@@ -5,7 +5,7 @@ import { useSetAtom } from "jotai"
 import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { selectedSidebarTabAtom } from "../../agents/atoms"
+import { selectedSidebarTabAtom, pendingPromptNavigationAtom } from "../../agents/atoms"
 import type { SourceView } from "../../shared/hooks/use-contextual-chat"
 
 const SOURCE_VIEW_LABELS: Record<SourceView, string> = {
@@ -30,6 +30,7 @@ interface ContextualChatsSectionProps {
 export function ContextualChatsSection({ sourceView, projectId }: ContextualChatsSectionProps) {
   const [isOpen, setIsOpen] = useState(true)
   const setSelectedTab = useSetAtom(selectedSidebarTabAtom)
+  const setPendingPromptNavigation = useSetAtom(pendingPromptNavigationAtom)
 
   const { data: chats } = trpc.chats.list.useQuery(
     { projectId, sourceView },
@@ -41,9 +42,14 @@ export function ContextualChatsSection({ sourceView, projectId }: ContextualChat
   const label = SOURCE_VIEW_LABELS[sourceView]
   const targetTab = SOURCE_VIEW_TABS[sourceView]
 
-  const handleChatClick = () => {
-    // Navigate to the corresponding view tab
+  const handleChatClick = (chat: (typeof chats)[0]) => {
     setSelectedTab(targetTab as any)
+    if (sourceView === "prompts" && chat.sourceContext) {
+      try {
+        const ctx = JSON.parse(chat.sourceContext)
+        if (ctx.promptId) setPendingPromptNavigation(ctx.promptId)
+      } catch {}
+    }
   }
 
   return (
@@ -81,7 +87,7 @@ export function ContextualChatsSection({ sourceView, projectId }: ContextualChat
 
                 <button
                   type="button"
-                  onClick={handleChatClick}
+                  onClick={() => handleChatClick(chat)}
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover:bg-foreground/10 transition-colors"
                 >
                   <MessageSquare className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />

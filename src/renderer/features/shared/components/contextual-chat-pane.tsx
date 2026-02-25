@@ -48,6 +48,12 @@ export const ContextualChatPane = memo(function ContextualChatPane({
   const [isResetting, setIsResetting] = useState(false)
   const streamingTextRef = useRef("")
   const scrollRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<ChatMessage[]>([])
+  const activeSubChatIdRef = useRef<string | null>(null)
+
+  // Keep refs in sync to avoid stale closures in subscription callbacks
+  useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => { activeSubChatIdRef.current = activeSubChatId }, [activeSubChatId])
 
   // Track previous chatId to detect when context changes
   const prevChatIdRef = useRef<string | null>(null)
@@ -66,6 +72,8 @@ export const ContextualChatPane = memo(function ContextualChatPane({
       setPendingPrompt(null)
     }
   }, [chatId, subChatId])
+
+  const updateMessagesMutation = trpc.chats.updateSubChatMessages.useMutation()
 
   // Load persisted messages from DB when chatId becomes available
   const { data: chatData } = trpc.chats.get.useQuery(
@@ -121,10 +129,20 @@ export const ContextualChatPane = memo(function ContextualChatPane({
         } else if (chunk.type === "finish") {
           if (streamingTextRef.current) {
             const finalContent = streamingTextRef.current
-            setMessages((prev) => [
-              ...prev,
-              { id: Date.now().toString(), role: "assistant" as const, content: finalContent, timestamp: new Date() },
-            ])
+            const assistantMsg: ChatMessage = { id: Date.now().toString(), role: "assistant" as const, content: finalContent, timestamp: new Date() }
+            const updatedMessages = [...messagesRef.current, assistantMsg]
+            setMessages(updatedMessages)
+            if (activeSubChatIdRef.current) {
+              updateMessagesMutation.mutate({
+                id: activeSubChatIdRef.current,
+                messages: JSON.stringify(updatedMessages.map(m => ({
+                  id: m.id,
+                  role: m.role,
+                  content: m.content,
+                  timestamp: m.timestamp.toISOString(),
+                }))),
+              })
+            }
           }
           streamingTextRef.current = ""
           setStreamingContent("")

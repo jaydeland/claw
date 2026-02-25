@@ -731,6 +731,12 @@ export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
  */
 export const selectedProjectDetailIdAtom = atom<string | null>(null)
 
+/**
+ * When a prompt chat is clicked from the sidebar, store the promptId to auto-select in PromptsView
+ * Consumed and cleared by PromptsView on mount/update
+ */
+export const pendingPromptNavigationAtom = atom<string | null>(null)
+
 // ============================================
 // HISTORY TAB
 // ============================================
