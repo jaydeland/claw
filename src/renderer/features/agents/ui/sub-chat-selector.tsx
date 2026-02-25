@@ -10,7 +10,7 @@ import {
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
 import { keepPreviousData } from "@tanstack/react-query"
-import { X, Plus, AlignJustify, Play, RotateCcw } from "lucide-react"
+import { X, AlignJustify, Play } from "lucide-react"
 import {
   IconSpinner,
   PlanIcon,
@@ -833,81 +833,7 @@ export function SubChatSelector({
               })}
         </div>
 
-        {/* Plus button - absolute positioned on right with gradient cover */}
-        {(isMobile || (!isMobile && subChatsSidebarMode === "tabs")) && (
-          <div className="absolute right-0 top-0 bottom-0 flex items-center z-20">
-            {/* Gradient to cover content peeking from the left */}
-            <div className="w-6 h-full bg-gradient-to-r from-transparent to-background" />
-            <div className="h-full flex items-center bg-background pr-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onCreateNew}
-                    className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  New chat
-                  <Kbd>{getShortcutKey("newTab")}</Kbd>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Action buttons - always visible on mobile, on desktop only in tabs mode */}
-      {(isMobile || (!isMobile && subChatsSidebarMode === "tabs")) && (
-        <div
-          className="flex items-center gap-1"
-          style={{
-            // @ts-expect-error - WebKit-specific property
-            WebkitAppRegion: "no-drag",
-          }}
-        >
-          <SearchHistoryPopover
-            ref={searchHistoryPopoverRef}
-            sortedSubChats={sortedSubChats}
-            loadingSubChats={loadingSubChats}
-            subChatUnseenChanges={subChatUnseenChanges}
-            pendingQuestionsMap={pendingQuestionsMap}
-            pendingPlanApprovals={pendingPlanApprovals}
-            allSubChatsLength={allSubChats.length}
-            onSelect={handleSelectFromHistory}
-          />
-
-          {/* Clear conversation button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  // Show confirmation dialog if we have an active sub-chat
-                  if (activeSubChatId) {
-                    setShowClearConfirm(true)
-                  }
-                }}
-                className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center"
-                disabled={!activeSubChatId || clearSessionMutation.isPending}
-              >
-                {clearSessionMutation.isPending ? (
-                  <IconSpinner className="h-4 w-4" />
-                ) : (
-                  <RotateCcw className="h-4 w-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              Clear conversation
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      )}
 
       {/* Diff button - only on mobile when diff is available (desktop uses RightIconBar) */}
       {isMobile && onOpenDiff && canOpenDiff && (
