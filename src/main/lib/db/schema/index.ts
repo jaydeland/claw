@@ -424,6 +424,30 @@ export const githubSettings = sqliteTable("github_settings", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
 
+// ============ SYSTEM PROMPTS ============
+// Stores editable system prompts for AI interactions
+export const systemPrompts = sqliteTable("system_prompts", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  key: text("key").notNull().unique(), // e.g., "mcp_config", "review", "title_generation"
+  name: text("name").notNull(), // Display name
+  description: text("description").notNull(), // What this prompt is used for
+  content: text("content").notNull(), // The actual prompt text
+  category: text("category").notNull().default("general"), // "mcp", "analysis", "chat", "background"
+  isEditable: integer("is_editable", { mode: "boolean" }).notNull().default(true),
+  defaultValue: text("default_value").notNull(), // Original value for reset
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+}, (table) => ({
+  categoryIdx: index("system_prompts_category_idx").on(table.category),
+  keyIdx: index("system_prompts_key_idx").on(table.key),
+}))
+
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
 export type ClawTriggerType = "cron" | "github_poll" | "manual"
@@ -466,3 +490,7 @@ export type ClawExecution = typeof clawExecutions.$inferSelect
 export type NewClawExecution = typeof clawExecutions.$inferInsert
 export type GithubSettings = typeof githubSettings.$inferSelect
 export type NewGithubSettings = typeof githubSettings.$inferInsert
+
+// System prompts types
+export type SystemPrompt = typeof systemPrompts.$inferSelect
+export type NewSystemPrompt = typeof systemPrompts.$inferInsert

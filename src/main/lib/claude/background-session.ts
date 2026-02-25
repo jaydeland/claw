@@ -18,6 +18,7 @@ import { buildClaudeEnv, getBundledClaudeBinaryPath } from "./env"
 import { getDatabase, claudeCodeCredentials, claudeCodeSettings } from "../db"
 import { eq } from "drizzle-orm"
 import { safeStorage } from "electron"
+import { getPromptByKey, PROMPT_KEYS } from "../prompts/prompt-service"
 
 // Types for session state tracking
 export interface BackgroundSessionState {
@@ -560,7 +561,10 @@ export async function checkBackgroundTaskStatus(
     const claudeBinaryPath = getBundledClaudeBinaryPath()
     const queryAbortController = new AbortController()
 
-    const prompt = `Use the BashOutput tool to check the status of background shell ${shellId}. Return the exact fields from the tool result.`
+    // Get prompt from DB or use fallback
+    const promptTemplate = getPromptByKey(PROMPT_KEYS.BASH_STATUS_CHECK)
+      ?? "Use the BashOutput tool to check the status of background shell. Return the exact fields from the tool result."
+    const prompt = `${promptTemplate.replace("background shell", `background shell ${shellId}`)}`
 
     // Define schema for structured output matching BashOutputToolOutput
     const schema = {
@@ -662,7 +666,11 @@ export async function generateChatTitle(firstMessage: string): Promise<string | 
   }
 
   try {
-    const prompt = `Generate a short title (5-8 words max) for a conversation that starts with this message. Return ONLY the title, no quotes, no explanation:
+    // Get prompt from DB or use fallback
+    const promptTemplate = getPromptByKey(PROMPT_KEYS.CONVERSATION_TITLE_GENERATION)
+      ?? "Generate a short title (5-8 words max) for a conversation that starts with this message. Return ONLY the title, no quotes, no explanation:"
+
+    const prompt = `${promptTemplate}
 
 ${firstMessage.slice(0, 500)}`
 
@@ -1127,7 +1135,11 @@ export async function fixLintErrors(
       })
       .join("\n")
 
-    const prompt = `Fix the TypeScript/ESLint errors in this file. Use the Read and Edit tools.
+    // Get prompt from DB or use fallback
+    const promptTemplate = getPromptByKey(PROMPT_KEYS.TYPESCRIPT_FIX)
+      ?? "Fix the TypeScript/ESLint errors in this file. Use the Read and Edit tools."
+
+    const prompt = `${promptTemplate}
 
 File: ${filePath}
 

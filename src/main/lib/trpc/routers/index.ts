@@ -27,6 +27,7 @@ import { analyzerRouter } from "./analyzer"
 import { transientChatRouter } from "./transient-chat"
 import { githubRouter } from "./github"
 import { clawsRouter } from "./claws"
+import { promptsRouter } from "./prompts"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -64,6 +65,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     transientChat: transientChatRouter,
     github: githubRouter,
     claws: clawsRouter,
+    prompts: promptsRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

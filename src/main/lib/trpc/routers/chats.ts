@@ -17,6 +17,7 @@ import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
 import { terminalManager } from "../../terminal/manager"
 import { queryBackgroundSession, isBackgroundSessionReady } from "../../claude/background-session"
+import { getPromptByKey, PROMPT_KEYS } from "../../prompts/prompt-service"
 import { publicProcedure, router } from "../index"
 
 // Fallback to truncated user message if AI generation fails
@@ -1062,7 +1063,10 @@ export const chatsRouter = router({
         // Try background Claude session first (fastest and most reliable)
         if (isBackgroundSessionReady()) {
           console.log("[generateSubChatName] Using background Claude session...")
-          const prompt = `Generate a short, descriptive name (2-5 words, no quotes or punctuation) for a chat that starts with this message: "${input.userMessage.slice(0, 200)}"`
+          // Get prompt from DB or use fallback
+          const promptTemplate = getPromptByKey(PROMPT_KEYS.CHAT_TITLE_GENERATION)
+            ?? "Generate a short, descriptive name (2-5 words, no quotes or punctuation) for a chat that starts with this message:"
+          const prompt = `${promptTemplate} "${input.userMessage.slice(0, 200)}"`
 
           const result = await queryBackgroundSession(prompt, { maxTokens: 50 })
 
@@ -1116,7 +1120,10 @@ export const chatsRouter = router({
         // Try background Claude session
         if (isBackgroundSessionReady()) {
           console.log("[generateChatName] Using background Claude session...")
-          const prompt = `Generate a short, descriptive name (2-5 words, no quotes or punctuation) for a chat that starts with this message: "${input.userMessage.slice(0, 200)}"`
+          // Get prompt from DB or use fallback
+          const promptTemplate = getPromptByKey(PROMPT_KEYS.CHAT_TITLE_GENERATION)
+            ?? "Generate a short, descriptive name (2-5 words, no quotes or punctuation) for a chat that starts with this message:"
+          const prompt = `${promptTemplate} "${input.userMessage.slice(0, 200)}"`
 
           const result = await queryBackgroundSession(prompt, { maxTokens: 50 })
 

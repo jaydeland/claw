@@ -10,6 +10,7 @@ import {
   type UIMessageChunk,
 } from "../../claude"
 import { registerSession, removeSession } from "../../session/session-registry"
+import { getPromptByKey, PROMPT_KEYS } from "../../prompts/prompt-service"
 import { app } from "electron"
 import * as path from "path"
 import * as crypto from "crypto"
@@ -26,8 +27,8 @@ async function getClaudeQuery() {
   return cachedClaudeQuery
 }
 
-// System prompts for different use cases
-const SYSTEM_PROMPTS = {
+// Fallback prompts in case database doesn't have them yet
+const FALLBACK_PROMPTS = {
   mcp: `You are an MCP server configuration assistant. Help users add MCP servers to their ~/.claude/mcp.json.
 
 ## WORKFLOW
@@ -93,7 +94,16 @@ const SYSTEM_PROMPTS = {
 - Acknowledge when the file looks good`,
 }
 
-type SystemPromptType = keyof typeof SYSTEM_PROMPTS
+type SystemPromptType = "mcp" | "review"
+
+/**
+ * Get a system prompt by type
+ * Uses the database prompt if available, falls back to hardcoded
+ */
+function getSystemPrompt(type: SystemPromptType): string {
+  const key = type === "mcp" ? PROMPT_KEYS.MCP_CONFIG : PROMPT_KEYS.REVIEW
+  return getPromptByKey(key) ?? FALLBACK_PROMPTS[type]
+}
 
 /**
  * Transient Chat Router
@@ -313,7 +323,7 @@ export const transientChatRouter = router({
                 cwd,
                 systemPrompt: {
                   type: "text" as const,
-                  text: SYSTEM_PROMPTS[input.systemPromptType || "mcp"],
+                  text: getSystemPrompt(input.systemPromptType || "mcp"),
                 },
                 env: claudeEnv,
                 permissionMode: "bypassPermissions" as const,
