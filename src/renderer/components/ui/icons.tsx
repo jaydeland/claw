@@ -5793,13 +5793,24 @@ export function LobsterClawIcon(props: IconProps) {
       strokeLinejoin="round"
       {...props}
     >
-      {/* Lobster claw - stylized pincer design */}
-      <path d="M7 4c0-1 1-2 2.5-2S12 3 12 4v6c0 1-1 2-2.5 2S7 11 7 10V4z" />
-      <path d="M17 4c0-1-1-2-2.5-2S12 3 12 4v6c0 1 1 2 2.5 2S17 11 17 10V4z" />
-      <path d="M7 4c-2 1-4 3-4 6s2 5 4 6" />
-      <path d="M17 4c2 1 4 3 4 6s-2 5-4 6" />
-      <path d="M12 10v8" />
-      <path d="M9 18h6" />
+      {/* Crab icon - stylized with claws, legs and body */}
+      {/* Body */}
+      <ellipse cx="12" cy="12" rx="4" ry="3" />
+      {/* Left claw */}
+      <path d="M8 10c-2-1-3-3-2-5" />
+      <path d="M6 5c-1-1-2-1-2 0s0 2 1 2" />
+      {/* Right claw */}
+      <path d="M16 10c2-1 3-3 2-5" />
+      <path d="M18 5c1-1 2-1 2 0s0 2-1 2" />
+      {/* Left legs */}
+      <path d="M8 12c-3 1-4 3-4 5" />
+      <path d="M8 13c-2 2-3 4-3 6" />
+      {/* Right legs */}
+      <path d="M16 12c3 1 4 3 4 5" />
+      <path d="M16 13c2 2 3 4 3 6" />
+      {/* Eyes */}
+      <circle cx="10.5" cy="10" r="1" fill="currentColor" />
+      <circle cx="13.5" cy="10" r="1" fill="currentColor" />
     </svg>
   )
 }

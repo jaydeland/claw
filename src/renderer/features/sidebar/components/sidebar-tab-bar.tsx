@@ -44,7 +44,7 @@ const tabs: TabItem[] = [
   { id: "skills", label: "Skills", icon: BookOpen },
   { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
-  { id: "claws", label: "Claws", icon: LobsterClawIcon },
+  { id: "claws", label: "Claws", icon: CodeSandbox },
 ]
 
 interface SidebarTabBarProps {
