@@ -73,7 +73,15 @@ export const ContextualChatPane = memo(function ContextualChatPane({
     }
   }, [chatId, subChatId])
 
-  const updateMessagesMutation = trpc.chats.updateSubChatMessages.useMutation()
+  const utils = trpc.useUtils()
+  const updateMessagesMutation = trpc.chats.updateSubChatMessages.useMutation({
+    onSuccess: () => {
+      // Invalidate so navigating back always returns fresh persisted messages
+      if (activeChatId) {
+        utils.chats.get.invalidate({ id: activeChatId })
+      }
+    },
+  })
 
   // Load persisted messages from DB when chatId becomes available
   const { data: chatData } = trpc.chats.get.useQuery(
@@ -83,6 +91,7 @@ export const ContextualChatPane = memo(function ContextualChatPane({
 
   useEffect(() => {
     if (!chatData?.subChats?.[0]?.messages) return
+    if (isStreaming) return // Don't overwrite local state while streaming
     try {
       const persisted = JSON.parse(chatData.subChats[0].messages) as Array<{
         role: "user" | "assistant"
@@ -107,8 +116,10 @@ export const ContextualChatPane = memo(function ContextualChatPane({
     } catch {
       // Invalid JSON, skip
     }
+  // Depend on the messages string so that background refetches (after cache invalidation)
+  // also trigger the load, not just initial chatData arrival
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatData?.id])
+  }, [chatData?.subChats?.[0]?.messages])
 
   // Subscribe to Claude stream
   trpc.claude.chat.useSubscription(
