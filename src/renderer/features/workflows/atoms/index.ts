@@ -10,6 +10,7 @@ export {
   workflowFileListSearchAtom,
   workflowViewModeAtom,
   workflowReviewDialogOpenAtom,
+  type WorkflowViewMode,
 } from "./workflows-content-atoms"
 
 // Export workflow panel atoms

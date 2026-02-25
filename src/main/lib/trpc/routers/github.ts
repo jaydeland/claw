@@ -431,6 +431,8 @@ export const githubRouter = router({
         projectId: z.string(),
         name: z.string(),
         mode: z.enum(["plan", "agent"]).default("agent"),
+        sourceView: z.enum(["github", "prompts", "skills", "commands"]).optional(),
+        sourceContext: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -438,7 +440,14 @@ export const githubRouter = router({
       const chatId = createId()
       const subChatId = createId()
 
-      db.insert(chats).values({ id: chatId, name: input.name, projectId: input.projectId, isTransient: true }).run()
+      db.insert(chats).values({
+        id: chatId,
+        name: input.name,
+        projectId: input.projectId,
+        isTransient: false,
+        sourceView: input.sourceView ?? "github",
+        sourceContext: input.sourceContext ?? null,
+      }).run()
       db.insert(subChats).values({
         id: subChatId,
         name: input.name,

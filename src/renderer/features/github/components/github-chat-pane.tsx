@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useCallback, useEffect, useRef, useState } from "react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import {
   Send,
   Loader2,
@@ -17,7 +17,6 @@ import { cn } from "../../../lib/utils"
 import {
   githubSelectionAtom,
   githubChatMessagesAtom,
-  githubChatSessionAtom,
   githubChatContextAtom,
   githubChatLoadingAtom,
   githubStartChatAtom,
@@ -27,6 +26,7 @@ import {
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
 import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
+import { useContextualChat } from "../../shared/hooks/use-contextual-chat"
 
 // Analysis labels
 const ANALYSIS_LABELS: Record<AnalysisType, string> = {
@@ -40,6 +40,22 @@ interface GitHubChatPaneProps {
   projectId: string
   projectPath: string
   selection: GitHubSelection
+}
+
+// Build a stable context key for the current GitHub selection
+function selectionContextKey(sel: NonNullable<GitHubSelection>): Record<string, unknown> {
+  switch (sel.type) {
+    case "pr":
+      return { type: "pr", repoId: sel.repoId, prNumber: sel.prNumber }
+    case "issue":
+      return { type: "issue", repoId: sel.repoId, issueNumber: sel.issueNumber }
+    case "code":
+      return { type: "code", repoId: sel.repoId, path: sel.path }
+    case "visualize":
+      return { type: "visualize", repoId: sel.repoId, analysisType: sel.analysisType }
+    default:
+      return { type: "unknown" }
+  }
 }
 
 export const GitHubChatPane = memo(function GitHubChatPane({
@@ -56,12 +72,28 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Claude session state — session persisted to survive app reloads
-  const [session, setSession] = useAtom(githubChatSessionAtom)
+  // Contextual chat session — persisted per GitHub selection context
+  const contextKey = selection ? selectionContextKey(selection) : { type: "none" }
+  const { chatId, subChatId, create: createContextualChat, reset: resetContextualChat } = useContextualChat({
+    sourceView: "github",
+    sourceContext: contextKey,
+    projectId,
+    enabled: !!selection && selection.type !== "visualize" && !!projectId,
+  })
+
+  // Local session state (mirrors DB chatId/subChatId for streaming)
+  const [session, setSession] = useState<{ chatId: string; subChatId: string } | null>(null)
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState("")
   const streamingTextRef = useRef("")
+
+  // Sync DB session into local state when it becomes available
+  useEffect(() => {
+    if (chatId && subChatId && !session) {
+      setSession({ chatId, subChatId })
+    }
+  }, [chatId, subChatId, session])
 
   // Track analysis generation state
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState<string | null>(null)
@@ -77,8 +109,8 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     { enabled: selection?.type === "visualize" && !!projectId }
   )
 
-  // Clear session and messages when selection changes.
-  // Skip on first mount so a restored session/messages survive an app reload.
+  // Clear local streaming state when selection changes.
+  // The DB session for the new context will be loaded via useContextualChat.
   useEffect(() => {
     if (isFirstMount.current) {
       isFirstMount.current = false
@@ -96,7 +128,6 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     (selection as any)?.path,
     (selection as any)?.analysisType,
     setMessages,
-    setSession,
   ])
 
   // Subscribe to Claude chat stream
@@ -269,12 +300,15 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     })
 
     try {
-      const { chatId, subChatId } = await createSessionMutation.mutateAsync({
-        projectId,
-        name: displayMessage.slice(0, 60),
-        mode: "agent",
-      })
-      setSession({ chatId, subChatId })
+      // Use existing DB chat if available, otherwise create a new one
+      let resolvedChatId = chatId
+      let resolvedSubChatId = subChatId
+      if (!resolvedChatId || !resolvedSubChatId) {
+        const result = await createContextualChat()
+        resolvedChatId = result.chatId
+        resolvedSubChatId = result.subChatId
+      }
+      setSession({ chatId: resolvedChatId, subChatId: resolvedSubChatId })
       streamingTextRef.current = ""
       setStreamingContent("")
       setIsStreaming(true)
@@ -288,7 +322,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       }
       setMessages((prev) => [...prev, errorMessage])
     }
-  }, [selection, projectId, createSessionMutation, setMessages, setChatContext])
+  }, [selection, chatId, subChatId, createContextualChat, setMessages, setChatContext])
 
   const handleActionClick = useCallback(async () => {
     if (!selection) return
@@ -480,17 +514,18 @@ export const GitHubChatPane = memo(function GitHubChatPane({
 
   const canSendMessage = !!session && !isStreaming
 
-  // Reset chat and start a new review
-  const handleReviewReset = useCallback(() => {
+  // Reset chat (archive old, create new) and start a new review
+  const handleReviewReset = useCallback(async () => {
     setSession(null)
     setPendingPrompt(null)
     setIsStreaming(false)
     setStreamingContent("")
     streamingTextRef.current = ""
     setMessages([])
-    // Trigger the action after state clears (next tick)
+    await resetContextualChat()
+    // Trigger the action after state clears
     setTimeout(() => handleActionClick(), 0)
-  }, [handleActionClick, setMessages])
+  }, [handleActionClick, setMessages, resetContextualChat])
 
   return (
     <div className="h-full flex flex-col bg-background">

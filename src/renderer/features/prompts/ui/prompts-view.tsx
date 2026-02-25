@@ -1,16 +1,15 @@
 "use client"
 
 import { useState, useRef, useCallback } from "react"
+import { useAtomValue } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
 import { Textarea } from "../../../components/ui/textarea"
-import { ScrollText, Save, RotateCcw, Bot } from "lucide-react"
+import { ScrollText, Save, RotateCcw } from "lucide-react"
 import { cn } from "../../../lib/utils"
-import {
-  TransientChat,
-  TransientChatMessages,
-  TransientChatInput,
-} from "../../../components/ai-assistant-dialog/transient-chat"
+import { selectedProjectAtom } from "../../agents/atoms"
+import { useContextualChat } from "../../shared/hooks/use-contextual-chat"
+import { ContextualChatPane } from "../../shared/components/contextual-chat-pane"
 
 interface Prompt {
   id: string
@@ -33,6 +32,7 @@ export function PromptsView() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const utils = trpc.useUtils()
+  const selectedProject = useAtomValue(selectedProjectAtom)
 
   const { data: promptsData, isLoading } = trpc.prompts.list.useQuery()
   const { data: categoriesData } = trpc.prompts.getCategories.useQuery()
@@ -49,6 +49,15 @@ export function PromptsView() {
     onSuccess: () => {
       utils.prompts.list.invalidate()
     },
+  })
+
+  // Per-prompt persistent chat session
+  const { chatId, subChatId, isLoading: isChatLoading, create: createChat, reset: resetChat } = useContextualChat({
+    sourceView: "prompts",
+    sourceContext: { promptId: selectedPrompt?.id ?? "" },
+    projectId: selectedProject?.id ?? "",
+    chatName: selectedPrompt ? `Prompt: ${selectedPrompt.name}` : undefined,
+    enabled: !!selectedPrompt && !!selectedProject,
   })
 
   const handleSelectPrompt = (prompt: Prompt) => {
@@ -87,17 +96,9 @@ export function PromptsView() {
   }, [])
 
   // Build AI context from selected prompt
-  const promptContext = selectedPrompt
+  const promptSystemContext = selectedPrompt
     ? `You are reviewing the following system prompt:\n\nName: ${selectedPrompt.name}\nKey: ${selectedPrompt.key}\nCategory: ${selectedPrompt.category}\n${selectedPrompt.description ? `Description: ${selectedPrompt.description}\n` : ""}\n---\n\n${selectedPrompt.content}`
     : ""
-
-  const chat = TransientChat({
-    systemPromptType: "review",
-    promptContext,
-    placeholder: "Ask about this prompt...",
-    hint: "Chat with AI about this prompt",
-    contextKey: selectedPrompt?.id,
-  })
 
   if (isLoading) {
     return (
@@ -278,31 +279,16 @@ export function PromptsView() {
 
           {/* AI Chat panel */}
           <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-            <div className="p-3 border-b border-border flex items-center gap-2 flex-shrink-0">
-              <Bot className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">AI Assistant</span>
-            </div>
-            <TransientChatMessages
-              messages={chat.messages}
-              messagesEndRef={chat.messagesEndRef}
-              error={chat.error}
-              setError={chat.setError}
-              detectedResult={chat.detectedResult}
-              renderResultPreview={chat.renderResultPreview}
-              onUseResult={chat.handleUseResult}
-              isComplete={chat.isComplete}
-            />
-            <TransientChatInput
-              inputValue={chat.inputValue}
-              setInputValue={chat.setInputValue}
-              handleKeyDown={chat.handleKeyDown}
-              handleSend={chat.handleSend}
-              isLoading={chat.isLoading}
-              isCreatingSession={chat.isCreatingSession}
-              isComplete={chat.isComplete}
-              inputRef={chat.inputRef}
-              placeholder={chat.placeholder}
-              hint={chat.hint}
+            <ContextualChatPane
+              chatId={chatId}
+              subChatId={subChatId}
+              projectId={selectedProject?.id ?? ""}
+              projectPath={selectedProject?.path ?? ""}
+              isSessionLoading={isChatLoading}
+              onReset={resetChat}
+              onCreate={createChat}
+              placeholder="Ask about this prompt..."
+              systemContext={promptSystemContext}
             />
           </div>
         </div>

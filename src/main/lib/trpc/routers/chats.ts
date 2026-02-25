@@ -1,4 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm"
+import type { SourceView } from "../../db/schema"
+import { createId } from "../../db/utils"
 import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
@@ -34,12 +36,22 @@ export const chatsRouter = router({
    * List all non-archived chats (optionally filter by project)
    */
   list: publicProcedure
-    .input(z.object({ projectId: z.string().optional() }))
+    .input(z.object({
+      projectId: z.string().optional(),
+      sourceView: z.enum(["github", "prompts", "skills", "commands"]).optional().nullable(),
+    }))
     .query(({ input }) => {
       const db = getDatabase()
       const conditions = [isNull(chats.archivedAt), eq(chats.isTransient, false)]
       if (input.projectId) {
         conditions.push(eq(chats.projectId, input.projectId))
+      }
+      // Default: only return workspace chats (no sourceView)
+      // When sourceView is provided, filter to that view's chats
+      if (input.sourceView) {
+        conditions.push(eq(chats.sourceView, input.sourceView))
+      } else {
+        conditions.push(isNull(chats.sourceView))
       }
       return db
         .select()
@@ -47,6 +59,125 @@ export const chatsRouter = router({
         .where(and(...conditions))
         .orderBy(desc(chats.updatedAt))
         .all()
+    }),
+
+  /**
+   * Look up the latest active chat for a specific view + context
+   */
+  getBySource: publicProcedure
+    .input(z.object({
+      sourceView: z.enum(["github", "prompts", "skills", "commands"]),
+      sourceContext: z.string(),
+      projectId: z.string(),
+    }))
+    .query(({ input }) => {
+      const db = getDatabase()
+      const chat = db
+        .select()
+        .from(chats)
+        .where(and(
+          eq(chats.sourceView, input.sourceView),
+          eq(chats.sourceContext, input.sourceContext),
+          eq(chats.projectId, input.projectId),
+          isNull(chats.archivedAt),
+        ))
+        .orderBy(desc(chats.updatedAt))
+        .get()
+
+      if (!chat) return null
+
+      const subChat = db
+        .select()
+        .from(subChats)
+        .where(eq(subChats.chatId, chat.id))
+        .orderBy(subChats.createdAt)
+        .get()
+
+      return { chat, subChat: subChat ?? null }
+    }),
+
+  /**
+   * Create a new chat tagged with sourceView + sourceContext (no worktree)
+   */
+  createWithSource: publicProcedure
+    .input(z.object({
+      projectId: z.string(),
+      name: z.string().optional(),
+      sourceView: z.enum(["github", "prompts", "skills", "commands"]),
+      sourceContext: z.string(),
+      mode: z.enum(["plan", "agent"]).default("agent"),
+      model: z.string().default("sonnet"),
+    }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+
+      const chatId = createId()
+      const subChatId = createId()
+
+      db.insert(chats).values({
+        id: chatId,
+        name: input.name ?? null,
+        projectId: input.projectId,
+        isTransient: false,
+        sourceView: input.sourceView as SourceView,
+        sourceContext: input.sourceContext,
+      }).run()
+
+      db.insert(subChats).values({
+        id: subChatId,
+        chatId,
+        mode: input.mode,
+        model: input.model,
+        messages: "[]",
+      }).run()
+
+      return { chatId, subChatId }
+    }),
+
+  /**
+   * Archive an existing source chat and create a fresh one
+   */
+  resetSource: publicProcedure
+    .input(z.object({
+      chatIdToArchive: z.string(),
+      projectId: z.string(),
+      name: z.string().optional(),
+      sourceView: z.enum(["github", "prompts", "skills", "commands"]),
+      sourceContext: z.string(),
+      mode: z.enum(["plan", "agent"]).default("agent"),
+      model: z.string().default("sonnet"),
+    }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+
+      // Archive the old chat
+      db.update(chats)
+        .set({ archivedAt: new Date() })
+        .where(eq(chats.id, input.chatIdToArchive))
+        .run()
+
+      // Create new chat with same source tagging
+      const chatId = createId()
+      const subChatId = createId()
+
+      db.insert(chats).values({
+        id: chatId,
+        name: input.name ?? null,
+        projectId: input.projectId,
+        isTransient: false,
+        sourceView: input.sourceView as SourceView,
+        sourceContext: input.sourceContext,
+      }).run()
+
+      db.insert(subChats).values({
+        id: subChatId,
+        chatId,
+        mode: input.mode,
+        model: input.model,
+        messages: "[]",
+      }).run()
+
+      return { chatId, subChatId }
     }),
 
   /**

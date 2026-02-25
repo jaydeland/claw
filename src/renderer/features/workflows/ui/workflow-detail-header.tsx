@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronRight, FileText, GitBranch, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle, Sparkles } from "lucide-react"
+import { ChevronRight, FileText, GitBranch, MessageSquare, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle, Sparkles } from "lucide-react"
 import {
   selectedWorkflowNodeAtom,
   selectedWorkflowCategoryAtom,
@@ -217,6 +217,21 @@ Read the file at the path above and analyze:
               >
                 <GitBranch className="h-4 w-4" />
                 Flowchart
+              </button>
+
+              <div className="w-px h-6 bg-border mx-1" />
+
+              <button
+                onClick={() => setViewMode("chat")}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors",
+                  viewMode === "chat"
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                )}
+              >
+                <MessageSquare className="h-4 w-4" />
+                Chat
               </button>
 
               <div className="w-px h-6 bg-border mx-1" />

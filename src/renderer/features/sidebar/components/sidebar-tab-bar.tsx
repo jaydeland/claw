@@ -59,6 +59,13 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
   const [isContentCollapsed, setIsContentCollapsed] = useAtom(sidebarContentCollapsedAtom)
   const [isIconBarExpanded, setIsIconBarExpanded] = React.useState(false)
 
+  // Claws tab should never be collapsed — if persisted state has it collapsed, fix it on mount/tab change
+  React.useEffect(() => {
+    if (selectedTab === "claws" && isContentCollapsed) {
+      setIsContentCollapsed(false)
+    }
+  }, [selectedTab])
+
   // Category atoms that control main content view - need to clear when switching tabs
   const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setClustersCategory = useSetAtom(selectedClustersCategoryAtom)
@@ -92,6 +99,11 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
         setIsContentCollapsed(true) // Full-width views — no sidebar panel needed
       } else {
         setGsdCategory(null)
+        setIsContentCollapsed(false)
+      }
+
+      // Force expand for claws to ensure content is always visible
+      if (tabId === "claws") {
         setIsContentCollapsed(false)
       }
     }

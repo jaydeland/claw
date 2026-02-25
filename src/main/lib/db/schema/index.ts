@@ -54,6 +54,9 @@ export const chats = sqliteTable("chats", {
   prNumber: integer("pr_number"),
   // Transient chat flag (for temporary mini-conversations like MCP config dialog)
   isTransient: integer("is_transient", { mode: "boolean" }).default(false),
+  // Contextual chat source tracking (for GitHub/Prompts/Skills/Commands views)
+  sourceView: text("source_view"),    // "github" | "prompts" | "skills" | "commands"
+  sourceContext: text("source_context"), // JSON key for per-context lookup, e.g. '{"promptId":"abc"}'
 })
 
 export const chatsRelations = relations(chats, ({ one, many }) => ({
@@ -470,6 +473,7 @@ export const systemPrompts = sqliteTable("system_prompts", {
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
 export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
+export type SourceView = "github" | "prompts" | "skills" | "commands"
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert

@@ -309,6 +309,34 @@
       "when": 1770486140000,
       "tag": "0043_add_system_prompts_key_index",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1770600000000,
+      "tag": "0044_add_source_view",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1770600001000,
+      "tag": "0045_add_source_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "6",
+      "when": 1770600002000,
+      "tag": "0046_add_source_view_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1770600003000,
+      "tag": "0047_add_source_context_idx",
+      "breakpoints": true
     }
   ]
 }

@@ -31,6 +31,7 @@ import {
 } from "../../agents/atoms"
 import { ChatStatusBadge } from "./chat-status-badge"
 import { useChatStatuses } from "../hooks/use-chat-status"
+import { ContextualChatsSection } from "./contextual-chats-section"
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
@@ -594,6 +595,16 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                           </div>
                         )
                       })}
+                    </div>
+                  )}
+
+                  {/* Contextual chat sections (GitHub, Prompts, Skills, Commands) */}
+                  {isExpanded && (
+                    <div className="mt-1 space-y-0.5">
+                      <ContextualChatsSection sourceView="github" projectId={project.id} />
+                      <ContextualChatsSection sourceView="prompts" projectId={project.id} />
+                      <ContextualChatsSection sourceView="skills" projectId={project.id} />
+                      <ContextualChatsSection sourceView="commands" projectId={project.id} />
                     </div>
                   )}
 

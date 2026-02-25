@@ -73,13 +73,15 @@ export const workflowFileListSearchAtom = atom<string>("")
 // DETAIL PANEL VIEW MODE
 // ============================================
 
+export type WorkflowViewMode = "markdown" | "flowchart" | "chat"
+
 /**
  * Storage for view modes per category
  * Persisted to localStorage as "workflows:view-modes"
  * Format: { "agents": "markdown", "commands": "flowchart", ... }
  */
 const workflowViewModesStorageAtom = atomWithStorage<
-  Record<string, "markdown" | "flowchart">
+  Record<string, WorkflowViewMode>
 >(
   "workflows:view-modes",
   {},
@@ -93,13 +95,13 @@ const workflowViewModesStorageAtom = atomWithStorage<
  * Defaults to "markdown" for new categories
  */
 export const workflowViewModeAtom = atom(
-  (get) => {
+  (get): WorkflowViewMode => {
     const category = get(selectedWorkflowCategoryAtom)
     if (!category) return "markdown"
     const modes = get(workflowViewModesStorageAtom)
     return modes[category] ?? "markdown"
   },
-  (get, set, newMode: "markdown" | "flowchart") => {
+  (get, set, newMode: WorkflowViewMode) => {
     const category = get(selectedWorkflowCategoryAtom)
     if (!category) return
     const current = get(workflowViewModesStorageAtom)
