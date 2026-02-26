@@ -501,6 +501,8 @@ export class WhatsAppTrigger {
       // Get user's own JID to add as initial participant
       // WhatsApp requires at least one participant to create a group
       const userJid = await this.getOwnJid()
+      console.log(`[WhatsAppTrigger] User JID for group creation: ${userJid}`)
+
       if (!userJid) {
         throw new Error("Could not get user's JID - WhatsApp connection may not be fully established")
       }
@@ -508,10 +510,16 @@ export class WhatsAppTrigger {
       // Create the group with user's own JID as initial participant
       // Baileys groupCreate expects: subject, participants (array of JIDs)
       const participants = [userJid]
-      console.log(`[WhatsAppTrigger] Creating group with participants:`, participants)
-      const groupMetadata = await this.sock.groupCreate(name, participants)
+      console.log(`[WhatsAppTrigger] Creating group with ${participants.length} participant(s):`, participants)
 
-      console.log(`[WhatsAppTrigger] Group created: ${groupMetadata.id}`)
+      let groupMetadata
+      try {
+        groupMetadata = await this.sock.groupCreate(name, participants)
+        console.log(`[WhatsAppTrigger] Group created successfully:`, groupMetadata)
+      } catch (groupError) {
+        console.error(`[WhatsAppTrigger] groupCreate failed:`, groupError)
+        throw groupError
+      }
 
       // Generate invite link if possible
       let inviteUrl: string | undefined
@@ -547,12 +555,27 @@ export class WhatsAppTrigger {
    */
   async getOwnJid(): Promise<string | null> {
     if (!this.sock) {
+      console.log("[WhatsAppTrigger] getOwnJid: socket not available")
       return null
     }
 
     try {
-      // Get the user's own JID from the socket
-      const userJid = (this.sock as any).user?.id
+      // Try multiple ways to get the user's JID from Baileys
+      // Method 1: Direct user object (most common in Baileys)
+      const sockAny = this.sock as any
+      let userJid = sockAny.user?.id
+
+      // Method 2: Try auth state if available
+      if (!userJid && sockAny.authState?.creds?.me?.id) {
+        userJid = sockAny.authState.creds.me.id
+      }
+
+      // Method 3: Check if jid is available directly on socket
+      if (!userJid && sockAny.jid) {
+        userJid = sockAny.jid
+      }
+
+      console.log(`[WhatsAppTrigger] getOwnJid: found=${!!userJid}, jid=${userJid}`)
       return userJid || null
     } catch (error) {
       console.error("[WhatsAppTrigger] Failed to get own JID:", error)
