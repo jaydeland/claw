@@ -582,10 +582,14 @@ export class WhatsAppTrigger {
 
       // Normalize JID: remove device suffix for cleaner format
       // Convert "15199099844:31@s.whatsapp.net" to "15199099844@s.whatsapp.net"
+      const rawJid = userJid
       if (userJid) {
         const match = userJid.match(/^(\d+)(:\d+)?(@s\.whatsapp\.net)$/)
         if (match) {
           userJid = `${match[1]}${match[3]}`
+          console.log(`[WhatsAppTrigger] Normalized JID: ${rawJid} -> ${userJid}`)
+        } else {
+          console.log(`[WhatsAppTrigger] JID did not match pattern: ${userJid}`)
         }
       }
 
