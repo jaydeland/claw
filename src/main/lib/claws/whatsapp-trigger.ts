@@ -290,8 +290,16 @@ export class WhatsAppTrigger {
 
     // Listen for incoming messages
     this.sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      console.log(`[WhatsAppTrigger] messages.upsert: type=${type}, count=${messages.length}`)
+      for (const msg of messages) {
+        console.log(`[WhatsAppTrigger] raw msg: jid=${msg.key.remoteJid}, fromMe=${msg.key.fromMe}, hasMessage=${!!msg.message}, msgType=${Object.keys(msg.message || {}).join(",")}`)
+      }
+
       // Only process new messages (not history sync)
-      if (type !== "notify") return
+      if (type !== "notify") {
+        console.log(`[WhatsAppTrigger] Skipping — type is "${type}", not "notify"`)
+        return
+      }
 
       for (const msg of messages) {
         // Pre-warm group metadata cache before handling — this ensures assertSessions
@@ -318,14 +326,21 @@ export class WhatsAppTrigger {
    * Handle incoming WhatsApp messages
    */
   private async handleMessage(msg: any): Promise<void> {
-    // Skip messages from self
-    if (msg.key.fromMe) return
+    const from = msg.key.remoteJid // phone number or group ID
+    const isGroup = from?.endsWith("@g.us")
+
+    // Skip self-messages in DMs; allow all messages in groups so bot triggers work
+    if (msg.key.fromMe && !isGroup) return
+
+    console.log(`[WhatsAppTrigger] handleMessage: from=${from}, fromMe=${msg.key.fromMe}, isGroup=${isGroup}`)
 
     // Extract message text
     const messageText = this.extractMessageText(msg)
-    if (!messageText) return
+    if (!messageText) {
+      console.log(`[WhatsAppTrigger] No text extracted — messageKeys=${Object.keys(msg.message || {}).join(",")}`)
+      return
+    }
 
-    const from = msg.key.remoteJid // phone number or group ID
     const sender = msg.pushName || "Unknown"
 
     console.log(`[WhatsAppTrigger] Message from ${sender} (${from}): ${messageText.substring(0, 100)}`)
