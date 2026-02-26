@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import { Clock, Github, Play, FolderOpen, Loader2, AlertCircle, Slack, MessageCircle } from "lucide-react"
+import { Clock, Github, Play, FolderOpen, Loader2, AlertCircle, Slack, MessageCircle, Plus, Check, Copy } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import {
@@ -69,11 +69,38 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
   const utils = trpc.useUtils()
   const { data: projects } = trpc.projects.list.useQuery()
 
+  // WhatsApp group creation state
+  const [createdGroupId, setCreatedGroupId] = useState<string | null>(null)
+  const [showGroupCreator, setShowGroupCreator] = useState(false)
+  const [groupName, setGroupName] = useState("")
+  const [copied, setCopied] = useState(false)
+
+  const createGroupMutation = trpc.whatsapp.createGroup.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.groupId) {
+        setCreatedGroupId(data.groupId)
+        setFormData((prev) => ({
+          ...prev,
+          whatsappChatFilter: data.groupId,
+        }))
+      }
+    },
+  })
+
+  const getOwnJidQuery = trpc.whatsapp.getOwnJid.useQuery(undefined, {
+    enabled: showWhatsAppConfig,
+  })
+
   const createMutation = trpc.claws.create.useMutation({
     onSuccess: () => {
       utils.claws.getAll.invalidate()
       setFormData(initialFormData)
       setErrors({})
+      setShowGroupCreator(false)
+      setCreatedGroupId(null)
+      setGroupName("")
+      setCopied(false)
+      createGroupMutation.reset()
       onOpenChange(false)
     },
   })
@@ -118,6 +145,14 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  // Reset group creator when trigger type changes away from WhatsApp
+  if (formData.triggerType !== "whatsapp_message" && showGroupCreator) {
+    setShowGroupCreator(false)
+    setCreatedGroupId(null)
+    setGroupName("")
+    createGroupMutation.reset()
   }
 
   const handleSubmit = () => {
@@ -173,8 +208,20 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
   const showSlackConfig = formData.triggerType === "slack_mention"
   const showWhatsAppConfig = formData.triggerType === "whatsapp_message"
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      // Reset group creator state when modal closes
+      setShowGroupCreator(false)
+      setCreatedGroupId(null)
+      setGroupName("")
+      setCopied(false)
+      createGroupMutation.reset()
+    }
+    onOpenChange(newOpen)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Claw</DialogTitle>
@@ -430,6 +477,152 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
                 <p className="text-xs text-muted-foreground">
                   Use &quot;group&quot; for groups only, &quot;individual&quot; for DMs only, phone number, or leave empty for all.
                 </p>
+              </div>
+
+              {/* Auto-create Group Section */}
+              <div className="pt-2 border-t border-border/50">
+                {!showGroupCreator ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowGroupCreator(true)
+                        setGroupName(formData.name || "Claw Notifications")
+                      }}
+                      disabled={createGroupMutation.isPending}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Auto-create Group
+                    </Button>
+                    {getOwnJidQuery.data?.success && getOwnJidQuery.data?.jid && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const jid = getOwnJidQuery.data.jid
+                          if (jid) {
+                            // Extract phone number from JID (format: 1234567890@s.whatsapp.net)
+                            const phoneNumber = jid.split("@")[0]
+                            setFormData((prev) => ({
+                              ...prev,
+                              whatsappChatFilter: phoneNumber,
+                            }))
+                          }
+                        }}
+                      >
+                        Use My Number
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="group-name">Group Name</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="group-name"
+                          placeholder="e.g., Claw Notifications"
+                          value={groupName}
+                          onChange={(e) => setGroupName(e.target.value)}
+                          disabled={createGroupMutation.isPending || !!createdGroupId}
+                        />
+                        {!createdGroupId ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              if (groupName.trim()) {
+                                createGroupMutation.mutate({
+                                  name: groupName.trim(),
+                                  description: `This group is configured for the "${formData.name || "Claw"}" automation. Messages sent here will trigger the claw.`,
+                                })
+                              }
+                            }}
+                            disabled={createGroupMutation.isPending || !groupName.trim()}
+                          >
+                            {createGroupMutation.isPending && (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            )}
+                            Create
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(createdGroupId)
+                              setCopied(true)
+                              setTimeout(() => setCopied(false), 2000)
+                            }}
+                          >
+                            {copied ? (
+                              <>
+                                <Check className="h-4 w-4 mr-1" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-4 w-4 mr-1" />
+                                Copy ID
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {createGroupMutation.error && (
+                      <Alert variant="destructive" className="text-xs">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          {createGroupMutation.error.message || "Failed to create group"}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {createdGroupId && (
+                      <>
+                        <Alert className="bg-green-500/10 text-green-600 border-green-500/20 text-xs">
+                          <Check className="h-4 w-4" />
+                          <AlertDescription>
+                            Group created successfully! The group ID has been set as the chat filter.
+                          </AlertDescription>
+                        </Alert>
+                        {createGroupMutation.data?.inviteUrl && (
+                          <p className="text-xs text-muted-foreground">
+                            <strong>Invite Link:</strong>{" "}
+                            <a
+                              href={createGroupMutation.data.inviteUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline"
+                            >
+                              {createGroupMutation.data.inviteUrl}
+                            </a>
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowGroupCreator(false)
+                        setCreatedGroupId(null)
+                        setGroupName("")
+                        createGroupMutation.reset()
+                      }}
+                    >
+                      {createdGroupId ? "Done" : "Cancel"}
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )}

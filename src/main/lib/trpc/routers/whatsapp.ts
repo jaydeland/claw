@@ -90,4 +90,52 @@ export const whatsappRouter = router({
       }
     })
   }),
+
+  /**
+   * Create a WhatsApp group for Claw notifications
+   * Returns the group ID that can be used in claw configuration
+   */
+  createGroup: publicProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const trigger = getWhatsAppTrigger()
+        const result = await trigger.createGroup(input.name, input.description)
+        return {
+          success: true,
+          groupId: result.groupId,
+          inviteUrl: result.inviteUrl,
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Get the user's own WhatsApp JID (phone number)
+   * Useful for configuring claws to message yourself for testing
+   */
+  getOwnJid: publicProcedure.query(async () => {
+    try {
+      const trigger = getWhatsAppTrigger()
+      const jid = await trigger.getOwnJid()
+      return {
+        success: true,
+        jid,
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }),
 })

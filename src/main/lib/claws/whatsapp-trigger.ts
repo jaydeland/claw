@@ -481,4 +481,73 @@ export class WhatsAppTrigger {
       isConnected: settings?.isConnected ?? false,
     }
   }
+
+  /**
+   * Create a WhatsApp group for Claw notifications
+   * Returns the group ID (jid) that can be used as a chat filter
+   */
+  async createGroup(name: string, description?: string): Promise<{ groupId: string; inviteUrl?: string }> {
+    if (!this.sock) {
+      throw new Error("WhatsApp not connected")
+    }
+
+    if (!this.isRunning) {
+      throw new Error("WhatsApp connection is not active")
+    }
+
+    try {
+      console.log(`[WhatsAppTrigger] Creating group: ${name}`)
+
+      // Create the group - initially empty, we'll add participants later if needed
+      // Baileys groupCreate expects: subject, participants (array of phone numbers)
+      const groupMetadata = await this.sock.groupCreate(name, [])
+
+      console.log(`[WhatsAppTrigger] Group created: ${groupMetadata.id}`)
+
+      // Generate invite link if possible
+      let inviteUrl: string | undefined
+      try {
+        const inviteCode = await this.sock.groupInviteCode(groupMetadata.id)
+        if (inviteCode) {
+          inviteUrl = `https://chat.whatsapp.com/${inviteCode}`
+        }
+      } catch (err) {
+        console.warn("[WhatsAppTrigger] Could not generate invite code:", err)
+      }
+
+      // Send description as a message if provided
+      if (description) {
+        await this.sendMessage(
+          groupMetadata.id,
+          `🤖 *Claw Automation Group*\n\n${description}\n\n_Add this group ID to your claw config to receive notifications here._`
+        )
+      }
+
+      return {
+        groupId: groupMetadata.id,
+        inviteUrl,
+      }
+    } catch (error) {
+      console.error("[WhatsAppTrigger] Failed to create group:", error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user's own phone number (jid) that can be used for testing
+   */
+  async getOwnJid(): Promise<string | null> {
+    if (!this.sock) {
+      return null
+    }
+
+    try {
+      // Get the user's own JID from the socket
+      const userJid = (this.sock as any).user?.id
+      return userJid || null
+    } catch (error) {
+      console.error("[WhatsAppTrigger] Failed to get own JID:", error)
+      return null
+    }
+  }
 }
