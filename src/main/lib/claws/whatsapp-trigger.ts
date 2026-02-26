@@ -537,12 +537,17 @@ export class WhatsAppTrigger {
         console.warn("[WhatsAppTrigger] Could not generate invite code:", err)
       }
 
-      // Send description as a message if provided
-      if (description) {
-        await this.sendMessage(
-          groupMetadata.id,
-          `🤖 *Claw Automation Group*\n\n${description}\n\n_Add this group ID to your claw config to receive notifications here._`
-        )
+      // Send welcome message to verify group is working
+      try {
+        const welcomeMessage = description
+          ? `🤖 *Claw Automation Group*\n\n${description}\n\n_Add this group ID to your claw config to receive notifications here._`
+          : `🤖 *Claw Automation Group*\n\nThis group has been created for Claw automation.\n\n_Group ID: ${groupMetadata.id}_`
+
+        await this.sendMessage(groupMetadata.id, welcomeMessage)
+        console.log(`[WhatsAppTrigger] Welcome message sent to group`)
+      } catch (msgError) {
+        console.warn("[WhatsAppTrigger] Could not send welcome message:", msgError)
+        // Don't fail group creation if welcome message fails
       }
 
       return {
@@ -598,6 +603,50 @@ export class WhatsAppTrigger {
     } catch (error) {
       console.error("[WhatsAppTrigger] Failed to get own JID:", error)
       return null
+    }
+  }
+
+  /**
+   * Send a test message to verify a group/chat is working
+   */
+  async sendTestMessage(chatId: string): Promise<void> {
+    if (!this.sock) {
+      throw new Error("WhatsApp not connected")
+    }
+
+    const testMessage = `🧪 *Test Message*\n\nThis is a test from Claw automation.\n\nIf you received this, the WhatsApp integration is working correctly!\n\n_Time: ${new Date().toLocaleString()}_`
+
+    await this.sendMessage(chatId, testMessage)
+    console.log(`[WhatsAppTrigger] Test message sent to ${chatId}`)
+  }
+
+  /**
+   * Get list of groups the user is in
+   */
+  async getGroups(): Promise<Array<{ id: string; name: string; participantCount: number }>> {
+    if (!this.sock) {
+      throw new Error("WhatsApp not connected")
+    }
+
+    try {
+      console.log("[WhatsAppTrigger] Fetching groups...")
+      const groups = await this.sock.groupFetchAllParticipating()
+
+      if (!groups) {
+        return []
+      }
+
+      const result = Object.entries(groups).map(([id, metadata]: [string, any]) => ({
+        id,
+        name: metadata.subject || "Unknown",
+        participantCount: metadata.participants?.length || 0,
+      }))
+
+      console.log(`[WhatsAppTrigger] Found ${result.length} groups`)
+      return result
+    } catch (error) {
+      console.error("[WhatsAppTrigger] Failed to fetch groups:", error)
+      throw error
     }
   }
 }

@@ -171,4 +171,47 @@ export const whatsappRouter = router({
       }
     }
   }),
+
+  /**
+   * Send a test message to a chat/group
+   */
+  sendTestMessage: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const trigger = getWhatsAppTrigger()
+        await trigger.sendTestMessage(input.chatId)
+        return {
+          success: true,
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Get list of groups the user is participating in
+   */
+  getGroups: publicProcedure.query(async () => {
+    try {
+      const trigger = getWhatsAppTrigger()
+      const groups = await trigger.getGroups()
+      return {
+        success: true,
+        groups,
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }),
 })
