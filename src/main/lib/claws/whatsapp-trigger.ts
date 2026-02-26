@@ -556,6 +556,17 @@ export class WhatsAppTrigger {
         throw groupError
       }
 
+      // Fetch group metadata to establish Signal session
+      // This is required before we can send messages to the group
+      console.log(`[WhatsAppTrigger] Fetching group metadata to establish Signal session...`)
+      try {
+        await this.sock.groupMetadata(groupMetadata.id)
+        console.log(`[WhatsAppTrigger] Group metadata fetched successfully`)
+      } catch (metadataError) {
+        console.warn(`[WhatsAppTrigger] Could not fetch group metadata:`, metadataError)
+        // Non-fatal - continue even if metadata fetch fails
+      }
+
       // Generate invite link if possible
       let inviteUrl: string | undefined
       try {
@@ -568,17 +579,22 @@ export class WhatsAppTrigger {
       }
 
       // Send welcome message to verify group is working
-      // Wait a bit for the Signal session to be established
-      console.log("[WhatsAppTrigger] Waiting 3 seconds for Signal session...")
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      // Wait longer for the Signal session to be established
+      console.log("[WhatsAppTrigger] Waiting 5 seconds for Signal session establishment...")
+      await new Promise(resolve => setTimeout(resolve, 5000))
 
       try {
         const welcomeMessage = description
-          ? `🤖 *Claw Automation Group*\n\n${description}\n\n_Add this group ID to your claw config to receive notifications here._`
+          ? `🤖 *Claw Automation Group*\n\n${description}\n\n_Group ID: ${groupMetadata.id}_`
           : `🤖 *Claw Automation Group*\n\nThis group has been created for Claw automation.\n\n_Group ID: ${groupMetadata.id}_`
 
-        await this.sendMessage(groupMetadata.id, welcomeMessage)
-        console.log(`[WhatsAppTrigger] Welcome message sent to group`)
+        // Use retry logic for welcome message
+        const success = await this.sendMessage(groupMetadata.id, welcomeMessage, 5) // 5 retries
+        if (success) {
+          console.log(`[WhatsAppTrigger] Welcome message sent to group`)
+        } else {
+          console.warn(`[WhatsAppTrigger] Welcome message could not be sent after retries`)
+        }
       } catch (msgError) {
         console.warn("[WhatsAppTrigger] Could not send welcome message:", msgError)
         // Don't fail group creation if welcome message fails
