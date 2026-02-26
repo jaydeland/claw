@@ -78,7 +78,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     sourceView: "github",
     sourceContext: contextKey,
     projectId,
-    enabled: !!selection && selection.type !== "visualize" && !!projectId,
+    enabled: !!selection && !!projectId,
   })
 
   // Local session state (mirrors DB chatId/subChatId for streaming)
@@ -275,13 +275,15 @@ export const GitHubChatPane = memo(function GitHubChatPane({
         return `Please review pull request #${sel.prNumber} in the repository at ${projectPath}.\n\nUse the Bash tool with \`gh pr view ${sel.prNumber}\` and \`gh pr diff ${sel.prNumber}\` to get the PR details and diff.\n\nProvide:\n- Overall assessment\n- Potential issues or concerns\n- Suggestions for improvement`
       case "issue":
         return `Help me plan the implementation of issue #${sel.issueNumber} in the repository at ${projectPath}.\n\nUse the Bash tool with \`gh issue view ${sel.issueNumber}\` to get the issue details.\n\nProvide:\n- Implementation approach\n- Files to modify\n- Step-by-step plan`
+      case "visualize":
+        return `I'm looking at the ${ANALYSIS_LABELS[sel.analysisType]} diagram for this repository. Please analyze the diagram and help me understand it. You can also suggest modifications or improvements to the visualization.`
       default:
         return ""
     }
   }, [projectPath])
 
   const startClaudeSession = useCallback(async (prompt: string, displayMessage: string) => {
-    if (!selection || selection.type === "visualize") return
+    if (!selection) return
 
     const userMessage: GitHubChatMessage = {
       id: Date.now().toString(),
@@ -297,6 +299,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       prNumber: selection.type === "pr" ? selection.prNumber : undefined,
       issueNumber: selection.type === "issue" ? selection.issueNumber : undefined,
       filePath: selection.type === "code" ? selection.path : undefined,
+      analysisType: selection.type === "visualize" ? selection.analysisType : undefined,
     })
 
     try {
@@ -390,7 +393,43 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   }, [selection, projectId, projectPath, generateMutation, buildInitialPrompt, startClaudeSession, setMessages, setChatContext])
 
   const handleSend = useCallback(async () => {
-    if (!input.trim() || isStreaming || !session) return
+    if (!input.trim() || isStreaming) return
+
+    // For visualize mode without a session, create one first
+    let resolvedSession = session
+    if (!resolvedSession && selection?.type === "visualize") {
+      try {
+        // Create a contextual chat session for visualize mode
+        let resolvedChatId = chatId
+        let resolvedSubChatId = subChatId
+        if (!resolvedChatId || !resolvedSubChatId) {
+          const result = await createContextualChat()
+          resolvedChatId = result.chatId
+          resolvedSubChatId = result.subChatId
+        }
+        resolvedSession = { chatId: resolvedChatId, subChatId: resolvedSubChatId }
+        setSession(resolvedSession)
+        setChatContext({
+          type: "visualize",
+          repoId: selection.repoId,
+          repoName: selection.repoName,
+          analysisType: selection.analysisType,
+        })
+      } catch (err) {
+        console.error("Failed to create session for visualize chat:", err)
+        const errorMessage: GitHubChatMessage = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `Failed to start session: ${err instanceof Error ? err.message : "Unknown error"}`,
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, errorMessage])
+        return
+      }
+    }
+
+    // Still require a session after attempting to create one
+    if (!resolvedSession) return
 
     const userInput = input.trim()
     setInput("")
@@ -418,8 +457,21 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       prompt = `<conversation_history>\n${historyText}\n</conversation_history>\n\nHuman: ${userInput}`
     }
 
+    // Add diagram context for visualize mode if this is the first message to Claude
+    // (Check if no session exists yet - UI messages may exist but no actual Claude conversation)
+    if (selection?.type === "visualize" && !session && existingDiagram) {
+      const diagramContext = `
+
+The user is viewing a ${ANALYSIS_LABELS[selection.analysisType]} diagram for the repository.
+Diagram summary: ${existingDiagram.summary || "No summary available"}
+Diagram stats: ${existingDiagram.stats ? JSON.stringify(JSON.parse(existingDiagram.stats), null, 2) : "No stats available"}
+
+Please consider this diagram context when responding to their question about the visualization.`
+      prompt = prompt + diagramContext
+    }
+
     setPendingPrompt(prompt)
-  }, [input, isStreaming, session, setMessages, messages])
+  }, [input, isStreaming, session, selection, chatId, subChatId, createContextualChat, setSession, setChatContext, setMessages, messages, existingDiagram])
 
   const getActionButton = () => {
     if (!selection) return null
@@ -512,7 +564,13 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     }
   }
 
-  const canSendMessage = !!session && !isStreaming
+  // Check if there's an existing diagram for visualize mode
+  const hasExistingDiagram = existingDiagram && existingDiagram.nodes && existingDiagram.nodes !== "[]"
+
+  // Allow chatting when:
+  // 1. We have an active session, OR
+  // 2. We're in visualize mode with an existing diagram (session will be created on first message)
+  const canSendMessage = (!!session || (selection?.type === "visualize" && hasExistingDiagram)) && !isStreaming
 
   // Reset chat (archive old, create new) and start a new review
   const handleReviewReset = useCallback(async () => {
