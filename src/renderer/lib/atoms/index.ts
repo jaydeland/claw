@@ -629,6 +629,19 @@ export const customHotkeysAtom = atomWithStorage<CustomHotkeysConfig>(
  */
 export const recordingHotkeyForActionAtom = atom<string | null>(null)
 
+// ============================================
+// CLAWS FEATURE ATOMS
+// ============================================
+
+export type SelectedClawInfo = {
+  id: string
+  name: string
+  triggerType: "cron" | "github_poll" | "manual"
+} | null
+
+// Currently selected claw for detail view in main content area
+export const selectedClawAtom = atom<SelectedClawInfo>(null)
+
 // Login modal (shown when Claude Code auth fails)
 export const agentsLoginModalOpenAtom = atom<boolean>(false)
 

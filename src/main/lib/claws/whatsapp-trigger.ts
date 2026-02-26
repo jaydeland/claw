@@ -5,13 +5,8 @@
  * No public URL needed - user scans QR code with WhatsApp app to authenticate.
  */
 
-import makeWASocket, {
-  DisconnectReason,
-  useMultiFileAuthState,
-  WASocket,
-  delay,
-  AnyMessageContent,
-} from "@whiskeysockets/baileys"
+// Use namespace import for CommonJS compatibility with externalized module
+import * as baileys from "@whiskeysockets/baileys"
 import { app } from "electron"
 import { getDatabase, headlessClaws, whatsappSettings, clawExecutions } from "../db"
 import { eq } from "drizzle-orm"
@@ -19,6 +14,14 @@ import { clawDaemon } from "./index"
 import { EventEmitter } from "events"
 import * as path from "path"
 import * as fs from "fs"
+
+// Extract needed exports from baileys namespace
+// When bundled by esbuild, CJS module.exports becomes the namespace default,
+// so makeWASocket lives at baileys.default.makeWASocket or baileys.makeWASocket
+const _baileys = (baileys as any).default ?? baileys
+const makeWASocket = _baileys.makeWASocket ?? _baileys
+const { DisconnectReason, useMultiFileAuthState, delay, Browsers, fetchLatestBaileysVersion } = _baileys
+type WASocket = ReturnType<typeof makeWASocket>
 
 // Global event emitter for QR codes
 export const whatsAppQREmitter = new EventEmitter()
@@ -101,11 +104,22 @@ export class WhatsAppTrigger {
     // Load auth state from filesystem
     const { state, saveCreds } = await useMultiFileAuthState(this.sessionPath)
 
+    // Fetch the latest WA Web version so we don't get rejected for running a stale version
+    let waVersion: [number, number, number] | undefined
+    try {
+      const { version } = await fetchLatestBaileysVersion()
+      waVersion = version
+      console.log(`[WhatsAppTrigger] Using WA version: ${version.join(".")}`)
+    } catch (err) {
+      console.warn("[WhatsAppTrigger] Could not fetch latest WA version, using bundled default:", err)
+    }
+
     this.sock = makeWASocket({
       printQRInTerminal: false, // We'll handle QR display via UI
       auth: state,
-      // Browser fingerprint to avoid detection
-      browser: ["Claw", "Desktop", "1.0"],
+      ...(waVersion ? { version: waVersion } : {}),
+      // Use a known-good browser fingerprint — custom strings get rejected by WA's handshake
+      browser: Browsers ? Browsers.macOS("Desktop") : ["Mac OS X", "Desktop", "10.15.7"],
       // Don't sync full history - we only care about new messages
       shouldSyncHistoryMessage: () => false,
       // Sync only groups where user is mentioned
@@ -125,6 +139,10 @@ export class WhatsAppTrigger {
       // Connection status changed
       if (connection === "close") {
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode
+        const errorMessage = lastDisconnect?.error?.message
+        const isNoiseHandshakeFailure = errorMessage === "Connection Failure"
+        // 515 = restart required, usually due to sync key corruption
+        const isRestartRequired = statusCode === 515 || errorMessage?.includes("restart required")
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
         this.isRunning = false
@@ -132,12 +150,30 @@ export class WhatsAppTrigger {
 
         if (shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
           this.reconnectAttempts++
-          console.log(`[WhatsAppTrigger] Reconnecting (attempt ${this.reconnectAttempts})...`)
-          await delay(5000)
+
+          // Noise handshake failures and restart-required errors are caused by stale/corrupt auth files.
+          // Clear them so the next connect() generates fresh keys.
+          const needsSessionReset = isNoiseHandshakeFailure || isRestartRequired
+          if (needsSessionReset && fs.existsSync(this.sessionPath)) {
+            console.log("[WhatsAppTrigger] Session error detected — clearing stale session files before retry")
+            try {
+              fs.rmSync(this.sessionPath, { recursive: true, force: true })
+              fs.mkdirSync(this.sessionPath, { recursive: true })
+            } catch (clearErr) {
+              console.error("[WhatsAppTrigger] Failed to clear session files:", clearErr)
+            }
+          }
+
+          // Use a longer delay for session reset scenarios to avoid server-side rate limiting
+          const retryDelay = needsSessionReset ? 10000 : 5000
+          console.log(`[WhatsAppTrigger] Reconnecting (attempt ${this.reconnectAttempts}) in ${retryDelay / 1000}s...`)
+          await delay(retryDelay)
           await this.connect()
         } else {
           console.log("[WhatsAppTrigger] Connection closed permanently")
           await this.updateConnectionStatus(false)
+          // Reset QR UI — the connection failed before a QR was shown or used
+          whatsAppQREmitter.emit("qr", null)
         }
       } else if (connection === "open") {
         console.log("[WhatsAppTrigger] Connected successfully")
@@ -148,6 +184,30 @@ export class WhatsAppTrigger {
 
         // Clear any pending QR code
         whatsAppQREmitter.emit("qr", null)
+      }
+    })
+
+    // Listen for errors that may require session cleanup
+    this.sock.ev.on("connection.update", async (update) => {
+      // Check for stream errors that indicate corrupted session state
+      const streamError = (update as any).streamError
+      if (streamError) {
+        const errorMsg = String(streamError.message || streamError)
+        const isSyncError = errorMsg.includes("BAD_DECRYPT") ||
+                           errorMsg.includes("failed to find key") ||
+                           errorMsg.includes("Stream Errored")
+
+        if (isSyncError && this.reconnectAttempts < this.maxReconnectAttempts) {
+          console.log("[WhatsAppTrigger] Sync/decryption error detected — clearing session files")
+          if (fs.existsSync(this.sessionPath)) {
+            try {
+              fs.rmSync(this.sessionPath, { recursive: true, force: true })
+              fs.mkdirSync(this.sessionPath, { recursive: true })
+            } catch (clearErr) {
+              console.error("[WhatsAppTrigger] Failed to clear session files:", clearErr)
+            }
+          }
+        }
       }
     })
 

@@ -209,10 +209,13 @@ export const clustersRouter = router({
     try {
       return await service.discoverClusters()
     } catch (error) {
+      // Credential errors mean AWS isn't configured — return empty silently
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes("credentials") || msg.includes("CredentialsProvider")) {
+        return []
+      }
       console.error("[clusters] Failed to discover clusters:", error)
-      throw new Error(
-        `Failed to discover clusters: ${error instanceof Error ? error.message : "Unknown error"}`
-      )
+      throw new Error(`Failed to discover clusters: ${msg}`)
     }
   }),
 

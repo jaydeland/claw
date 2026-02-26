@@ -26,6 +26,7 @@ import {
   subChatsQuickSwitchOpenAtom,
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
+  selectedClawAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { ChatView } from "../main/active-chat"
@@ -58,6 +59,7 @@ import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-d
 import { HistoryChatView } from "../../history"
 import { ProjectDetailPage } from "./project-detail-page"
 import { PromptsView } from "../../prompts/ui/prompts-view"
+import { ExecutionHistoryViewer } from "../../sidebar/components/execution-history-viewer"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -71,6 +73,7 @@ export function AgentsContent() {
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
   const selectedGsdCategory = useAtomValue(selectedGsdCategoryAtom)
+  const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
 
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
@@ -849,7 +852,8 @@ export function AgentsContent() {
   const showProjectDetail = !!selectedProjectDetailId
   const showGitHubView = selectedSidebarTab === "github"
   const showPromptsView = selectedSidebarTab === "prompts"
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView
+  const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView
 
   return (
     <>
@@ -885,6 +889,17 @@ export function AgentsContent() {
       <div className={showPromptsView ? "flex-1 h-full overflow-hidden" : "hidden"}>
         <PromptsView />
       </div>
+
+      {/* Claws execution detail view */}
+      {showClawsDetailView && selectedClaw && (
+        <div className="flex-1 h-full overflow-hidden">
+          <ExecutionHistoryViewer
+            claw={selectedClaw}
+            onBack={() => setSelectedClaw(null)}
+            className="h-full"
+          />
+        </div>
+      )}
 
       {/* Main content - chats/terminal/other */}
       <div className={showMainContent ? "flex h-full" : "hidden"}>

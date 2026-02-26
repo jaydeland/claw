@@ -985,8 +985,9 @@ export const claudeRouter = router({
               try {
                 await fs.rm(isolatedConfigDir, { recursive: true, force: true })
                 console.log(`[claude] Deleted isolated config directory for fresh start`)
-                // Recreate the directory
+                // Recreate the directory and re-run symlinks (cleanup wiped them)
                 mkdirSync(isolatedConfigDir, { recursive: true })
+                await ensureSymlinks(isolatedConfigDir)
               } catch (cleanupErr) {
                 console.warn(`[claude] Failed to clean up session directory:`, cleanupErr)
               }
@@ -1241,49 +1242,66 @@ export const claudeRouter = router({
                   return settings?.maxBudgetUsd ? { maxBudgetUsd: settings.maxBudgetUsd } : {}
                 })()),
                 // Hooks system for lifecycle events
+                // SDK expects Record<HookEvent, HookCallbackMatcher[]> where each matcher has { hooks: HookCallback[] }
                 hooks: {
                   // Desktop notifications for important events
-                  async Notification({ message }: { message: string }) {
-                    console.log(`[CLAUDE] Notification: ${message}`)
-                    const mainWindow = BrowserWindow.getAllWindows()[0]
-                    if (mainWindow) {
-                      mainWindow.webContents.send('claude-notification', {
-                        type: 'info',
-                        message,
-                      })
-                    }
-                  },
-                  // Pre-tool use guardrails
-                  async PreToolUse({ toolName, args }: { toolName: string; args: any }) {
-                    console.log(`[CLAUDE] PreToolUse: ${toolName}`)
-                    // Example: Log destructive Bash commands
-                    if (toolName === "Bash" && typeof args.command === "string") {
-                      const dangerousPatterns = ["rm -rf", "sudo rm", "format", "mkfs"]
-                      if (dangerousPatterns.some(p => args.command.includes(p))) {
-                        console.warn(`[CLAUDE] ⚠️ Potentially destructive Bash command: ${args.command}`)
+                  Notification: [{
+                    hooks: [async (input: any) => {
+                      const { message } = input
+                      console.log(`[CLAUDE] Notification: ${message}`)
+                      const mainWindow = BrowserWindow.getAllWindows()[0]
+                      if (mainWindow) {
+                        mainWindow.webContents.send('claude-notification', { type: 'info', message })
                       }
-                    }
-                  },
+                      return {}
+                    }],
+                  }],
+                  // Pre-tool use guardrails
+                  PreToolUse: [{
+                    hooks: [async (input: any) => {
+                      const { tool_name, tool_input } = input
+                      console.log(`[CLAUDE] PreToolUse: ${tool_name}`)
+                      if (tool_name === "Bash" && typeof tool_input?.command === "string") {
+                        const dangerousPatterns = ["rm -rf", "sudo rm", "format", "mkfs"]
+                        if (dangerousPatterns.some(p => tool_input.command.includes(p))) {
+                          console.warn(`[CLAUDE] ⚠️ Potentially destructive Bash command: ${tool_input.command}`)
+                        }
+                      }
+                      return {}
+                    }],
+                  }],
                   // Post-tool use audit logging
-                  async PostToolUse({ toolName, result }: { toolName: string; result: any }) {
-                    console.log(`[CLAUDE] PostToolUse: ${toolName} - status: ${result?.status || 'unknown'}`)
-                  },
+                  PostToolUse: [{
+                    hooks: [async (input: any) => {
+                      const { tool_name, tool_response } = input
+                      console.log(`[CLAUDE] PostToolUse: ${tool_name} - status: ${tool_response?.status || 'unknown'}`)
+                      return {}
+                    }],
+                  }],
                   // Agent team events (when experimental flag enabled)
-                  async TeammateIdle({ teammate_name }: { teammate_name: string }) {
-                    console.log(`[CLAUDE] TeammateIdle: ${teammate_name}`)
-                    safeEmit({ type: "teammate-idle", teammateName: teammate_name } as UIMessageChunk)
-                  },
-                  async TaskCompleted({ task_id, task_subject }: { task_id: string; task_subject: string }) {
-                    console.log(`[CLAUDE] TaskCompleted: ${task_id} - ${task_subject}`)
-                    safeEmit({ type: "task-completed", taskId: task_id, taskSubject: task_subject } as UIMessageChunk)
-                    const mainWindow = BrowserWindow.getAllWindows()[0]
-                    if (mainWindow) {
-                      mainWindow.webContents.send('claude-notification', {
-                        type: 'success',
-                        message: `Task completed: ${task_subject}`,
-                      })
-                    }
-                  },
+                  TeammateIdle: [{
+                    hooks: [async (input: any) => {
+                      const { teammate_name } = input
+                      console.log(`[CLAUDE] TeammateIdle: ${teammate_name}`)
+                      safeEmit({ type: "teammate-idle", teammateName: teammate_name } as UIMessageChunk)
+                      return {}
+                    }],
+                  }],
+                  TaskCompleted: [{
+                    hooks: [async (input: any) => {
+                      const { task_id, task_subject } = input
+                      console.log(`[CLAUDE] TaskCompleted: ${task_id} - ${task_subject}`)
+                      safeEmit({ type: "task-completed", taskId: task_id, taskSubject: task_subject } as UIMessageChunk)
+                      const mainWindow = BrowserWindow.getAllWindows()[0]
+                      if (mainWindow) {
+                        mainWindow.webContents.send('claude-notification', {
+                          type: 'success',
+                          message: `Task completed: ${task_subject}`,
+                        })
+                      }
+                      return {}
+                    }],
+                  }],
                 },
               },
             }
@@ -1291,7 +1309,7 @@ export const claudeRouter = router({
             // 5. Run Claude SDK
             let stream
             try {
-              stream = claudeQuery(queryOptions as any)
+              stream = claudeQuery(queryOptions)
               // Store query object in session registry for MCP server runtime control and file checkpointing
               updateSessionQuery(input.subChatId, stream)
               console.log(`[CLAUDE] Stored active query for subChat ${input.subChatId}`)

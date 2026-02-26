@@ -4,6 +4,8 @@ import React, { useState, useMemo } from "react"
 import { Zap, Plus, Play, Settings, History, Clock, CheckCircle, XCircle, Loader2, Power, PowerOff, Trash2, ExternalLink } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
+import { useAtom } from "jotai"
+import { selectedClawAtom } from "../../../lib/atoms"
 import { Input } from "../../../components/ui/input"
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
@@ -26,7 +28,6 @@ import {
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog"
 import { ScrollArea } from "../../../components/ui/scroll-area"
-import { ExecutionHistoryViewer } from "./execution-history-viewer"
 import { CreateClawModal } from "./create-claw-modal"
 
 interface ClawsTabContentProps {
@@ -48,7 +49,7 @@ type ClawWithParsedConfig = {
 export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [selectedClawId, setSelectedClawId] = useState<string | null>(null)
+  const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
   const [clawToDelete, setClawToDelete] = useState<string | null>(null)
   const [clawToTrigger, setClawToTrigger] = useState<string | null>(null)
 
@@ -71,8 +72,8 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
   const triggerMutation = trpc.claws.trigger.useMutation({
     onSuccess: () => {
       setClawToTrigger(null)
-      if (selectedClawId) {
-        utils.claws.getExecutions.invalidate({ clawId: selectedClawId })
+      if (selectedClaw) {
+        utils.claws.getExecutions.invalidate({ clawId: selectedClaw.id })
       }
     },
   })
@@ -114,19 +115,6 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
   const handleTrigger = (clawId: string) => {
     setClawToTrigger(clawId)
     triggerMutation.mutate({ id: clawId })
-  }
-
-  if (selectedClawId) {
-    const claw = claws.find((c) => c.id === selectedClawId)
-    if (claw) {
-      return (
-        <ExecutionHistoryViewer
-          claw={claw}
-          onBack={() => setSelectedClawId(null)}
-          className={className}
-        />
-      )
-    }
   }
 
   return (
@@ -184,7 +172,10 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
             {claws.map((claw) => (
               <div
                 key={claw.id}
-                className="group flex flex-col gap-1 p-2 rounded-md hover:bg-foreground/5 cursor-pointer border border-transparent hover:border-border/50"
+                className={cn(
+                  "group flex flex-col gap-1 p-2 rounded-md hover:bg-foreground/5 cursor-pointer border border-transparent hover:border-border/50",
+                  selectedClaw?.id === claw.id && "bg-foreground/5 border-border/50"
+                )}
               >
                 {/* Row 1: Name and status */}
                 <div className="flex items-center justify-between gap-2">
@@ -244,7 +235,7 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
                     className="h-6 w-6"
                     onClick={(e) => {
                       e.stopPropagation()
-                      setSelectedClawId(claw.id)
+                      setSelectedClaw(selectedClaw?.id === claw.id ? null : { id: claw.id, name: claw.name, triggerType: claw.triggerType })
                     }}
                     title="View history"
                   >

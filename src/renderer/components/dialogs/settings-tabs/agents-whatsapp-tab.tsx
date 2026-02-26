@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useState } from "react"
 import { Check, AlertCircle, Loader2, QrCode, Trash2, Power, MessageCircle } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { cn } from "../../../lib/utils"
@@ -21,6 +21,7 @@ import {
 export function AgentsWhatsAppTab() {
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [showQR, setShowQR] = useState(false)
+  const [connectionFailed, setConnectionFailed] = useState(false)
 
   const utils = trpc.useUtils()
 
@@ -51,30 +52,31 @@ export function AgentsWhatsAppTab() {
     },
   })
 
-  // Subscribe to QR codes
-  useEffect(() => {
-    const subscription = trpc.whatsapp.onQRCode.subscribe(undefined, {
-      onData: (qr) => {
-        if (qr) {
-          setQrCode(qr)
-          setShowQR(true)
-        } else {
-          setShowQR(false)
+  // Subscribe to QR codes using the proper useSubscription hook
+  trpc.whatsapp.onQRCode.useSubscription(undefined, {
+    onData: (qr) => {
+      if (qr) {
+        setQrCode(qr)
+        setShowQR(true)
+        setConnectionFailed(false)
+      } else {
+        // null emitted on successful connect OR on permanent failure
+        if (showQR && !qrCode) {
+          // We were waiting for a QR that never came — connection failed
+          setConnectionFailed(true)
         }
-      },
-      onError: (err) => {
-        console.error("QR subscription error:", err)
-      },
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [])
+        setShowQR(false)
+      }
+    },
+    onError: (err) => {
+      console.error("QR subscription error:", err)
+    },
+  })
 
   const handleConnect = async () => {
     setShowQR(true)
     setQrCode(null)
+    setConnectionFailed(false)
     await connectMutation.mutateAsync()
   }
 
@@ -182,6 +184,14 @@ export function AgentsWhatsAppTab() {
               <AlertDescription className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4" />
                 {connectMutation.error.message}
+              </AlertDescription>
+            </Alert>
+          )}
+          {connectionFailed && (
+            <Alert variant="destructive">
+              <AlertDescription className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Failed to connect to WhatsApp. Please try again.
               </AlertDescription>
             </Alert>
           )}
