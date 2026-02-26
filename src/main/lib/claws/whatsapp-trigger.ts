@@ -347,19 +347,42 @@ export class WhatsAppTrigger {
   }
 
   /**
-   * Send a WhatsApp message
+   * Send a WhatsApp message with retry logic
    */
-  async sendMessage(to: string, text: string): Promise<void> {
+  async sendMessage(to: string, text: string, retries = 3): Promise<boolean> {
     if (!this.sock) {
       console.error("[WhatsAppTrigger] Socket not available")
-      return
+      return false
     }
 
-    try {
-      await this.sock.sendMessage(to, { text })
-    } catch (error) {
-      console.error("[WhatsAppTrigger] Failed to send message:", error)
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(`[WhatsAppTrigger] Sending message to ${to} (attempt ${attempt}/${retries})`)
+        await this.sock.sendMessage(to, { text })
+        console.log(`[WhatsAppTrigger] Message sent successfully to ${to}`)
+        return true
+      } catch (error: any) {
+        console.error(`[WhatsAppTrigger] Failed to send message (attempt ${attempt}/${retries}):`, error)
+
+        // If it's a "not-acceptable" error, wait and retry
+        // This happens when Signal session isn't established yet
+        if (error?.data === 406 || error?.message?.includes("not-acceptable")) {
+          if (attempt < retries) {
+            const delayMs = attempt * 2000 // 2s, 4s, 6s
+            console.log(`[WhatsAppTrigger] Waiting ${delayMs}ms before retry...`)
+            await new Promise(resolve => setTimeout(resolve, delayMs))
+            continue
+          }
+        }
+
+        // For other errors or if retries exhausted, throw
+        if (attempt === retries) {
+          throw error
+        }
+      }
     }
+
+    return false
   }
 
   /**
@@ -393,7 +416,10 @@ export class WhatsAppTrigger {
 
         const message = `${statusEmoji} *${clawName}* ${statusText}\n\n\`\`\`${truncatedLogs}\`\`\``
 
-        await this.sendMessage(chatId, message)
+        const success = await this.sendMessage(chatId, message)
+        if (!success) {
+          console.error(`[WhatsAppTrigger] Failed to send execution result to ${chatId}`)
+        }
       } catch (error) {
         console.error("[WhatsAppTrigger] Error monitoring execution:", error)
         clearInterval(checkInterval)
@@ -542,6 +568,10 @@ export class WhatsAppTrigger {
       }
 
       // Send welcome message to verify group is working
+      // Wait a bit for the Signal session to be established
+      console.log("[WhatsAppTrigger] Waiting 3 seconds for Signal session...")
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
       try {
         const welcomeMessage = description
           ? `🤖 *Claw Automation Group*\n\n${description}\n\n_Add this group ID to your claw config to receive notifications here._`
@@ -620,7 +650,10 @@ export class WhatsAppTrigger {
 
     const testMessage = `🧪 *Test Message*\n\nThis is a test from Claw automation.\n\nIf you received this, the WhatsApp integration is working correctly!\n\n_Time: ${new Date().toLocaleString()}_`
 
-    await this.sendMessage(chatId, testMessage)
+    const success = await this.sendMessage(chatId, testMessage)
+    if (!success) {
+      throw new Error("Failed to send test message after retries")
+    }
     console.log(`[WhatsAppTrigger] Test message sent to ${chatId}`)
   }
 
