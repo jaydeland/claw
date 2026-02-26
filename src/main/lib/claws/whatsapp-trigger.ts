@@ -580,6 +580,15 @@ export class WhatsAppTrigger {
         userJid = sockAny.jid
       }
 
+      // Normalize JID: remove device suffix for cleaner format
+      // Convert "15199099844:31@s.whatsapp.net" to "15199099844@s.whatsapp.net"
+      if (userJid) {
+        const match = userJid.match(/^(\d+)(:\d+)?(@s\.whatsapp\.net)$/)
+        if (match) {
+          userJid = `${match[1]}${match[3]}`
+        }
+      }
+
       console.log(`[WhatsAppTrigger] getOwnJid: found=${!!userJid}, jid=${userJid}`)
       return userJid || null
     } catch (error) {
