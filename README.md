@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/claw-logo.png" alt="Claw Logo" width="200" />
+  <img src="assets/claw-logo-cropped.png" alt="Claw Logo" width="280" />
 </p>
 
 # Claw
@@ -25,6 +25,7 @@ Claw is an Electron desktop app that wraps the Claude Code SDK, providing a loca
 - **Session Resume** - Continue interrupted sessions from where they left off
 - **Sub-chat System** - Multiple parallel conversation tabs per chat
 - **Model Selection** - Choose between Opus, Sonnet (default), or Haiku
+- **Cross-View Chat Persistence** - Chat sessions persist across sidebar tabs and views
 
 ### 🌿 Git Worktree Isolation
 
@@ -111,19 +112,20 @@ Visual task management system (Beta):
 - Real-time updates with optimistic UI
 - Job detail panel
 
-### 📑 10 Sidebar Tabs
+### 📑 11 Sidebar Tabs
 
 Complete workspace navigation:
 1. **History** - Chat archive and search
 2. **Workspaces** - Projects and chats
 3. **Clusters** - Kubernetes clusters
 4. **GSD** - Project planning
-5. **Commands** - Command palette
-6. **Conductor** - Kanban board
-7. **Agents** - Agent management
-8. **Skills** - Skills library
-9. **MCPs** - MCP server list
-10. **Terminal** - Terminal sessions
+5. **GitHub** - GitHub integration and PR management
+6. **Agents** - Agent management
+7. **Skills** - Skills library
+8. **MCPs** - MCP server list
+9. **Terminal** - Terminal sessions
+10. **Claws** - Messaging integrations (Slack, WhatsApp)
+11. **Prompts** - Saved prompts library
 
 ### 📊 Session Flow Visualization
 
@@ -148,6 +150,15 @@ Visual workflow system for complex automations:
 
 ![Workflows](assets/screenshots/workflows.png)
 *Workflow flowchart showing MCP integrations and tool execution paths*
+
+### 🦞 Claws (Messaging Integrations)
+
+Connect external messaging platforms to Claw agents:
+- **Slack Integration** - Socket Mode connection for real-time messaging
+- **WhatsApp Integration** - QR code pairing via Baileys library
+- **Agent Routing** - Route messages to specific Claw agents
+- **Trigger Configuration** - Set up message triggers and auto-responses
+- **Channel Management** - Connect multiple channels per integration
 
 ### 📊 Additional Features
 
