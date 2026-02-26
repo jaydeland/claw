@@ -88,7 +88,7 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
   })
 
   const getOwnJidQuery = trpc.whatsapp.getOwnJid.useQuery(undefined, {
-    enabled: showWhatsAppConfig,
+    enabled: formData.triggerType === "whatsapp_message",
   })
 
   const createMutation = trpc.claws.create.useMutation({
