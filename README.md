@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/claw-logo-cropped.png" alt="Claw Logo" width="280" />
+  <img src="assets/claw-logo.png" alt="Claw Logo" width="200" />
 </p>
 
 # Claw
