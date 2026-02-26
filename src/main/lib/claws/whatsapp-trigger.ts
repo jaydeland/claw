@@ -492,12 +492,15 @@ export class WhatsAppTrigger {
    * Returns the group ID (jid) that can be used as a chat filter
    */
   async createGroup(name: string, description?: string): Promise<{ groupId: string; inviteUrl?: string }> {
+    // Check connection state with detailed logging
+    console.log(`[WhatsAppTrigger] createGroup called. sock=${!!this.sock}, isRunning=${this.isRunning}`)
+
     if (!this.sock) {
-      throw new Error("WhatsApp not connected")
+      throw new Error("WhatsApp not connected. Please connect WhatsApp in Settings first.")
     }
 
     if (!this.isRunning) {
-      throw new Error("WhatsApp connection is not active")
+      throw new Error("WhatsApp connection is not active. Please check the connection status.")
     }
 
     try {
@@ -506,6 +509,7 @@ export class WhatsAppTrigger {
       // Get user's own JID to add as initial participant
       // WhatsApp requires at least one participant to create a group
       const userJid = await this.getOwnJid()
+      console.log(`[WhatsAppTrigger] getOwnJid result: ${userJid}`)
       console.log(`[WhatsAppTrigger] User JID for group creation: ${userJid}`)
 
       if (!userJid) {
