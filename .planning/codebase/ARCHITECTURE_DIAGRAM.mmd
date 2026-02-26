@@ -1,0 +1,101 @@
+flowchart TB
+    subgraph User["🖥️ User Interface"]
+        direction TB
+        UI[("User")]
+    end
+
+    subgraph Renderer["🎨 Renderer Process (Chromium)"]
+        direction TB
+        React[React Components]
+        State[Jotai/Zustand State]
+        tRPCClient[tRPC Client]
+    end
+
+    subgraph Preload["🔌 Preload Layer"]
+        direction TB
+        DesktopAPI[desktopApi]
+        tRPCBridge[tRPC Bridge]
+    end
+
+    subgraph Main["⚙️ Main Process (Node.js)"]
+        direction TB
+        subgraph tRPC["tRPC Routers"]
+            claude[claude.ts]
+            git[git.ts]
+            projects[projects.ts]
+            chats[chats.ts]
+        end
+        subgraph Managers["Managers"]
+            ClaudeMgr[Claude Session Manager]
+            GitMgr[Git Worktree Manager]
+            TerminalMgr[Terminal Session Manager]
+            AuthMgr[Auth Manager]
+        end
+    end
+
+    subgraph Data["💾 Data Layer"]
+        direction TB
+        SQLite[(SQLite Database)]
+        Drizzle[Drizzle ORM]
+        Tables[tables: projects, chats, sub_chats]
+    end
+
+    subgraph External["🌐 External Services"]
+        direction TB
+        ClaudeSDK[@anthropic-ai/claude-code]
+        Git[Git Repository]
+        PTY[node-pty Terminal]
+        MCP[MCP Servers]
+        SafeStorage[Electron safeStorage]
+    end
+
+    %% User interactions
+    UI -->|interacts with| React
+    React -->|reads/writes| State
+    React -->|calls| tRPCClient
+
+    %% Renderer to Preload
+    tRPCClient -->|IPC calls| tRPCBridge
+    tRPCBridge -->|forwards| DesktopAPI
+
+    %% Preload to Main
+    DesktopAPI -->|IPC| claude
+    DesktopAPI -->|IPC| git
+    DesktopAPI -->|IPC| projects
+    DesktopAPI -->|IPC| chats
+
+    %% tRPC routers to managers
+    claude --> ClaudeMgr
+    git --> GitMgr
+    projects --> Drizzle
+    chats --> Drizzle
+
+    %% Managers to external
+    ClaudeMgr -->|dynamic import| ClaudeSDK
+    ClaudeMgr -->|uses| SafeStorage
+    GitMgr -->|simple-git| Git
+    TerminalMgr -->|node-pty| PTY
+    AuthMgr -->|encrypt/decrypt| SafeStorage
+
+    %% Data layer
+    Drizzle -->|queries| SQLite
+    SQLite -->|stores| Tables
+
+    %% External connections
+    ClaudeSDK -->|spawns| MCP
+    ClaudeSDK -->|background tasks| PTY
+
+    %% Styling
+    classDef user fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef renderer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef preload fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef main fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef data fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef external fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+
+    class UI user
+    class React,State,tRPCClient renderer
+    class DesktopAPI,tRPCBridge preload
+    class claude,git,projects,chats,ClaudeMgr,GitMgr,TerminalMgr,AuthMgr main
+    class SQLite,Drizzle,Tables data
+    class ClaudeSDK,Git,PTY,MCP,SafeStorage external

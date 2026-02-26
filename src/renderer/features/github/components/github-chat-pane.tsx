@@ -36,6 +36,56 @@ const ANALYSIS_LABELS: Record<AnalysisType, string> = {
   build: "Build System",
 }
 
+// Original prompts used to generate each diagram type
+// These provide context to Claude about what the diagram represents
+const ANALYSIS_PROMPTS: Record<AnalysisType, string> = {
+  codeflow: `Analyze this codebase and generate a React Flow diagram showing the code flow and module dependencies.
+
+Focus on:
+1. Main entry points (index files, main functions)
+2. Module hierarchy and imports
+3. Function/class relationships
+4. Data flow between modules
+5. Key exports and their consumers
+
+Output format: React Flow JSON with nodes (id, type, position, data) and edges (id, source, target, label).`,
+
+  db: `Analyze this codebase and generate a React Flow diagram showing the database schema and data flow.
+
+Focus on:
+1. Database tables/collections
+2. Field definitions and types
+3. Relationships (1:1, 1:N, N:M)
+4. Foreign keys and constraints
+5. Indexes and keys
+6. Migration patterns
+
+Output format: React Flow JSON with nodes (tables) and edges (relationships).`,
+
+  architecture: `Analyze this codebase and generate a React Flow diagram showing the high-level system architecture.
+
+Focus on:
+1. System layers (frontend, backend, database, external services)
+2. Major components and their responsibilities
+3. Communication patterns between components
+4. External integrations (APIs, services, libraries)
+5. Infrastructure components
+
+Output format: React Flow JSON with nodes (components) and edges (connections).`,
+
+  build: `Analyze this codebase and generate a React Flow diagram showing the build system and dependencies.
+
+Focus on:
+1. Build tools and configuration (webpack, vite, rollup, etc.)
+2. Package dependencies (direct and dev)
+3. Build pipeline steps
+4. Scripts and commands
+5. Output/bundle structure
+6. CI/CD integration if present
+
+Output format: React Flow JSON with nodes (build steps) and edges (dependencies).`,
+}
+
 interface GitHubChatPaneProps {
   projectId: string
   projectPath: string
@@ -445,29 +495,64 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     setStreamingContent("")
     setIsStreaming(true)
 
-    // For follow-up messages, include the conversation history explicitly so
-    // Claude has context even when session resumption fails (e.g. session
-    // expiry, config directory cleanup). The session mechanism remains the
-    // primary path; this is a reliable fallback.
+    // Start with just the user's input - this is what we want to send to Claude
     let prompt = userInput
-    if (messages.length > 0) {
-      const historyText = messages
-        .map((m) => `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`)
-        .join("\n\n")
-      prompt = `<conversation_history>\n${historyText}\n</conversation_history>\n\nHuman: ${userInput}`
-    }
 
     // Add diagram context for visualize mode if this is the first message to Claude
     // (Check if no session exists yet - UI messages may exist but no actual Claude conversation)
     if (selection?.type === "visualize" && !session && existingDiagram) {
+      // Parse the diagram data
+      const nodes = existingDiagram.nodes ? JSON.parse(existingDiagram.nodes) : []
+      const edges = existingDiagram.edges ? JSON.parse(existingDiagram.edges) : []
+      const stats = existingDiagram.stats ? JSON.parse(existingDiagram.stats) : {}
+
+      // Get the original prompt used to generate this diagram type
+      const analysisType = selection.analysisType
+      const originalPrompt = ANALYSIS_PROMPTS[analysisType]
+
       const diagramContext = `
 
-The user is viewing a ${ANALYSIS_LABELS[selection.analysisType]} diagram for the repository.
-Diagram summary: ${existingDiagram.summary || "No summary available"}
-Diagram stats: ${existingDiagram.stats ? JSON.stringify(JSON.parse(existingDiagram.stats), null, 2) : "No stats available"}
+=== DIAGRAM CONTEXT ===
 
-Please consider this diagram context when responding to their question about the visualization.`
+You previously generated a ${ANALYSIS_LABELS[analysisType]} visualization for this repository. The diagram is displayed in a React Flow canvas beside this chat.
+
+ORIGINAL ANALYSIS PROMPT:
+${originalPrompt}
+
+CURRENT DIAGRAM DATA:
+Nodes (${nodes.length}):
+${JSON.stringify(nodes.map((n: any) => ({ id: n.id, type: n.type, data: n.data })), null, 2)}
+
+Edges (${edges.length}):
+${JSON.stringify(edges.map((e: any) => ({ id: e.id, source: e.source, target: e.target, label: e.label })), null, 2)}
+
+Summary: ${existingDiagram.summary || "No summary available"}
+
+Stats:
+${JSON.stringify(stats, null, 2)}
+
+=== END DIAGRAM CONTEXT ===
+
+The user is asking about this diagram. You can:
+1. Explain what the diagram shows
+2. Suggest improvements or additions
+3. Answer questions about specific nodes/edges
+4. Propose modifications to the React Flow code
+5. Generate updated diagram data if requested
+
+When suggesting changes, provide the complete updated nodes/edges JSON that could be used to update the diagram.`
       prompt = prompt + diagramContext
+    }
+
+    // For follow-up messages with an active session, include the conversation history
+    // as a fallback in case session resumption fails (e.g. session expiry, config cleanup)
+    // Note: This is only applied when we have a session - for visualize mode first message,
+    // we keep the prompt clean with just the user's question + diagram context
+    if (session && messages.length > 0) {
+      const historyText = messages
+        .map((m) => `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`)
+        .join("\n\n")
+      prompt = `<conversation_history>\n${historyText}\n</conversation_history>\n\nHuman: ${prompt}`
     }
 
     setPendingPrompt(prompt)
