@@ -20,7 +20,21 @@ import * as fs from "fs"
 // so makeWASocket lives at baileys.default.makeWASocket or baileys.makeWASocket
 const _baileys = (baileys as any).default ?? baileys
 const makeWASocket = _baileys.makeWASocket ?? _baileys
-const { DisconnectReason, useMultiFileAuthState, delay, Browsers, fetchLatestBaileysVersion } = _baileys
+const { DisconnectReason, useMultiFileAuthState, makeCacheableSignalKeyStore, delay, Browsers, fetchLatestBaileysVersion } = _baileys
+
+// Minimal pino-compatible logger for Baileys internals.
+// makeCacheableSignalKeyStore requires a logger as its second argument;
+// passing undefined causes a TypeError when it tries to call logger.trace().
+const baileysLogger = {
+  trace: () => {},
+  debug: () => {},
+  info:  (...a: any[]) => console.log("[Baileys]", ...a),
+  warn:  (...a: any[]) => console.warn("[Baileys]", ...a),
+  error: (...a: any[]) => console.error("[Baileys]", ...a),
+  fatal: (...a: any[]) => console.error("[Baileys FATAL]", ...a),
+  child: () => baileysLogger,
+  level: "silent",
+}
 type WASocket = ReturnType<typeof makeWASocket>
 
 // Global event emitter for QR codes and status changes
@@ -57,6 +71,10 @@ export class WhatsAppTrigger {
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private sessionPath: string
+  // Group metadata cache — keyed by group JID, required for Signal session resolution
+  private groupMetadataCache = new Map<string, any>()
+  // LID-to-phone JID translation — WhatsApp is migrating participants to opaque @lid identifiers
+  private lidToPhoneMap: Record<string, string> = {}
 
   constructor() {
     // Store session in userData
@@ -117,7 +135,13 @@ export class WhatsAppTrigger {
 
     this.sock = makeWASocket({
       printQRInTerminal: false, // We'll handle QR display via UI
-      auth: state,
+      auth: {
+        creds: state.creds,
+        // Wrap the file-backed key store with an in-memory cache.
+        // This prevents assertSessions from re-fetching Signal keys on every send,
+        // which is the primary cause of the 406 "not-acceptable" error in group chats.
+        keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
+      },
       ...(waVersion ? { version: waVersion } : {}),
       // Use a known-good browser fingerprint — custom strings get rejected by WA's handshake
       browser: Browsers ? Browsers.macOS("Desktop") : ["Mac OS X", "Desktop", "10.15.7"],
@@ -125,6 +149,9 @@ export class WhatsAppTrigger {
       shouldSyncHistoryMessage: () => false,
       // Sync only groups where user is mentioned
       syncFullHistory: false,
+      // Provide cached group metadata so relayMessage can resolve participant Signal sessions.
+      // Without this, assertSessions fetches stale/incomplete data and the WA server returns 406.
+      cachedGroupMetadata: async (jid: string) => this.groupMetadataCache.get(jid),
     })
 
     // Listen for connection updates
@@ -183,6 +210,18 @@ export class WhatsAppTrigger {
         this.isStarting = false
         await this.updateConnectionStatus(true)
 
+        // Build LID → phone JID map for own account.
+        // WhatsApp is transitioning group participants to opaque @lid identifiers;
+        // without this map, self-addressed messages in groups may be unresolvable.
+        if (this.sock?.user) {
+          const phoneUser = this.sock.user.id.split(":")[0]
+          const lidUser = (this.sock.user as any).lid?.split(":")[0]
+          if (lidUser && phoneUser) {
+            this.lidToPhoneMap[lidUser] = `${phoneUser}@s.whatsapp.net`
+            console.log(`[WhatsAppTrigger] LID mapping: ${lidUser}@lid -> ${phoneUser}@s.whatsapp.net`)
+          }
+        }
+
         // Clear any pending QR code
         whatsAppQREmitter.emit("qr", null)
       }
@@ -212,12 +251,42 @@ export class WhatsAppTrigger {
       }
     })
 
+    // Keep group metadata cache warm so relayMessage can resolve participant sessions
+    this.sock.ev.on("groups.upsert", (groups) => {
+      for (const group of groups) {
+        this.groupMetadataCache.set(group.id, group)
+      }
+    })
+
+    this.sock.ev.on("groups.update", (updates) => {
+      for (const update of updates) {
+        if (update.id) {
+          const existing = this.groupMetadataCache.get(update.id)
+          if (existing) {
+            this.groupMetadataCache.set(update.id, { ...existing, ...update })
+          }
+        }
+      }
+    })
+
     // Listen for incoming messages
     this.sock.ev.on("messages.upsert", async ({ messages, type }) => {
       // Only process new messages (not history sync)
       if (type !== "notify") return
 
       for (const msg of messages) {
+        // Pre-warm group metadata cache before handling — this ensures assertSessions
+        // has participant data available when we call sendMessage in the handler
+        const jid = msg.key.remoteJid
+        if (jid?.endsWith("@g.us") && this.sock && !this.groupMetadataCache.has(jid)) {
+          try {
+            const meta = await this.sock.groupMetadata(jid)
+            this.groupMetadataCache.set(jid, meta)
+          } catch {
+            // Non-fatal — proceed without cache entry
+          }
+        }
+
         await this.handleMessage(msg)
       }
     })
@@ -353,6 +422,18 @@ export class WhatsAppTrigger {
     if (!this.sock) {
       console.error("[WhatsAppTrigger] Socket not available")
       return false
+    }
+
+    // For group chats, ensure the metadata cache is populated before the first attempt.
+    // relayMessage → assertSessions needs participant JIDs to fetch Signal keys from the server.
+    if (to.endsWith("@g.us") && !this.groupMetadataCache.has(to)) {
+      try {
+        const meta = await this.sock.groupMetadata(to)
+        this.groupMetadataCache.set(to, meta)
+        console.log(`[WhatsAppTrigger] Pre-fetched group metadata for ${to} (${meta.participants?.length ?? 0} participants)`)
+      } catch (err) {
+        console.warn(`[WhatsAppTrigger] Could not pre-fetch group metadata for ${to}:`, err)
+      }
     }
 
     for (let attempt = 1; attempt <= retries; attempt++) {
