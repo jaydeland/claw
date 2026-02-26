@@ -22,6 +22,7 @@ export default defineConfig({
           "better-sqlite3",
           "@prisma/client",
           "@anthropic-ai/claude-agent-sdk", // ESM module - must use dynamic import
+          "@whiskeysockets/baileys",        // ESM module (v7+) - must use dynamic import
         ],
         output: {
           format: "cjs",

@@ -5,8 +5,8 @@
  * No public URL needed - user scans QR code with WhatsApp app to authenticate.
  */
 
-// Use namespace import for CommonJS compatibility with externalized module
-import * as baileys from "@whiskeysockets/baileys"
+// Baileys v7 is pure ESM — must be dynamically imported at runtime.
+// It is externalized in electron.vite.config.ts so esbuild leaves it as-is.
 import { app } from "electron"
 import { getDatabase, headlessClaws, whatsappSettings, clawExecutions } from "../db"
 import { eq } from "drizzle-orm"
@@ -14,13 +14,6 @@ import { clawDaemon } from "./index"
 import { EventEmitter } from "events"
 import * as path from "path"
 import * as fs from "fs"
-
-// Extract needed exports from baileys namespace
-// When bundled by esbuild, CJS module.exports becomes the namespace default,
-// so makeWASocket lives at baileys.default.makeWASocket or baileys.makeWASocket
-const _baileys = (baileys as any).default ?? baileys
-const makeWASocket = _baileys.makeWASocket ?? _baileys
-const { DisconnectReason, useMultiFileAuthState, makeCacheableSignalKeyStore, delay, Browsers, fetchLatestBaileysVersion } = _baileys
 
 // Minimal pino-compatible logger for Baileys internals.
 // makeCacheableSignalKeyStore requires a logger as its second argument;
@@ -35,7 +28,29 @@ const baileysLogger = {
   child: () => baileysLogger,
   level: "silent",
 }
-type WASocket = ReturnType<typeof makeWASocket>
+
+// Lazily-resolved Baileys exports (populated on first connect())
+let makeWASocket: any
+let DisconnectReason: any
+let useMultiFileAuthState: any
+let makeCacheableSignalKeyStore: any
+let delay: any
+let Browsers: any
+let fetchLatestBaileysVersion: any
+
+async function loadBaileys(): Promise<void> {
+  if (makeWASocket) return // already loaded
+  const b = await import("@whiskeysockets/baileys")
+  makeWASocket = b.makeWASocket
+  DisconnectReason = b.DisconnectReason
+  useMultiFileAuthState = b.useMultiFileAuthState
+  makeCacheableSignalKeyStore = b.makeCacheableSignalKeyStore
+  delay = b.delay
+  Browsers = b.Browsers
+  fetchLatestBaileysVersion = b.fetchLatestBaileysVersion
+}
+
+type WASocket = any
 
 // Global event emitter for QR codes and status changes
 export const whatsAppQREmitter = new EventEmitter()
@@ -120,6 +135,9 @@ export class WhatsAppTrigger {
    * Connect to WhatsApp Web
    */
   private async connect(): Promise<void> {
+    // Load Baileys (ESM, deferred until first connection)
+    await loadBaileys()
+
     // Load auth state from filesystem
     const { state, saveCreds } = await useMultiFileAuthState(this.sessionPath)
 
