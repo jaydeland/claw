@@ -5,10 +5,12 @@
  * in response to triggers (cron, GitHub polling, or manual).
  */
 
-import { safeStorage, Notification } from "electron"
+import { safeStorage, Notification, app } from "electron"
 import { spawn, ChildProcess } from "node:child_process"
+import { existsSync } from "fs"
+import { join } from "path"
 import { eq, desc } from "drizzle-orm"
-import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, type HeadlessClaw, type ClawExecution } from "../db"
+import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, type HeadlessClaw, type ClawExecution } from "../db"
 import { createId } from "../db/utils"
 import { getSlackTrigger } from "./slack-trigger"
 import { getWhatsAppTrigger } from "./whatsapp-trigger"
@@ -147,6 +149,8 @@ class ClawDaemon {
       case "whatsapp_message":
         // WhatsApp triggers are handled by WhatsAppTrigger singleton
         console.log(`[ClawDaemon] Claw "${claw.name}" registered for WhatsApp messages`)
+        // Ensure WhatsAppTrigger is started if credentials exist
+        await this.ensureWhatsAppTriggerStarted()
         break
       default:
         console.warn(`[ClawDaemon] Unknown trigger type: ${claw.triggerType}`)
@@ -304,6 +308,36 @@ class ClawDaemon {
   async stopSlackTrigger(): Promise<void> {
     const slackTrigger = getSlackTrigger()
     await slackTrigger.stop()
+  }
+
+  /**
+   * Ensure WhatsApp trigger is started if a session exists.
+   * We check both the DB flag and the presence of creds.json on disk —
+   * the DB flag can be stale (e.g. after deleting+rescanning), so disk wins.
+   */
+  private async ensureWhatsAppTriggerStarted(): Promise<void> {
+    try {
+      const whatsappTrigger = getWhatsAppTrigger()
+      if (whatsappTrigger.isActive()) return
+
+      // Check DB flag first (fast path)
+      const db = getDatabase()
+      const settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
+
+      // Also check for creds.json on disk — covers the case where session was
+      // manually cleared and rescanned but isConnected wasn't persisted yet
+      const credsPath = join(app.getPath("userData"), "baileys_auth", "creds.json")
+      const hasSession = settings?.isConnected || existsSync(credsPath)
+
+      if (hasSession) {
+        console.log("[ClawDaemon] WhatsApp session found, auto-starting trigger")
+        await whatsappTrigger.start()
+      } else {
+        console.log("[ClawDaemon] No WhatsApp session on disk — waiting for user to scan QR")
+      }
+    } catch (error) {
+      console.error("[ClawDaemon] Failed to start WhatsApp trigger:", error)
+    }
   }
 
   /**
