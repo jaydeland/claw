@@ -498,9 +498,18 @@ export class WhatsAppTrigger {
     try {
       console.log(`[WhatsAppTrigger] Creating group: ${name}`)
 
-      // Create the group - initially empty, we'll add participants later if needed
-      // Baileys groupCreate expects: subject, participants (array of phone numbers)
-      const groupMetadata = await this.sock.groupCreate(name, [])
+      // Get user's own JID to add as initial participant
+      // WhatsApp requires at least one participant to create a group
+      const userJid = await this.getOwnJid()
+      if (!userJid) {
+        throw new Error("Could not get user's JID - WhatsApp connection may not be fully established")
+      }
+
+      // Create the group with user's own JID as initial participant
+      // Baileys groupCreate expects: subject, participants (array of JIDs)
+      const participants = [userJid]
+      console.log(`[WhatsAppTrigger] Creating group with participants:`, participants)
+      const groupMetadata = await this.sock.groupCreate(name, participants)
 
       console.log(`[WhatsAppTrigger] Group created: ${groupMetadata.id}`)
 

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import { Zap, Plus, Play, Settings, History, Clock, CheckCircle, XCircle, Loader2, Power, PowerOff, Trash2, ExternalLink } from "lucide-react"
+import { Zap, Plus, Play, Settings, History, Clock, CheckCircle, XCircle, Loader2, Power, PowerOff, Trash2, ExternalLink, Edit } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { useAtom } from "jotai"
@@ -49,6 +49,8 @@ type ClawWithParsedConfig = {
 export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [clawToEdit, setClawToEdit] = useState<ClawWithParsedConfig | null>(null)
   const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
   const [clawToDelete, setClawToDelete] = useState<string | null>(null)
   const [clawToTrigger, setClawToTrigger] = useState<string | null>(null)
@@ -235,6 +237,19 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
                     className="h-6 w-6"
                     onClick={(e) => {
                       e.stopPropagation()
+                      setClawToEdit(claw)
+                      setEditModalOpen(true)
+                    }}
+                    title="Edit"
+                  >
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation()
                       setSelectedClaw(selectedClaw?.id === claw.id ? null : { id: claw.id, name: claw.name, triggerType: claw.triggerType })
                     }}
                     title="View history"
@@ -260,7 +275,15 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
         )}
       </div>
 
-      {/* Create Claw Modal */}
+      {/* Create/Edit Claw Modal */}
+      <CreateClawModal
+        open={editModalOpen}
+        onOpenChange={(open) => {
+          setEditModalOpen(open)
+          if (!open) setClawToEdit(null)
+        }}
+        claw={clawToEdit}
+      />
       <CreateClawModal open={createModalOpen} onOpenChange={setCreateModalOpen} />
 
       {/* Delete Confirmation */}

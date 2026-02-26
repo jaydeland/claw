@@ -28,6 +28,15 @@ import { Alert, AlertDescription } from "../../../components/ui/alert"
 interface CreateClawModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  claw?: {
+    id: string
+    name: string
+    instruction: string
+    targetWorktree: string
+    triggerType: TriggerType
+    triggerConfig: Record<string, string>
+    isEnabled: boolean
+  } | null
 }
 
 type TriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
@@ -62,9 +71,32 @@ const initialFormData: FormData = {
   whatsappChatFilter: "",
 }
 
-export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
+export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalProps) {
+  const isEditing = !!claw
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
+
+  // Populate form when editing
+  React.useEffect(() => {
+    if (claw && open) {
+      const config = claw.triggerConfig || {}
+      setFormData({
+        name: claw.name,
+        instruction: claw.instruction,
+        targetWorktree: claw.targetWorktree,
+        triggerType: claw.triggerType as TriggerType,
+        cronExpression: config.expression || "0 */6 * * *",
+        githubOwner: config.owner || "",
+        githubRepo: config.repo || "",
+        githubLabel: config.label || "agent-ready",
+        slackChannelFilter: config.slackChannelFilter || "",
+        whatsappChatFilter: config.whatsappChatFilter || "",
+      })
+    } else if (!claw && open) {
+      // Reset when opening create modal
+      setFormData(initialFormData)
+    }
+  }, [claw, open])
 
   const utils = trpc.useUtils()
   const { data: projects } = trpc.projects.list.useQuery()
@@ -92,6 +124,20 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
   })
 
   const createMutation = trpc.claws.create.useMutation({
+    onSuccess: () => {
+      utils.claws.getAll.invalidate()
+      setFormData(initialFormData)
+      setErrors({})
+      setShowGroupCreator(false)
+      setCreatedGroupId(null)
+      setGroupName("")
+      setCopied(false)
+      createGroupMutation.reset()
+      onOpenChange(false)
+    },
+  })
+
+  const updateMutation = trpc.claws.update.useMutation({
     onSuccess: () => {
       utils.claws.getAll.invalidate()
       setFormData(initialFormData)
@@ -177,13 +223,24 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
                 }
               : {}
 
-    createMutation.mutate({
-      name: formData.name,
-      instruction: formData.instruction,
-      targetWorktree: formData.targetWorktree,
-      triggerType: formData.triggerType,
-      triggerConfig,
-    })
+    if (isEditing && claw) {
+      updateMutation.mutate({
+        id: claw.id,
+        name: formData.name,
+        instruction: formData.instruction,
+        targetWorktree: formData.targetWorktree,
+        triggerType: formData.triggerType,
+        triggerConfig,
+      })
+    } else {
+      createMutation.mutate({
+        name: formData.name,
+        instruction: formData.instruction,
+        targetWorktree: formData.targetWorktree,
+        triggerType: formData.triggerType,
+        triggerConfig,
+      })
+    }
   }
 
   const handleProjectSelect = (projectId: string) => {
@@ -224,7 +281,7 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Claw</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Claw" : "Create New Claw"}</DialogTitle>
           <DialogDescription>Configure a headless agent to run autonomously.</DialogDescription>
         </DialogHeader>
 
@@ -642,9 +699,14 @@ export function CreateClawModal({ open, onOpenChange }: CreateClawModalProps) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={createMutation.isPending}>
-            {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Create Claw
+          <Button
+            onClick={handleSubmit}
+            disabled={isEditing ? updateMutation.isPending : createMutation.isPending}
+          >
+            {(isEditing ? updateMutation.isPending : createMutation.isPending) && (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            )}
+            {isEditing ? "Save Changes" : "Create Claw"}
           </Button>
         </DialogFooter>
       </DialogContent>
