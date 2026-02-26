@@ -23,8 +23,9 @@ const makeWASocket = _baileys.makeWASocket ?? _baileys
 const { DisconnectReason, useMultiFileAuthState, delay, Browsers, fetchLatestBaileysVersion } = _baileys
 type WASocket = ReturnType<typeof makeWASocket>
 
-// Global event emitter for QR codes
+// Global event emitter for QR codes and status changes
 export const whatsAppQREmitter = new EventEmitter()
+export const whatsAppStatusEmitter = new EventEmitter()
 
 // Singleton instance
 let whatsappTriggerInstance: WhatsAppTrigger | null = null
@@ -468,6 +469,10 @@ export class WhatsAppTrigger {
       .set({ isConnected: connected, updatedAt: new Date() })
       .where(eq(whatsappSettings.id, "default"))
       .run()
+
+    // Emit status change event for real-time UI updates
+    console.log(`[WhatsAppTrigger] Emitting status change: ${connected}`)
+    whatsAppStatusEmitter.emit("statusChange", { isConnected: connected })
   }
 
   /**

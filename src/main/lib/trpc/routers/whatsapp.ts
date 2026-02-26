@@ -2,7 +2,7 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, whatsappSettings } from "../../db"
 import { eq } from "drizzle-orm"
-import { getWhatsAppTrigger, whatsAppQREmitter } from "../../claws/whatsapp-trigger"
+import { getWhatsAppTrigger, whatsAppQREmitter, whatsAppStatusEmitter } from "../../claws/whatsapp-trigger"
 import { observable } from "@trpc/server/observable"
 
 /**
@@ -11,16 +11,30 @@ import { observable } from "@trpc/server/observable"
 export const whatsappRouter = router({
   /**
    * Get WhatsApp connection status
+   * Also checks actual socket state for more accurate status
    */
   getStatus: publicProcedure.query(async () => {
     const db = getDatabase()
     const settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
 
     const trigger = getWhatsAppTrigger()
+    const isActive = trigger.isActive()
+
+    // If socket reports active but DB doesn't, update DB to match reality
+    const isConnected = isActive || (settings?.isConnected ?? false)
+
+    if (isActive && !settings?.isConnected) {
+      // Socket is connected but DB says disconnected - sync DB
+      console.log("[WhatsAppRouter] Syncing DB status to connected")
+      db.update(whatsappSettings)
+        .set({ isConnected: true, updatedAt: new Date() })
+        .where(eq(whatsappSettings.id, "default"))
+        .run()
+    }
 
     return {
-      isConnected: settings?.isConnected ?? false,
-      isActive: trigger.isActive(),
+      isConnected,
+      isActive,
     }
   }),
 
@@ -87,6 +101,25 @@ export const whatsappRouter = router({
       // Cleanup when subscription ends
       return () => {
         whatsAppQREmitter.off("qr", handler)
+      }
+    })
+  }),
+
+  /**
+   * Subscribe to connection status changes
+   * Emits when WhatsApp connection status changes
+   */
+  onStatusChange: publicProcedure.subscription(() => {
+    return observable<{ isConnected: boolean }>((emit) => {
+      const handler = (status: { isConnected: boolean }) => {
+        emit.next(status)
+      }
+
+      whatsAppStatusEmitter.on("statusChange", handler)
+
+      // Cleanup when subscription ends
+      return () => {
+        whatsAppStatusEmitter.off("statusChange", handler)
       }
     })
   }),

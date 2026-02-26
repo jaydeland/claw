@@ -25,7 +25,12 @@ export function AgentsWhatsAppTab() {
 
   const utils = trpc.useUtils()
 
-  const { data: status, isLoading: isLoadingStatus } = trpc.whatsapp.getStatus.useQuery()
+  const { data: status, isLoading: isLoadingStatus } = trpc.whatsapp.getStatus.useQuery(undefined, {
+    // Poll every 3 seconds to catch status changes from background processes
+    refetchInterval: 3000,
+    // Keep polling even when window is in background
+    refetchIntervalInBackground: true,
+  })
   const connectMutation = trpc.whatsapp.connect.useMutation({
     onSuccess: (data) => {
       if (!data.success) {
@@ -70,6 +75,17 @@ export function AgentsWhatsAppTab() {
     },
     onError: (err) => {
       console.error("QR subscription error:", err)
+    },
+  })
+
+  // Subscribe to status changes for real-time UI updates
+  trpc.whatsapp.onStatusChange.useSubscription(undefined, {
+    onData: (status) => {
+      console.log("[WhatsAppTab] Status change received:", status)
+      utils.whatsapp.getStatus.invalidate()
+    },
+    onError: (err) => {
+      console.error("Status subscription error:", err)
     },
   })
 
