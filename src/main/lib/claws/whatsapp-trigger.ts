@@ -187,7 +187,9 @@ export class WhatsAppTrigger {
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode
         const errorMessage = lastDisconnect?.error?.message
         const isNoiseHandshakeFailure = errorMessage === "Connection Failure"
-        // 515 = restart required, usually due to sync key corruption
+        // 515 = "restart required" — sent by WA after QR pairing and after state sync.
+        // It means "close and reconnect cleanly", NOT "session is corrupt".
+        // Wiping the session on 515 would destroy freshly-scanned credentials.
         const isRestartRequired = statusCode === 515 || errorMessage?.includes("restart required")
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
@@ -197,11 +199,11 @@ export class WhatsAppTrigger {
         if (shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
           this.reconnectAttempts++
 
-          // Noise handshake failures and restart-required errors are caused by stale/corrupt auth files.
-          // Clear them so the next connect() generates fresh keys.
-          const needsSessionReset = isNoiseHandshakeFailure || isRestartRequired
+          // Only wipe auth files on actual Noise handshake failures (BAD_DECRYPT / corrupted keys).
+          // 515 restarts are normal and must never trigger a session wipe.
+          const needsSessionReset = isNoiseHandshakeFailure
           if (needsSessionReset && fs.existsSync(this.sessionPath)) {
-            console.log("[WhatsAppTrigger] Session error detected — clearing stale session files before retry")
+            console.log("[WhatsAppTrigger] Noise handshake failure — clearing stale session files before retry")
             try {
               fs.rmSync(this.sessionPath, { recursive: true, force: true })
               fs.mkdirSync(this.sessionPath, { recursive: true })
@@ -210,8 +212,7 @@ export class WhatsAppTrigger {
             }
           }
 
-          // Use a longer delay for session reset scenarios to avoid server-side rate limiting
-          const retryDelay = needsSessionReset ? 10000 : 5000
+          const retryDelay = isRestartRequired ? 3000 : needsSessionReset ? 10000 : 5000
           console.log(`[WhatsAppTrigger] Reconnecting (attempt ${this.reconnectAttempts}) in ${retryDelay / 1000}s...`)
           await delay(retryDelay)
           await this.connect()
