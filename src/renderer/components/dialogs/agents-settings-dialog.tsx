@@ -7,7 +7,6 @@ import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
 import { cn } from "../../lib/utils"
 import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms/agents-settings-dialog"
 import {
-  ProfileIconFilled,
   EyeOpenFilledIcon,
   SlidersFilledIcon,
   SettingsIcon,
@@ -15,7 +14,6 @@ import {
 import { FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
 import { Github } from "lucide-react"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
-import { AgentsProfileTab } from "./settings-tabs/agents-profile-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
 import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
@@ -59,12 +57,6 @@ interface AgentsSettingsDialogProps {
 
 // Main settings tabs
 const MAIN_TABS = [
-  {
-    id: "profile" as SettingsTab,
-    label: "Account",
-    icon: ProfileIconFilled,
-    description: "Manage your account settings",
-  },
   {
     id: "providers" as SettingsTab,
     label: "AI Providers",
@@ -280,8 +272,6 @@ export function AgentsSettingsDialog({
   const renderTabContent = () => {
     // Handle static tabs
     switch (activeTab) {
-      case "profile":
-        return <AgentsProfileTab />
       case "providers":
         return <AgentsProvidersTab />
       case "appearance":

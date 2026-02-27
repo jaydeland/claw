@@ -5,7 +5,6 @@ export const agentsSettingsDialogOpenAtom = atom(false)
 
 // Settings tab types - matches MAIN_TABS + ADVANCED_TABS in agents-settings-dialog.tsx
 export type SettingsTab =
-  | "profile"
   | "providers"
   | "appearance"
   | "keyboard"
