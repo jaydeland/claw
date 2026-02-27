@@ -187,8 +187,10 @@ export class WhatsAppTrigger {
         keys: state.keys,
       },
       ...(waVersion ? { version: waVersion } : {}),
-      // Use a known-good browser fingerprint — custom strings get rejected by WA's handshake
-      browser: Browsers ? Browsers.macOS("Desktop") : ["Mac OS X", "Desktop", "10.15.7"],
+      // Use a browser fingerprint that identifies as a LINKED device, not primary.
+      // Browsers.macOS("Desktop") treats the session as primary device and kicks other linked devices.
+      // "Chrome" with a specific version identifies as a proper linked device companion.
+      browser: Browsers ? Browsers.macOS("Chrome") : ["Mac OS X", "Chrome", "120.0.0.0"],
       // Don't sync full history - we only care about new messages
       shouldSyncHistoryMessage: () => false,
       // Sync only groups where user is mentioned
