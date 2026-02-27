@@ -667,6 +667,15 @@ export const claudeRouter = router({
     )
     .subscription(({ input }) => {
       return observable<UIMessageChunk>((emit) => {
+        // Check for existing session and abort it before creating new one
+        // This prevents race conditions where the old AbortController affects the new session
+        const existingSession = getSession(input.subChatId)
+        if (existingSession) {
+          console.log(`[SD] Aborting existing session for subChat ${input.subChatId.slice(-8)}`)
+          existingSession.abortController.abort()
+          removeSession(input.subChatId)
+        }
+
         const abortController = new AbortController()
         const streamId = crypto.randomUUID()
 
@@ -1313,6 +1322,14 @@ export const claudeRouter = router({
             }
 
             // 5. Run Claude SDK
+            // Check if session was aborted during setup (race condition)
+            if (abortController.signal.aborted) {
+              console.log(`[SD] M:END sub=${subId} reason=aborted_before_query n=${chunkCount}`)
+              safeEmit({ type: "finish" } as UIMessageChunk)
+              safeComplete()
+              return
+            }
+
             let stream
             try {
               stream = claudeQuery(queryOptions)
