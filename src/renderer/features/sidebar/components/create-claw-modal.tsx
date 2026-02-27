@@ -265,6 +265,20 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
   const showSlackConfig = formData.triggerType === "slack_mention"
   const showWhatsAppConfig = formData.triggerType === "whatsapp_message"
 
+  // Fetch WhatsApp groups for the selector (must be after showWhatsAppConfig is defined)
+  const getGroupsQuery = trpc.whatsapp.getGroups.useQuery(undefined, {
+    enabled: showWhatsAppConfig,
+  })
+
+  // Find the currently selected group from the fetched list
+  const selectedGroup = useMemo(() => {
+    if (!formData.whatsappChatFilter || !getGroupsQuery.data?.groups) return null
+    return getGroupsQuery.data.groups.find((g) => g.id === formData.whatsappChatFilter)
+  }, [formData.whatsappChatFilter, getGroupsQuery.data?.groups])
+
+  // Determine the select value - either the group ID if found, or empty for custom
+  const selectValue = selectedGroup ? selectedGroup.id : formData.whatsappChatFilter?.startsWith("@g.us") ? "__custom__" : formData.whatsappChatFilter || ""
+
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       // Reset group creator state when modal closes
@@ -532,9 +546,73 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
                   }
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use &quot;group&quot; for groups only, &quot;individual&quot; for DMs only, phone number, or leave empty for all.
+                  Leave empty to respond to no chats. Select a specific group from the dropdown, or type: &quot;group&quot; for all groups, &quot;individual&quot; for DMs only, or a phone number.
                 </p>
               </div>
+
+              {/* Group Selector Dropdown */}
+              {getGroupsQuery.data?.success && getGroupsQuery.data.groups && getGroupsQuery.data.groups.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-border/50">
+                  <Label htmlFor="whatsapp-group-select">Or Select a Group</Label>
+                  <Select
+                    value={selectedGroup?.id || formData.whatsappChatFilter || "__empty__"}
+                    onValueChange={(value) => {
+                      if (value === "__empty__") {
+                        setFormData((prev) => ({ ...prev, whatsappChatFilter: "" }))
+                      } else {
+                        setFormData((prev) => ({ ...prev, whatsappChatFilter: value }))
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="whatsapp-group-select">
+                      <SelectValue placeholder="Select a group..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__empty__">Select a group...</SelectItem>
+                      {/* Show unknown group if saved group not in list */}
+                      {formData.whatsappChatFilter?.includes("@g.us") && !selectedGroup && (
+                        <SelectItem value={formData.whatsappChatFilter}>
+                          Unknown Group (ID: {formData.whatsappChatFilter.split("@")[0]?.slice(-8)}...)
+                        </SelectItem>
+                      )}
+                      {getGroupsQuery.data.groups.map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name} ({group.participantCount} participants)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {getGroupsQuery.isLoading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading groups...
+                </div>
+              )}
+
+              {/* Error State with Retry */}
+              {getGroupsQuery.error && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs text-destructive">
+                    Failed to load groups: {getGroupsQuery.error.message}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => getGroupsQuery.refetch()}
+                    disabled={getGroupsQuery.isRefetching}
+                  >
+                    {getGroupsQuery.isRefetching ? (
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    ) : null}
+                    Retry
+                  </Button>
+                </div>
+              )}
 
               {/* Auto-create Group Section */}
               <div className="pt-2 border-t border-border/50">

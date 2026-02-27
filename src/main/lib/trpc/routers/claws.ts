@@ -52,9 +52,9 @@ const manualConfigSchema = z.object({})
 const triggerConfigSchema = z.union([
   cronConfigSchema,
   githubPollConfigSchema,
-  manualConfigSchema,
   z.object({ slackChannelFilter: z.string().optional() }),
   z.object({ whatsappChatFilter: z.string().optional() }),
+  manualConfigSchema, // Must be last - empty object matches anything
 ])
 
 /**
