@@ -208,12 +208,17 @@ export const claudeCodeRouter = router({
         throw new Error("Session not found or expired. Please start the authentication process again.")
       }
 
-      // The user may paste the full callback URL or just the code value
+      // platform.claude.com/oauth/code/callback displays "CODE#STATE" combined.
+      // Extract just the code (everything before the '#').
+      // Also handle the case where the user pastes the full callback URL.
       let authCode = input.code.trim()
       if (authCode.startsWith("http")) {
         try {
           authCode = new URL(authCode).searchParams.get("code") || authCode
         } catch { /* use as-is */ }
+      }
+      if (authCode.includes("#")) {
+        authCode = authCode.split("#")[0]
       }
 
       const token = await exchangeAnthropicCode(authCode, session.codeVerifier, session.state)
