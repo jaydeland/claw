@@ -22,6 +22,7 @@ const ANTHROPIC_REDIRECT_URI = "https://platform.claude.com/oauth/code/callback"
 interface OAuthSession {
   oauthUrl: string
   codeVerifier: string
+  state: string
 }
 
 const activeSessions = new Map<string, OAuthSession>()
@@ -38,20 +39,20 @@ function generateCodeChallenge(verifier: string): string {
 
 // ============ TOKEN EXCHANGE ============
 
-async function exchangeAnthropicCode(code: string, codeVerifier: string): Promise<string | null> {
+async function exchangeAnthropicCode(code: string, codeVerifier: string, state: string): Promise<string | null> {
   try {
-    const params = new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: ANTHROPIC_REDIRECT_URI,
-      client_id: ANTHROPIC_OAUTH_CLIENT_ID,
-      code_verifier: codeVerifier,
-    })
-
+    // Anthropic's token endpoint expects JSON (not URL-encoded) and requires the state parameter
     const response = await fetch(ANTHROPIC_OAUTH_TOKEN_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: ANTHROPIC_REDIRECT_URI,
+        client_id: ANTHROPIC_OAUTH_CLIENT_ID,
+        code_verifier: codeVerifier,
+        state,
+      }),
     })
 
     if (!response.ok) {
@@ -163,7 +164,7 @@ export const claudeCodeRouter = router({
     authUrl.searchParams.set("code_challenge_method", "S256")
     authUrl.searchParams.set("state", state)
 
-    activeSessions.set(sessionId, { oauthUrl: authUrl.toString(), codeVerifier })
+    activeSessions.set(sessionId, { oauthUrl: authUrl.toString(), codeVerifier, state })
 
     // Clean up after 15 minutes
     setTimeout(() => activeSessions.delete(sessionId), 15 * 60 * 1000)
@@ -215,7 +216,7 @@ export const claudeCodeRouter = router({
         } catch { /* use as-is */ }
       }
 
-      const token = await exchangeAnthropicCode(authCode, session.codeVerifier)
+      const token = await exchangeAnthropicCode(authCode, session.codeVerifier, session.state)
       if (!token) {
         throw new Error("Failed to exchange authorization code. Please check the code and try again.")
       }
