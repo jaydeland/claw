@@ -448,24 +448,22 @@ export class WhatsAppTrigger {
         throw dbError
       }
 
-      if (claws.length === 0) {
-        // No claws configured - send a helpful message
-        console.log(`[WhatsAppTrigger] No claws configured, sending help message to ${from}`)
-        const helpResult = await this.sendMessage(from, "🤖 No WhatsApp-triggered claws are configured. Create one in Claw settings!")
-        console.log(`[WhatsAppTrigger] Help message send result: ${helpResult}`)
+      // Filter claws to only those configured for this specific chat
+      // Claws MUST have a chat filter configured to respond
+      const matchingClaws = claws.filter(claw => {
+        const config = JSON.parse(claw.triggerConfig || "{}")
+        const chatFilter = config.whatsappChatFilter
+        // Only match if a chat filter is configured AND it matches this chat
+        return chatFilter && this.matchesChatFilter(from, chatFilter)
+      })
+
+      if (matchingClaws.length === 0) {
+        // No claws configured for this chat - silently ignore
+        console.log(`[WhatsAppTrigger] No claws configured for chat ${from}, ignoring message`)
         return
       }
 
-      for (const claw of claws) {
-        // Parse trigger config for chat filter (optional)
-        const config = JSON.parse(claw.triggerConfig || "{}")
-        const chatFilter = config.whatsappChatFilter
-
-        // If chat filter is set, check if this chat matches
-        if (chatFilter && !this.matchesChatFilter(from, chatFilter)) {
-          console.log(`[WhatsAppTrigger] Chat ${from} doesn't match filter ${chatFilter}`)
-          continue
-        }
+      for (const claw of matchingClaws) {
 
         // Send acknowledgment
         const ackText = `🤖 *${claw.name}* is working on it...`
