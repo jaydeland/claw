@@ -71,7 +71,7 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
         type: "tool-input-available",
         toolCallId: currentToolCallId,
         toolName: currentToolName || "unknown",
-        input: accumulatedToolInput ? JSON.parse(accumulatedToolInput) : {},
+        input: accumulatedToolInput ? (() => { try { return JSON.parse(accumulatedToolInput) } catch { return { _raw: accumulatedToolInput } } })() : {},
       }
       currentToolCallId = null
       currentToolName = null
