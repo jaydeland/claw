@@ -259,6 +259,12 @@ export async function warmupMcpCache(): Promise<void> {
         continue
       }
 
+      // Skip projects that no longer exist on disk
+      if (!existsSync(projectPath)) {
+        console.log(`[MCP Warmup] Skipping removed project: ${projectPath}`)
+        continue
+      }
+
       try {
         // Use getMergedMcpConfig (same as queries) instead of ~/.claude.json's mcpServers
         const mergedConfig = await getMergedMcpConfig(projectPath)

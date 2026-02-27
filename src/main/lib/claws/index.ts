@@ -443,83 +443,137 @@ class ClawDaemon {
       }
     }
 
-    // Spawn Claude Code process
-    this.spawnClaudeProcess(claw, executionId, instruction)
+    // Execute using Claude SDK
+    this.executeClaudeSDK(claw, executionId, instruction)
 
     return executionId
   }
 
   /**
-   * Spawn the Claude Code process
+   * Execute Claude Code using the SDK
    */
-  private spawnClaudeProcess(claw: HeadlessClaw, executionId: string, instruction: string): void {
+  private async executeClaudeSDK(claw: HeadlessClaw, executionId: string, instruction: string): Promise<void> {
     const db = getDatabase()
     let logs = ""
 
-    // Build environment
-    const env = {
-      ...process.env,
-      FORCE_COLOR: "0", // Strip ANSI colors
-      CLAW_EXECUTION: "1", // Signal to Claude that it's running in headless mode
-    }
+    console.log(`[ClawDaemon] Executing Claude SDK for execution ${executionId} in ${claw.targetWorktree}`)
 
-    // Spawn the process
-    // Using npx to run @anthropic-ai/claude-code with the -p flag for non-interactive mode
-    const child = spawn("npx", ["@anthropic-ai/claude-code", "-p", instruction], {
-      cwd: claw.targetWorktree,
-      env,
-      shell: true,
-      detached: false,
-    })
+    try {
+      // Import the SDK
+      const sdk = await import("@anthropic-ai/claude-agent-sdk")
+      const claudeQuery = sdk.query
 
-    // Update active triggers with child process
-    const trigger = this.activeTriggers.get(claw.id)
-    if (trigger) {
-      trigger.childProcess = child
-    }
+      // Build environment
+      const { buildClaudeEnv, getBundledClaudeBinaryPath } = await import("../claude/env")
+      const claudeEnv = buildClaudeEnv()
+      const claudeBinaryPath = getBundledClaudeBinaryPath()
 
-    // Capture stdout
-    child.stdout?.on("data", (data: Buffer) => {
-      const chunk = data.toString()
-      logs += chunk
-      this.updateExecutionLogs(executionId, logs)
-    })
+      const env: Record<string, string> = {
+        ...claudeEnv,
+        FORCE_COLOR: "0",
+        CLAW_EXECUTION: "1",
+      }
 
-    // Capture stderr
-    child.stderr?.on("data", (data: Buffer) => {
-      const chunk = data.toString()
-      logs += chunk
-      this.updateExecutionLogs(executionId, logs)
-    })
+      // Create abort controller
+      const abortController = new AbortController()
 
-    // Handle process exit
-    child.on("exit", (code) => {
-      const status: ExecutionStatus = code === 0 ? "success" : "failed"
+      // Store abort controller for potential cancellation
+      const trigger = this.activeTriggers.get(claw.id)
+      if (trigger) {
+        // Store a mock child process for compatibility with existing code
+        trigger.childProcess = {
+          kill: () => abortController.abort(),
+        } as any
+      }
+
+      console.log(`[ClawDaemon] Starting SDK query with bundled binary: ${claudeBinaryPath}`)
+
+      const stream = claudeQuery({
+        prompt: instruction,
+        options: {
+          abortController,
+          cwd: claw.targetWorktree,
+          systemPrompt: {
+            type: "preset" as const,
+            preset: "claude_code" as const,
+          },
+          env,
+          permissionMode: "bypassPermissions" as const,
+          allowDangerouslySkipPermissions: true,
+          pathToClaudeCodeExecutable: claudeBinaryPath,
+          persistSession: false,
+        },
+      })
+
+      let messageCount = 0
+      let hasError = false
+
+      for await (const msg of stream) {
+        const msgAny = msg as any
+        messageCount++
+
+        // Collect text from assistant messages
+        if (msgAny.type === "assistant" && msgAny.message?.content) {
+          let text = ""
+          const content = msgAny.message.content
+
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              if (block.type === "text" && block.text) {
+                text += block.text
+              }
+            }
+          } else if (typeof content === "string") {
+            text = content
+          }
+
+          if (text) {
+            console.log(`[ClawDaemon] SDK message ${messageCount}: ${text.substring(0, 200)}`)
+            logs += text + "\n"
+            this.updateExecutionLogs(executionId, logs)
+          }
+        }
+
+        // Check for errors
+        if (msgAny.type === "result" && msgAny.is_error) {
+          hasError = true
+          if (msgAny.errors) {
+            const errorText = msgAny.errors.join("\n")
+            console.error(`[ClawDaemon] SDK errors: ${errorText}`)
+            logs += `\nErrors: ${errorText}`
+          }
+        }
+
+        // Break on result
+        if (msgAny.type === "result") {
+          console.log(`[ClawDaemon] SDK stream completed after ${messageCount} messages`)
+          break
+        }
+      }
+
+      const status: ExecutionStatus = hasError ? "failed" : "success"
 
       db.update(clawExecutions)
         .set({
           status,
-          exitCode: code ?? undefined,
-          logs: logs + `\nProcess exited with code ${code} at ${new Date().toISOString()}`,
+          logs: logs + `\nExecution completed at ${new Date().toISOString()}`,
           completedAt: new Date(),
         })
         .where(eq(clawExecutions.id, executionId))
         .run()
 
-      // Remove child process from active triggers
+      // Remove from active triggers
       if (trigger) {
         trigger.childProcess = undefined
       }
 
-      // Send notification
       this.sendNotification(claw.name, status)
 
       console.log(`[ClawDaemon] Execution ${executionId} completed with status: ${status}`)
-    })
 
-    // Handle errors
-    child.on("error", (error) => {
-      logs += `\nProcess error: ${error.message}`
+    } catch (error: any) {
+      console.error(`[ClawDaemon] SDK execution failed:`, error)
+      logs += `\nExecution error: ${error.message || String(error)}`
 
       db.update(clawExecutions)
         .set({
@@ -530,13 +584,13 @@ class ClawDaemon {
         .where(eq(clawExecutions.id, executionId))
         .run()
 
-      // Remove child process from active triggers
+      const trigger = this.activeTriggers.get(claw.id)
       if (trigger) {
         trigger.childProcess = undefined
       }
 
       this.sendNotification(claw.name, "failed")
-    })
+    }
   }
 
   /**

@@ -424,15 +424,27 @@ export class WhatsAppTrigger {
 
     try {
       // Find all claws configured for WhatsApp trigger
-      const db = getDatabase()
-      const claws = db
-        .select()
-        .from(headlessClaws)
-        .where(eq(headlessClaws.triggerType, "whatsapp_message"))
-        .all()
-        .filter(claw => claw.isEnabled)
+      console.log(`[WhatsAppTrigger] Querying database for WhatsApp claws...`)
+      let claws: typeof headlessClaws.$inferSelect[] = []
+      try {
+        const db = getDatabase()
+        const allClaws = db
+          .select()
+          .from(headlessClaws)
+          .where(eq(headlessClaws.triggerType, "whatsapp_message"))
+          .all()
+        console.log(`[WhatsAppTrigger] Raw query returned ${allClaws.length} claws`)
+        if (allClaws.length > 0) {
+          console.log(`[WhatsAppTrigger] First claw: id=${allClaws[0].id}, name=${allClaws[0].name}, isEnabled=${allClaws[0].isEnabled}, triggerType=${allClaws[0].triggerType}`)
+        }
 
-      console.log(`[WhatsAppTrigger] Found ${claws.length} enabled WhatsApp claws`)
+        claws = allClaws.filter(claw => claw.isEnabled)
+        console.log(`[WhatsAppTrigger] Found ${claws.length} enabled WhatsApp claws`)
+      } catch (dbError: any) {
+        console.error("[WhatsAppTrigger] Database query error:", dbError)
+        console.error("[WhatsAppTrigger] Database error stack:", dbError?.stack)
+        throw dbError
+      }
 
       if (claws.length === 0) {
         // No claws configured - send a helpful message
@@ -467,19 +479,31 @@ export class WhatsAppTrigger {
         }
 
         // Execute the claw with WhatsApp context
+        console.log(`[WhatsAppTrigger] Executing claw "${claw.name}" (id=${claw.id})`)
+        if (!clawDaemon) {
+          console.error("[WhatsAppTrigger] ERROR: clawDaemon is undefined! Cannot execute claw.")
+          await this.sendMessage(from, "❌ Internal error: Claw daemon not available.")
+          return
+        }
         const executionId = await clawDaemon.executeClaw(claw.id, {
           whatsappFrom: from,
           whatsappSender: sender,
           originalMessage: messageText,
           triggerSource: "whatsapp",
         })
+        console.log(`[WhatsAppTrigger] Claw execution started: ${executionId}`)
 
         // Monitor execution and send result
         this.monitorExecution(executionId, claw.name, from)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[WhatsAppTrigger] Error handling message:", error)
-      await this.sendMessage(from, "❌ Error processing your request. Please try again.")
+      console.error("[WhatsAppTrigger] Error stack:", error?.stack || 'No stack')
+      try {
+        await this.sendMessage(from, "❌ Error processing your request. Please try again.")
+      } catch (sendError) {
+        console.error("[WhatsAppTrigger] Failed to send error message:", sendError)
+      }
     }
   }
 
@@ -600,7 +624,10 @@ export class WhatsAppTrigger {
    * Monitor a claw execution and send the result when complete
    */
   private monitorExecution(executionId: string, clawName: string, chatId: string): void {
+    console.log(`[WhatsAppTrigger] Starting execution monitor for ${clawName} (${executionId})`)
+    let checkCount = 0
     const checkInterval = setInterval(async () => {
+      checkCount++
       try {
         const db = getDatabase()
         const execution = db
@@ -609,12 +636,18 @@ export class WhatsAppTrigger {
           .where(eq(clawExecutions.id, executionId))
           .get()
 
-        if (!execution || execution.status === "running") {
-          // Still running, check again later
+        if (!execution) {
+          console.log(`[WhatsAppTrigger] Monitor check #${checkCount}: execution ${executionId} not found in DB`)
+          return
+        }
+
+        if (execution.status === "running") {
+          console.log(`[WhatsAppTrigger] Monitor check #${checkCount}: execution ${executionId} still running`)
           return
         }
 
         // Execution complete
+        console.log(`[WhatsAppTrigger] Monitor check #${checkCount}: execution ${executionId} completed with status=${execution.status}`)
         clearInterval(checkInterval)
 
         // Limit logs to avoid message size limits
@@ -626,19 +659,23 @@ export class WhatsAppTrigger {
         const statusText = execution.status === "success" ? "completed successfully" : `failed (exit code ${execution.exitCode})`
 
         const message = `${statusEmoji} *${clawName}* ${statusText}\n\n\`\`\`${truncatedLogs}\`\`\``
+        console.log(`[WhatsAppTrigger] Sending result to ${chatId}: "${message.substring(0, 100)}..."`)
 
         const success = await this.sendMessage(chatId, message)
-        if (!success) {
+        if (success) {
+          console.log(`[WhatsAppTrigger] Result sent successfully to ${chatId}`)
+        } else {
           console.error(`[WhatsAppTrigger] Failed to send execution result to ${chatId}`)
         }
       } catch (error) {
-        console.error("[WhatsAppTrigger] Error monitoring execution:", error)
+        console.error(`[WhatsAppTrigger] Error monitoring execution (check #${checkCount}):`, error)
         clearInterval(checkInterval)
       }
     }, 2000) // Check every 2 seconds
 
     // Stop checking after 10 minutes
     setTimeout(() => {
+      console.log(`[WhatsAppTrigger] Monitor timeout for ${executionId} after 10 minutes (${checkCount} checks)`)
       clearInterval(checkInterval)
     }, 10 * 60 * 1000)
   }
