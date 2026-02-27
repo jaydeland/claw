@@ -587,7 +587,38 @@ CRITICAL REQUIREMENTS FOR EDGES:
 - Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
 - Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
 - NEVER use "undefined", null, or empty strings for source or target
-- Double-check that every node id referenced in edges exists in the nodes array
+- Before finalizing your response, verify EVERY edge by checking that both source and target node IDs exist
+
+VALIDATION CHECKLIST (perform before responding):
+1. List all unique node IDs from your nodes array
+2. For each edge, confirm its source exists in the node IDs list
+3. For each edge, confirm its target exists in the node IDs list
+4. If any edge references a missing node, either create that node or remove the edge
+
+CONCRETE EXAMPLE:
+✅ CORRECT - edges reference existing nodes:
+{
+  "nodes": [
+    { "id": "src", "type": "input", "position": { "x": 0, "y": 0 }, "data": { "label": "Source Files" } },
+    { "id": "vite", "type": "default", "position": { "x": 200, "y": 0 }, "data": { "label": "Vite" } },
+    { "id": "dist", "type": "output", "position": { "x": 400, "y": 0 }, "data": { "label": "dist/" } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "src", "target": "vite", "label": "input" },
+    { "id": "e2", "source": "vite", "target": "dist", "label": "output" }
+  ]
+}
+
+❌ INCORRECT - edges reference nodes that don't exist:
+{
+  "nodes": [
+    { "id": "vite", "type": "default", "position": { "x": 200, "y": 0 }, "data": { "label": "Vite" } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "src", "target": "vite" },  ← "src" node doesn't exist!
+    { "id": "e2", "source": "vite", "target": "dist" }   ← "dist" node doesn't exist!
+  ]
+}
 
 Layout as a pipeline from left to right:
 - Source files on left
@@ -638,7 +669,38 @@ CRITICAL REQUIREMENTS FOR EDGES:
 - Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
 - Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
 - NEVER use "undefined", null, or empty strings for source or target
-- Double-check that every node id referenced in edges exists in the nodes array
+- Before finalizing your response, verify EVERY edge by checking that both source and target node IDs exist
+
+VALIDATION CHECKLIST (perform before responding):
+1. List all unique node IDs from your nodes array
+2. For each edge, confirm its source exists in the node IDs list
+3. For each edge, confirm its target exists in the node IDs list
+4. If any edge references a missing node, either create that node or remove the edge
+
+CONCRETE EXAMPLE:
+✅ CORRECT - edges reference existing nodes:
+{
+  "nodes": [
+    { "id": "src", "type": "input", "position": { "x": 0, "y": 0 }, "data": { "label": "Source Files" } },
+    { "id": "vite", "type": "default", "position": { "x": 200, "y": 0 }, "data": { "label": "Vite" } },
+    { "id": "dist", "type": "output", "position": { "x": 400, "y": 0 }, "data": { "label": "dist/" } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "src", "target": "vite", "label": "input" },
+    { "id": "e2", "source": "vite", "target": "dist", "label": "output" }
+  ]
+}
+
+❌ INCORRECT - edges reference nodes that don't exist:
+{
+  "nodes": [
+    { "id": "vite", "type": "default", "position": { "x": 200, "y": 0 }, "data": { "label": "Vite" } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "src", "target": "vite" },  ← "src" node doesn't exist!
+    { "id": "e2", "source": "vite", "target": "dist" }   ← "dist" node doesn't exist!
+  ]
+}
 
 Layout as a pipeline from left to right:
 - Source files on left
