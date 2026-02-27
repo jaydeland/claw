@@ -36,6 +36,8 @@ interface CreateClawModalProps {
     triggerType: TriggerType
     triggerConfig: Record<string, string>
     isEnabled: boolean
+    allowedDirectories?: string
+    allowedMcpServers?: string
   } | null
 }
 
@@ -53,9 +55,12 @@ interface FormData {
   githubRepo: string
   githubLabel: string
   // Slack config
-  slackChannelFilter: string
+  slackChannelFilter: string // Stores the channel ID once selected or created
   // WhatsApp config
   whatsappChatFilter: string
+  // Access control
+  allowedDirectories: string[] // extra dirs beyond targetWorktree
+  allowedMcpServers: string[]  // server ids; empty = no MCPs
 }
 
 const initialFormData: FormData = {
@@ -69,6 +74,8 @@ const initialFormData: FormData = {
   githubLabel: "agent-ready",
   slackChannelFilter: "",
   whatsappChatFilter: "",
+  allowedDirectories: [],
+  allowedMcpServers: [],
 }
 
 export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalProps) {
@@ -91,6 +98,8 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
         githubLabel: config.label || "agent-ready",
         slackChannelFilter: config.slackChannelFilter || "",
         whatsappChatFilter: config.whatsappChatFilter || "",
+        allowedDirectories: claw.allowedDirectories ? JSON.parse(claw.allowedDirectories) : [],
+        allowedMcpServers: claw.allowedMcpServers ? JSON.parse(claw.allowedMcpServers) : [],
       })
     } else if (!claw && open) {
       // Reset when opening create modal
@@ -123,6 +132,26 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
     enabled: formData.triggerType === "whatsapp_message",
   })
 
+  // Slack channel picker state
+  const [slackChannelMode, setSlackChannelMode] = useState<"select" | "create">("select")
+  const [slackNewChannelName, setSlackNewChannelName] = useState("")
+
+  const getBotChannelsQuery = trpc.slack.listBotChannels.useQuery(undefined, {
+    enabled: formData.triggerType === "slack_mention",
+  })
+
+  const createChannelMutation = trpc.slack.createDedicatedChannel.useMutation({
+    onSuccess: (data) => {
+      setFormData((prev) => ({ ...prev, slackChannelFilter: data.channelId }))
+      getBotChannelsQuery.refetch()
+    },
+  })
+
+  const { data: availableMcpServers } = trpc.claws.listAvailableMcpServers.useQuery()
+
+  // Extra directory input state
+  const [newDirInput, setNewDirInput] = useState("")
+
   const createMutation = trpc.claws.create.useMutation({
     onSuccess: () => {
       utils.claws.getAll.invalidate()
@@ -133,6 +162,10 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       setGroupName("")
       setCopied(false)
       createGroupMutation.reset()
+      setSlackChannelMode("select")
+      setSlackNewChannelName("")
+      createChannelMutation.reset()
+      setNewDirInput("")
       onOpenChange(false)
     },
   })
@@ -147,6 +180,10 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       setGroupName("")
       setCopied(false)
       createGroupMutation.reset()
+      setSlackChannelMode("select")
+      setSlackNewChannelName("")
+      createChannelMutation.reset()
+      setNewDirInput("")
       onOpenChange(false)
     },
   })
@@ -186,8 +223,11 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       }
     }
 
-    // Note: slack_mention and whatsapp_message don't require config
-    // Channel/chat filters are optional
+    if (formData.triggerType === "slack_mention") {
+      if (!formData.slackChannelFilter.trim()) {
+        newErrors.slackChannelFilter = "A Slack channel is required"
+      }
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -214,13 +254,9 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
               label: formData.githubLabel,
             }
           : formData.triggerType === "slack_mention"
-            ? {
-                slackChannelFilter: formData.slackChannelFilter || undefined,
-              }
+            ? { slackChannelFilter: formData.slackChannelFilter }
             : formData.triggerType === "whatsapp_message"
-              ? {
-                  whatsappChatFilter: formData.whatsappChatFilter || undefined,
-                }
+              ? { whatsappChatFilter: formData.whatsappChatFilter || undefined }
               : {}
 
     if (isEditing && claw) {
@@ -231,6 +267,8 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
         targetWorktree: formData.targetWorktree,
         triggerType: formData.triggerType,
         triggerConfig,
+        allowedDirectories: formData.allowedDirectories,
+        allowedMcpServers: formData.allowedMcpServers,
       })
     } else {
       createMutation.mutate({
@@ -239,6 +277,8 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
         targetWorktree: formData.targetWorktree,
         triggerType: formData.triggerType,
         triggerConfig,
+        allowedDirectories: formData.allowedDirectories,
+        allowedMcpServers: formData.allowedMcpServers,
       })
     }
   }
@@ -287,6 +327,10 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       setGroupName("")
       setCopied(false)
       createGroupMutation.reset()
+      setSlackChannelMode("select")
+      setSlackNewChannelName("")
+      createChannelMutation.reset()
+      setNewDirInput("")
     }
     onOpenChange(newOpen)
   }
@@ -515,20 +559,121 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
           {/* Slack Configuration */}
           {showSlackConfig && (
             <div className="space-y-3 p-3 bg-muted/50 rounded-md">
-              <div className="space-y-2">
-                <Label htmlFor="slack-filter">Slack Channel Filter (optional)</Label>
-                <Input
-                  id="slack-filter"
-                  placeholder="#claw-commands or leave empty for all channels"
-                  value={formData.slackChannelFilter}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, slackChannelFilter: e.target.value }))
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave empty to respond to all channels. Use channel name (e.g., #claw-commands) or channel ID.
-                </p>
+              <div className="space-y-1">
+                <Label>Slack Channel <span className="text-destructive">*</span></Label>
+                <p className="text-xs text-muted-foreground">Select an existing channel or create a new one.</p>
               </div>
+
+              {slackChannelMode === "select" ? (
+                <div className="space-y-2">
+                  <Select
+                    value={formData.slackChannelFilter || "__none__"}
+                    onValueChange={(v) => {
+                      if (v === "__create__") {
+                        setSlackChannelMode("create")
+                        setSlackNewChannelName("")
+                        createChannelMutation.reset()
+                      } else if (v !== "__none__") {
+                        setFormData((prev) => ({ ...prev, slackChannelFilter: v }))
+                      }
+                    }}
+                  >
+                    <SelectTrigger className={cn(errors.slackChannelFilter && "border-destructive")}>
+                      <SelectValue placeholder="Select a channel..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__create__">
+                        <span className="flex items-center gap-1.5 text-primary">
+                          <Plus className="h-3.5 w-3.5" />
+                          Create new channel
+                        </span>
+                      </SelectItem>
+                      {getBotChannelsQuery.isLoading && (
+                        <SelectItem value="__loading__" disabled>
+                          Loading channels...
+                        </SelectItem>
+                      )}
+                      {getBotChannelsQuery.data?.map((ch) => (
+                        <SelectItem key={ch.id} value={ch.id}>
+                          #{ch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {formData.slackChannelFilter && (
+                    <p className="text-xs text-muted-foreground">
+                      Channel ID: <code>{formData.slackChannelFilter}</code>
+                    </p>
+                  )}
+                  {errors.slackChannelFilter && (
+                    <p className="text-xs text-destructive">{errors.slackChannelFilter}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g., claw-commands"
+                      value={slackNewChannelName}
+                      onChange={(e) => setSlackNewChannelName(e.target.value)}
+                      disabled={createChannelMutation.isPending || !!createChannelMutation.data}
+                    />
+                    {!createChannelMutation.data ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          if (slackNewChannelName.trim()) {
+                            createChannelMutation.mutate({ channelName: slackNewChannelName.trim() })
+                          }
+                        }}
+                        disabled={createChannelMutation.isPending || !slackNewChannelName.trim()}
+                      >
+                        {createChannelMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                        Create
+                      </Button>
+                    ) : (
+                      <Button type="button" variant="outline" size="sm" onClick={() => {
+                        setSlackChannelMode("select")
+                        setSlackNewChannelName("")
+                        createChannelMutation.reset()
+                      }}>
+                        <Check className="h-4 w-4 mr-1" />
+                        Done
+                      </Button>
+                    )}
+                  </div>
+
+                  {createChannelMutation.data && (
+                    <Alert className="bg-green-500/10 text-green-600 border-green-500/20 text-xs">
+                      <Check className="h-4 w-4" />
+                      <AlertDescription>
+                        #{createChannelMutation.data.channelName} created!
+                        {createChannelMutation.data.alreadyExisted ? " (already existed, bot joined)" : ""}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {createChannelMutation.error && (
+                    <Alert variant="destructive" className="text-xs">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{createChannelMutation.error.message}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {!createChannelMutation.data && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setSlackChannelMode("select"); setSlackNewChannelName("") }}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -758,6 +903,120 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
                     </Button>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Allowed Directories */}
+          <div className="space-y-2">
+            <Label>Allowed Directories</Label>
+            <p className="text-xs text-muted-foreground">
+              The target worktree is always included. Add extra directories the agent may read/write.
+            </p>
+            <div className="space-y-1">
+              {/* Non-removable: targetWorktree */}
+              {formData.targetWorktree && (
+                <div className="flex items-center gap-2 px-2 py-1 bg-muted/40 rounded text-xs text-muted-foreground">
+                  <FolderOpen className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate flex-1">{formData.targetWorktree}</span>
+                  <span className="text-xs text-muted-foreground/60 flex-shrink-0">(required)</span>
+                </div>
+              )}
+              {/* User-added dirs */}
+              {formData.allowedDirectories.map((dir, i) => (
+                <div key={i} className="flex items-center gap-2 px-2 py-1 bg-muted/40 rounded text-xs">
+                  <FolderOpen className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                  <span className="truncate flex-1">{dir}</span>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-destructive flex-shrink-0"
+                    onClick={() => setFormData((prev) => ({
+                      ...prev,
+                      allowedDirectories: prev.allowedDirectories.filter((_, idx) => idx !== i),
+                    }))}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="/path/to/extra/dir"
+                value={newDirInput}
+                onChange={(e) => setNewDirInput(e.target.value)}
+                className="text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newDirInput.trim()) {
+                    e.preventDefault()
+                    setFormData((prev) => ({
+                      ...prev,
+                      allowedDirectories: [...prev.allowedDirectories, newDirInput.trim()],
+                    }))
+                    setNewDirInput("")
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (newDirInput.trim()) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      allowedDirectories: [...prev.allowedDirectories, newDirInput.trim()],
+                    }))
+                    setNewDirInput("")
+                  }
+                }}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Allowed MCP Servers */}
+          {availableMcpServers && availableMcpServers.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Allowed MCP Servers</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-6 px-2"
+                  onClick={() => setFormData((prev) => ({
+                    ...prev,
+                    allowedMcpServers: availableMcpServers.map(s => s.id),
+                  }))}
+                >
+                  Select all
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                No selection = no MCPs available to this claw.
+              </p>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {availableMcpServers.map((server) => (
+                  <label key={server.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/40 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={formData.allowedMcpServers.includes(server.id)}
+                      onChange={(e) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          allowedMcpServers: e.target.checked
+                            ? [...prev.allowedMcpServers, server.id]
+                            : prev.allowedMcpServers.filter(id => id !== server.id),
+                        }))
+                      }}
+                      className="rounded"
+                    />
+                    <span className="flex-1 truncate">{server.name}</span>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">{server.toolCount} tools</span>
+                  </label>
+                ))}
               </div>
             </div>
           )}

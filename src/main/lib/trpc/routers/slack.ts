@@ -186,6 +186,24 @@ export const slackRouter = router({
     }),
 
   /**
+   * List all channels the bot is a member of
+   */
+  listBotChannels: publicProcedure.query(async () => {
+    const slackTrigger = getSlackTrigger()
+    return slackTrigger.listBotChannels()
+  }),
+
+  /**
+   * Create a dedicated Slack channel and invite the bot (without creating a claw)
+   */
+  createDedicatedChannel: publicProcedure
+    .input(z.object({ channelName: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const slackTrigger = getSlackTrigger()
+      return slackTrigger.setupDedicatedChannel(input.channelName)
+    }),
+
+  /**
    * Clear Slack credentials
    */
   clearCredentials: publicProcedure.mutation(async () => {

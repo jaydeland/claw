@@ -384,6 +384,8 @@ export const headlessClaws = sqliteTable("headless_claws", {
   triggerType: text("trigger_type", { enum: ["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"] }).notNull(),
   triggerConfig: text("trigger_config").notNull(), // JSON: cron expression, GitHub repo, or chat filter
   isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
+  allowedDirectories: text("allowed_directories").notNull().default("[]"), // JSON string[]: extra dirs beyond targetWorktree
+  allowedMcpServers: text("allowed_mcp_servers").notNull().default("[]"),  // JSON string[]: empty = no MCPs, null-stored-as-"[]" = inherit global
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })

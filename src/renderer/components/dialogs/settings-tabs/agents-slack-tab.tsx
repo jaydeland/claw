@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState } from "react"
-import { Slack, Check, AlertCircle, Eye, EyeOff, Trash2, Loader2, Save, Power, Hash, Plus, Zap } from "lucide-react"
+import React, { useState, useRef, useEffect } from "react"
+import { Slack, Check, AlertCircle, Eye, EyeOff, Trash2, Loader2, Save, Power, Hash, Plus, ChevronRight } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../ui/button"
@@ -33,11 +33,17 @@ export function AgentsSlackTab() {
   const [showAppToken, setShowAppToken] = useState(false)
   const [showBotToken, setShowBotToken] = useState(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
+  // Show Step 2 card after credentials saved
+  const [showStep2, setShowStep2] = useState(false)
 
-  // Quick Setup state
+  // Channel setup state
+  const [channelSetupMode, setChannelSetupMode] = useState<"select" | "create">("select")
   const [channelName, setChannelName] = useState("claw-agent")
+  const [selectedExistingChannel, setSelectedExistingChannel] = useState("")
   const [selectedProjectPath, setSelectedProjectPath] = useState("")
   const [setupResult, setSetupResult] = useState<{ channelName: string; clawName: string } | null>(null)
+
+  const step2Ref = useRef<HTMLDivElement>(null)
 
   const utils = trpc.useUtils()
 
@@ -48,6 +54,10 @@ export function AgentsSlackTab() {
   )
   const { data: slackClaws } = trpc.slack.listSlackClaws.useQuery(undefined, { enabled: !!credentials?.hasAppToken })
   const { data: projects } = trpc.projects.list.useQuery(undefined, { enabled: !!credentials?.hasAppToken })
+  const { data: botChannels, refetch: refetchBotChannels } = trpc.slack.listBotChannels.useQuery(
+    undefined,
+    { enabled: !!credentials?.hasAppToken }
+  )
 
   const saveMutation = trpc.slack.saveCredentials.useMutation({
     onSuccess: () => {
@@ -56,11 +66,20 @@ export function AgentsSlackTab() {
       setBotToken("")
       setSavedMessage("Slack credentials saved successfully!")
       setTimeout(() => setSavedMessage(null), 3000)
+      // Trigger Step 2 after credentials saved
+      setShowStep2(true)
     },
     onError: (error) => {
       setSavedMessage(`Error: ${error.message}`)
     },
   })
+
+  // Scroll Step 2 card into view when it appears
+  useEffect(() => {
+    if (showStep2 && step2Ref.current) {
+      setTimeout(() => step2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100)
+    }
+  }, [showStep2])
 
   const toggleMutation = trpc.slack.toggleSocketMode.useMutation({
     onSuccess: (data) => {
@@ -86,6 +105,7 @@ export function AgentsSlackTab() {
     onSuccess: (data) => {
       utils.slack.listSlackClaws.invalidate()
       utils.slack.hasCredentials.invalidate()
+      refetchBotChannels()
       setSetupResult({ channelName: data.channelName, clawName: `Slack: #${data.channelName}` })
     },
     onError: (error) => {
@@ -113,20 +133,54 @@ export function AgentsSlackTab() {
     testConnection()
   }
 
+  const connectMutation = trpc.claws.create.useMutation({
+    onSuccess: () => {
+      utils.slack.listSlackClaws.invalidate()
+      utils.claws.getAll.invalidate()
+      const ch = botChannels?.find(c => c.id === selectedExistingChannel)
+      setSetupResult({ channelName: ch?.name ?? selectedExistingChannel, clawName: `Slack: #${ch?.name ?? selectedExistingChannel}` })
+    },
+    onError: (error) => {
+      setSavedMessage(`Error: ${error.message}`)
+      setTimeout(() => setSavedMessage(null), 8000)
+    },
+  })
+
   const handleSetup = () => {
     const project = projects?.find(p => p.path === selectedProjectPath)
-    if (!channelName.trim() || !selectedProjectPath || !project) return
+    if (!selectedProjectPath || !project) return
     setSetupResult(null)
-    setupMutation.mutate({
-      channelName: channelName.trim(),
-      projectPath: selectedProjectPath,
-      projectName: project.name,
-    })
+
+    if (channelSetupMode === "create") {
+      if (!channelName.trim()) return
+      setupMutation.mutate({
+        channelName: channelName.trim(),
+        projectPath: selectedProjectPath,
+        projectName: project.name,
+      })
+    } else {
+      // Connect to existing channel — create claw directly
+      if (!selectedExistingChannel) return
+      const ch = botChannels?.find(c => c.id === selectedExistingChannel)
+      const chName = ch?.name ?? selectedExistingChannel
+      connectMutation.mutate({
+        name: `Slack: #${chName}`,
+        instruction: `You are a helpful AI assistant responding to messages in the #${chName} Slack channel. Help users with their questions and tasks related to the project at ${selectedProjectPath}.`,
+        targetWorktree: selectedProjectPath,
+        triggerType: "slack_mention",
+        triggerConfig: { slackChannelFilter: selectedExistingChannel },
+        allowedDirectories: [],
+        allowedMcpServers: [],
+      })
+    }
   }
 
   const hasTokens = credentials?.hasAppToken && credentials?.hasBotToken
   const cleanChannelName = channelName.toLowerCase().replace(/^#/, "").replace(/\s+/g, "-")
-  const canSetup = !!cleanChannelName && !!selectedProjectPath && !setupMutation.isPending
+  const isPending = setupMutation.isPending || connectMutation.isPending
+  const canSetup = !!selectedProjectPath && !isPending && (
+    channelSetupMode === "create" ? !!cleanChannelName : !!selectedExistingChannel
+  )
 
   return (
     <div className="p-6 space-y-6">
@@ -304,17 +358,20 @@ export function AgentsSlackTab() {
         </CardContent>
       </Card>
 
-      {/* Quick Setup Card — shown only when tokens are configured */}
-      {hasTokens && (
-        <Card>
+      {/* Step 2: Connect a Channel — shown when tokens are configured OR after fresh save */}
+      {(hasTokens || showStep2) && (
+        <Card ref={step2Ref} className={cn(showStep2 && !hasTokens ? "border-primary/50 ring-1 ring-primary/20" : "")}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Zap className="h-4 w-4" />
-              Quick Channel Setup
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex-shrink-0">2</span>
+              Connect a Channel
+              {!hasTokens && (
+                <span className="ml-auto text-xs font-normal text-muted-foreground">Step required to receive messages</span>
+              )}
             </CardTitle>
             <CardDescription>
-              Create a dedicated Slack channel and wire up a Claw to respond to messages in it — in one click.
-              Requires the <code className="text-xs bg-muted px-1 py-0.5 rounded">channels:manage</code> scope on your Slack app.
+              Pick an existing Slack channel the bot is already in, or create a new one.
+              Each channel needs a dedicated Claw to respond to messages.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -322,35 +379,92 @@ export function AgentsSlackTab() {
               <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-md space-y-1">
                 <div className="flex items-center gap-2 text-green-700 font-medium text-sm">
                   <Check className="h-4 w-4" />
-                  Channel ready!
+                  Channel connected!
                 </div>
                 <p className="text-sm text-muted-foreground">
                   <span className="font-mono text-foreground">#{setupResult.channelName}</span> is set up and the claw{" "}
                   <span className="font-medium text-foreground">{setupResult.clawName}</span> will respond to messages there.
                 </p>
-                <Button variant="outline" size="sm" className="mt-2" onClick={() => setSetupResult(null)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  Set up another
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="channel-name">Channel name</Label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="channel-name"
-                      value={channelName}
-                      onChange={(e) => setChannelName(e.target.value)}
-                      className="pl-8"
-                      placeholder="claw-agent"
-                    />
-                  </div>
-                  {cleanChannelName && cleanChannelName !== channelName && (
-                    <p className="text-xs text-muted-foreground">Will be created as <code>#{cleanChannelName}</code></p>
+                <div className="flex gap-2 mt-2">
+                  <Button variant="outline" size="sm" onClick={() => { setSetupResult(null); setSelectedExistingChannel(""); setChannelName("claw-agent") }}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Connect another
+                  </Button>
+                  {showStep2 && (
+                    <Button variant="ghost" size="sm" onClick={() => setShowStep2(false)}>
+                      Done
+                    </Button>
                   )}
                 </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Mode tabs */}
+                <div className="flex gap-1 p-1 bg-muted rounded-md w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setChannelSetupMode("select")}
+                    className={cn(
+                      "px-3 py-1 text-sm rounded transition-colors",
+                      channelSetupMode === "select" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Use existing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChannelSetupMode("create")}
+                    className={cn(
+                      "px-3 py-1 text-sm rounded transition-colors",
+                      channelSetupMode === "create" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Create new
+                  </button>
+                </div>
+
+                {channelSetupMode === "select" ? (
+                  <div className="space-y-1.5">
+                    <Label>Channel (bot must already be a member)</Label>
+                    <Select value={selectedExistingChannel} onValueChange={setSelectedExistingChannel}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a channel..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {botChannels?.map(ch => (
+                          <SelectItem key={ch.id} value={ch.id}>
+                            #{ch.name}
+                          </SelectItem>
+                        ))}
+                        {!botChannels?.length && (
+                          <SelectItem value="__none__" disabled>
+                            No channels found — invite the bot to a channel first
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="channel-name">New channel name</Label>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="channel-name"
+                        value={channelName}
+                        onChange={(e) => setChannelName(e.target.value)}
+                        className="pl-8"
+                        placeholder="claw-agent"
+                      />
+                    </div>
+                    {cleanChannelName && cleanChannelName !== channelName && (
+                      <p className="text-xs text-muted-foreground">Will be created as <code>#{cleanChannelName}</code></p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Requires <code className="bg-muted px-1 py-0.5 rounded">channels:manage</code> scope.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <Label htmlFor="project-select">Project (claw will work in this directory)</Label>
@@ -369,14 +483,24 @@ export function AgentsSlackTab() {
                   </Select>
                 </div>
 
-                <Button onClick={handleSetup} disabled={!canSetup} className="w-full">
-                  {setupMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4 mr-2" />
+                <div className="flex gap-2">
+                  <Button onClick={handleSetup} disabled={!canSetup} className="flex-1">
+                    {isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 mr-2" />
+                    )}
+                    {isPending
+                      ? channelSetupMode === "create" ? "Creating..." : "Connecting..."
+                      : channelSetupMode === "create" ? "Create Channel & Claw" : "Connect Channel"
+                    }
+                  </Button>
+                  {showStep2 && !hasTokens && (
+                    <Button variant="ghost" size="sm" onClick={() => setShowStep2(false)}>
+                      Skip for now
+                    </Button>
                   )}
-                  {setupMutation.isPending ? "Creating channel & claw..." : "Create Channel & Claw"}
-                </Button>
+                </div>
               </div>
             )}
           </CardContent>

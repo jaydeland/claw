@@ -488,6 +488,22 @@ class ClawDaemon {
 
       console.log(`[ClawDaemon] Starting SDK query with bundled binary: ${claudeBinaryPath}`)
 
+      // Allowed directories: targetWorktree is always included; user can add more
+      const extraDirs: string[] = claw.allowedDirectories
+        ? JSON.parse(claw.allowedDirectories)
+        : []
+      const allowedDirs = [claw.targetWorktree, ...extraDirs]
+
+      // MCP servers: empty array = no MCPs (default safe); non-empty = restrict to named servers
+      const allowedMcps: string[] = claw.allowedMcpServers
+        ? JSON.parse(claw.allowedMcpServers)
+        : []
+
+      const finalEnv: Record<string, string> = {
+        ...env,
+        ...(allowedMcps.length > 0 ? { CLAUDE_MCP_ALLOW_LIST: allowedMcps.join(",") } : { CLAUDE_MCP_DISABLE_ALL: "1" }),
+      }
+
       const stream = claudeQuery({
         prompt: instruction,
         options: {
@@ -497,12 +513,12 @@ class ClawDaemon {
             type: "preset" as const,
             preset: "claude_code" as const,
           },
-          env,
-          permissionMode: "bypassPermissions" as const,
-          allowDangerouslySkipPermissions: true,
+          env: finalEnv,
+          permissionMode: "default" as const,
+          allowedDirectories: allowedDirs,
           pathToClaudeCodeExecutable: claudeBinaryPath,
           persistSession: false,
-        },
+        } as any,
       })
 
       let messageCount = 0

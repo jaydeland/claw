@@ -172,17 +172,20 @@ export class SlackTrigger {
       }
 
       for (const claw of claws) {
-        // Parse trigger config for channel filter (optional)
+        // Parse trigger config for channel filter (required)
         const config = JSON.parse(claw.triggerConfig || "{}")
         const channelFilter = config.slackChannelFilter
 
-        // If channel filter is set, check if this channel matches
-        if (channelFilter) {
-          const matches = await this.resolveChannelFilter(channelId, channelFilter)
-          if (!matches) {
-            console.log(`[SlackTrigger] Channel ${channelId} doesn't match filter ${channelFilter}`)
-            continue
-          }
+        // Claws without a channel filter are skipped — responding to all channels is not allowed
+        if (!channelFilter) {
+          console.log(`[SlackTrigger] Claw ${claw.name} has no channel filter — skipping`)
+          continue
+        }
+
+        const matches = await this.resolveChannelFilter(channelId, channelFilter)
+        if (!matches) {
+          console.log(`[SlackTrigger] Channel ${channelId} doesn't match filter ${channelFilter}`)
+          continue
         }
 
         // Send acknowledgment
@@ -236,6 +239,30 @@ export class SlackTrigger {
     }
 
     return this.channelNameCache.get(channelId) === normalizedFilter
+  }
+
+  /**
+   * List all channels the bot is currently a member of.
+   * Falls back to creating a temporary WebClient from stored tokens if Socket Mode isn't running.
+   */
+  async listBotChannels(): Promise<Array<{ id: string; name: string }>> {
+    const tokens = await this.getDecryptedTokens()
+    if (!tokens.botToken) return []
+
+    const client = this.webClient ?? new WebClient(tokens.botToken)
+    try {
+      const result = await client.conversations.list({
+        types: "public_channel,private_channel",
+        exclude_archived: true,
+        limit: 200,
+      })
+      return (result.channels ?? [])
+        .filter((c: any) => c.is_member && c.id && c.name)
+        .map((c: any) => ({ id: c.id as string, name: c.name as string }))
+    } catch (err) {
+      console.error("[SlackTrigger] Failed to list bot channels:", err)
+      return []
+    }
   }
 
   /**
