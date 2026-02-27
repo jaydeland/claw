@@ -33,7 +33,6 @@ const baileysLogger = {
 let makeWASocket: any
 let DisconnectReason: any
 let useMultiFileAuthState: any
-let makeCacheableSignalKeyStore: any
 let delay: any
 let Browsers: any
 let fetchLatestBaileysVersion: any
@@ -44,7 +43,6 @@ async function loadBaileys(): Promise<void> {
   makeWASocket = b.makeWASocket
   DisconnectReason = b.DisconnectReason
   useMultiFileAuthState = b.useMultiFileAuthState
-  makeCacheableSignalKeyStore = b.makeCacheableSignalKeyStore
   delay = b.delay
   Browsers = b.Browsers
   fetchLatestBaileysVersion = b.fetchLatestBaileysVersion
@@ -107,9 +105,25 @@ export class WhatsAppTrigger {
    * Start the WhatsApp connection
    */
   async start(): Promise<void> {
-    if (this.isRunning || this.isStarting) {
-      console.log("[WhatsAppTrigger] Already running or starting")
+    if (this.isRunning) {
+      console.log("[WhatsAppTrigger] Already running, ignoring start() call")
       return
+    }
+
+    if (this.isStarting) {
+      console.log("[WhatsAppTrigger] Already starting, ignoring start() call")
+      return
+    }
+
+    // If we have an existing socket, stop it first
+    if (this.sock) {
+      console.log("[WhatsAppTrigger] Cleaning up existing socket before starting")
+      try {
+        this.sock.end(undefined)
+        this.sock = null
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
 
     this.isStarting = true
@@ -141,6 +155,18 @@ export class WhatsAppTrigger {
     // Load auth state from filesystem
     const { state, saveCreds } = await useMultiFileAuthState(this.sessionPath)
 
+    // Log state info for debugging sync issues
+    const hasCreds = !!state.creds?.me?.id
+    const syncKeys = Object.keys(state.creds?.accountSyncCounter || {}).length
+    const keyCount = Object.keys(state.keys).length
+    console.log(`[WhatsAppTrigger] Auth state loaded: hasCreds=${hasCreds}, syncKeys=${syncKeys}, keyTypes=${keyCount}`)
+
+    // Validate session before attempting connection
+    // If we have creds but no sync state, the session might be corrupted
+    if (hasCreds && syncKeys === 0) {
+      console.log("[WhatsAppTrigger] Warning: Session has creds but no sync state - may cause 401 errors")
+    }
+
     // Fetch the latest WA Web version so we don't get rejected for running a stale version
     let waVersion: [number, number, number] | undefined
     try {
@@ -155,10 +181,10 @@ export class WhatsAppTrigger {
       printQRInTerminal: false, // We'll handle QR display via UI
       auth: {
         creds: state.creds,
-        // Wrap the file-backed key store with an in-memory cache.
-        // This prevents assertSessions from re-fetching Signal keys on every send,
-        // which is the primary cause of the 406 "not-acceptable" error in group chats.
-        keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
+        // Use the file-backed key store directly without caching wrapper.
+        // The makeCacheableSignalKeyStore was causing issues where keys weren't
+        // properly loaded from disk after a 515 restart, causing sync failures.
+        keys: state.keys,
       },
       ...(waVersion ? { version: waVersion } : {}),
       // Use a known-good browser fingerprint — custom strings get rejected by WA's handshake
@@ -215,11 +241,32 @@ export class WhatsAppTrigger {
           const retryDelay = isRestartRequired ? 3000 : needsSessionReset ? 10000 : 5000
           console.log(`[WhatsAppTrigger] Reconnecting (attempt ${this.reconnectAttempts}) in ${retryDelay / 1000}s...`)
           await delay(retryDelay)
+
+          // For 515 restarts, wait a moment to let any pending creds.update events flush to disk
+          if (isRestartRequired) {
+            console.log("[WhatsAppTrigger] Waiting for state flush before reconnect...")
+            await delay(1000)
+          }
+
           await this.connect()
         } else {
-          console.log("[WhatsAppTrigger] Connection closed permanently")
+          const isLoggedOut = statusCode === DisconnectReason?.loggedOut || statusCode === 401
+          console.log(`[WhatsAppTrigger] Connection closed permanently (statusCode=${statusCode}, loggedOut=${isLoggedOut})`)
+
+          // If the device was removed / logged out, clear the local session files.
+          // Without this, ensureWhatsAppTriggerStarted() sees creds.json still on disk,
+          // auto-starts again, and immediately hits a Connection Failure loop.
+          if (isLoggedOut && fs.existsSync(this.sessionPath)) {
+            console.log("[WhatsAppTrigger] Device removed / logged out — clearing session files so QR re-scan is required")
+            try {
+              fs.rmSync(this.sessionPath, { recursive: true, force: true })
+            } catch (clearErr) {
+              console.error("[WhatsAppTrigger] Failed to clear session files:", clearErr)
+            }
+          }
+
           await this.updateConnectionStatus(false)
-          // Reset QR UI — the connection failed before a QR was shown or used
+          // Emit null QR to reset/show the QR scan UI
           whatsAppQREmitter.emit("qr", null)
         }
       } else if (connection === "open") {
@@ -246,28 +293,14 @@ export class WhatsAppTrigger {
       }
     })
 
-    // Listen for errors that may require session cleanup
-    this.sock.ev.on("connection.update", async (update) => {
-      // Check for stream errors that indicate corrupted session state
-      const streamError = (update as any).streamError
-      if (streamError) {
-        const errorMsg = String(streamError.message || streamError)
-        const isSyncError = errorMsg.includes("BAD_DECRYPT") ||
-                           errorMsg.includes("failed to find key") ||
-                           errorMsg.includes("Stream Errored")
+    // Handle app state sync errors gracefully - don't let them kill the connection
+    this.sock.ev.on("app-state-sync.error", (error: any) => {
+      console.log(`[WhatsAppTrigger] App state sync error (non-fatal): ${error.message || error}`)
+      // Log but don't propagate - app state sync is not critical for our use case
+    })
 
-        if (isSyncError && this.reconnectAttempts < this.maxReconnectAttempts) {
-          console.log("[WhatsAppTrigger] Sync/decryption error detected — clearing session files")
-          if (fs.existsSync(this.sessionPath)) {
-            try {
-              fs.rmSync(this.sessionPath, { recursive: true, force: true })
-              fs.mkdirSync(this.sessionPath, { recursive: true })
-            } catch (clearErr) {
-              console.error("[WhatsAppTrigger] Failed to clear session files:", clearErr)
-            }
-          }
-        }
-      }
+    this.sock.ev.on("app-state-sync.complete", () => {
+      console.log("[WhatsAppTrigger] App state sync completed")
     })
 
     // Keep group metadata cache warm so relayMessage can resolve participant sessions
@@ -305,12 +338,18 @@ export class WhatsAppTrigger {
         // Pre-warm group metadata cache before handling — this ensures assertSessions
         // has participant data available when we call sendMessage in the handler
         const jid = msg.key.remoteJid
-        if (jid?.endsWith("@g.us") && this.sock && !this.groupMetadataCache.has(jid)) {
-          try {
-            const meta = await this.sock.groupMetadata(jid)
-            this.groupMetadataCache.set(jid, meta)
-          } catch {
-            // Non-fatal — proceed without cache entry
+        if (jid?.endsWith("@g.us") && this.sock) {
+          if (!this.groupMetadataCache.has(jid)) {
+            try {
+              console.log(`[WhatsAppTrigger] Pre-warming group metadata for ${jid}`)
+              const meta = await this.sock.groupMetadata(jid)
+              this.groupMetadataCache.set(jid, meta)
+              console.log(`[WhatsAppTrigger] Group metadata cached for ${jid}: ${meta.participants?.length ?? 0} participants`)
+            } catch (err) {
+              console.warn(`[WhatsAppTrigger] Could not pre-warm group metadata for ${jid}:`, err)
+            }
+          } else {
+            console.log(`[WhatsAppTrigger] Using cached group metadata for ${jid}`)
           }
         }
 
@@ -318,8 +357,46 @@ export class WhatsAppTrigger {
       }
     })
 
+    // Catch-all error handler to prevent unhandled errors from crashing
+    this.sock.ev.on("error", (error: any) => {
+      console.error("[WhatsAppTrigger] Socket error (non-fatal):", error?.message || error)
+    })
+
     // Save credentials when updated
-    this.sock.ev.on("creds.update", saveCreds)
+    this.sock.ev.on("creds.update", (creds) => {
+      const keys = Object.keys(creds)
+      const hasAccountSync = 'accountSyncCounter' in creds
+      const hasDeviceId = 'me' in creds && creds.me?.id
+      console.log(`[WhatsAppTrigger] Credentials updated: keys=[${keys.join(", ")}], hasAccountSync=${hasAccountSync}, hasDeviceId=${hasDeviceId}`)
+
+      // Log account sync state if present
+      if (hasAccountSync) {
+        const syncCounters = Object.keys(creds.accountSyncCounter || {})
+        console.log(`[WhatsAppTrigger] Account sync counters: ${syncCounters.join(", ") || "none"}`)
+      }
+
+      saveCreds(creds)
+    })
+
+    // Handle state sync errors without killing the connection
+    this.sock.ev.on("messaging-history.set", () => {
+      console.log("[WhatsAppTrigger] History sync completed")
+    })
+
+    this.sock.ev.on("chats.upsert", (chats) => {
+      console.log(`[WhatsAppTrigger] Chats upsert: ${chats.length} chats`)
+    })
+
+    this.sock.ev.on("contacts.upsert", (contacts) => {
+      console.log(`[WhatsAppTrigger] Contacts upsert: ${contacts.length} contacts`)
+    })
+
+    // Log errors but don't let them crash the connection
+    this.sock.ev.on("connection.update", (update: any) => {
+      if (update.receivedPendingNotifications !== undefined) {
+        console.log(`[WhatsAppTrigger] Pending notifications received: ${update.receivedPendingNotifications}`)
+      }
+    })
   }
 
   /**
@@ -355,9 +432,13 @@ export class WhatsAppTrigger {
         .all()
         .filter(claw => claw.isEnabled)
 
+      console.log(`[WhatsAppTrigger] Found ${claws.length} enabled WhatsApp claws`)
+
       if (claws.length === 0) {
         // No claws configured - send a helpful message
-        await this.sendMessage(from, "🤖 No WhatsApp-triggered claws are configured. Create one in Claw settings!")
+        console.log(`[WhatsAppTrigger] No claws configured, sending help message to ${from}`)
+        const helpResult = await this.sendMessage(from, "🤖 No WhatsApp-triggered claws are configured. Create one in Claw settings!")
+        console.log(`[WhatsAppTrigger] Help message send result: ${helpResult}`)
         return
       }
 
@@ -373,7 +454,17 @@ export class WhatsAppTrigger {
         }
 
         // Send acknowledgment
-        await this.sendMessage(from, `🤖 *${claw.name}* is working on it...`)
+        const ackText = `🤖 *${claw.name}* is working on it...`
+        console.log(`[WhatsAppTrigger] Sending acknowledgment to ${from}: "${ackText}"`)
+        try {
+          const ackResult = await this.sendMessage(from, ackText)
+          console.log(`[WhatsAppTrigger] Acknowledgment result: success=${ackResult}`)
+          if (!ackResult) {
+            console.error(`[WhatsAppTrigger] WARNING: Acknowledgment send returned false for ${from}`)
+          }
+        } catch (ackError) {
+          console.error(`[WhatsAppTrigger] ERROR: Failed to send acknowledgment to ${from}:`, ackError)
+        }
 
         // Execute the claw with WhatsApp context
         const executionId = await clawDaemon.executeClaw(claw.id, {
@@ -460,21 +551,26 @@ export class WhatsAppTrigger {
 
     // For group chats, ensure the metadata cache is populated before the first attempt.
     // relayMessage → assertSessions needs participant JIDs to fetch Signal keys from the server.
-    if (to.endsWith("@g.us") && !this.groupMetadataCache.has(to)) {
-      try {
-        const meta = await this.sock.groupMetadata(to)
-        this.groupMetadataCache.set(to, meta)
-        console.log(`[WhatsAppTrigger] Pre-fetched group metadata for ${to} (${meta.participants?.length ?? 0} participants)`)
-      } catch (err) {
-        console.warn(`[WhatsAppTrigger] Could not pre-fetch group metadata for ${to}:`, err)
+    if (to.endsWith("@g.us")) {
+      if (!this.groupMetadataCache.has(to)) {
+        console.log(`[WhatsAppTrigger] Group metadata cache miss for ${to}, fetching...`)
+        try {
+          const meta = await this.sock.groupMetadata(to)
+          this.groupMetadataCache.set(to, meta)
+          console.log(`[WhatsAppTrigger] Pre-fetched group metadata for ${to} (${meta.participants?.length ?? 0} participants)`)
+        } catch (err) {
+          console.warn(`[WhatsAppTrigger] Could not pre-fetch group metadata for ${to}:`, err)
+        }
+      } else {
+        console.log(`[WhatsAppTrigger] Using cached group metadata for ${to}`)
       }
     }
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        console.log(`[WhatsAppTrigger] Sending message to ${to} (attempt ${attempt}/${retries})`)
-        await this.sock.sendMessage(to, { text })
-        console.log(`[WhatsAppTrigger] Message sent successfully to ${to}`)
+        console.log(`[WhatsAppTrigger] Sending message to ${to} (attempt ${attempt}/${retries}): "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`)
+        const result = await this.sock.sendMessage(to, { text })
+        console.log(`[WhatsAppTrigger] Message sent successfully to ${to}, message ID: ${result?.key?.id || 'unknown'}`)
         return true
       } catch (error: any) {
         console.error(`[WhatsAppTrigger] Failed to send message (attempt ${attempt}/${retries}):`, error)

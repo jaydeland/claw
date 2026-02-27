@@ -51,7 +51,12 @@ export function AgentNode({ data }: { data: { name: string; description: string;
 
   return (
     <div className="px-6 py-4 shadow-lg rounded-lg bg-purple-600 text-white border-2 border-purple-700 min-w-[200px]">
-      <Handle type="target" position={Position.Top} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-purple-700"
+        style={{ top: -6 }}
+      />
       <div className="flex items-center justify-between gap-2">
         <div className="font-bold text-lg">{data.name}</div>
         {badge && BadgeIcon && (
@@ -67,7 +72,12 @@ export function AgentNode({ data }: { data: { name: string; description: string;
       {data.description && (
         <div className="text-sm opacity-80 mt-1 line-clamp-2">{data.description}</div>
       )}
-      <Handle type="source" position={Position.Bottom} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-purple-700"
+        style={{ bottom: -6 }}
+      />
     </div>
   )
 }
@@ -76,15 +86,26 @@ export function ToolNode({ data }: { data: { name: string; category?: string; se
   const isMcp = data.category === "mcp"
   const bgColor = isMcp ? "bg-pink-500" : "bg-blue-500"
   const borderColor = isMcp ? "border-pink-600" : "border-blue-600"
+  const handleBorder = isMcp ? "border-pink-600" : "border-blue-600"
 
   return (
     <div className={`px-4 py-2 shadow-md rounded-md ${bgColor} text-white border ${borderColor}`}>
-      <Handle type="target" position={Position.Top} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className={`w-3 h-3 bg-white border-2 ${handleBorder}`}
+        style={{ top: -6 }}
+      />
       <div className="font-mono text-sm">{data.name}</div>
       {data.server && (
         <div className="text-xs opacity-75 mt-0.5">{data.server}</div>
       )}
-      <Handle type="source" position={Position.Bottom} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className={`w-3 h-3 bg-white border-2 ${handleBorder}`}
+        style={{ bottom: -6 }}
+      />
     </div>
   )
 }
@@ -94,7 +115,12 @@ export function SkillNode({ data }: { data: { name: string; context?: 'fork'; ag
 
   return (
     <div className="px-4 py-2 shadow-md rounded-md bg-green-500 text-white border border-green-600">
-      <Handle type="target" position={Position.Top} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-green-600"
+        style={{ top: -6 }}
+      />
       <div className="flex items-center gap-2">
         <div className="text-sm">{data.name}</div>
         {hasForkContext && (
@@ -110,7 +136,12 @@ export function SkillNode({ data }: { data: { name: string; context?: 'fork'; ag
       {data.agent && (
         <div className="text-xs opacity-75 mt-0.5">Agent: {data.agent}</div>
       )}
-      <Handle type="source" position={Position.Bottom} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-green-600"
+        style={{ bottom: -6 }}
+      />
     </div>
   )
 }
@@ -118,9 +149,19 @@ export function SkillNode({ data }: { data: { name: string; context?: 'fork'; ag
 export function CommandNode({ data }: { data: { name: string } }) {
   return (
     <div className="px-4 py-2 shadow-md rounded-md bg-orange-500 text-white border border-orange-600">
-      <Handle type="target" position={Position.Top} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-orange-600"
+        style={{ top: -6 }}
+      />
       <div className="text-sm">/{data.name}</div>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-orange-600"
+        style={{ bottom: -6 }}
+      />
     </div>
   )
 }
@@ -128,9 +169,19 @@ export function CommandNode({ data }: { data: { name: string } }) {
 export function McpNode({ data }: { data: { name: string } }) {
   return (
     <div className="px-4 py-2 shadow-md rounded-md bg-pink-500 text-white border border-pink-600">
-      <Handle type="target" position={Position.Top} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-pink-600"
+        style={{ top: -6 }}
+      />
       <div className="text-sm font-mono">MCP: {data.name}</div>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-pink-600"
+        style={{ bottom: -6 }}
+      />
     </div>
   )
 }
@@ -143,12 +194,18 @@ export function ToolGroupNode({
   const isBuiltin = data.category === "builtin"
   const bgColor = isBuiltin ? "bg-blue-500" : "bg-pink-500"
   const borderColor = isBuiltin ? "border-blue-600" : "border-pink-600"
+  const handleBorder = isBuiltin ? "border-blue-600" : "border-pink-600"
 
   return (
     <div
       className={`${bgColor} ${borderColor} border-2 rounded-lg p-3 shadow-lg min-w-[180px] text-white`}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className={`w-3 h-3 bg-white border-2 ${handleBorder}`}
+        style={{ top: -6 }}
+      />
       <div className="font-semibold text-sm mb-2 border-b border-white/30 pb-2">{data.name}</div>
       <div className="space-y-1 mt-2">
         {data.tools.map((tool, idx) => (
@@ -174,7 +231,12 @@ export function CliAppNode({ data }: { data: { apps: CliAppMetadata[] } }) {
 
   return (
     <div className="bg-cyan-500 border-cyan-600 border-2 rounded-lg p-3 shadow-lg min-w-[200px] max-w-[280px] text-white">
-      <Handle type="target" position={Position.Top} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-cyan-600"
+        style={{ top: -6 }}
+      />
       <div className="font-semibold text-sm mb-2 border-b border-white/30 pb-2 flex items-center gap-2">
         <Terminal className="h-4 w-4" />
         CLI Apps
@@ -240,7 +302,12 @@ export function BackgroundTaskNode({ data }: { data: { tasks: BackgroundTaskMeta
 
   return (
     <div className="bg-amber-500 border-amber-600 border-2 rounded-lg p-3 shadow-lg min-w-[200px] max-w-[280px] text-white">
-      <Handle type="target" position={Position.Top} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-amber-600"
+        style={{ top: -6 }}
+      />
       <div className="font-semibold text-sm mb-2 border-b border-white/30 pb-2 flex items-center gap-2">
         <Zap className="h-4 w-4" />
         Background Tasks

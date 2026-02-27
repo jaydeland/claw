@@ -7,7 +7,7 @@
 
 import { safeStorage, Notification, app } from "electron"
 import { spawn, ChildProcess } from "node:child_process"
-import { existsSync } from "fs"
+import { existsSync, statSync, unlinkSync } from "fs"
 import { join } from "path"
 import { eq, desc } from "drizzle-orm"
 import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, type HeadlessClaw, type ClawExecution } from "../db"
@@ -318,23 +318,33 @@ class ClawDaemon {
   private async ensureWhatsAppTriggerStarted(): Promise<void> {
     try {
       const whatsappTrigger = getWhatsAppTrigger()
-      if (whatsappTrigger.isActive()) return
-
-      // Check DB flag first (fast path)
-      const db = getDatabase()
-      const settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
-
-      // Also check for creds.json on disk — covers the case where session was
-      // manually cleared and rescanned but isConnected wasn't persisted yet
-      const credsPath = join(app.getPath("userData"), "baileys_auth", "creds.json")
-      const hasSession = settings?.isConnected || existsSync(credsPath)
-
-      if (hasSession) {
-        console.log("[ClawDaemon] WhatsApp session found, auto-starting trigger")
-        await whatsappTrigger.start()
-      } else {
-        console.log("[ClawDaemon] No WhatsApp session on disk — waiting for user to scan QR")
+      if (whatsappTrigger.isActive()) {
+        console.log("[ClawDaemon] WhatsApp trigger already active, skipping auto-start")
+        return
       }
+
+      // Check for creds.json on disk
+      const credsPath = join(app.getPath("userData"), "baileys_auth", "creds.json")
+      if (!existsSync(credsPath)) {
+        console.log("[ClawDaemon] No WhatsApp session on disk — waiting for user to scan QR")
+        return
+      }
+
+      // Validate the session file isn't empty/corrupted
+      try {
+        const stats = statSync(credsPath)
+        if (stats.size < 100) {
+          console.log("[ClawDaemon] WhatsApp creds file too small, likely corrupted — clearing and waiting for re-scan")
+          unlinkSync(credsPath)
+          return
+        }
+      } catch (e) {
+        console.log("[ClawDaemon] Could not read WhatsApp creds file — waiting for re-scan")
+        return
+      }
+
+      console.log("[ClawDaemon] WhatsApp session found, auto-starting trigger")
+      await whatsappTrigger.start()
     } catch (error) {
       console.error("[ClawDaemon] Failed to start WhatsApp trigger:", error)
     }

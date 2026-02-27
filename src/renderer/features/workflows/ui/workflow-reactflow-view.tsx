@@ -765,6 +765,7 @@ function WorkflowReactFlowInner() {
           animated: true,
           style: { stroke: "#94a3b8", strokeWidth: 2 },
         }}
+        elevateEdgesOnSelect={true}
       >
         <Background color="#e2e8f0" gap={16} />
         <Controls />
