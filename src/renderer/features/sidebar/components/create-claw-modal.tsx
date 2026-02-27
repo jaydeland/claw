@@ -579,7 +579,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
                     }}
                   >
                     <SelectTrigger className={cn(errors.slackChannelFilter && "border-destructive")}>
-                      <SelectValue placeholder="Select a channel..." />
+                      <SelectValue placeholder={getBotChannelsQuery.isLoading ? "Loading channels..." : "Select a channel..."} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__create__">
@@ -589,8 +589,11 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
                         </span>
                       </SelectItem>
                       {getBotChannelsQuery.isLoading && (
-                        <SelectItem value="__loading__" disabled>
-                          Loading channels...
+                        <SelectItem value="__loading__" disabled>Loading...</SelectItem>
+                      )}
+                      {!getBotChannelsQuery.isLoading && getBotChannelsQuery.data?.length === 0 && (
+                        <SelectItem value="__empty__" disabled>
+                          Bot isn&apos;t in any channels yet — use &quot;Create new channel&quot;
                         </SelectItem>
                       )}
                       {getBotChannelsQuery.data?.map((ch) => (
