@@ -13,6 +13,7 @@ export type SettingsTab =
   | "github"
   | "slack"
   | "whatsapp"
+  | "claude-settings"
   | "advanced"
   | "worktrees"
   | "backup"

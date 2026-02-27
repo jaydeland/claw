@@ -31,6 +31,8 @@ import { slackRouter } from "./slack"
 import { whatsappRouter } from "./whatsapp"
 import { promptsRouter } from "./prompts"
 import { claudeConfigRouter } from "./claude-config"
+import { hooksRouter } from "./hooks"
+import { projectSettingsRouter } from "./project-settings"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -72,6 +74,8 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     whatsapp: whatsappRouter,
     prompts: promptsRouter,
     claudeConfig: claudeConfigRouter,
+    hooks: hooksRouter,
+    projectSettings: projectSettingsRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

@@ -27,8 +27,9 @@ import { AgentsProvidersTab } from "./settings-tabs/agents-providers-tab"
 import { AgentsGitHubTab } from "./settings-tabs/agents-github-tab"
 import { AgentsSlackTab } from "./settings-tabs/agents-slack-tab"
 import { AgentsWhatsAppTab } from "./settings-tabs/agents-whatsapp-tab"
+import { ClaudeSettingsTab } from "./settings-tabs/claude-settings-tab"
 import { trpc } from "../../lib/trpc"
-import { Slack, MessageCircle } from "lucide-react"
+import { Slack, MessageCircle, Settings2 } from "lucide-react"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -104,6 +105,12 @@ const MAIN_TABS = [
     label: "WhatsApp",
     icon: MessageCircle,
     description: "WhatsApp Web integration for agent triggers",
+  },
+  {
+    id: "claude-settings" as SettingsTab,
+    label: "Claude Settings",
+    icon: Settings2,
+    description: "Manage Skills, MCPs, Agents, and Hooks",
   },
 ]
 
@@ -288,6 +295,8 @@ export function AgentsSettingsDialog({
         return <AgentsSlackTab />
       case "whatsapp":
         return <AgentsWhatsAppTab />
+      case "claude-settings":
+        return <ClaudeSettingsTab />
       case "advanced":
         return <AgentsAdvancedSettingsTab />
       case "worktrees":

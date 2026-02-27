@@ -37,6 +37,11 @@ export const projects = sqliteTable("projects", {
   // Terminal start commands - JSON array of commands to run when a new chat terminal is created
   // These commands run in the persistent PTY shell session after the prompt is ready
   startCommands: text("start_commands").notNull().default("[]"),
+  // Project-specific Claude Code settings
+  mcpOverrides: text("mcp_overrides"), // JSON: Record<string, McpServerConfig>
+  envVars: text("env_vars"), // JSON: Record<string, string>
+  skillsPath: text("skills_path"), // Custom path for project skills
+  agentsPath: text("agents_path"), // Custom path for project agents
 })
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -492,6 +497,41 @@ export const systemPrompts = sqliteTable("system_prompts", {
   keyIdx: index("system_prompts_key_idx").on(table.key),
 }))
 
+// ============ HOOKS ============
+// Stores lifecycle hooks for workflow automation
+export const hooks = sqliteTable("hooks", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  name: text("name").notNull(),
+  description: text("description"),
+  hookType: text("hook_type", {
+    enum: ["PreToolUse", "PostToolUse", "SubagentStart", "SubagentStop", "Stop"]
+  }).notNull(),
+  matcher: text("matcher").notNull(), // Pattern to match against (e.g., "git commit", "*")
+  command: text("command").notNull(), // Command to execute when hook triggers
+  scope: text("scope", { enum: ["global", "project"] }).notNull(), // "global" | "project"
+  projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+}, (table) => ({
+  projectIdIdx: index("hooks_project_id_idx").on(table.projectId),
+  scopeIdx: index("hooks_scope_idx").on(table.scope),
+  hookTypeIdx: index("hooks_hook_type_idx").on(table.hookType),
+}))
+
+export const hooksRelations = relations(hooks, ({ one }) => ({
+  project: one(projects, {
+    fields: [hooks.projectId],
+    references: [projects.id],
+  }),
+}))
+
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
 export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
@@ -545,3 +585,9 @@ export type NewWhatsappSettings = typeof whatsappSettings.$inferInsert
 // System prompts types
 export type SystemPrompt = typeof systemPrompts.$inferSelect
 export type NewSystemPrompt = typeof systemPrompts.$inferInsert
+
+// Hooks types
+export type Hook = typeof hooks.$inferSelect
+export type NewHook = typeof hooks.$inferInsert
+export type HookType = "PreToolUse" | "PostToolUse" | "SubagentStart" | "SubagentStop" | "Stop"
+export type HookScope = "global" | "project"
