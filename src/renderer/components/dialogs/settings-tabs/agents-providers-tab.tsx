@@ -152,13 +152,14 @@ function ClaudeCodeProvider() {
     },
   })
 
+  const isPollingStep = flowState.step === "waiting_url" || flowState.step === "has_url"
   const { data: authStatus } = trpc.claudeCode.pollStatus.useQuery(
     {
-      sandboxUrl: flowState.step === "waiting_url" ? flowState.sandboxUrl : "",
-      sessionId: flowState.step === "waiting_url" ? flowState.sessionId : "",
+      sandboxUrl: isPollingStep ? (flowState as { sandboxUrl: string }).sandboxUrl : "",
+      sessionId: isPollingStep ? (flowState as { sessionId: string }).sessionId : "",
     },
     {
-      enabled: flowState.step === "waiting_url",
+      enabled: isPollingStep,
       refetchInterval: 1500,
       refetchIntervalInBackground: true,
     }
@@ -201,8 +202,15 @@ function ClaudeCodeProvider() {
         sandboxUrl: currentState.sandboxUrl,
         sessionId: currentState.sessionId,
       })
+    } else if (flowState.step === "has_url" && authStatus?.state === "success") {
+      // OAuth redirect was handled automatically by local server - mark as connected
+      toast.success("Claude Code connected successfully!")
+      setFlowState({ step: "idle" })
+      setAuthCode("")
+      refetch()
+      utils.claudeCode.getIntegration.invalidate()
     }
-  }, [authStatus, flowState])
+  }, [authStatus, flowState, refetch, utils.claudeCode.getIntegration])
 
   const handleStartAuth = () => {
     setFlowState({ step: "starting" })

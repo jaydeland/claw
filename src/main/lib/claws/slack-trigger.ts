@@ -40,6 +40,8 @@ export class SlackTrigger {
   private webClient: WebClient | null = null
   private isRunning = false
   private isStarting = false
+  // Cache: channelId -> channelName, to avoid repeated API calls for name-based filters
+  private channelNameCache: Map<string, string> = new Map()
 
   /**
    * Check if Socket Mode is running
@@ -175,9 +177,12 @@ export class SlackTrigger {
         const channelFilter = config.slackChannelFilter
 
         // If channel filter is set, check if this channel matches
-        if (channelFilter && !this.matchesChannelFilter(channelId, channelFilter, event.channel_name)) {
-          console.log(`[SlackTrigger] Channel ${channelId} doesn't match filter ${channelFilter}`)
-          continue
+        if (channelFilter) {
+          const matches = await this.resolveChannelFilter(channelId, channelFilter)
+          if (!matches) {
+            console.log(`[SlackTrigger] Channel ${channelId} doesn't match filter ${channelFilter}`)
+            continue
+          }
         }
 
         // Send acknowledgment
@@ -202,16 +207,99 @@ export class SlackTrigger {
   }
 
   /**
-   * Check if a channel matches the filter
+   * Resolve whether an incoming channelId matches a stored filter.
+   *
+   * Filters stored as Slack channel IDs (all-caps alphanumeric, e.g. C08ABC123)
+   * are compared directly — fast and always reliable.
+   *
+   * Filters stored as names (#general or general) require resolving the incoming
+   * channel's name via conversations.info, cached to avoid repeated API calls.
    */
-  private matchesChannelFilter(channelId: string, filter: string, channelName?: string): boolean {
-    // Filter can be a channel ID (C...) or channel name (#general)
-    const normalizedFilter = filter.startsWith("#") ? filter.slice(1) : filter
-    const normalizedName = channelName?.startsWith("#") ? channelName.slice(1) : channelName
+  private async resolveChannelFilter(channelId: string, filter: string): Promise<boolean> {
+    // Channel IDs are all uppercase alphanumeric (C..., G..., D...)
+    if (/^[A-Z0-9]+$/.test(filter)) {
+      return channelId === filter
+    }
 
-    return channelId === filter ||
-           channelId === normalizedFilter ||
-           normalizedName === normalizedFilter
+    // Name-based filter — look up the channel's actual name
+    const normalizedFilter = filter.startsWith("#") ? filter.slice(1) : filter
+
+    if (!this.channelNameCache.has(channelId)) {
+      try {
+        const result = await this.webClient!.conversations.info({ channel: channelId })
+        const name = (result.channel as any)?.name ?? ""
+        this.channelNameCache.set(channelId, name)
+      } catch (err) {
+        console.error("[SlackTrigger] Failed to resolve channel name for filter comparison:", err)
+        return false
+      }
+    }
+
+    return this.channelNameCache.get(channelId) === normalizedFilter
+  }
+
+  /**
+   * Create a dedicated Slack channel, invite the bot, and post a welcome message.
+   * Returns the resolved channelId and channelName for the caller to persist.
+   */
+  async setupDedicatedChannel(channelName: string): Promise<{
+    channelId: string
+    channelName: string
+    alreadyExisted: boolean
+  }> {
+    const tokens = await this.getDecryptedTokens()
+    if (!tokens.botToken) throw new Error("No bot token configured")
+
+    const client = this.webClient ?? new WebClient(tokens.botToken)
+    const cleanName = channelName.toLowerCase().replace(/^#/, "").replace(/\s+/g, "-")
+
+    let channelId: string
+    let resolvedName: string
+    let alreadyExisted = false
+
+    try {
+      const result = await client.conversations.create({ name: cleanName })
+      channelId = result.channel!.id!
+      resolvedName = result.channel!.name!
+    } catch (err: any) {
+      const slackErr = err?.data?.error
+      if (slackErr === "name_taken") {
+        // Find the existing channel by listing and matching name
+        const list = await client.conversations.list({ types: "public_channel", limit: 1000, exclude_archived: true })
+        const existing = list.channels?.find((c: any) => c.name === cleanName)
+        if (!existing?.id) throw new Error(`Channel #${cleanName} already exists but could not be found in the list`)
+        channelId = existing.id
+        resolvedName = existing.name
+        alreadyExisted = true
+      } else if (slackErr === "missing_scope") {
+        throw new Error(
+          "Bot needs the 'channels:manage' scope to create channels. " +
+          "Add it in your Slack app's OAuth & Permissions page, then reinstall the app to your workspace."
+        )
+      } else {
+        throw err
+      }
+    }
+
+    // Get bot's own user ID and invite it to the channel
+    const auth = await client.auth.test()
+    const botUserId = auth.user_id!
+    try {
+      await client.conversations.invite({ channel: channelId, users: botUserId })
+    } catch (err: any) {
+      if (err?.data?.error !== "already_in_channel") throw err
+    }
+
+    // Cache the resolved name
+    this.channelNameCache.set(channelId, resolvedName)
+
+    // Post a welcome message
+    await client.chat.postMessage({
+      channel: channelId,
+      text: `👋 I'm your Claw AI assistant. Mention me or send a message here to trigger the claw for this channel.`,
+    })
+
+    return { channelId, channelName: resolvedName, alreadyExisted }
   }
 
   /**

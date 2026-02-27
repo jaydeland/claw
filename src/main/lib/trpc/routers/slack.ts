@@ -1,9 +1,11 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, slackSettings } from "../../db"
+import { getDatabase, slackSettings, headlessClaws } from "../../db"
 import { eq } from "drizzle-orm"
 import { safeStorage } from "electron"
 import { getSlackTrigger } from "../../claws/slack-trigger"
+import { clawDaemon } from "../../claws"
+import { createId } from "../../db/utils"
 
 /**
  * Encrypt text using Electron's safeStorage
@@ -113,6 +115,75 @@ export const slackRouter = router({
     const slackTrigger = getSlackTrigger()
     return slackTrigger.testConnection()
   }),
+
+  /**
+   * List all claws configured with a slack_mention trigger
+   */
+  listSlackClaws: publicProcedure.query(() => {
+    const db = getDatabase()
+    const claws = db
+      .select()
+      .from(headlessClaws)
+      .where(eq(headlessClaws.triggerType, "slack_mention"))
+      .all()
+    return claws.map(c => {
+      const config = (() => { try { return JSON.parse(c.triggerConfig || "{}") } catch { return {} } })()
+      return { id: c.id, name: c.name, isEnabled: c.isEnabled, channelFilter: config.slackChannelFilter ?? null }
+    })
+  }),
+
+  /**
+   * One-shot setup: create a Slack channel, invite the bot, create a claw, enable Socket Mode.
+   */
+  setupChannelClaw: publicProcedure
+    .input(z.object({
+      channelName: z.string().min(1),
+      projectPath: z.string().min(1),
+      projectName: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const slackTrigger = getSlackTrigger()
+
+      // Create the channel and invite the bot via Slack API
+      const { channelId, channelName, alreadyExisted } = await slackTrigger.setupDedicatedChannel(input.channelName)
+
+      // Check if a claw already exists for this channel
+      const allSlackClaws = db.select().from(headlessClaws).where(eq(headlessClaws.triggerType, "slack_mention")).all()
+      const existingClaw = allSlackClaws.find(c => {
+        try { return JSON.parse(c.triggerConfig || "{}").slackChannelFilter === channelId } catch { return false }
+      })
+
+      let clawId: string
+      let clawAlreadyExisted = false
+      if (existingClaw) {
+        clawId = existingClaw.id
+        clawAlreadyExisted = true
+      } else {
+        clawId = createId()
+        db.insert(headlessClaws).values({
+          id: clawId,
+          name: `Slack: #${channelName}`,
+          instruction:
+            `You are a helpful AI assistant responding to messages in the #${channelName} Slack channel. ` +
+            `Help users with their questions and tasks related to the project at ${input.projectPath}.`,
+          targetWorktree: input.projectPath,
+          triggerType: "slack_mention",
+          triggerConfig: JSON.stringify({ slackChannelFilter: channelId }),
+          isEnabled: true,
+        }).run()
+      }
+
+      // Enable Socket Mode if it isn't running yet
+      if (!slackTrigger.isActive()) {
+        await slackTrigger.start()
+      }
+
+      // Reload daemon so the new trigger is registered
+      await clawDaemon.reload()
+
+      return { channelId, channelName, clawId, alreadyExisted, clawAlreadyExisted }
+    }),
 
   /**
    * Clear Slack credentials

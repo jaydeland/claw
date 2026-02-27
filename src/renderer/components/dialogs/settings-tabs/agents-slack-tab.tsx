@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { Slack, Check, AlertCircle, Eye, EyeOff, Trash2, Loader2, Save, Power } from "lucide-react"
+import { Slack, Check, AlertCircle, Eye, EyeOff, Trash2, Loader2, Save, Power, Hash, Plus, Zap } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../ui/button"
@@ -19,6 +19,13 @@ import {
   CardHeader,
   CardTitle,
 } from "../../ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select"
 
 export function AgentsSlackTab() {
   const [appToken, setAppToken] = useState("")
@@ -27,6 +34,11 @@ export function AgentsSlackTab() {
   const [showBotToken, setShowBotToken] = useState(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
 
+  // Quick Setup state
+  const [channelName, setChannelName] = useState("claw-agent")
+  const [selectedProjectPath, setSelectedProjectPath] = useState("")
+  const [setupResult, setSetupResult] = useState<{ channelName: string; clawName: string } | null>(null)
+
   const utils = trpc.useUtils()
 
   const { data: credentials, isLoading: isLoadingStatus } = trpc.slack.hasCredentials.useQuery()
@@ -34,6 +46,8 @@ export function AgentsSlackTab() {
     undefined,
     { enabled: false }
   )
+  const { data: slackClaws } = trpc.slack.listSlackClaws.useQuery(undefined, { enabled: !!credentials?.hasAppToken })
+  const { data: projects } = trpc.projects.list.useQuery(undefined, { enabled: !!credentials?.hasAppToken })
 
   const saveMutation = trpc.slack.saveCredentials.useMutation({
     onSuccess: () => {
@@ -68,6 +82,18 @@ export function AgentsSlackTab() {
     },
   })
 
+  const setupMutation = trpc.slack.setupChannelClaw.useMutation({
+    onSuccess: (data) => {
+      utils.slack.listSlackClaws.invalidate()
+      utils.slack.hasCredentials.invalidate()
+      setSetupResult({ channelName: data.channelName, clawName: `Slack: #${data.channelName}` })
+    },
+    onError: (error) => {
+      setSavedMessage(`Error: ${error.message}`)
+      setTimeout(() => setSavedMessage(null), 8000)
+    },
+  })
+
   const handleSave = () => {
     if (!appToken.trim() || !botToken.trim()) return
     saveMutation.mutate({ appToken: appToken.trim(), botToken: botToken.trim() })
@@ -87,7 +113,20 @@ export function AgentsSlackTab() {
     testConnection()
   }
 
+  const handleSetup = () => {
+    const project = projects?.find(p => p.path === selectedProjectPath)
+    if (!channelName.trim() || !selectedProjectPath || !project) return
+    setSetupResult(null)
+    setupMutation.mutate({
+      channelName: channelName.trim(),
+      projectPath: selectedProjectPath,
+      projectName: project.name,
+    })
+  }
+
   const hasTokens = credentials?.hasAppToken && credentials?.hasBotToken
+  const cleanChannelName = channelName.toLowerCase().replace(/^#/, "").replace(/\s+/g, "-")
+  const canSetup = !!cleanChannelName && !!selectedProjectPath && !setupMutation.isPending
 
   return (
     <div className="p-6 space-y-6">
@@ -159,11 +198,7 @@ export function AgentsSlackTab() {
                     onClick={() => setShowAppToken(!showAppToken)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    {showAppToken ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    {showAppToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
@@ -184,11 +219,7 @@ export function AgentsSlackTab() {
                     onClick={() => setShowBotToken(!showBotToken)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    {showBotToken ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    {showBotToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
@@ -258,9 +289,7 @@ export function AgentsSlackTab() {
                   {testResult.success ? (
                     <div className="flex items-center gap-2">
                       <Check className="h-4 w-4" />
-                      <span>
-                        Connected to Slack workspace: <strong>{testResult.team}</strong>
-                      </span>
+                      <span>Connected to Slack workspace: <strong>{testResult.team}</strong></span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -275,6 +304,120 @@ export function AgentsSlackTab() {
         </CardContent>
       </Card>
 
+      {/* Quick Setup Card — shown only when tokens are configured */}
+      {hasTokens && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              Quick Channel Setup
+            </CardTitle>
+            <CardDescription>
+              Create a dedicated Slack channel and wire up a Claw to respond to messages in it — in one click.
+              Requires the <code className="text-xs bg-muted px-1 py-0.5 rounded">channels:manage</code> scope on your Slack app.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {setupResult ? (
+              <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-md space-y-1">
+                <div className="flex items-center gap-2 text-green-700 font-medium text-sm">
+                  <Check className="h-4 w-4" />
+                  Channel ready!
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-mono text-foreground">#{setupResult.channelName}</span> is set up and the claw{" "}
+                  <span className="font-medium text-foreground">{setupResult.clawName}</span> will respond to messages there.
+                </p>
+                <Button variant="outline" size="sm" className="mt-2" onClick={() => setSetupResult(null)}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Set up another
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="channel-name">Channel name</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="channel-name"
+                      value={channelName}
+                      onChange={(e) => setChannelName(e.target.value)}
+                      className="pl-8"
+                      placeholder="claw-agent"
+                    />
+                  </div>
+                  {cleanChannelName && cleanChannelName !== channelName && (
+                    <p className="text-xs text-muted-foreground">Will be created as <code>#{cleanChannelName}</code></p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="project-select">Project (claw will work in this directory)</Label>
+                  <Select value={selectedProjectPath} onValueChange={setSelectedProjectPath}>
+                    <SelectTrigger id="project-select">
+                      <SelectValue placeholder="Select a project..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects?.map(p => (
+                        <SelectItem key={p.id} value={p.path}>
+                          <span className="font-medium">{p.name}</span>
+                          <span className="ml-2 text-xs text-muted-foreground truncate">{p.path}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button onClick={handleSetup} disabled={!canSetup} className="w-full">
+                  {setupMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  {setupMutation.isPending ? "Creating channel & claw..." : "Create Channel & Claw"}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Active Slack Claws */}
+      {hasTokens && slackClaws && slackClaws.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Slack Claws</CardTitle>
+            <CardDescription>Claws currently configured to respond to Slack messages</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {slackClaws.map(claw => (
+                <div key={claw.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-md">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Hash className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    <span className="text-sm font-medium truncate">{claw.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {claw.channelFilter && (
+                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                        {claw.channelFilter}
+                      </code>
+                    )}
+                    <span className={cn(
+                      "text-xs font-medium",
+                      claw.isEnabled ? "text-green-600" : "text-muted-foreground"
+                    )}>
+                      {claw.isEnabled ? "enabled" : "disabled"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Setup Instructions */}
       <Card>
         <CardHeader>
@@ -288,8 +431,8 @@ export function AgentsSlackTab() {
             <li>Go to <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">api.slack.com/apps</a></li>
             <li>Click &quot;Create New App&quot; &rarr; &quot;From scratch&quot;</li>
             <li>Enable <strong>Socket Mode</strong> in Settings &rarr; Socket Mode</li>
-            <li>Generate an <strong>App-Level Token</strong> with connections:write scope</li>
-            <li>Go to OAuth &amp; Permissions and add scopes: <code>chat:write</code>, <code>app_mentions:read</code>, <code>im:read</code>, <code>im:write</code></li>
+            <li>Generate an <strong>App-Level Token</strong> with <code>connections:write</code> scope</li>
+            <li>Go to OAuth &amp; Permissions and add scopes: <code>chat:write</code>, <code>app_mentions:read</code>, <code>im:read</code>, <code>im:write</code>, <code>channels:manage</code>, <code>channels:read</code></li>
             <li>Install the app to your workspace and copy the <strong>Bot User OAuth Token</strong></li>
             <li>Subscribe to events: <code>app_mention</code> and <code>message.im</code></li>
           </ol>

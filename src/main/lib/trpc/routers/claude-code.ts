@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto"
 import { eq } from "drizzle-orm"
 import { safeStorage, shell } from "electron"
 import { z } from "zod"
@@ -5,9 +6,70 @@ import { getExistingClaudeToken } from "../../claude-token"
 import { claudeCodeCredentials, claudeCodeSettings, getDatabase } from "../../db"
 import { publicProcedure, router } from "../index"
 
-/**
- * Encrypt token using Electron's safeStorage
- */
+// ============ ANTHROPIC OAUTH CONSTANTS ============
+
+const ANTHROPIC_OAUTH_AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
+// Token endpoint (platform.claude.com is the registered endpoint for this client)
+const ANTHROPIC_OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
+const ANTHROPIC_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+const ANTHROPIC_OAUTH_SCOPES = "user:inference"
+// Registered redirect URI — Anthropic redirects here after auth, showing the user a code to paste
+const ANTHROPIC_REDIRECT_URI = "https://platform.claude.com/oauth/code/callback"
+
+// ============ IN-PROCESS SESSION STATE ============
+// No local HTTP server needed — sessions are stored in-process and accessed via tRPC directly.
+
+interface OAuthSession {
+  oauthUrl: string
+  codeVerifier: string
+}
+
+const activeSessions = new Map<string, OAuthSession>()
+
+// ============ PKCE HELPERS ============
+
+function generateCodeVerifier(): string {
+  return randomBytes(32).toString("base64url")
+}
+
+function generateCodeChallenge(verifier: string): string {
+  return createHash("sha256").update(verifier).digest().toString("base64url")
+}
+
+// ============ TOKEN EXCHANGE ============
+
+async function exchangeAnthropicCode(code: string, codeVerifier: string): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: ANTHROPIC_REDIRECT_URI,
+      client_id: ANTHROPIC_OAUTH_CLIENT_ID,
+      code_verifier: codeVerifier,
+    })
+
+    const response = await fetch(ANTHROPIC_OAUTH_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[ClaudeCode] Token exchange failed:", errorText)
+      return null
+    }
+
+    const data = await response.json() as { access_token?: string; token?: string }
+    return data.access_token || data.token || null
+  } catch (err) {
+    console.error("[ClaudeCode] Token exchange error:", err)
+    return null
+  }
+}
+
+// ============ TOKEN STORAGE ============
+
 function encryptToken(token: string): string {
   if (!safeStorage.isEncryptionAvailable()) {
     console.warn("[ClaudeCode] Encryption not available, storing as base64")
@@ -16,9 +78,6 @@ function encryptToken(token: string): string {
   return safeStorage.encryptString(token).toString("base64")
 }
 
-/**
- * Decrypt token using Electron's safeStorage
- */
 function decryptToken(encrypted: string): string {
   if (!safeStorage.isEncryptionAvailable()) {
     return Buffer.from(encrypted, "base64").toString("utf-8")
@@ -40,15 +99,13 @@ function storeOAuthToken(oauthToken: string) {
       id: "default",
       oauthToken: encryptedToken,
       connectedAt: new Date(),
-      userId: null, // 21st.dev auth removed
+      userId: null,
     })
     .run()
 }
 
-/**
- * Claude Code OAuth router for desktop
- * Uses server only for sandbox creation, stores token locally
- */
+// ============ ROUTER ============
+
 export const claudeCodeRouter = router({
   /**
    * Check if user has Claude Code connected (local check)
@@ -56,14 +113,12 @@ export const claudeCodeRouter = router({
   getIntegration: publicProcedure.query(() => {
     const db = getDatabase()
 
-    // Check OAuth credentials
     const cred = db
       .select()
       .from(claudeCodeCredentials)
       .where(eq(claudeCodeCredentials.id, "default"))
       .get()
 
-    // Check AWS Bedrock credentials
     const settings = db
       .select()
       .from(claudeCodeSettings)
@@ -83,125 +138,108 @@ export const claudeCodeRouter = router({
   }),
 
   /**
-   * Start OAuth flow - disabled (21st.dev auth removed)
-   * Use importToken or importSystemToken instead
+   * Start OAuth flow — generates PKCE params and the Anthropic authorization URL.
+   *
+   * The redirect URI is https://platform.claude.com/oauth/code/callback (the only
+   * URI registered for this client ID). After the user approves in their browser,
+   * Anthropic shows them a code on that page which they paste back via submitCode.
+   *
+   * Returns sandbox-compatible { sandboxId, sandboxUrl, sessionId } so the existing
+   * UI polling flow works unchanged. sandboxUrl is a sentinel value; pollStatus reads
+   * from in-process state instead of making an HTTP request.
    */
-  startAuth: publicProcedure.mutation(async () => {
-    throw new Error("OAuth flow via 21st.dev is disabled. Use 'Import from Claude Code CLI' option instead.")
+  startAuth: publicProcedure.mutation(() => {
+    const sessionId = randomBytes(16).toString("hex")
+    const codeVerifier = generateCodeVerifier()
+    const codeChallenge = generateCodeChallenge(codeVerifier)
+    const state = randomBytes(16).toString("hex")
+
+    const authUrl = new URL(ANTHROPIC_OAUTH_AUTHORIZE_URL)
+    authUrl.searchParams.set("response_type", "code")
+    authUrl.searchParams.set("client_id", ANTHROPIC_OAUTH_CLIENT_ID)
+    authUrl.searchParams.set("redirect_uri", ANTHROPIC_REDIRECT_URI)
+    authUrl.searchParams.set("scope", ANTHROPIC_OAUTH_SCOPES)
+    authUrl.searchParams.set("code_challenge", codeChallenge)
+    authUrl.searchParams.set("code_challenge_method", "S256")
+    authUrl.searchParams.set("state", state)
+
+    activeSessions.set(sessionId, { oauthUrl: authUrl.toString(), codeVerifier })
+
+    // Clean up after 15 minutes
+    setTimeout(() => activeSessions.delete(sessionId), 15 * 60 * 1000)
+
+    console.log("[ClaudeCode] OAuth session created:", sessionId)
+
+    return {
+      sandboxId: sessionId,
+      sandboxUrl: "local", // sentinel — pollStatus reads from activeSessions directly
+      sessionId,
+    }
   }),
 
   /**
-   * Poll for OAuth URL - calls sandbox directly
+   * Poll for OAuth status — reads directly from in-process session state.
+   * sandboxUrl is ignored; sessionId is the lookup key.
    */
   pollStatus: publicProcedure
-    .input(
-      z.object({
-        sandboxUrl: z.string(),
-        sessionId: z.string(),
-      })
-    )
-    .query(async ({ input }) => {
-      try {
-        const response = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
-
-        if (!response.ok) {
-          return { state: "error" as const, oauthUrl: null, error: "Failed to poll status" }
-        }
-
-        const data = await response.json()
-        return {
-          state: data.state as string,
-          oauthUrl: data.oauthUrl ?? null,
-          error: data.error ?? null,
-        }
-      } catch (error) {
-        console.error("[ClaudeCode] Poll status error:", error)
-        return { state: "error" as const, oauthUrl: null, error: "Connection failed" }
+    .input(z.object({ sandboxUrl: z.string(), sessionId: z.string() }))
+    .query(({ input }) => {
+      const session = activeSessions.get(input.sessionId)
+      if (!session) {
+        return { state: "error" as const, oauthUrl: null, error: "Session not found or expired" }
       }
+      return { state: "has_url" as const, oauthUrl: session.oauthUrl, error: null }
     }),
 
   /**
-   * Submit OAuth code - calls sandbox directly, stores token locally
+   * Submit the OAuth code pasted by the user from platform.claude.com/oauth/code/callback.
+   * Accepts either the raw code or the full callback URL (both are handled).
    */
   submitCode: publicProcedure
-    .input(
-      z.object({
-        sandboxUrl: z.string(),
-        sessionId: z.string(),
-        code: z.string().min(1),
-      })
-    )
+    .input(z.object({
+      sandboxUrl: z.string(),
+      sessionId: z.string(),
+      code: z.string().min(1),
+    }))
     .mutation(async ({ input }) => {
-      // Submit code to sandbox
-      const codeRes = await fetch(
-        `${input.sandboxUrl}/api/auth/${input.sessionId}/code`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: input.code }),
-        }
-      )
-
-      if (!codeRes.ok) {
-        throw new Error(`Code submission failed: ${codeRes.statusText}`)
+      const session = activeSessions.get(input.sessionId)
+      if (!session) {
+        throw new Error("Session not found or expired. Please start the authentication process again.")
       }
 
-      // Poll for OAuth token (max 10 seconds)
-      let oauthToken: string | null = null
-
-      for (let i = 0; i < 10; i++) {
-        await new Promise((r) => setTimeout(r, 1000))
-
-        const statusRes = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
-
-        if (!statusRes.ok) continue
-
-        const status = await statusRes.json()
-
-        if (status.state === "success" && status.oauthToken) {
-          oauthToken = status.oauthToken
-          break
-        }
-
-        if (status.state === "error") {
-          throw new Error(status.error || "Authentication failed")
-        }
+      // The user may paste the full callback URL or just the code value
+      let authCode = input.code.trim()
+      if (authCode.startsWith("http")) {
+        try {
+          authCode = new URL(authCode).searchParams.get("code") || authCode
+        } catch { /* use as-is */ }
       }
 
-      if (!oauthToken) {
-        throw new Error("Timeout waiting for OAuth token")
+      const token = await exchangeAnthropicCode(authCode, session.codeVerifier)
+      if (!token) {
+        throw new Error("Failed to exchange authorization code. Please check the code and try again.")
       }
 
-      storeOAuthToken(oauthToken)
+      storeOAuthToken(token)
+      activeSessions.delete(input.sessionId)
 
       console.log("[ClaudeCode] Token stored locally")
       return { success: true }
     }),
 
   /**
-   * Import an existing OAuth token from the local machine
+   * Import an OAuth token directly (e.g. from a token string)
    */
   importToken: publicProcedure
-    .input(
-      z.object({
-        token: z.string().min(1),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const oauthToken = input.token.trim()
-
-      storeOAuthToken(oauthToken)
-
+    .input(z.object({ token: z.string().min(1) }))
+    .mutation(({ input }) => {
+      storeOAuthToken(input.token.trim())
       console.log("[ClaudeCode] Token imported locally")
       return { success: true }
     }),
 
   /**
-   * Check for existing Claude token in system credentials
+   * Check for an existing Claude token in system credentials (from Claude Code CLI)
    */
   getSystemToken: publicProcedure.query(() => {
     const token = getExistingClaudeToken()?.trim() ?? null
@@ -209,21 +247,20 @@ export const claudeCodeRouter = router({
   }),
 
   /**
-   * Import Claude token from system credentials
+   * Import the Claude token from system credentials (Claude Code CLI)
    */
   importSystemToken: publicProcedure.mutation(() => {
     const token = getExistingClaudeToken()?.trim()
     if (!token) {
       throw new Error("No existing Claude token found")
     }
-
     storeOAuthToken(token)
     console.log("[ClaudeCode] Token imported from system")
     return { success: true }
   }),
 
   /**
-   * Get decrypted OAuth token (local)
+   * Get decrypted OAuth token
    */
   getToken: publicProcedure.query(() => {
     const db = getDatabase()
@@ -247,20 +284,19 @@ export const claudeCodeRouter = router({
   }),
 
   /**
-   * Disconnect - delete local credentials
+   * Disconnect — delete local credentials
    */
   disconnect: publicProcedure.mutation(() => {
     const db = getDatabase()
     db.delete(claudeCodeCredentials)
       .where(eq(claudeCodeCredentials.id, "default"))
       .run()
-
     console.log("[ClaudeCode] Disconnected")
     return { success: true }
   }),
 
   /**
-   * Open OAuth URL in browser
+   * Open a URL in the system browser
    */
   openOAuthUrl: publicProcedure
     .input(z.string())

@@ -372,6 +372,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
             onClick={() => onToggleFolder(node.path)}
             className={cn(
               "w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-sm",
+              "border border-border/30",
               "hover:bg-accent hover:text-accent-foreground"
             )}
           >
@@ -408,8 +409,9 @@ const RepoTreeItem = memo(function RepoTreeItem({
         style={{ paddingLeft: depth * 8 + 16 }}
         className={cn(
           "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
+          "border",
           "hover:bg-accent hover:text-accent-foreground",
-          isSelected && "bg-accent"
+          isSelected ? "bg-accent border-primary/50" : "border-border/30"
         )}
       >
         <File className="h-4 w-4 text-muted-foreground" />
@@ -426,6 +428,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
         onClick={onToggleRepo}
         className={cn(
           "w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm",
+          "border border-border/30",
           "hover:bg-accent hover:text-accent-foreground",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
         )}
@@ -476,8 +479,11 @@ const RepoTreeItem = memo(function RepoTreeItem({
                 }
                 className={cn(
                   "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
+                  "border",
                   "hover:bg-accent hover:text-accent-foreground",
-                  selection?.type === "pr" && selection.prNumber === pr.number && "bg-accent"
+                  selection?.type === "pr" && selection.prNumber === pr.number
+                    ? "bg-accent border-primary/50"
+                    : "border-border/30"
                 )}
               >
                 <GitPullRequest
@@ -521,8 +527,11 @@ const RepoTreeItem = memo(function RepoTreeItem({
                 }
                 className={cn(
                   "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
+                  "border",
                   "hover:bg-accent hover:text-accent-foreground",
-                  selection?.type === "issue" && selection.issueNumber === issue.number && "bg-accent"
+                  selection?.type === "issue" && selection.issueNumber === issue.number
+                    ? "bg-accent border-primary/50"
+                    : "border-border/30"
                 )}
               >
                 <CircleDot
@@ -584,10 +593,11 @@ const RepoTreeItem = memo(function RepoTreeItem({
                   }
                   className={cn(
                     "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
+                    "border",
                     "hover:bg-accent hover:text-accent-foreground",
-                    selection?.type === "visualize" &&
-                      selection.analysisType === type &&
-                      "bg-accent"
+                    selection?.type === "visualize" && selection.analysisType === type
+                      ? "bg-accent border-primary/50"
+                      : "border-border/30"
                   )}
                 >
                   <Icon className="h-4 w-4 text-muted-foreground" />
@@ -628,6 +638,7 @@ const SectionTreeItem = memo(function SectionTreeItem({
         onClick={onToggle}
         className={cn(
           "w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-sm",
+          "border border-border/30",
           "hover:bg-accent hover:text-accent-foreground",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
         )}

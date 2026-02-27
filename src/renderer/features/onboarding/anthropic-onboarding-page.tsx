@@ -71,7 +71,7 @@ export function AnthropicOnboardingPage() {
   const shouldOfferExistingToken =
     checkedExistingToken && hasExistingToken && !ignoredExistingToken
 
-  // Poll for OAuth URL
+  // Poll for OAuth URL (only needed during waiting_url to get the oauthUrl from the session)
   const pollStatusQuery = trpc.claudeCode.pollStatus.useQuery(
     {
       sandboxUrl: flowState.step === "waiting_url" ? flowState.sandboxUrl : "",
@@ -108,7 +108,7 @@ export function AnthropicOnboardingPage() {
     }
   }, [flowState.step, startAuthMutation, checkedExistingToken, shouldOfferExistingToken])
 
-  // Update flow state when we get the OAuth URL
+  // Update flow state when we get the OAuth URL or when auth completes automatically
   useEffect(() => {
     if (flowState.step === "waiting_url" && pollStatusQuery.data?.oauthUrl) {
       setSavedOauthUrl(pollStatusQuery.data.oauthUrl)
@@ -127,8 +127,16 @@ export function AnthropicOnboardingPage() {
         step: "error",
         message: pollStatusQuery.data.error || "Failed to get OAuth URL",
       })
+    } else if (
+      flowState.step === "has_url" &&
+      pollStatusQuery.data?.state === "success"
+    ) {
+      // OAuth redirect was handled automatically by local server - complete onboarding
+      setFlowState({ step: "submitting" })
+      setAnthropicOnboardingCompleted(true)
+      setActiveProvider("anthropic-oauth")
     }
-  }, [pollStatusQuery.data, flowState])
+  }, [pollStatusQuery.data, flowState, setAnthropicOnboardingCompleted, setActiveProvider])
 
   // Open URL in browser when ready (after user clicked Connect)
   useEffect(() => {
