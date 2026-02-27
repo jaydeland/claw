@@ -266,13 +266,18 @@ export class SlackTrigger {
   }
 
   /**
-   * Create a dedicated Slack channel, invite the bot, and post a welcome message.
+   * Create a dedicated private Slack channel, invite the bot and an optional user, and post a welcome message.
    * Returns the resolved channelId and channelName for the caller to persist.
+   *
+   * @param inviteUserIdOrEmail  Slack user ID (U...) or email address to add to the channel.
+   *                             Email lookup requires the `users:read.email` scope on the bot token.
    */
-  async setupDedicatedChannel(channelName: string): Promise<{
+  async setupDedicatedChannel(channelName: string, inviteUserIdOrEmail?: string): Promise<{
     channelId: string
     channelName: string
     alreadyExisted: boolean
+    invitedUserId?: string
+    inviteWarning?: string
   }> {
     const tokens = await this.getDecryptedTokens()
     if (!tokens.botToken) throw new Error("No bot token configured")
@@ -285,14 +290,14 @@ export class SlackTrigger {
     let alreadyExisted = false
 
     try {
-      const result = await client.conversations.create({ name: cleanName })
+      const result = await client.conversations.create({ name: cleanName, is_private: true })
       channelId = result.channel!.id!
       resolvedName = result.channel!.name!
     } catch (err: any) {
       const slackErr = err?.data?.error
       if (slackErr === "name_taken") {
         // Find the existing channel by listing and matching name
-        const list = await client.conversations.list({ types: "public_channel", limit: 1000, exclude_archived: true })
+        const list = await client.conversations.list({ types: "private_channel", limit: 1000, exclude_archived: true })
         const existing = list.channels?.find((c: any) => c.name === cleanName)
         if (!existing?.id) throw new Error(`Channel #${cleanName} already exists but could not be found in the list`)
         channelId = existing.id
@@ -300,7 +305,7 @@ export class SlackTrigger {
         alreadyExisted = true
       } else if (slackErr === "missing_scope") {
         throw new Error(
-          "Bot needs the 'channels:manage' scope to create channels. " +
+          "Bot needs the 'groups:write' scope to create private channels. " +
           "Add it in your Slack app's OAuth & Permissions page, then reinstall the app to your workspace."
         )
       } else {
@@ -317,6 +322,36 @@ export class SlackTrigger {
       if (err?.data?.error !== "already_in_channel") throw err
     }
 
+    // Resolve and invite the requesting user if provided
+    let invitedUserId: string | undefined
+    let inviteWarning: string | undefined
+
+    if (inviteUserIdOrEmail) {
+      try {
+        if (inviteUserIdOrEmail.includes("@")) {
+          // Email → look up user ID
+          const lookup = await client.users.lookupByEmail({ email: inviteUserIdOrEmail })
+          invitedUserId = lookup.user?.id
+          if (!invitedUserId) throw new Error("User not found for email: " + inviteUserIdOrEmail)
+        } else {
+          invitedUserId = inviteUserIdOrEmail.trim()
+        }
+
+        await client.conversations.invite({ channel: channelId, users: invitedUserId })
+      } catch (err: any) {
+        const slackErr = err?.data?.error
+        if (slackErr === "already_in_channel") {
+          // Fine — they're already there
+        } else if (slackErr === "users_not_found") {
+          inviteWarning = `Could not find Slack user "${inviteUserIdOrEmail}". Check the ID or email and add them manually.`
+        } else if (slackErr === "missing_scope") {
+          inviteWarning = "Bot needs 'users:read.email' scope to look up users by email. Add the user manually or use their Slack user ID instead."
+        } else {
+          inviteWarning = `Could not invite user: ${err?.message ?? slackErr}`
+        }
+      }
+    }
+
     // Cache the resolved name
     this.channelNameCache.set(channelId, resolvedName)
 
@@ -326,7 +361,7 @@ export class SlackTrigger {
       text: `👋 I'm your Claw AI assistant. Mention me or send a message here to trigger the claw for this channel.`,
     })
 
-    return { channelId, channelName: resolvedName, alreadyExisted }
+    return { channelId, channelName: resolvedName, alreadyExisted, invitedUserId, inviteWarning }
   }
 
   /**

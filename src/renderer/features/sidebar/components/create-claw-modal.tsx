@@ -135,6 +135,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
   // Slack channel picker state
   const [slackChannelMode, setSlackChannelMode] = useState<"select" | "create">("select")
   const [slackNewChannelName, setSlackNewChannelName] = useState("")
+  const [slackInviteUser, setSlackInviteUser] = useState("")
 
   const getBotChannelsQuery = trpc.slack.listBotChannels.useQuery(undefined, {
     enabled: formData.triggerType === "slack_mention",
@@ -146,6 +147,8 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       getBotChannelsQuery.refetch()
     },
   })
+
+  const createChannelInviteWarning = createChannelMutation.data?.inviteWarning
 
   const { data: availableMcpServers } = trpc.claws.listAvailableMcpServers.useQuery()
 
@@ -164,6 +167,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       createGroupMutation.reset()
       setSlackChannelMode("select")
       setSlackNewChannelName("")
+      setSlackInviteUser("")
       createChannelMutation.reset()
       setNewDirInput("")
       onOpenChange(false)
@@ -182,6 +186,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       createGroupMutation.reset()
       setSlackChannelMode("select")
       setSlackNewChannelName("")
+      setSlackInviteUser("")
       createChannelMutation.reset()
       setNewDirInput("")
       onOpenChange(false)
@@ -329,6 +334,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       createGroupMutation.reset()
       setSlackChannelMode("select")
       setSlackNewChannelName("")
+      setSlackInviteUser("")
       createChannelMutation.reset()
       setNewDirInput("")
     }
@@ -615,20 +621,30 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
                 </div>
               ) : (
                 <div className="space-y-2">
+                  <Input
+                    placeholder="Channel name (e.g., claw-commands)"
+                    value={slackNewChannelName}
+                    onChange={(e) => setSlackNewChannelName(e.target.value)}
+                    disabled={createChannelMutation.isPending || !!createChannelMutation.data}
+                  />
+                  <Input
+                    placeholder="Add user (Slack user ID or email)"
+                    value={slackInviteUser}
+                    onChange={(e) => setSlackInviteUser(e.target.value)}
+                    disabled={createChannelMutation.isPending || !!createChannelMutation.data}
+                  />
                   <div className="flex gap-2">
-                    <Input
-                      placeholder="e.g., claw-commands"
-                      value={slackNewChannelName}
-                      onChange={(e) => setSlackNewChannelName(e.target.value)}
-                      disabled={createChannelMutation.isPending || !!createChannelMutation.data}
-                    />
+                    <div className="flex-1" />
                     {!createChannelMutation.data ? (
                       <Button
                         type="button"
                         size="sm"
                         onClick={() => {
                           if (slackNewChannelName.trim()) {
-                            createChannelMutation.mutate({ channelName: slackNewChannelName.trim() })
+                            createChannelMutation.mutate({
+                              channelName: slackNewChannelName.trim(),
+                              inviteUserIdOrEmail: slackInviteUser.trim() || undefined,
+                            })
                           }
                         }}
                         disabled={createChannelMutation.isPending || !slackNewChannelName.trim()}
@@ -652,9 +668,16 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
                     <Alert className="bg-green-500/10 text-green-600 border-green-500/20 text-xs">
                       <Check className="h-4 w-4" />
                       <AlertDescription>
-                        #{createChannelMutation.data.channelName} created!
-                        {createChannelMutation.data.alreadyExisted ? " (already existed, bot joined)" : ""}
+                        #{createChannelMutation.data.channelName} created (private)
+                        {createChannelMutation.data.alreadyExisted ? " — already existed, bot joined" : ""}
+                        {createChannelMutation.data.invitedUserId ? ` — ${slackInviteUser} added` : ""}
                       </AlertDescription>
+                    </Alert>
+                  )}
+                  {createChannelInviteWarning && (
+                    <Alert className="text-xs">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{createChannelInviteWarning}</AlertDescription>
                     </Alert>
                   )}
 

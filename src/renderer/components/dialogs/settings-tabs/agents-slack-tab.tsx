@@ -39,9 +39,10 @@ export function AgentsSlackTab() {
   // Channel setup state
   const [channelSetupMode, setChannelSetupMode] = useState<"select" | "create">("select")
   const [channelName, setChannelName] = useState("claw-agent")
+  const [channelInviteUser, setChannelInviteUser] = useState("")
   const [selectedExistingChannel, setSelectedExistingChannel] = useState("")
   const [selectedProjectPath, setSelectedProjectPath] = useState("")
-  const [setupResult, setSetupResult] = useState<{ channelName: string; clawName: string } | null>(null)
+  const [setupResult, setSetupResult] = useState<{ channelName: string; clawName: string; inviteWarning?: string } | null>(null)
 
   const step2Ref = useRef<HTMLDivElement>(null)
 
@@ -106,7 +107,7 @@ export function AgentsSlackTab() {
       utils.slack.listSlackClaws.invalidate()
       utils.slack.hasCredentials.invalidate()
       refetchBotChannels()
-      setSetupResult({ channelName: data.channelName, clawName: `Slack: #${data.channelName}` })
+      setSetupResult({ channelName: data.channelName, clawName: `Slack: #${data.channelName}`, inviteWarning: (data as any).inviteWarning })
     },
     onError: (error) => {
       setSavedMessage(`Error: ${error.message}`)
@@ -157,6 +158,7 @@ export function AgentsSlackTab() {
         channelName: channelName.trim(),
         projectPath: selectedProjectPath,
         projectName: project.name,
+        inviteUserIdOrEmail: channelInviteUser.trim() || undefined,
       })
     } else {
       // Connect to existing channel — create claw directly
@@ -385,8 +387,11 @@ export function AgentsSlackTab() {
                   <span className="font-mono text-foreground">#{setupResult.channelName}</span> is set up and the claw{" "}
                   <span className="font-medium text-foreground">{setupResult.clawName}</span> will respond to messages there.
                 </p>
+                {setupResult.inviteWarning && (
+                  <p className="text-xs text-amber-600">{setupResult.inviteWarning}</p>
+                )}
                 <div className="flex gap-2 mt-2">
-                  <Button variant="outline" size="sm" onClick={() => { setSetupResult(null); setSelectedExistingChannel(""); setChannelName("claw-agent") }}>
+                  <Button variant="outline" size="sm" onClick={() => { setSetupResult(null); setSelectedExistingChannel(""); setChannelName("claw-agent"); setChannelInviteUser("") }}>
                     <Plus className="h-3.5 w-3.5 mr-1" />
                     Connect another
                   </Button>
@@ -460,8 +465,13 @@ export function AgentsSlackTab() {
                     {cleanChannelName && cleanChannelName !== channelName && (
                       <p className="text-xs text-muted-foreground">Will be created as <code>#{cleanChannelName}</code></p>
                     )}
+                    <Input
+                      placeholder="Add user (Slack user ID or email, optional)"
+                      value={channelInviteUser}
+                      onChange={(e) => setChannelInviteUser(e.target.value)}
+                    />
                     <p className="text-xs text-muted-foreground">
-                      Requires <code className="bg-muted px-1 py-0.5 rounded">channels:manage</code> scope.
+                      Creates a private channel. Requires <code className="bg-muted px-1 py-0.5 rounded">groups:write</code> scope.
                     </p>
                   </div>
                 )}

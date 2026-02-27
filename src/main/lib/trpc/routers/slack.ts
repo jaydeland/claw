@@ -140,13 +140,14 @@ export const slackRouter = router({
       channelName: z.string().min(1),
       projectPath: z.string().min(1),
       projectName: z.string().min(1),
+      inviteUserIdOrEmail: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
       const slackTrigger = getSlackTrigger()
 
       // Create the channel and invite the bot via Slack API
-      const { channelId, channelName, alreadyExisted } = await slackTrigger.setupDedicatedChannel(input.channelName)
+      const { channelId, channelName, alreadyExisted } = await slackTrigger.setupDedicatedChannel(input.channelName, input.inviteUserIdOrEmail)
 
       // Check if a claw already exists for this channel
       const allSlackClaws = db.select().from(headlessClaws).where(eq(headlessClaws.triggerType, "slack_mention")).all()
@@ -197,10 +198,13 @@ export const slackRouter = router({
    * Create a dedicated Slack channel and invite the bot (without creating a claw)
    */
   createDedicatedChannel: publicProcedure
-    .input(z.object({ channelName: z.string().min(1) }))
+    .input(z.object({
+      channelName: z.string().min(1),
+      inviteUserIdOrEmail: z.string().optional(),
+    }))
     .mutation(async ({ input }) => {
       const slackTrigger = getSlackTrigger()
-      return slackTrigger.setupDedicatedChannel(input.channelName)
+      return slackTrigger.setupDedicatedChannel(input.channelName, input.inviteUserIdOrEmail)
     }),
 
   /**
