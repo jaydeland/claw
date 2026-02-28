@@ -27,6 +27,9 @@ Claw is an Electron desktop app that wraps the Claude Code SDK, providing a loca
 - **Model Selection** - Choose between Opus, Sonnet (default), or Haiku
 - **Cross-View Chat Persistence** - Chat sessions persist across sidebar tabs and views
 
+![AI Providers Settings](assets/screenshots/ai-providers-settings.png)
+*AI provider selection: Anthropic Claude (OAuth), AWS Bedrock, and Ollama with per-provider model and context window configuration*
+
 ### 🌿 Git Worktree Isolation
 
 Each chat runs in its own Git worktree with an isolated branch:
@@ -63,6 +66,28 @@ Multi-cluster EKS integration with real-time monitoring:
 ![Kubernetes Logs](assets/screenshots/kubernetes-logs.png)
 *Real-time Kubernetes log streaming with service filtering*
 
+### 🐙 GitHub Integration
+
+Deep GitHub integration for code review and project management:
+- **PR Review** - Browse open pull requests with full diff view
+- **Issue Tracking** - View and chat about issues with agent context
+- **Code Browser** - Navigate repository file tree and view file contents
+- **Architecture Analysis** - Generate Mermaid diagrams from code structure
+- **Agent Chat** - Chat with Claude agents about any PR, issue, or file in context
+- **README View** - Auto-displays repository README when expanding a repo
+
+![GitHub PR Diff](assets/screenshots/github-pr-diff.png)
+*GitHub PR diff view with full file change context and agent chat panel*
+
+![GitHub Issue Agent](assets/screenshots/github-issue-agent.png)
+*Agent analyzing a GitHub issue with access to the full repository context*
+
+![GitHub Architecture Analysis](assets/screenshots/github-architecture-analysis.png)
+*AI-generated architecture diagram from repository analysis with chat interface*
+
+![GitHub Code Browser](assets/screenshots/github-code-browser.png)
+*Repository file tree with inline code viewer*
+
 ### 📋 GSD (Get Shit Done) Workflow
 
 Structured planning system with execution tracking:
@@ -75,6 +100,9 @@ Structured planning system with execution tracking:
 
 ![GSD Workflow](assets/screenshots/gsd-workflow.png)
 *GSD structured planning workflow interface*
+
+![GSD Project State](assets/screenshots/gsd-project-state.png)
+*GSD project state view showing current phase, decisions, and next actions*
 
 ### 🔌 MCP Server Integration
 
@@ -89,6 +117,9 @@ Comprehensive MCP (Model Context Protocol) server support:
 ![MCP Servers](assets/screenshots/mcp-servers.png)
 *MCP server list with OAuth authentication status*
 
+![MCP Server Detail](assets/screenshots/mcps-server-detail.png)
+*Per-server configuration: command, arguments, environment variables, auto-approve tools, and connection status*
+
 ### 💻 Integrated Terminal
 
 Full xterm.js terminal emulator with advanced features:
@@ -102,6 +133,9 @@ Full xterm.js terminal emulator with advanced features:
 
 ![Terminal](assets/screenshots/terminal.png)
 *Integrated terminal with Kubernetes cluster context*
+
+![Terminal LS](assets/screenshots/terminal-ls.png)
+*Terminal with colorized file listing showing project directory structure*
 
 ### 🎯 Conductor (Kanban Board)
 
@@ -151,6 +185,9 @@ Visual workflow system for complex automations:
 ![Workflows](assets/screenshots/workflows.png)
 *Workflow flowchart showing MCP integrations and tool execution paths*
 
+![Workflows Subagent Flowchart](assets/screenshots/workflows-subagent-flowchart.png)
+*Subagent flowchart view showing tools available to each agent*
+
 ### 🦞 Claws (Messaging Integrations)
 
 Connect external messaging platforms to Claw agents:
@@ -159,6 +196,23 @@ Connect external messaging platforms to Claw agents:
 - **Agent Routing** - Route messages to specific Claw agents
 - **Trigger Configuration** - Set up message triggers and auto-responses
 - **Channel Management** - Connect multiple channels per integration
+
+![Claws Agent Config](assets/screenshots/claws-agent-config.png)
+*Headless agent configuration with trigger type (Cron, GitHub, Slack, WhatsApp), system instruction, and execution history*
+
+### 📝 Prompts Library
+
+Manage and use saved system prompts across agent sessions:
+- **Categorized Library** - Organize prompts by type (MCP, Chat, Background, Analysis)
+- **Live Editor** - Edit prompt content with character count and instant preview
+- **Agent Integration** - Use prompts as system context in any agent chat
+- **11+ Built-in Prompts** - Chat title generation, code analysis, architecture review, and more
+
+![Prompts Library](assets/screenshots/prompts-library.png)
+*Prompts library with categorized system prompts and live editor*
+
+![Prompts Agent Chat](assets/screenshots/prompts-agent-chat.png)
+*Agent chat initiated from Prompts view with full tool execution tree*
 
 ### 📊 Additional Features
 

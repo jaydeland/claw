@@ -92,17 +92,13 @@ function useAvailableModels(): AvailableModelsResult {
   const [ollamaConfig] = useAtom(ollamaConfigAtom)
   const [customApiConfig] = useAtom(customApiConfigAtom)
 
-  // Determine if this is a cloud/remote Ollama endpoint
-  const isCloudEndpoint = ollamaConfig.baseUrl && !ollamaConfig.baseUrl.includes('localhost') && !ollamaConfig.baseUrl.includes('127.0.0.1')
-
   // Fetch Ollama models when Ollama is the active provider
-  // For local endpoints, filter to show only remote/cloud models
-  // For cloud endpoints, all models are already remote so no filtering needed
+  // Show all available models regardless of whether they're local or remote
   const { data: ollamaModelsData } = trpc.claude.getOllamaModels.useQuery(
     {
       baseUrl: ollamaConfig.baseUrl || "http://localhost:11434",
       apiKey: ollamaConfig.ollamaApiKey,
-      filterRemote: !isCloudEndpoint, // Filter for local endpoints only
+      filterRemote: false, // Show all models (local pulls + remote-registered)
     },
     {
       enabled: activeProvider === "ollama" && !!ollamaConfig.baseUrl,
