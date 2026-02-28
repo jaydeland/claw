@@ -944,9 +944,11 @@ export async function createWorktreeForChat(
 			console.log(`[worktree] Using custom location: ${customWorktreeLocation} → ${worktreesDir}`);
 			worktreePath = join(worktreesDir, projectId, chatId);
 		} else {
-			// Default: sibling directory wt-<projectname>-<number>
-			worktreePath = await getDefaultWorktreePath(projectPath);
-			console.log(`[worktree] Using default sibling location: ${worktreePath}`);
+			// Default: sibling directory wt-<projectname>-<number>/<chatId>
+			// Each chat gets its own subdirectory to ensure isolation
+			const baseWorktreePath = await getDefaultWorktreePath(projectPath);
+			worktreePath = join(baseWorktreePath, chatId);
+			console.log(`[worktree] Using default sibling location with chatId: ${worktreePath}`);
 		}
 
 		await createWorktree(projectPath, branch, worktreePath, `origin/${baseBranch}`);

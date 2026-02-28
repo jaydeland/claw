@@ -1022,7 +1022,20 @@ export const claudeRouter = router({
               }
             }
             
-            console.log(`[SD] Query options - cwd: ${input.cwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`)
+            // Verify worktree exists before using it as cwd
+            let verifiedCwd = input.cwd
+            try {
+              const cwdStat = await fs.stat(input.cwd)
+              if (!cwdStat.isDirectory()) {
+                console.warn(`[claude] cwd is not a directory: ${input.cwd}, falling back to projectPath`)
+                verifiedCwd = input.projectPath || input.cwd
+              }
+            } catch (error) {
+              console.warn(`[claude] cwd does not exist: ${input.cwd}, falling back to projectPath`)
+              verifiedCwd = input.projectPath || input.cwd
+            }
+
+            console.log(`[SD] Query options - cwd: ${verifiedCwd}, projectPath: ${input.projectPath || "(not set)"}, mcpServers: ${mcpServersForSdk ? Object.keys(mcpServersForSdk).join(", ") : "(none)"}`)
             if (finalCustomConfig) {
               const redactedConfig = {
                 ...finalCustomConfig,
@@ -1076,7 +1089,7 @@ export const claudeRouter = router({
               prompt,
               options: {
                 abortController, // Must be inside options!
-                cwd: input.cwd,
+                cwd: verifiedCwd,
                 systemPrompt: systemPromptConfig,
                 // Register mentioned agents with SDK via options.agents
                 ...(Object.keys(agentsOption).length > 0 && { agents: agentsOption }),
@@ -1742,6 +1755,11 @@ export const claudeRouter = router({
                     case "tool-input-available":
                       // DEBUG: Log tool calls
                       console.log(`[SD] M:TOOL_CALL sub=${subId} toolName="${chunk.toolName}" mode=${input.mode} callId=${chunk.toolCallId}`)
+
+                      // DEBUG: Log LS (List) tool input to diagnose cwd issues
+                      if (chunk.toolName === "LS" && chunk.input) {
+                        console.log(`[SD] M:LS_TOOL sub=${subId} input=`, chunk.input, `cwd=${input.cwd}`)
+                      }
 
                       // Track ExitPlanMode toolCallId so we can stop when it completes
                       if (input.mode === "plan" && chunk.toolName === "ExitPlanMode") {

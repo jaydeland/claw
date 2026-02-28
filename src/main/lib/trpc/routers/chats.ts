@@ -385,6 +385,24 @@ export const chatsRouter = router({
         )
         console.log("[chats.create] worktree result:", result)
 
+        // Verify worktree directory actually exists
+        if (result.success && result.worktreePath) {
+          try {
+            const stats = statSync(result.worktreePath)
+            if (!stats.isDirectory()) {
+              console.warn(`[chats.create] Worktree path is not a directory: ${result.worktreePath}`)
+              result.success = false
+              result.error = "Worktree path is not a directory"
+            } else {
+              console.log(`[chats.create] Verified worktree exists: ${result.worktreePath}`)
+            }
+          } catch (e) {
+            console.warn(`[chats.create] Worktree directory does not exist: ${result.worktreePath}`)
+            result.success = false
+            result.error = "Worktree directory does not exist"
+          }
+        }
+
         if (result.success && result.worktreePath) {
           // Preserve custom name from user input, append the worktree's branch
           // Format: "Custom Name (branch)"
@@ -429,6 +447,11 @@ export const chatsRouter = router({
         branch: worktreeResult.branch,
         baseBranch: worktreeResult.baseBranch,
         subChats: [subChat],
+      }
+
+      // Small delay to ensure worktree is fully ready (git files may still be initializing)
+      if (input.useWorktree && worktreeResult.worktreePath) {
+        await new Promise(resolve => setTimeout(resolve, 100))
       }
 
       console.log("[chats.create] returning:", response)

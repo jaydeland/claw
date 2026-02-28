@@ -130,7 +130,10 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
     // ===== STREAMING EVENTS (token-by-token) =====
     if (msg.type === "stream_event") {
       const event = msg.event
-      console.log("[transform] stream_event:", event?.type, "delta:", event?.delta?.type, "content_block_type:", event?.content_block?.type)
+      // Only log content_block_type for content_block_start events (it's undefined for deltas)
+      const contentBlockType = event?.content_block?.type
+      const logDetails = contentBlockType ? `, content_block_type: ${contentBlockType}` : ""
+      console.log("[transform] stream_event:", event?.type, "delta:", event?.delta?.type, logDetails)
       // Debug: log full event when content_block_start but no type
       if (event?.type === "content_block_start" && !event?.content_block?.type) {
         console.log("[transform] WARNING: content_block_start with no type, full event:", JSON.stringify(event))

@@ -4292,6 +4292,15 @@ export function ChatView({
 
   // Desktop: use worktreePath instead of sandbox
   const worktreePath = agentChat?.worktreePath as string | null
+
+  // Debug logging for worktree path
+  console.log("[ActiveChat] worktreePath extracted:", {
+    worktreePath,
+    agentChatId: agentChat?.id,
+    agentChatWorktreePath: agentChat?.worktreePath,
+    hasAgentChat: !!agentChat,
+  })
+
   // Desktop: original project path for MCP config lookup
   const originalProjectPath = (agentChat as any)?.project?.path as string | undefined
   // Fallback for web: use sandbox_id

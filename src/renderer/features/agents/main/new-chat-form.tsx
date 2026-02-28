@@ -771,6 +771,14 @@ export function NewChatForm({
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
     onSuccess: (data) => {
+      // Log worktree info for debugging
+      console.log("[NewChatForm] Chat created:", {
+        id: data.id,
+        worktreePath: (data as any).worktreePath,
+        branch: (data as any).branch,
+        useWorktree: workMode === "worktree",
+      })
+
       // Clear editor and images only on success
       editorRef.current?.clear()
       clearImages()
