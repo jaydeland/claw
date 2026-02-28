@@ -180,11 +180,20 @@ const SingleRepoSection = memo(function SingleRepoSection({
   const toggleRepo = useCallback(() => {
     setExpandedRepos((prev) => {
       const next = new Set(prev)
-      if (next.has(projectId)) next.delete(projectId)
-      else next.add(projectId)
+      if (next.has(projectId)) {
+        next.delete(projectId)
+      } else {
+        next.add(projectId)
+        // Auto-select README when expanding a repo
+        setSelection({
+          type: "readme",
+          repoId: projectId,
+          repoName: currentRepo.name,
+        })
+      }
       return next
     })
-  }, [projectId, setExpandedRepos])
+  }, [projectId, setExpandedRepos, setSelection, currentRepo.name])
 
   const toggleSection = useCallback((section: string) => {
     setExpandedSections((prev) => {

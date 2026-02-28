@@ -12,13 +12,14 @@ export type AnalysisType = "codeflow" | "db" | "architecture" | "build"
 
 // ============ SELECTION TYPES ============
 
-export type GitHubSelectionType = "pr" | "issue" | "code" | "visualize"
+export type GitHubSelectionType = "pr" | "issue" | "code" | "visualize" | "readme"
 
 export type GitHubSelection =
   | { type: "pr"; repoId: string; repoName: string; prNumber: number }
   | { type: "issue"; repoId: string; repoName: string; issueNumber: number }
   | { type: "code"; repoId: string; repoName: string; path: string }
   | { type: "visualize"; repoId: string; repoName: string; analysisType: AnalysisType }
+  | { type: "readme"; repoId: string; repoName: string }
   | null
 
 // ============ TREE STATE ============
