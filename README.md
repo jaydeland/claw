@@ -137,15 +137,6 @@ Full xterm.js terminal emulator with advanced features:
 ![Terminal LS](assets/screenshots/terminal-ls.png)
 *Terminal with colorized file listing showing project directory structure*
 
-### 🎯 Conductor (Kanban Board)
-
-Visual task management system (Beta):
-- 5 column workflow: To Do, In Progress, Review, Done, Blocked
-- Drag-and-drop task organization
-- GSD chat integration
-- Real-time updates with optimistic UI
-- Job detail panel
-
 ### 📑 11 Sidebar Tabs
 
 Complete workspace navigation:
