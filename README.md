@@ -63,7 +63,6 @@ Multi-cluster EKS integration with real-time monitoring:
 - **Live Log Streaming** - Real-time logs with auto-scroll, word wrap, service filtering
 - **DevSpace Integration** - Development environment management
 
-![Kubernetes Logs](assets/screenshots/kubernetes-logs.png)
 *Real-time Kubernetes log streaming with service filtering*
 
 ### 🐙 GitHub Integration
@@ -98,9 +97,6 @@ Structured planning system with execution tracking:
 - Commands: `/gsd:plan-phase`, `/gsd:add-phase`, `/gsd:execute-phase`, `/gsd:discuss-phase`, `/gsd:map-codebase`
 - Version management and auto-update
 
-![GSD Workflow](assets/screenshots/gsd-workflow.png)
-*GSD structured planning workflow interface*
-
 ![GSD Project State](assets/screenshots/gsd-project-state.png)
 *GSD project state view showing current phase, decisions, and next actions*
 
@@ -113,9 +109,6 @@ Comprehensive MCP (Model Context Protocol) server support:
 - **Tool Caching** - Performance optimization for frequently used tools
 - **Status Monitoring** - Real-time connection status (connected, needs-auth, failed)
 - **Enable/Disable** - Toggle servers per project
-
-![MCP Servers](assets/screenshots/mcp-servers.png)
-*MCP server list with OAuth authentication status*
 
 ![MCP Server Detail](assets/screenshots/mcps-server-detail.png)
 *Per-server configuration: command, arguments, environment variables, auto-approve tools, and connection status*
@@ -130,9 +123,6 @@ Full xterm.js terminal emulator with advanced features:
 - Drag-and-drop file paths
 - Session serialization and restore
 - OSC-7 current directory parsing
-
-![Terminal](assets/screenshots/terminal.png)
-*Integrated terminal with Kubernetes cluster context*
 
 ![Terminal LS](assets/screenshots/terminal-ls.png)
 *Terminal with colorized file listing showing project directory structure*
