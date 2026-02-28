@@ -50,8 +50,6 @@ Built-in Git client with comprehensive change tracking:
 - History view for commits
 - Change categorization and filtering
 
-![Workspaces](assets/screenshots/workspaces.png)
-*Main chat interface with conversation history and session context*
 
 ### ☸️ Kubernetes Management
 
