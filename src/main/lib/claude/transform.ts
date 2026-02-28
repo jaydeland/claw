@@ -539,12 +539,24 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
         yield* endTextBlock()
         yield* endToolInput()
 
-        // Emit SDK errors to UI
+        // Emit SDK errors to UI, filtering known non-fatal internal binary errors
         if (msg.errors && Array.isArray(msg.errors) && msg.errors.length > 0) {
-          const errorText = msg.errors.join("\n")
-          yield {
-            type: "error",
-            errorText: `SDK Error: ${errorText}`,
+          // These patterns indicate internal binary operations failing on custom providers,
+          // not actual user-facing tool failures. Filter them to reduce noise.
+          const isKnownInternalError = (err: string) =>
+            err.includes("/v1/messages/count_tokens") ||        // Anthropic-only endpoint
+            err.includes("T.startsWith") ||                     // Cascade from count_tokens 404
+            (err.includes("not_found_error") && err.includes("model") && err.includes("claude-"))
+
+          const userFacingErrors = msg.errors.filter(
+            (e: unknown) => typeof e !== "string" || !isKnownInternalError(e)
+          )
+          if (userFacingErrors.length > 0) {
+            const errorText = userFacingErrors.join("\n")
+            yield {
+              type: "error",
+              errorText: `SDK Error: ${errorText}`,
+            }
           }
         }
       } else {

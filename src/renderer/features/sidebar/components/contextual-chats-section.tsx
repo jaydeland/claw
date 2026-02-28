@@ -2,11 +2,19 @@
 
 import { useState } from "react"
 import { useSetAtom } from "jotai"
-import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react"
+import { ChevronDown, ChevronRight, MessageSquare, MoreHorizontal, Archive, Trash2 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { selectedSidebarTabAtom, pendingPromptNavigationAtom } from "../../agents/atoms"
 import type { SourceView } from "../../shared/hooks/use-contextual-chat"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu"
+import { Button } from "../../../components/ui/button"
 
 const SOURCE_VIEW_LABELS: Record<SourceView, string> = {
   github: "GitHub Chats",

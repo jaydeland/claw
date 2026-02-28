@@ -705,4 +705,46 @@ export const githubRouter = router({
       }
     }
   }),
+
+  /**
+   * Fetch README content for a repository
+   */
+  getReadme: publicProcedure
+    .input(z.object({ projectPath: z.string() }))
+    .query(async ({ input }) => {
+      const ghCheck = await checkGhAvailable()
+      if (!ghCheck.available) {
+        return { success: false as const, error: ghCheck.error, content: "" }
+      }
+
+      const remote = await getGitHubRemote(input.projectPath)
+      if (!remote) {
+        return { success: false as const, error: "No GitHub remote found", content: "" }
+      }
+
+      // Try to fetch README using gh CLI
+      const readmePaths = ["README.md", "readme.md", "README.rst", "readme.rst", "README.txt", "readme.txt", "README", "readme"]
+
+      for (const readmePath of readmePaths) {
+        try {
+          const { stdout } = await execAsync(
+            `gh api repos/${remote.owner}/${remote.repo}/contents/${readmePath}`,
+            { cwd: input.projectPath }
+          )
+
+          const fileData = JSON.parse(stdout)
+          if (fileData.content) {
+            // Content is base64 encoded
+            const content = Buffer.from(fileData.content, "base64").toString("utf-8")
+            return { success: true as const, content }
+          }
+        } catch {
+          // Try next path
+          continue
+        }
+      }
+
+      // If no README found, return empty content (not an error)
+      return { success: true as const, content: "" }
+    }),
 })

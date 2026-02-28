@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo, useCallback } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send, Check, X, CheckCircle, GitMerge, ExternalLink } from "lucide-react"
+import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send, Check, X, CheckCircle, GitMerge, ExternalLink, BookOpen } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
@@ -43,6 +43,8 @@ export const GitHubContentPane = memo(function GitHubContentPane({
       return <IssueDetailView issueNumber={selection.issueNumber} repoName={selection.repoName} projectPath={projectPath} />
     case "code":
       return <CodeView path={selection.path} repoName={selection.repoName} projectPath={projectPath} />
+    case "readme":
+      return <ReadmeView repoName={selection.repoName} projectPath={projectPath} />
     case "visualize":
       return (
         <VisualizeView
@@ -889,3 +891,60 @@ function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
+
+interface ReadmeViewProps {
+  repoName: string
+  projectPath: string
+}
+
+const ReadmeView = memo(function ReadmeView({ repoName, projectPath }: ReadmeViewProps) {
+  // Try to fetch README.md, falling back to readme.md, README.rst, etc.
+  const readmePaths = ["README.md", "readme.md", "README.rst", "readme.rst", "README.txt", "readme.txt", "README", "readme"]
+
+  const { data, isLoading, error } = trpc.github.getReadme.useQuery(
+    { projectPath },
+    { enabled: !!projectPath }
+  )
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  if (error || !data?.success) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
+        <AlertCircle className="h-8 w-8 mb-2 text-destructive" />
+        <p className="text-sm text-destructive">Failed to load README</p>
+        <p className="text-xs mt-1">{error?.message || (data as any)?.error || "No README found in repository"}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-border flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-5 w-5 text-blue-500" />
+          <h2 className="text-lg font-semibold">README</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">{repoName}</p>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {data.content ? (
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <MemoizedMarkdown content={data.content} id={`${repoName}-readme`} size="sm" />
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-center py-8">No README content available</p>
+        )}
+      </div>
+    </div>
+  )
+})

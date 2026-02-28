@@ -530,6 +530,12 @@ export function buildClaudeEnv(options?: {
         // Model selection for Ollama/Custom API
         if (customEnv.ANTHROPIC_MODEL) {
           env.ANTHROPIC_MODEL = customEnv.ANTHROPIC_MODEL
+          // Map haiku/sonnet/opus defaults to the configured model so internal binary
+          // sub-agents (agent teams) don't try to use Anthropic model names like
+          // "claude-haiku-4-5-20251001" which don't exist on custom providers
+          env.ANTHROPIC_DEFAULT_HAIKU_MODEL = customEnv.ANTHROPIC_MODEL
+          env.ANTHROPIC_DEFAULT_SONNET_MODEL = customEnv.ANTHROPIC_MODEL
+          env.ANTHROPIC_DEFAULT_OPUS_MODEL = customEnv.ANTHROPIC_MODEL
         }
 
         // Determine if this is Ollama mode (check by baseUrl or the "ollama" marker token)
