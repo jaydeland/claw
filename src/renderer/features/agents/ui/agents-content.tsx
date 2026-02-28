@@ -60,6 +60,8 @@ import { HistoryChatView } from "../../history"
 import { ProjectDetailPage } from "./project-detail-page"
 import { PromptsView } from "../../prompts/ui/prompts-view"
 import { ExecutionHistoryViewer } from "../../sidebar/components/execution-history-viewer"
+import { selectedSettingsCategoryAtom } from "../atoms"
+import { CcSettingsContent } from "../../settings/ui/cc-settings-content"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -73,6 +75,7 @@ export function AgentsContent() {
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
   const selectedGsdCategory = useAtomValue(selectedGsdCategoryAtom)
+  const selectedSettingsCategory = useAtomValue(selectedSettingsCategoryAtom)
   const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
 
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
@@ -853,7 +856,8 @@ export function AgentsContent() {
   const showGitHubView = selectedSidebarTab === "github"
   const showPromptsView = selectedSidebarTab === "prompts"
   const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView
+  const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showSettingsView
 
   return (
     <>
@@ -888,6 +892,11 @@ export function AgentsContent() {
       {/* Prompts view */}
       <div className={showPromptsView ? "flex-1 h-full overflow-hidden" : "hidden"}>
         <PromptsView />
+      </div>
+
+      {/* CC Settings view */}
+      <div className={showSettingsView ? "flex-1 h-full overflow-hidden" : "hidden"}>
+        <CcSettingsContent />
       </div>
 
       {/* Claws execution detail view */}

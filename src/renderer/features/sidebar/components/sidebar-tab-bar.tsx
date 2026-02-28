@@ -17,13 +17,14 @@ import {
   ScrollText,
 } from "lucide-react"
 import { OriginalMCPIcon, LobsterClawIcon, SingleClawIcon } from "../../../components/ui/icons"
+import { ClaudeCodeIcon } from "../../../components/ui/canvas-icons"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
-import { selectedSidebarTabAtom, sidebarContentCollapsedAtom, type SidebarTab } from "../../agents/atoms"
+import { selectedSidebarTabAtom, sidebarContentCollapsedAtom, selectedSettingsCategoryAtom, type SidebarTab } from "../../agents/atoms"
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
@@ -41,9 +42,7 @@ const tabs: TabItem[] = [
   { id: "clusters", label: "Clusters", icon: Server },
   { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
   { id: "github", label: "GitHub", icon: Github },
-  { id: "agents", label: "Agents", icon: Bot },
-  { id: "skills", label: "Skills", icon: LibraryBig },
-  { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
+  { id: "settings", label: "CC Settings", icon: ClaudeCodeIcon },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "claws", label: "Claws", icon: SingleClawIcon },
   { id: "prompts", label: "Prompts", icon: ScrollText },
@@ -71,6 +70,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
   const setClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const setMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const setGsdCategory = useSetAtom(selectedGsdCategoryAtom)
+  const setSettingsCategory = useSetAtom(selectedSettingsCategoryAtom)
 
   const handleTabClick = (tabId: SidebarTab) => {
     if (selectedTab === tabId) {
@@ -97,6 +97,10 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
       } else if (tabId === "github" || tabId === "prompts") {
         setGsdCategory(null)
         setIsContentCollapsed(true) // Full-width views — no sidebar panel needed
+      } else if (tabId === "settings") {
+        setGsdCategory(null)
+        setSettingsCategory("overview") // Default to overview category
+        setIsContentCollapsed(false) // Settings has tree pane
       } else {
         setGsdCategory(null)
         setIsContentCollapsed(false)

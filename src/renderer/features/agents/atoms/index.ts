@@ -672,7 +672,7 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
  * - "claws": Claws integration
  * - "prompts": System prompts management
  */
-export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "github" | "claws" | "prompts"
+export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "github" | "claws" | "prompts" | "settings"
 
 /**
  * Currently selected sidebar tab (persisted)
@@ -684,6 +684,14 @@ export const selectedSidebarTabAtom = atomWithStorage<SidebarTab>(
   undefined,
   { getOnInit: true },
 )
+
+/**
+ * Selected CC Settings category
+ * Controls which settings section is shown in the main content area
+ */
+export type SettingsCategory = "overview" | "permissions" | "hooks" | "status-line"
+
+export const selectedSettingsCategoryAtom = atom<SettingsCategory | null>(null)
 
 /**
  * Sidebar content collapsed state (persisted)

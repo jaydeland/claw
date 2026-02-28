@@ -107,6 +107,7 @@ import {
   McpsTabContent,
   ClawsTabContent,
 } from "./components"
+import { CcSettingsTabContent } from "./components/cc-settings-tab-content"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
 import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
@@ -2413,6 +2414,8 @@ export function AgentsSidebar({
             <McpsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : selectedSidebarTab === "claws" ? (
             <ClawsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "settings" ? (
+            <CcSettingsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : null}
           {/* Note: clusters tab doesn't show sidebar content - cluster selection is via dropdown in main view */}
         </>
