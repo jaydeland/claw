@@ -219,6 +219,34 @@ function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
     }
   })
 
+  // Fetch external images (for secure image rendering in markdown)
+  ipcMain.handle("image:fetch", async (_event, url: string) => {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Claw-GitHub-Viewer/1.0",
+        },
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      const contentType = response.headers.get("content-type") || "image/png"
+      const buffer = Buffer.from(await response.arrayBuffer())
+      const base64 = buffer.toString("base64")
+      return {
+        success: true,
+        dataUrl: `data:${contentType};base64,${base64}`,
+        contentType,
+      }
+    } catch (error) {
+      console.error("[Main] Failed to fetch image:", url, error)
+      return {
+        success: false,
+        error: (error as Error).message,
+      }
+    }
+  })
+
   // Auth IPC handlers (stubbed - 21st.dev auth removed, app works without login)
   ipcMain.handle("auth:get-user", () => null)
   ipcMain.handle("auth:is-authenticated", () => true) // Always authenticated for local use

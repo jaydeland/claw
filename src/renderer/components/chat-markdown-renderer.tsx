@@ -7,6 +7,7 @@ import { Copy, Check } from "lucide-react"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
 import { highlightCode } from "../lib/themes/shiki-theme-loader"
 import { findContentRenderer } from "../lib/content-renderer-registry"
+import { SecureImage } from "./secure-image"
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
 export function stripEmojis(text: string): string {
@@ -412,6 +413,9 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
       ),
       pre: ({ children }: any) => <>{children}</>,
       code: createCodeComponent(codeTheme, size, styles),
+      img: ({ src, alt, ...props }: any) => (
+        <SecureImage src={src} alt={alt} className="my-4" {...props} />
+      ),
     }),
     [styles, codeTheme, size],
   )
@@ -676,6 +680,9 @@ const MemoizedMarkdownBlock = memo(
         ),
         pre: ({ children }: any) => <>{children}</>,
         code: createCodeComponent(codeTheme, size, styles),
+        img: ({ src, alt, ...props }: any) => (
+          <SecureImage src={src} alt={alt} className="my-4" {...props} />
+        ),
       }),
       [styles, codeTheme, size],
     )

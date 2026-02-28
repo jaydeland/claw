@@ -111,6 +111,9 @@ contextBridge.exposeInMainWorld("desktopApi", {
   // File System
   readTextFile: (filePath: string) => ipcRenderer.invoke("fs:readTextFile", filePath),
 
+  // Image fetching (for secure markdown image rendering)
+  fetchImage: (url: string) => ipcRenderer.invoke("image:fetch", url),
+
   // Shortcut events (from main process menu accelerators)
   onShortcutNewAgent: (callback: () => void) => {
     const handler = () => callback()
@@ -199,6 +202,9 @@ export interface DesktopApi {
   }) => Promise<string[] | null>
   // File System
   readTextFile: (filePath: string) => Promise<string>
+
+  // Image fetching (for secure markdown image rendering)
+  fetchImage: (url: string) => Promise<{ success: boolean; dataUrl?: string; contentType?: string; error?: string }>
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
   // File changes

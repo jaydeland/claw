@@ -69,6 +69,9 @@ export interface DesktopApi {
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
 
+  // Image fetching (for secure markdown image rendering)
+  fetchImage: (url: string) => Promise<{ success: boolean; dataUrl?: string; contentType?: string; error?: string }>
+
   // Auth
   getUser: () => Promise<DesktopUser | null>
   isAuthenticated: () => Promise<boolean>
