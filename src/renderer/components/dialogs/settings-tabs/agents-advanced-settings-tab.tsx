@@ -90,6 +90,9 @@ export function AgentsAdvancedSettingsTab() {
   // Get selected project for default worktree path preview
   const selectedProject = useAtomValue(selectedProjectAtom)
 
+  // Fetch system info for versions
+  const { data: systemInfo } = trpc.debug.getSystemInfo.useQuery()
+
   // Path settings state
   const [customConfigDir, setCustomConfigDir] = useState("")
   const [customWorktreeLocation, setCustomWorktreeLocation] = useState("")
@@ -297,6 +300,29 @@ export function AgentsAdvancedSettingsTab() {
 
   return (
     <div className="space-y-6 p-6 max-h-[70vh] overflow-y-auto">
+      {/* Version Information Section */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground">Version Information</h3>
+        </div>
+        <div className="pl-6 space-y-2">
+          <div className="p-3 bg-muted/50 rounded-lg border border-border space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Claw Desktop</span>
+              <span className="text-sm font-mono text-foreground">{systemInfo?.version || "loading..."}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Claude Agent SDK</span>
+              <span className="text-sm font-mono text-foreground">{systemInfo?.claudeAgentSdkVersion || "loading..."}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Claude Code Binary</span>
+              <span className="text-sm font-mono text-foreground">{systemInfo?.claudeCodeBinaryVersion || "loading..."}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Configuration Sources Section */}
       <div className="space-y-3">
         <button

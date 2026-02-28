@@ -9,9 +9,42 @@ import {
   generateChatTitle,
   type BackgroundSessionState,
 } from "../../claude/background-session"
+import { readFileSync, existsSync } from "fs"
+import { join } from "path"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
+
+// Get Claude Agent SDK version from package.json
+function getClaudeAgentSdkVersion(): string {
+  try {
+    const packageJsonPath = join(process.cwd(), "package.json")
+    if (existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"))
+      return packageJson.dependencies?.["@anthropic-ai/claude-agent-sdk"] || "unknown"
+    }
+  } catch (error) {
+    console.error("[Debug] Failed to read SDK version:", error)
+  }
+  return "unknown"
+}
+
+// Get Claude Code binary version from VERSION file
+function getClaudeCodeBinaryVersion(): string {
+  try {
+    // In development, check directly in resources/bin
+    // In production, the binary is in app.asar.unpacked/resources/bin
+    const versionFilePath = join(process.resourcesPath || process.cwd(), "bin", "VERSION")
+    if (existsSync(versionFilePath)) {
+      const versionContent = readFileSync(versionFilePath, "utf-8")
+      // VERSION file format: version\nISO date\n
+      return versionContent.split("\n")[0]?.trim() || "unknown"
+    }
+  } catch (error) {
+    console.error("[Debug] Failed to read binary version:", error)
+  }
+  return "unknown"
+}
 
 export const debugRouter = router({
   /**
@@ -24,6 +57,8 @@ export const debugRouter = router({
       arch: process.arch,
       isDev: IS_DEV,
       userDataPath: app.getPath("userData"),
+      claudeAgentSdkVersion: getClaudeAgentSdkVersion(),
+      claudeCodeBinaryVersion: getClaudeCodeBinaryVersion(),
     }
   }),
 
