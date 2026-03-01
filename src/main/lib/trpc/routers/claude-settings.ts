@@ -308,6 +308,7 @@ export const claudeSettingsRouter = router({
             customBinaryPath: input.customBinaryPath ?? null,
             customEnvVars: JSON.stringify(input.customEnvVars ?? {}),
             customConfigDir: input.customConfigDir ?? null,
+            customWorktreeLocation: input.customWorktreeLocation ?? null,
             defaultStartCommands: JSON.stringify(input.defaultStartCommands ?? []),
             mcpServerSettings: JSON.stringify(input.mcpServerSettings ?? {}),
             authMode: input.authMode ?? "oauth",
