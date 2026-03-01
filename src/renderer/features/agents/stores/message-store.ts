@@ -740,31 +740,7 @@ export const syncMessagesWithStatusAtom = atom(
       newRoles.set(msg.id, msg.role)
     }
 
-    // Check if IDs changed (new message added or removed)
-    const idsChanged =
-      newIds.length !== currentIds.length ||
-      newIds.some((id, i) => id !== currentIds[i])
-
-    if (idsChanged) {
-      set(messageIdsAtom, newIds)
-    }
-
-    // Check if roles changed
-    let rolesChanged = newRoles.size !== currentRoles.size
-    if (!rolesChanged) {
-      for (const [id, role] of newRoles) {
-        if (currentRoles.get(id) !== role) {
-          rolesChanged = true
-          break
-        }
-      }
-    }
-
-    if (rolesChanged) {
-      set(messageRolesAtom, newRoles)
-    }
-
-    // Update individual message atoms ONLY if they changed
+    // Update individual message atoms FIRST to prevent race condition
     // This is the key optimization - only changed messages trigger re-renders
     // CRITICAL: AI SDK mutates objects in-place, so we MUST create a new reference
     // for Jotai to detect the change (it uses Object.is() for comparison)
@@ -772,6 +748,10 @@ export const syncMessagesWithStatusAtom = atom(
     // 1. msg object itself is mutated in-place
     // 2. msg.parts array is mutated in-place
     // 3. Individual part objects inside parts are mutated in-place
+    //
+    // IMPORTANT: Message atoms must be populated BEFORE updating messageIdsAtom/messageRolesAtom
+    // Derived atoms (userMessageIdsAtom, messageGroupsAtom) read from messageAtomFamily,
+    // so if IDs/roles update first, derived atoms will read null/undefined from stale atoms.
     for (const msg of messages) {
       // ALWAYS set atoms to ensure persistence with keep-alive tabs
       // Multiple tabs render simultaneously and need their atoms to persist
@@ -791,6 +771,32 @@ export const syncMessagesWithStatusAtom = atom(
 
       // Update change tracking
       hasMessageChanged(currentSubChatId, msg.id, msg)
+    }
+
+    // Check if roles changed - update AFTER individual message atoms are set
+    let rolesChanged = newRoles.size !== currentRoles.size
+    if (!rolesChanged) {
+      for (const [id, role] of newRoles) {
+        if (currentRoles.get(id) !== role) {
+          rolesChanged = true
+          break
+        }
+      }
+    }
+
+    // Update roles atom BEFORE messageIdsAtom to ensure derived atoms have correct role data
+    if (rolesChanged) {
+      set(messageRolesAtom, newRoles)
+    }
+
+    // Check if IDs changed - update LAST after all message atoms and roles are populated
+    // This ensures derived atoms read consistent data when they recalculate
+    const idsChanged =
+      newIds.length !== currentIds.length ||
+      newIds.some((id, i) => id !== currentIds[i])
+
+    if (idsChanged) {
+      set(messageIdsAtom, newIds)
     }
 
     // Cleanup removed message caches (but NOT atoms - keep-alive tabs need them)

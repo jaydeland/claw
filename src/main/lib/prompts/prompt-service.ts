@@ -128,6 +128,9 @@ export const PROMPT_KEYS = {
   ANALYSIS_DB: "analysis_db",
   ANALYSIS_ARCHITECTURE: "analysis_architecture",
   ANALYSIS_BUILD: "analysis_build",
+
+  // GitHub visualization chat
+  GITHUB_VISUALIZATION_CHAT: "github_visualization_chat",
 } as const
 
 export type PromptKey = (typeof PROMPT_KEYS)[keyof typeof PROMPT_KEYS]

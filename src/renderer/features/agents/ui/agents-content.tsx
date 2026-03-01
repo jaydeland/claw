@@ -27,6 +27,7 @@ import {
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
   selectedClawAtom,
+  isEditingClawAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { ChatView } from "../main/active-chat"
@@ -60,6 +61,7 @@ import { HistoryChatView } from "../../history"
 import { ProjectDetailPage } from "./project-detail-page"
 import { PromptsView } from "../../prompts/ui/prompts-view"
 import { ExecutionHistoryViewer } from "../../sidebar/components/execution-history-viewer"
+import { ClawEditView } from "../../sidebar/components/claw-edit-view"
 import { selectedSettingsCategoryAtom } from "../atoms"
 import { CcSettingsContent } from "../../settings/ui/cc-settings-content"
 // Desktop mock
@@ -77,6 +79,7 @@ export function AgentsContent() {
   const selectedGsdCategory = useAtomValue(selectedGsdCategoryAtom)
   const selectedSettingsCategory = useAtomValue(selectedSettingsCategoryAtom)
   const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
+  const [isEditingClaw, setIsEditingClaw] = useAtom(isEditingClawAtom)
 
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
@@ -855,9 +858,10 @@ export function AgentsContent() {
   const showProjectDetail = !!selectedProjectDetailId
   const showGitHubView = selectedSidebarTab === "github"
   const showPromptsView = selectedSidebarTab === "prompts"
-  const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw
+  const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw && !isEditingClaw
+  const showClawsEditView = selectedSidebarTab === "claws" && !!selectedClaw && isEditingClaw
   const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showSettingsView
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showClawsEditView && !showSettingsView
 
   return (
     <>
@@ -907,6 +911,13 @@ export function AgentsContent() {
             onBack={() => setSelectedClaw(null)}
             className="h-full"
           />
+        </div>
+      )}
+
+      {/* Claws edit view */}
+      {showClawsEditView && selectedClaw && (
+        <div className="flex-1 h-full overflow-hidden">
+          <ClawEditView className="h-full" />
         </div>
       )}
 

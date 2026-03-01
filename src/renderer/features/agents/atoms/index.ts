@@ -689,7 +689,21 @@ export const selectedSidebarTabAtom = atomWithStorage<SidebarTab>(
  * Selected CC Settings category
  * Controls which settings section is shown in the main content area
  */
-export type SettingsCategory = "overview" | "permissions" | "hooks" | "status-line"
+export type SettingsCategory =
+  // General Settings
+  | "overview"
+  | "permissions"
+  | "hooks"
+  | "status-line"
+  // Agents
+  | "agents-overview"
+  | "agents-permissions"
+  // Skills
+  | "skills-overview"
+  | "skills-hooks"
+  // MCPs
+  | "mcps-overview"
+  | "mcps-permissions"
 
 export const selectedSettingsCategoryAtom = atom<SettingsCategory | null>(null)
 

@@ -5,7 +5,7 @@ import { Zap, Plus, Play, Settings, History, Clock, CheckCircle, XCircle, Loader
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { useAtom } from "jotai"
-import { selectedClawAtom } from "../../../lib/atoms"
+import { selectedClawAtom, isEditingClawAtom } from "../../../lib/atoms"
 import { Input } from "../../../components/ui/input"
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
@@ -44,14 +44,15 @@ type ClawWithParsedConfig = {
   triggerConfig: { expression?: string; owner?: string; repo?: string; label?: string }
   isEnabled: boolean
   createdAt: Date
+  allowedDirectories?: string
+  allowedMcpServers?: string
 }
 
 export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [editModalOpen, setEditModalOpen] = useState(false)
-  const [clawToEdit, setClawToEdit] = useState<ClawWithParsedConfig | null>(null)
   const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
+  const [isEditingClaw, setIsEditingClaw] = useAtom(isEditingClawAtom)
   const [clawToDelete, setClawToDelete] = useState<string | null>(null)
   const [clawToTrigger, setClawToTrigger] = useState<string | null>(null)
 
@@ -237,8 +238,8 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
                     className="h-6 w-6"
                     onClick={(e) => {
                       e.stopPropagation()
-                      setClawToEdit(claw)
-                      setEditModalOpen(true)
+                      setSelectedClaw({ id: claw.id, name: claw.name, triggerType: claw.triggerType })
+                      setIsEditingClaw(true)
                     }}
                     title="Edit"
                   >
@@ -251,6 +252,7 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
                     onClick={(e) => {
                       e.stopPropagation()
                       setSelectedClaw(selectedClaw?.id === claw.id ? null : { id: claw.id, name: claw.name, triggerType: claw.triggerType })
+                      setIsEditingClaw(false)
                     }}
                     title="View history"
                   >
@@ -275,15 +277,7 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
         )}
       </div>
 
-      {/* Create/Edit Claw Modal */}
-      <CreateClawModal
-        open={editModalOpen}
-        onOpenChange={(open) => {
-          setEditModalOpen(open)
-          if (!open) setClawToEdit(null)
-        }}
-        claw={clawToEdit}
-      />
+      {/* Create Claw Modal */}
       <CreateClawModal open={createModalOpen} onOpenChange={setCreateModalOpen} />
 
       {/* Delete Confirmation */}

@@ -909,6 +909,27 @@ export async function getDefaultWorktreePath(projectPath: string): Promise<strin
 }
 
 /**
+ * Determine the best git start point for a new worktree branch.
+ * Tries remote tracking branch first, then local branch, then HEAD.
+ */
+async function getWorktreeStartPoint(git: SimpleGit, baseBranch: string): Promise<string> {
+	// 1. Prefer remote tracking branch (cleanest isolation)
+	try {
+		await git.raw(["rev-parse", "--verify", `origin/${baseBranch}`]);
+		return `origin/${baseBranch}`;
+	} catch {}
+
+	// 2. Fall back to local branch
+	try {
+		await git.raw(["rev-parse", "--verify", baseBranch]);
+		return baseBranch;
+	} catch {}
+
+	// 3. Last resort: current HEAD
+	return "HEAD";
+}
+
+/**
  * Create a git worktree for a chat (wrapper for chats.ts)
  * @param projectPath - Path to the main repository
  * @param projectId - Project ID for worktree directory
@@ -927,7 +948,7 @@ export async function createWorktreeForChat(
 		const isRepo = await git.checkIsRepo();
 
 		if (!isRepo) {
-			return { success: true, worktreePath: projectPath };
+			return { success: false, error: "Not a git repository - Claude will run in project directory" };
 		}
 
 		// Use provided base branch or auto-detect
@@ -951,7 +972,8 @@ export async function createWorktreeForChat(
 			console.log(`[worktree] Using default sibling location with chatId: ${worktreePath}`);
 		}
 
-		await createWorktree(projectPath, branch, worktreePath, `origin/${baseBranch}`);
+		const startPoint = await getWorktreeStartPoint(git, baseBranch);
+		await createWorktree(projectPath, branch, worktreePath, startPoint);
 
 		// Run worktree setup commands in BACKGROUND (don't block chat creation)
 		// This allows the user to start chatting immediately while deps install

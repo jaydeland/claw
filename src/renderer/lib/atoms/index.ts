@@ -642,6 +642,9 @@ export type SelectedClawInfo = {
 // Currently selected claw for detail view in main content area
 export const selectedClawAtom = atom<SelectedClawInfo>(null)
 
+// Track whether we're in edit mode for the selected claw (shows edit form in main view instead of modal)
+export const isEditingClawAtom = atom<boolean>(false)
+
 // Login modal (shown when Claude Code auth fails)
 export const agentsLoginModalOpenAtom = atom<boolean>(false)
 

@@ -25,6 +25,7 @@ import {
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
 import { ClustersSidebarSection, selectedClustersCategoryAtom } from "../clusters"
+import { CcSettingsSidebarSection } from "../settings/ui/cc-settings-sidebar-section"
 import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../mcp/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
@@ -2429,6 +2430,9 @@ export function AgentsSidebar({
 
       {/* Clusters Section */}
       <ClustersSidebarSection />
+
+      {/* CC Settings Section */}
+      <CcSettingsSidebarSection />
 
       {/* Footer - Multi-select toolbar or normal footer */}
       <AnimatePresence mode="wait">

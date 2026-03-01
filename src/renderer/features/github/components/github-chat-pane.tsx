@@ -154,10 +154,59 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   // tRPC mutations and queries
   const createSessionMutation = trpc.github.createChatSession.useMutation()
   const generateMutation = trpc.analyzer.generateViaBackground.useMutation()
+  const updateDiagramMutation = trpc.analyzer.update.useMutation()
   const { data: existingDiagram, refetch: refetchDiagram } = trpc.analyzer.get.useQuery(
     { projectId, type: (selection as { analysisType: AnalysisType })?.analysisType || "codeflow" },
     { enabled: selection?.type === "visualize" && !!projectId }
   )
+
+  // Parse AI response for diagram updates and apply them
+  const applyDiagramUpdates = useCallback(async (content: string) => {
+    // Look for JSON code blocks with action: "update_diagram"
+    const jsonMatch = content.match(/```json\s*\n?(\{[\s\S]*?\})\n?```/)
+    if (!jsonMatch) return
+
+    try {
+      const data = JSON.parse(jsonMatch[1])
+      if (data.action !== "update_diagram" || !data.nodes || !data.edges) return
+
+      // Validate the update data
+      if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+        console.warn("[GitHubChatPane] Invalid diagram update data: nodes and edges must be arrays")
+        return
+      }
+
+      // Check if we have a valid diagram to update
+      if (!existingDiagram?.id) {
+        console.warn("[GitHubChatPane] No existing diagram to update")
+        return
+      }
+
+      // Apply the update
+      await updateDiagramMutation.mutateAsync({
+        id: existingDiagram.id,
+        nodes: data.nodes,
+        edges: data.edges,
+        summary: data.summary || existingDiagram.summary || undefined,
+      })
+
+      // Refetch to update the UI
+      await refetchDiagram()
+
+      // Add a system message about the update
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `✅ Diagram updated successfully! ${data.summary || ""}`,
+          timestamp: new Date(),
+        },
+      ])
+    } catch (err) {
+      console.error("[GitHubChatPane] Failed to parse or apply diagram update:", err)
+    }
+  }, [existingDiagram, updateDiagramMutation, refetchDiagram, setMessages])
 
   // Clear local streaming state when selection changes.
   // The DB session for the new context will be loaded via useContextualChat.
@@ -209,6 +258,10 @@ export const GitHubChatPane = memo(function GitHubChatPane({
                 timestamp: new Date(),
               },
             ])
+            // Check for diagram updates in visualize mode
+            if (selection?.type === "visualize") {
+              void applyDiagramUpdates(finalContent)
+            }
           }
           streamingTextRef.current = ""
           setStreamingContent("")
@@ -326,7 +379,15 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       case "issue":
         return `Help me plan the implementation of issue #${sel.issueNumber} in the repository at ${projectPath}.\n\nUse the Bash tool with \`gh issue view ${sel.issueNumber}\` to get the issue details.\n\nProvide:\n- Implementation approach\n- Files to modify\n- Step-by-step plan`
       case "visualize":
-        return `I'm looking at the ${ANALYSIS_LABELS[sel.analysisType]} diagram for this repository. Please analyze the diagram and help me understand it. You can also suggest modifications or improvements to the visualization.`
+        return `I'm viewing the ${ANALYSIS_LABELS[sel.analysisType]} diagram for this repository in the left pane.
+
+Please help me understand this diagram by:
+1. Explaining what the diagram represents at a high level
+2. Describing the key components (nodes) and their relationships (edges)
+3. Identifying any patterns, clusters, or architectural insights
+4. Pointing out any potential issues or areas for improvement
+
+You can also suggest modifications to the diagram if you'd like to reorganize it, add missing components, or improve the layout. When suggesting changes, please provide the complete updated diagram data in the JSON format specified in the diagram context.`
       default:
         return ""
     }
@@ -502,9 +563,10 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     // (Check if no session exists yet - UI messages may exist but no actual Claude conversation)
     if (selection?.type === "visualize" && !session && existingDiagram) {
       // Parse the diagram data
-      const nodes = existingDiagram.nodes ? JSON.parse(existingDiagram.nodes) : []
-      const edges = existingDiagram.edges ? JSON.parse(existingDiagram.edges) : []
+      const nodes: Array<{id: string; type?: string; position: {x: number; y: number}; data: Record<string, unknown>}> = existingDiagram.nodes ? JSON.parse(existingDiagram.nodes) : []
+      const edges: Array<{id: string; source: string; target: string; type?: string; label?: string; data?: Record<string, unknown>}> = existingDiagram.edges ? JSON.parse(existingDiagram.edges) : []
       const stats = existingDiagram.stats ? JSON.parse(existingDiagram.stats) : {}
+      const viewport = existingDiagram.viewport ? JSON.parse(existingDiagram.viewport) : null
 
       // Get the original prompt used to generate this diagram type
       const analysisType = selection.analysisType
@@ -512,35 +574,113 @@ export const GitHubChatPane = memo(function GitHubChatPane({
 
       const diagramContext = `
 
-=== DIAGRAM CONTEXT ===
+=== SYSTEM INSTRUCTIONS ===
 
-You previously generated a ${ANALYSIS_LABELS[analysisType]} visualization for this repository. The diagram is displayed in a React Flow canvas beside this chat.
+You are an AI assistant embedded in a split-view interface. A React Flow diagram is displayed in the left pane, and this chat is in the right pane. Your role is to help the user understand, analyze, and modify the diagram in real-time.
 
-ORIGINAL ANALYSIS PROMPT:
+=== DIAGRAM TYPE ===
+${ANALYSIS_LABELS[analysisType]} Analysis
+
+=== ORIGINAL ANALYSIS PROMPT ===
 ${originalPrompt}
 
-CURRENT DIAGRAM DATA:
-Nodes (${nodes.length}):
-${JSON.stringify(nodes.map((n: any) => ({ id: n.id, type: n.type, data: n.data })), null, 2)}
+=== CURRENT DIAGRAM DATA ===
 
-Edges (${edges.length}):
-${JSON.stringify(edges.map((e: any) => ({ id: e.id, source: e.source, target: e.target, label: e.label })), null, 2)}
+**Nodes (${nodes.length}):**
+${JSON.stringify(nodes.map((n) => ({
+          id: n.id,
+          type: n.type,
+          position: n.position,
+          data: n.data
+        })), null, 2)}
 
-Summary: ${existingDiagram.summary || "No summary available"}
+**Edges (${edges.length}):**
+${JSON.stringify(edges.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          type: e.type,
+          label: e.label,
+          data: e.data
+        })), null, 2)}
 
-Stats:
+**Viewport:**
+${viewport ? JSON.stringify(viewport, null, 2) : "Default (not saved)"}
+
+**Summary:**
+${existingDiagram.summary || "No summary available"}
+
+**Stats:**
 ${JSON.stringify(stats, null, 2)}
+
+=== HOW TO MODIFY THE DIAGRAM ===
+
+You can help the user modify the diagram by providing complete updated diagram data in your response. When the user requests changes:
+
+1. **Explain the changes** you plan to make
+2. **Provide the updated data** in this exact JSON format:
+
+\`\`\`json
+{
+  "action": "update_diagram",
+  "nodes": [
+    {
+      "id": "node-id",
+      "type": "default|input|output|process|decision|subprocess",
+      "position": { "x": 100, "y": 200 },
+      "data": {
+        "label": "Display Name",
+        "description": "Brief description",
+        "type": "component|service|module|file|function"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-id",
+      "source": "source-node-id",
+      "target": "target-node-id",
+      "type": "smoothstep|default|straight",
+      "label": "relationship name"
+    }
+  ],
+  "summary": "Description of changes made"
+}
+\`\`\`
+
+**CRITICAL RULES FOR UPDATES:**
+- Include ALL nodes that should remain (omitted nodes will be deleted)
+- Node IDs must be unique and match exactly in edges
+- Every edge's "source" and "target" MUST reference an existing node ID
+- Position coordinates should be in range 0-1000 for x and y
+- Use "smoothstep" edge type for best visual results
+- Maintain consistent flow direction (top-to-bottom or left-to-right)
+
+=== AVAILABLE NODE TYPES ===
+
+Visual node types (affect styling):
+- "input" / "start": Entry points (green, rounded)
+- "output" / "end": Exit points (green, rounded)
+- "default": Standard node (gray)
+- "process": Processing step (blue)
+- "decision": Decision point (amber/orange)
+- "data": Data store (purple)
+- "subprocess": Sub-process (orange with double border)
+
+Semantic types (in data.type field):
+- "service", "database", "frontend", "external", "layer"
+- "table", "file", "function", "class", "module"
 
 === END DIAGRAM CONTEXT ===
 
-The user is asking about this diagram. You can:
-1. Explain what the diagram shows
-2. Suggest improvements or additions
-3. Answer questions about specific nodes/edges
-4. Propose modifications to the React Flow code
-5. Generate updated diagram data if requested
+The user is now asking about this diagram. You can:
+1. Explain what the diagram shows and how components relate
+2. Suggest improvements or identify missing elements
+3. Answer specific questions about nodes or edges
+4. Generate complete updated diagram data when changes are requested
+5. Help troubleshoot issues with the visualization
 
-When suggesting changes, provide the complete updated nodes/edges JSON that could be used to update the diagram.`
+Be specific in your explanations and always reference node IDs when discussing particular elements.`
       prompt = prompt + diagramContext
     }
 
