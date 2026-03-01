@@ -18,6 +18,40 @@ import {
 // Types from tRPC - inferred from workflows router
 type WorkflowGraph = ReturnType<typeof trpc.workflows.getWorkflowGraph.useQuery>["data"]
 
+// Section color variants for alternating visual distinction
+type SectionColorVariant = "default" | "blue" | "green" | "purple" | "orange" | "cyan" | "pink"
+
+const SECTION_COLOR_CLASSES: Record<SectionColorVariant, { icon: string; text: string }> = {
+  default: {
+    icon: "text-muted-foreground",
+    text: "text-foreground",
+  },
+  blue: {
+    icon: "text-blue-600 dark:text-blue-400",
+    text: "text-blue-700 dark:text-blue-300",
+  },
+  green: {
+    icon: "text-green-600 dark:text-green-400",
+    text: "text-green-700 dark:text-green-300",
+  },
+  purple: {
+    icon: "text-purple-600 dark:text-purple-400",
+    text: "text-purple-700 dark:text-purple-300",
+  },
+  orange: {
+    icon: "text-orange-600 dark:text-orange-400",
+    text: "text-orange-700 dark:text-orange-300",
+  },
+  cyan: {
+    icon: "text-cyan-600 dark:text-cyan-400",
+    text: "text-cyan-700 dark:text-cyan-300",
+  },
+  pink: {
+    icon: "text-pink-600 dark:text-pink-400",
+    text: "text-pink-700 dark:text-pink-300",
+  },
+}
+
 interface TreeNodeProps {
   nodeKey: string
   isExpanded: boolean

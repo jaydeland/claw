@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useEffect, useState } from "react"
+import { createContext, memo, useCallback, useContext, useEffect, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   ChevronRight,
@@ -369,6 +369,8 @@ const RepoTreeItem = memo(function RepoTreeItem({
     node: TreeNode
     depth?: number
   }) {
+    const colorVariant = useSectionColor()
+    const colorClasses = SECTION_COLOR_CLASSES[colorVariant]
     const isFolderExpanded = expandedFolders.has(node.path)
     const isSelected = selection?.type === "code" && selection.path === node.path
     const hasChildren = node.children.length > 0
@@ -381,17 +383,16 @@ const RepoTreeItem = memo(function RepoTreeItem({
             onClick={() => onToggleFolder(node.path)}
             className={cn(
               "w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-sm",
-              "border border-border/30",
               "hover:bg-accent hover:text-accent-foreground"
             )}
           >
             {isFolderExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              <ChevronDown className={cn("h-3.5 w-3.5", colorClasses.icon)} />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              <ChevronRight className={cn("h-3.5 w-3.5", colorClasses.icon)} />
             )}
             <Folder className="h-4 w-4 text-yellow-500" />
-            <span className="truncate">{node.name}</span>
+            <span className={cn("truncate", colorClasses.text)}>{node.name}</span>
           </button>
           {isFolderExpanded && hasChildren && (
             <div>
@@ -417,14 +418,13 @@ const RepoTreeItem = memo(function RepoTreeItem({
         }
         style={{ paddingLeft: depth * 8 + 16 }}
         className={cn(
-          "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
-          "border",
+          "w-full flex items-center gap-2 py-1 rounded-md text-sm",
           "hover:bg-accent hover:text-accent-foreground",
-          isSelected ? "bg-accent border-primary/50" : "border-border/30"
+          isSelected ? "bg-accent" : ""
         )}
       >
-        <File className="h-4 w-4 text-muted-foreground" />
-        <span className="truncate">{node.name}</span>
+        <File className={cn("h-4 w-4", colorClasses.icon)} />
+        <span className={cn("truncate", colorClasses.text)}>{node.name}</span>
       </button>
     )
   }
@@ -473,44 +473,14 @@ const RepoTreeItem = memo(function RepoTreeItem({
             count={openPRs}
             isExpanded={expandedSections.has(sectionKey("prs"))}
             onToggle={() => onToggleSection(sectionKey("prs"))}
+            colorVariant="green"
           >
-            {prs.map((pr) => (
-              <button
-                key={pr.number}
-                type="button"
-                onClick={() =>
-                  onSelect({
-                    type: "pr",
-                    repoId: repo.id,
-                    repoName: repo.name,
-                    prNumber: pr.number,
-                  })
-                }
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
-                  "border",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  selection?.type === "pr" && selection.prNumber === pr.number
-                    ? "bg-accent border-primary/50"
-                    : "border-border/30"
-                )}
-              >
-                <GitPullRequest
-                  className={cn(
-                    "h-4 w-4",
-                    pr.state === "open" && "text-green-500",
-                    pr.state === "closed" && "text-red-500",
-                    pr.state === "merged" && "text-purple-500"
-                  )}
-                />
-                <span className="truncate">
-                  #{pr.number} {pr.title}
-                </span>
-              </button>
-            ))}
-            {prs.length === 0 && (
-              <span className="px-6 py-1 text-sm text-muted-foreground">No pull requests</span>
-            )}
+            <PRItems
+              prs={prs}
+              repo={repo}
+              selection={selection}
+              onSelect={onSelect}
+            />
           </SectionTreeItem>
 
           {/* Issues section */}
@@ -521,42 +491,14 @@ const RepoTreeItem = memo(function RepoTreeItem({
             count={openIssues}
             isExpanded={expandedSections.has(sectionKey("issues"))}
             onToggle={() => onToggleSection(sectionKey("issues"))}
+            colorVariant="purple"
           >
-            {issues.map((issue) => (
-              <button
-                key={issue.number}
-                type="button"
-                onClick={() =>
-                  onSelect({
-                    type: "issue",
-                    repoId: repo.id,
-                    repoName: repo.name,
-                    issueNumber: issue.number,
-                  })
-                }
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
-                  "border",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  selection?.type === "issue" && selection.issueNumber === issue.number
-                    ? "bg-accent border-primary/50"
-                    : "border-border/30"
-                )}
-              >
-                <CircleDot
-                  className={cn(
-                    "h-4 w-4",
-                    issue.state === "open" ? "text-green-500" : "text-gray-500"
-                  )}
-                />
-                <span className="truncate">
-                  #{issue.number} {issue.title}
-                </span>
-              </button>
-            ))}
-            {issues.length === 0 && (
-              <span className="px-6 py-1 text-sm text-muted-foreground">No issues</span>
-            )}
+            <IssueItems
+              issues={issues}
+              repo={repo}
+              selection={selection}
+              onSelect={onSelect}
+            />
           </SectionTreeItem>
 
           {/* Code section - shows files with expandable folders */}
@@ -566,6 +508,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
             icon={FileCode}
             isExpanded={expandedSections.has(sectionKey("code"))}
             onToggle={() => onToggleSection(sectionKey("code"))}
+            colorVariant="blue"
           >
             {files.length > 0 ? (
               <div>
@@ -574,7 +517,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
                 ))}
               </div>
             ) : (
-              <span className="px-6 py-1 text-sm text-muted-foreground">No files</span>
+              <span className="pl-[2ch] py-1 text-sm text-muted-foreground">No files</span>
             )}
           </SectionTreeItem>
 
@@ -585,39 +528,217 @@ const RepoTreeItem = memo(function RepoTreeItem({
             icon={GitBranch}
             isExpanded={expandedSections.has(sectionKey("visualize"))}
             onToggle={() => onToggleSection(sectionKey("visualize"))}
+            colorVariant="orange"
           >
-            {ANALYSIS_TYPES.map((type) => {
-              const Icon = analysisIcons[type]
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() =>
-                    onSelect({
-                      type: "visualize",
-                      repoId: repo.id,
-                      repoName: repo.name,
-                      analysisType: type,
-                    })
-                  }
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm",
-                    "border",
-                    "hover:bg-accent hover:text-accent-foreground",
-                    selection?.type === "visualize" && selection.analysisType === type
-                      ? "bg-accent border-primary/50"
-                      : "border-border/30"
-                  )}
-                >
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                  <span>{analysisLabels[type]}</span>
-                </button>
-              )
-            })}
+            <VisualizeItems
+              analysisTypes={ANALYSIS_TYPES}
+              analysisIcons={analysisIcons}
+              analysisLabels={analysisLabels}
+              repo={repo}
+              selection={selection}
+              onSelect={onSelect}
+            />
           </SectionTreeItem>
         </div>
       )}
     </div>
+  )
+})
+
+// Section color variants for alternating visual distinction
+type SectionColorVariant = "default" | "blue" | "green" | "purple" | "orange" | "cyan" | "pink"
+
+const SECTION_COLOR_CLASSES: Record<SectionColorVariant, { icon: string; text: string }> = {
+  default: {
+    icon: "text-muted-foreground",
+    text: "text-foreground",
+  },
+  blue: {
+    icon: "text-blue-600 dark:text-blue-400",
+    text: "text-blue-700 dark:text-blue-300",
+  },
+  green: {
+    icon: "text-green-600 dark:text-green-400",
+    text: "text-green-700 dark:text-green-300",
+  },
+  purple: {
+    icon: "text-purple-600 dark:text-purple-400",
+    text: "text-purple-700 dark:text-purple-300",
+  },
+  orange: {
+    icon: "text-orange-600 dark:text-orange-400",
+    text: "text-orange-700 dark:text-orange-300",
+  },
+  cyan: {
+    icon: "text-cyan-600 dark:text-cyan-400",
+    text: "text-cyan-700 dark:text-cyan-300",
+  },
+  pink: {
+    icon: "text-pink-600 dark:text-pink-400",
+    text: "text-pink-700 dark:text-pink-300",
+  },
+}
+
+// Context for passing color variant to child items
+const SectionColorContext = createContext<SectionColorVariant>("default")
+const useSectionColor = () => useContext(SectionColorContext)
+
+// PR items component - uses parent's color from context
+const PRItems = memo(function PRItems({
+  prs,
+  repo,
+  selection,
+  onSelect,
+}: {
+  prs: Array<{ number: number; title: string; state: string }>
+  repo: GitHubRepo
+  selection: GitHubSelection | null
+  onSelect: (selection: GitHubSelection) => void
+}) {
+  const colorVariant = useSectionColor()
+  const colorClasses = SECTION_COLOR_CLASSES[colorVariant]
+
+  if (prs.length === 0) {
+    return <span className="pl-[2ch] py-1 text-sm text-muted-foreground">No pull requests</span>
+  }
+
+  return (
+    <>
+      {prs.map((pr) => (
+        <button
+          key={pr.number}
+          type="button"
+          onClick={() =>
+            onSelect({
+              type: "pr",
+              repoId: repo.id,
+              repoName: repo.name,
+              prNumber: pr.number,
+            })
+          }
+          className={cn(
+            "w-full flex items-center gap-2 pl-[2ch] pr-2 py-1 rounded-md text-sm",
+            "hover:bg-accent hover:text-accent-foreground",
+            selection?.type === "pr" && selection.prNumber === pr.number
+              ? "bg-accent"
+              : ""
+          )}
+        >
+          <GitPullRequest
+            className={cn(
+              "h-4 w-4",
+              colorClasses.icon
+            )}
+          />
+          <span className={cn("truncate", colorClasses.text)}>
+            #{pr.number} {pr.title}
+          </span>
+        </button>
+      ))}
+    </>
+  )
+})
+
+// Issue items component - uses parent's color from context
+const IssueItems = memo(function IssueItems({
+  issues,
+  repo,
+  selection,
+  onSelect,
+}: {
+  issues: Array<{ number: number; title: string; state: string }>
+  repo: GitHubRepo
+  selection: GitHubSelection | null
+  onSelect: (selection: GitHubSelection) => void
+}) {
+  const colorVariant = useSectionColor()
+  const colorClasses = SECTION_COLOR_CLASSES[colorVariant]
+
+  if (issues.length === 0) {
+    return <span className="pl-[2ch] py-1 text-sm text-muted-foreground">No issues</span>
+  }
+
+  return (
+    <>
+      {issues.map((issue) => (
+        <button
+          key={issue.number}
+          type="button"
+          onClick={() =>
+            onSelect({
+              type: "issue",
+              repoId: repo.id,
+              repoName: repo.name,
+              issueNumber: issue.number,
+            })
+          }
+          className={cn(
+            "w-full flex items-center gap-2 pl-[2ch] pr-2 py-1 rounded-md text-sm",
+            "hover:bg-accent hover:text-accent-foreground",
+            selection?.type === "issue" && selection.issueNumber === issue.number
+              ? "bg-accent"
+              : ""
+          )}
+        >
+          <CircleDot className={cn("h-4 w-4", colorClasses.icon)} />
+          <span className={cn("truncate", colorClasses.text)}>
+            #{issue.number} {issue.title}
+          </span>
+        </button>
+      ))}
+    </>
+  )
+})
+
+// Visualize items component - uses parent's color from context
+const VisualizeItems = memo(function VisualizeItems({
+  analysisTypes,
+  analysisIcons,
+  analysisLabels,
+  repo,
+  selection,
+  onSelect,
+}: {
+  analysisTypes: AnalysisType[]
+  analysisIcons: Record<AnalysisType, React.ComponentType<{ className?: string }>>
+  analysisLabels: Record<AnalysisType, string>
+  repo: GitHubRepo
+  selection: GitHubSelection | null
+  onSelect: (selection: GitHubSelection) => void
+}) {
+  const colorVariant = useSectionColor()
+  const colorClasses = SECTION_COLOR_CLASSES[colorVariant]
+
+  return (
+    <>
+      {analysisTypes.map((type) => {
+        const Icon = analysisIcons[type]
+        return (
+          <button
+            key={type}
+            type="button"
+            onClick={() =>
+              onSelect({
+                type: "visualize",
+                repoId: repo.id,
+                repoName: repo.name,
+                analysisType: type,
+              })
+            }
+            className={cn(
+              "w-full flex items-center gap-2 pl-[2ch] pr-2 py-1 rounded-md text-sm",
+              "hover:bg-accent hover:text-accent-foreground",
+              selection?.type === "visualize" && selection.analysisType === type
+                ? "bg-accent"
+                : ""
+            )}
+          >
+            <Icon className={cn("h-4 w-4", colorClasses.icon)} />
+            <span className={colorClasses.text}>{analysisLabels[type]}</span>
+          </button>
+        )
+      })}
+    </>
   )
 })
 
@@ -629,6 +750,8 @@ interface SectionTreeItemProps {
   isExpanded: boolean
   onToggle: () => void
   children: React.ReactNode
+  /** Color variant for the section - affects icon and label colors */
+  colorVariant?: SectionColorVariant
 }
 
 const SectionTreeItem = memo(function SectionTreeItem({
@@ -639,33 +762,44 @@ const SectionTreeItem = memo(function SectionTreeItem({
   isExpanded,
   onToggle,
   children,
+  colorVariant = "default",
 }: SectionTreeItemProps) {
+  const colorClasses = SECTION_COLOR_CLASSES[colorVariant]
+
   return (
-    <div>
+    <div className={cn(
+      "rounded-md border border-border/30",
+      isExpanded && "bg-muted/20"
+    )}>
       <button
         type="button"
         onClick={onToggle}
         className={cn(
           "w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-sm",
-          "border border-border/30",
-          "hover:bg-accent hover:text-accent-foreground",
+          "hover:bg-accent",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
         )}
       >
         {isExpanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          <ChevronDown className={cn("h-4 w-4", colorClasses.icon)} />
         ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <ChevronRight className={cn("h-4 w-4", colorClasses.icon)} />
         )}
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium">{label}</span>
+        <Icon className={cn("h-4 w-4", colorClasses.icon)} />
+        <span className={cn("font-medium", colorClasses.text)}>{label}</span>
         {count !== undefined && count > 0 && (
           <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
             {count}
           </span>
         )}
       </button>
-      {isExpanded && <div className="ml-1 mt-0.5 space-y-0.5">{children}</div>}
+      {isExpanded && (
+        <SectionColorContext.Provider value={colorVariant}>
+          <div className="px-2 pb-1 space-y-0.5">
+            {children}
+          </div>
+        </SectionColorContext.Provider>
+      )}
     </div>
   )
 })
