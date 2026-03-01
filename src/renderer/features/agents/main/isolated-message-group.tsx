@@ -108,13 +108,7 @@ export const IsolatedMessageGroup = memo(function IsolatedMessageGroup({
     [rawTextContent]
   )
 
-  // NOW we can do the early return check - after all hooks have been called
-  const hasMsg = !!userMsg
-  const msgRole = userMsg?.role || 'undefined'
-  console.log(`[IsolatedMessageGroup] userMsgId="${userMsgId}", hasUserMsg=${hasMsg}, role=${msgRole}, assistantIds=${assistantIds.length}`)
-
   if (!userMsg) {
-    console.error(`[IsolatedMessageGroup] NULL userMsg for "${userMsgId}" - EARLY RETURN`)
     return null
   }
 

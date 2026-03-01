@@ -10,7 +10,7 @@ import { spawn, ChildProcess } from "node:child_process"
 import { existsSync, statSync, unlinkSync } from "fs"
 import { join } from "path"
 import { eq, desc } from "drizzle-orm"
-import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, type HeadlessClaw, type ClawExecution } from "../db"
+import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, chats, subChats, projects, type HeadlessClaw, type ClawExecution } from "../db"
 import { createId } from "../db/utils"
 import { getSlackTrigger } from "./slack-trigger"
 import { getWhatsAppTrigger } from "./whatsapp-trigger"
@@ -402,12 +402,35 @@ class ClawDaemon {
       throw new Error(`Claw is disabled: ${claw.name}`)
     }
 
+    // Create or get the Claw Chat (parent chat for this claw)
+    const clawChat = await this.getOrCreateClawChat(claw)
+
     // Create execution record
     const executionId = createId()
+
+    // Create subChat for this execution
+    const subChatName = this.generateSubChatName(claw, context)
+    const subChatId = createId()
+
+    // Initial messages array with system context
+    const initialMessages = this.buildInitialMessages(claw, context)
+
+    db.insert(subChats)
+      .values({
+        id: subChatId,
+        chatId: clawChat.id,
+        name: subChatName,
+        messages: JSON.stringify(initialMessages),
+        mode: "agent",
+      })
+      .run()
+
+    // Create execution record with subChat link
     db.insert(clawExecutions)
       .values({
         id: executionId,
         clawId: claw.id,
+        subChatId: subChatId,
         status: "running",
         logs: `Starting execution at ${new Date().toISOString()}\n`,
         startedAt: new Date(),
@@ -443,16 +466,134 @@ class ClawDaemon {
       }
     }
 
-    // Execute using Claude SDK
-    this.executeClaudeSDK(claw, executionId, instruction)
+    // Execute using Claude SDK with subChat tracking
+    this.executeClaudeSDK(claw, executionId, subChatId, instruction)
 
     return executionId
   }
 
   /**
+   * Get or create a Claw Chat for storing execution subChats
+   */
+  private async getOrCreateClawChat(claw: HeadlessClaw): Promise<typeof chats.$inferSelect> {
+    const db = getDatabase()
+
+    // Look for existing claw chat by name pattern
+    const existingChat = db
+      .select()
+      .from(chats)
+      .where(eq(chats.name, `Claw: ${claw.name}`))
+      .get()
+
+    if (existingChat) {
+      return existingChat
+    }
+
+    // Need to find or create a project for claw chats
+    let project = db.select().from(projects).where(eq(projects.name, "Claw Executions")).get()
+
+    if (!project) {
+      const projectId = createId()
+      db.insert(projects)
+        .values({
+          id: projectId,
+          name: "Claw Executions",
+          path: claw.targetWorktree,
+        })
+        .run()
+      project = { id: projectId, name: "Claw Executions", path: claw.targetWorktree, createdAt: new Date(), updatedAt: new Date(), startCommands: "[]" } as typeof projects.$inferSelect
+    }
+
+    // Create the chat
+    const chatId = createId()
+    db.insert(chats)
+      .values({
+        id: chatId,
+        name: `Claw: ${claw.name}`,
+        projectId: project.id,
+        sourceView: "commands",
+        sourceContext: JSON.stringify({ clawId: claw.id }),
+      })
+      .run()
+
+    return db.select().from(chats).where(eq(chats.id, chatId)).get()!
+  }
+
+  /**
+   * Generate a name for the subChat based on trigger context
+   */
+  private generateSubChatName(claw: HeadlessClaw, context?: any): string {
+    const timestamp = new Date().toLocaleTimeString()
+
+    if (context?.triggerSource === "whatsapp" && context?.whatsappSender) {
+      return `${timestamp} - WhatsApp from ${context.whatsappSender}`
+    }
+
+    if (context?.triggerSource === "slack" && context?.slackUser) {
+      return `${timestamp} - Slack from ${context.slackUser}`
+    }
+
+    if (context?.issueNumber) {
+      return `${timestamp} - Issue #${context.issueNumber}`
+    }
+
+    return `${timestamp} - ${claw.triggerType}`
+  }
+
+  /**
+   * Build initial messages with context
+   */
+  private buildInitialMessages(claw: HeadlessClaw, context?: any): any[] {
+    const messages = []
+
+    // System/context message
+    const contextParts = [`Claw "${claw.name}" triggered via ${claw.triggerType}`]
+
+    if (context?.triggerSource === "whatsapp") {
+      contextParts.push(`From: ${context.whatsappSender} (${context.whatsappFrom})`)
+      if (context.originalMessage) {
+        contextParts.push(`Message: "${context.originalMessage}"`)
+      }
+    }
+
+    if (context?.triggerSource === "slack") {
+      contextParts.push(`From: ${context.slackUser} in ${context.slackChannel}`)
+      if (context.originalMessage) {
+        contextParts.push(`Message: "${context.originalMessage}"`)
+      }
+    }
+
+    if (context?.issueNumber) {
+      contextParts.push(`GitHub Issue #${context.issueNumber}: ${context.issueTitle || "N/A"}`)
+    }
+
+    messages.push({
+      id: createId(),
+      role: "user",
+      content: [{ type: "text", text: contextParts.join("\n") }],
+      timestamp: Date.now(),
+    })
+
+    // The instruction as user message
+    messages.push({
+      id: createId(),
+      role: "user",
+      content: [{ type: "text", text: claw.instruction }],
+      timestamp: Date.now(),
+    })
+
+    return messages
+  }
+
+  /**
    * Execute Claude Code using the SDK
    */
-  private async executeClaudeSDK(claw: HeadlessClaw, executionId: string, instruction: string): Promise<void> {
+  private async executeClaudeSDK(
+    claw: HeadlessClaw,
+    executionId: string,
+    subChatId: string,
+    instruction: string
+  ): Promise<void> {
     const db = getDatabase()
     let logs = ""
 
@@ -518,12 +659,13 @@ class ClawDaemon {
           allowDangerouslySkipPermissions: true,
           allowedDirectories: allowedDirs,
           pathToClaudeCodeExecutable: claudeBinaryPath,
-          persistSession: false,
+          persistSession: true,
         } as any,
       })
 
       let messageCount = 0
       let hasError = false
+      const executionMessages: any[] = []
 
       for await (const msg of stream) {
         const msgAny = msg as any
@@ -548,7 +690,51 @@ class ClawDaemon {
             console.log(`[ClawDaemon] SDK message ${messageCount}: ${text.substring(0, 200)}`)
             logs += text + "\n"
             this.updateExecutionLogs(executionId, logs)
+
+            // Store message in subChat
+            const message = {
+              id: createId(),
+              role: "assistant",
+              content: [{ type: "text", text }],
+              timestamp: Date.now(),
+            }
+            executionMessages.push(message)
+            await this.appendMessageToSubChat(subChatId, message)
           }
+        }
+
+        // Check for tool calls and store them as messages
+        if (msgAny.type === "tool_call") {
+          const toolMessage = {
+            id: createId(),
+            role: "assistant",
+            content: [{
+              type: "tool_call",
+              toolCallId: msgAny.tool_call?.id,
+              name: msgAny.tool_call?.name,
+              input: msgAny.tool_call?.input,
+            }],
+            timestamp: Date.now(),
+          }
+          executionMessages.push(toolMessage)
+          await this.appendMessageToSubChat(subChatId, toolMessage)
+        }
+
+        // Check for tool results
+        if (msgAny.type === "tool_result") {
+          const resultMessage = {
+            id: createId(),
+            role: "user",
+            content: [{
+              type: "tool_result",
+              toolCallId: msgAny.tool_result?.toolCallId,
+              output: msgAny.tool_result?.output,
+              isError: msgAny.tool_result?.isError,
+            }],
+            timestamp: Date.now(),
+          }
+          executionMessages.push(resultMessage)
+          await this.appendMessageToSubChat(subChatId, resultMessage)
         }
 
         // Check for errors
@@ -564,6 +750,16 @@ class ClawDaemon {
         // Break on result
         if (msgAny.type === "result") {
           console.log(`[ClawDaemon] SDK stream completed after ${messageCount} messages`)
+
+          // Extract session ID from the result if available
+          const sessionId = msgAny.sessionId || msgAny.session?.id
+          if (sessionId) {
+            db.update(subChats)
+              .set({ sessionId })
+              .where(eq(subChats.id, subChatId))
+              .run()
+          }
+
           break
         }
       }
@@ -592,6 +788,15 @@ class ClawDaemon {
       console.error(`[ClawDaemon] SDK execution failed:`, error)
       logs += `\nExecution error: ${error.message || String(error)}`
 
+      // Store error message in subChat
+      const errorMessage = {
+        id: createId(),
+        role: "system",
+        content: [{ type: "text", text: `Execution error: ${error.message || String(error)}` }],
+        timestamp: Date.now(),
+      }
+      await this.appendMessageToSubChat(subChatId, errorMessage)
+
       db.update(clawExecutions)
         .set({
           status: "failed",
@@ -616,6 +821,31 @@ class ClawDaemon {
   private updateExecutionLogs(executionId: string, logs: string): void {
     const db = getDatabase()
     db.update(clawExecutions).set({ logs }).where(eq(clawExecutions.id, executionId)).run()
+  }
+
+  /**
+   * Append a message to the subChat
+   */
+  private async appendMessageToSubChat(subChatId: string, message: any): Promise<void> {
+    const db = getDatabase()
+
+    const subChat = db.select().from(subChats).where(eq(subChats.id, subChatId)).get()
+    if (!subChat) return
+
+    try {
+      const messages = JSON.parse(subChat.messages || "[]")
+      messages.push(message)
+
+      db.update(subChats)
+        .set({
+          messages: JSON.stringify(messages),
+          updatedAt: new Date(),
+        })
+        .where(eq(subChats.id, subChatId))
+        .run()
+    } catch (e) {
+      console.error("[ClawDaemon] Failed to append message to subChat:", e)
+    }
   }
 
   /**

@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState, useEffect, useRef } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Brain } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
@@ -38,16 +38,15 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
   const isStreaming = isPending && isActivelyStreaming
   const isInterrupted = isPending && !isActivelyStreaming && chatStatus !== undefined
 
-  // Default: expanded while streaming, collapsed when done
-  const [isExpanded, setIsExpanded] = useState(isStreaming)
+  // Default: expanded by default (was: only while streaming)
+  const [isExpanded, setIsExpanded] = useState(true)
   const wasStreamingRef = useRef(isStreaming)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Auto-collapse when streaming ends (transition from true -> false)
+  // Auto-collapse when streaming ends (transition from true -> false) - disabled to keep expanded
+  // Note: User can still manually collapse
   useEffect(() => {
-    if (wasStreamingRef.current && !isStreaming) {
-      setIsExpanded(false)
-    }
+    // Intentionally not auto-collapsing anymore - content stays expanded by default
     wasStreamingRef.current = isStreaming
   }, [isStreaming])
 
@@ -70,38 +69,45 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
   }
 
   return (
-    <div>
-      {/* Header - clickable to toggle, same as Exploring */}
+    <div className="rounded-lg border border-border/50 bg-accent/30 overflow-hidden my-1.5">
+      {/* Header - clickable to toggle, with themed background */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="group flex items-start gap-1.5 py-0.5 px-2 cursor-pointer"
+        className="group flex items-center justify-between py-1.5 px-3 cursor-pointer hover:bg-accent/50 transition-colors duration-150 border-b border-border/30"
       >
-        <div className="flex-1 min-w-0 flex items-center gap-1">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* Icon with theme-based color */}
+          <Brain className={cn(
+            "w-3.5 h-3.5 flex-shrink-0 transition-colors duration-200",
+            isStreaming ? "text-primary animate-pulse" : "text-primary/70"
+          )} />
           <div className="text-xs flex items-center gap-1.5 min-w-0">
-            <span className="font-medium whitespace-nowrap flex-shrink-0 text-muted-foreground">
+            <span className={cn(
+              "font-medium whitespace-nowrap flex-shrink-0",
+              isStreaming ? "text-primary" : "text-foreground"
+            )}>
               {isStreaming ? "Thinking" : "Thought"}
             </span>
             {/* Preview text when collapsed */}
             {!isExpanded && previewText && (
-              <span className="text-muted-foreground/60 truncate">
+              <span className="text-muted-foreground/70 truncate">
                 {previewText}...
               </span>
             )}
-            {/* Chevron - rotates when expanded, visible on hover when collapsed */}
-            <ChevronRight
-              className={cn(
-                "w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 ease-out flex-shrink-0",
-                isExpanded && "rotate-90",
-                !isExpanded && "opacity-0 group-hover:opacity-100",
-              )}
-            />
           </div>
         </div>
+        {/* Chevron - rotates when expanded */}
+        <ChevronRight
+          className={cn(
+            "w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 ease-out flex-shrink-0",
+            isExpanded && "rotate-90",
+          )}
+        />
       </div>
 
       {/* Thinking content - only show when expanded */}
       {isExpanded && thinkingText && (
-        <div className="relative">
+        <div className="relative bg-card/30">
           {/* Top gradient fade when streaming and has lots of content */}
           {isStreaming && thinkingText.length > SCROLL_THRESHOLD && (
             <div className="absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-background/70 to-transparent z-10 pointer-events-none" />
@@ -111,21 +117,21 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
           <div
             ref={scrollRef}
             className={cn(
-              "px-2",
+              "px-3 py-2",
               isStreaming &&
                 thinkingText.length > SCROLL_THRESHOLD &&
                 "overflow-y-auto scrollbar-none max-h-24",
             )}
           >
-            {/* Markdown content */}
+            {/* Markdown content with subtle theme integration */}
             <ChatMarkdownRenderer
               content={thinkingText}
               size="sm"
-              className="text-muted-foreground"
+              className="text-foreground/80"
             />
             {/* Blinking cursor when streaming */}
             {isStreaming && (
-              <span className="inline-block w-1 h-3 bg-muted-foreground/50 ml-0.5 animate-pulse" />
+              <span className="inline-block w-1 h-3 bg-primary/50 ml-0.5 animate-pulse" />
             )}
           </div>
         </div>

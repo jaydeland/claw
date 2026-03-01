@@ -1,0 +1,168 @@
+flowchart TB
+    subgraph Source["📁 Source Code"]
+        direction TB
+        SRC_MAIN["src/main/<br/>TypeScript"]
+        SRC_PRELOAD["src/preload/<br/>TypeScript"]
+        SRC_RENDERER["src/renderer/<br/>React + TSX"]
+        RESOURCES["resources/<br/>Binaries & Assets"]
+    end
+
+    subgraph Config["⚙️ Configuration"]
+        direction TB
+        VITE_CONFIG["electron.vite.config.ts"]
+        PACKAGE["package.json"]
+        TSCONFIG["tsconfig.json"]
+        TAILWIND["tailwind.config.ts"]
+        DRIZZLE["drizzle.config.ts"]
+    end
+
+    subgraph ElectronVite["🔧 Electron-Vite Build"]
+        direction TB
+        subgraph MainBuild["Main Process Build"]
+            M_PLUGIN["externalizeDepsPlugin"]
+            M_ROLLUP["Rollup (CJS)"]
+            M_OUT["out/main/index.js"]
+        end
+
+        subgraph PreloadBuild["Preload Build"]
+            P_PLUGIN["externalizeDepsPlugin"]
+            P_ROLLUP["Rollup (CJS)"]
+            P_OUT["out/preload/index.js"]
+        end
+
+        subgraph RendererBuild["Renderer Build"]
+            R_VITE["Vite Dev Server<br/>127.0.0.1:5174"]
+            R_REACT["@vitejs/plugin-react"]
+            R_TAILWIND["PostCSS + Tailwind"]
+            R_OUT["out/renderer/"]
+        end
+    end
+
+    subgraph NativeModules["🔌 Native Modules"]
+        direction TB
+        BETTER_SQLITE["better-sqlite3<br/>(SQLite binding)"]
+        NODE_PTY["node-pty<br/>(Pseudo-terminal)"]
+        ESM_MODULES["ESM-only Modules<br/>↳ @anthropic-ai/claude-agent-sdk<br/>↳ @whiskeysockets/baileys"]
+    end
+
+    subgraph ExternalDeps["📦 External Dependencies"]
+        direction TB
+        ELECTRON["electron<br/>(framework)"]
+        REACT["react 19<br/>(UI framework)"]
+        TRPC["tRPC + trpc-electron<br/>(type-safe IPC)"]
+        DRIZZLE_ORM["drizzle-orm<br/>(database ORM)"]
+    end
+
+    subgraph Outputs["📤 Build Outputs"]
+        direction TB
+        OUT_MAIN["out/main/<br/>Node.js bundle"]
+        OUT_PRELOAD["out/preload/<br/>Bridge bundle"]
+        OUT_RENDERER["out/renderer/<br/>Web bundle"]
+    end
+
+    subgraph Packager["📦 Electron Builder"]
+        direction TB
+        ASAR["ASAR Archive<br/>(app.asar)"]
+        EXTRA_RES["Extra Resources<br/>↳ migrations/<br/>↳ bin/${platform}-${arch}/<br/>↳ gsd/<br/>↳ agents/swarm"]
+        UNPACK["asarUnpack<br/>↳ better-sqlite3<br/>↳ node-pty<br/>↳ claude-agent-sdk"]
+    end
+
+    subgraph Platforms["🎯 Platform Targets"]
+        direction TB
+        MAC["macOS<br/>DMG + ZIP<br/>arm64 + x64"]
+        WIN["Windows<br/>NSIS + Portable"]
+        LINUX["Linux<br/>AppImage + DEB"]
+    end
+
+    subgraph Scripts["📝 NPM Scripts"]
+        direction TB
+        DEV["bun run dev<br/>Development mode"]
+        BUILD["bun run build<br/>Compile all"]
+        PACKAGE_SCRIPT["bun run package<br/>Package current platform"]
+        REBUILD["bun rebuild<br/>Rebuild native modules"]
+    end
+
+    %% Source to Config connections
+    SRC_MAIN -.->|configures| VITE_CONFIG
+    SRC_RENDERER -.->|configures| TAILWIND
+
+    %% Config to ElectronVite connections
+    VITE_CONFIG -->|main config| MainBuild
+    VITE_CONFIG -->|preload config| PreloadBuild
+    VITE_CONFIG -->|renderer config| RendererBuild
+
+    %% Source to Build connections
+    SRC_MAIN -->|input| M_ROLLUP
+    SRC_PRELOAD -->|input| P_ROLLUP
+    SRC_RENDERER -->|input| R_VITE
+
+    %% Plugins
+    M_PLUGIN -->|exclude bundling| M_ROLLUP
+    P_PLUGIN -->|exclude bundling| P_ROLLUP
+    R_REACT -->|transform| R_VITE
+    R_TAILWIND -->|process CSS| R_VITE
+
+    %% External deps connections
+    ELECTRON -.->|external| M_ROLLUP
+    ELECTRON -.->|external| P_ROLLUP
+    TRPC -.->|bundled| M_ROLLUP
+    DRIZZLE_ORM -.->|bundled| M_ROLLUP
+
+    %% Native modules connections
+    BETTER_SQLITE -.->|external| M_ROLLUP
+    NODE_PTY -.->|external| M_ROLLUP
+    ESM_MODULES -.->|dynamic import| M_ROLLUP
+
+    %% Build to outputs
+    M_ROLLUP -->|generates| OUT_MAIN
+    P_ROLLUP -->|generates| OUT_PRELOAD
+    R_VITE -->|generates| OUT_RENDERER
+
+    %% Outputs to Packager
+    OUT_MAIN -->|included| ASAR
+    OUT_PRELOAD -->|included| ASAR
+    OUT_RENDERER -->|included| ASAR
+    RESOURCES -->|copied| EXTRA_RES
+
+    %% Native modules to unpack
+    BETTER_SQLITE -->|asarUnpack| UNPACK
+    NODE_PTY -->|asarUnpack| UNPACK
+    ESM_MODULES -->|asarUnpack| UNPACK
+
+    %% Packager to Platforms
+    ASAR -->|packaged into| MAC
+    EXTRA_RES -->|packaged into| MAC
+    UNPACK -->|extracted alongside| MAC
+    ASAR -->|packaged into| WIN
+    EXTRA_RES -->|packaged into| WIN
+    UNPACK -->|extracted alongside| WIN
+    ASAR -->|packaged into| LINUX
+    EXTRA_RES -->|packaged into| LINUX
+    UNPACK -->|extracted alongside| LINUX
+
+    %% Scripts to build process
+    DEV -->|starts| ElectronVite
+    BUILD -->|triggers| ElectronVite
+    PACKAGE_SCRIPT -->|triggers| Packager
+    REBUILD -->|compiles| NativeModules
+
+    %% Styling
+    classDef source fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef config fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef build fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef native fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef external fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef output fill:#e0f7fa,stroke:#00838f,stroke-width:2px
+    classDef package fill:#fff8e1,stroke:#f9a825,stroke-width:2px
+    classDef platform fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px
+    classDef script fill:#fbe9e7,stroke:#d84315,stroke-width:2px
+
+    class SRC_MAIN,SRC_PRELOAD,SRC_RENDERER,RESOURCES source
+    class VITE_CONFIG,PACKAGE,TSCONFIG,TAILWIND,DRIZZLE config
+    class M_PLUGIN,M_ROLLUP,P_PLUGIN,P_ROLLUP,R_VITE,R_REACT,R_TAILWIND,MainBuild,PreloadBuild,RendererBuild build
+    class BETTER_SQLITE,NODE_PTY,ESM_MODULES native
+    class ELECTRON,REACT,TRPC,DRIZZLE_ORM external
+    class OUT_MAIN,OUT_PRELOAD,OUT_RENDERER output
+    class ASAR,EXTRA_RES,UNPACK,Packager package
+    class MAC,WIN,LINUX platform
+    class DEV,BUILD,PACKAGE_SCRIPT,REBUILD script

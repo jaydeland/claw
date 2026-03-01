@@ -3562,10 +3562,7 @@ const ChatViewInner = memo(function ChatViewInner({
   // Only the active tab should update these global atoms.
   const syncMessages = useSetAtom(syncMessagesWithStatusAtom)
   useLayoutEffect(() => {
-    console.log('[syncMessages] useLayoutEffect triggered:', `isActive=${isActive}, messagesLength=${messages.length}, status=${status}, subChatId=${subChatId}`)
-    // Skip syncing for inactive tabs - they shouldn't update global atoms
     if (!isActive) return
-    console.log('[syncMessages] Syncing messages to Jotai atoms')
     syncMessages({ messages, status, subChatId })
   }, [messages, status, subChatId, syncMessages, isActive])
 

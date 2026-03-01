@@ -1344,6 +1344,25 @@ export const claudeRouter = router({
                       return {}
                     }],
                   }],
+                  // Worktree lifecycle hooks - SDK notifies us when it creates/removes worktrees
+                  WorktreeCreate: [{
+                    hooks: [async (input: any) => {
+                      const { name, cwd, session_id } = input
+                      console.log(`[CLAUDE] WorktreeCreate: ${name} in session ${session_id}`)
+                      // The SDK is creating a worktree - we should verify it exists or create it
+                      // Return {} to allow the SDK to proceed with its own worktree creation
+                      return {}
+                    }],
+                  }],
+                  WorktreeRemove: [{
+                    hooks: [async (input: any) => {
+                      const { worktree_path, session_id } = input
+                      console.log(`[CLAUDE] WorktreeRemove: ${worktree_path} in session ${session_id}`)
+                      // The SDK is removing a worktree - we can clean up any associated resources
+                      // Return {} to allow the SDK to proceed with its own worktree removal
+                      return {}
+                    }],
+                  }],
                 },
               },
             }

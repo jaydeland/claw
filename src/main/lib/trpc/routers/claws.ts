@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, headlessClaws, clawExecutions, mcpToolCache } from "../../db"
+import { getDatabase, headlessClaws, clawExecutions, subChats, mcpToolCache } from "../../db"
 import { eq, desc } from "drizzle-orm"
 import { createId } from "../../db/utils"
 import { clawDaemon } from "../../claws"
@@ -249,18 +249,45 @@ export const clawsRouter = router({
     .query(async ({ input }) => {
       const db = getDatabase()
       const executions = db
-        .select()
+        .select({
+          id: clawExecutions.id,
+          clawId: clawExecutions.clawId,
+          subChatId: clawExecutions.subChatId,
+          status: clawExecutions.status,
+          logs: clawExecutions.logs,
+          exitCode: clawExecutions.exitCode,
+          startedAt: clawExecutions.startedAt,
+          completedAt: clawExecutions.completedAt,
+        })
         .from(clawExecutions)
         .where(eq(clawExecutions.clawId, input.clawId))
         .orderBy(desc(clawExecutions.startedAt))
         .limit(input.limit)
         .all()
 
-      return { success: true, executions }
+      // Fetch subChat names for executions that have them
+      const executionsWithNames = await Promise.all(
+        executions.map(async (execution) => {
+          if (!execution.subChatId) return execution
+
+          const subChat = db
+            .select({ name: subChats.name })
+            .from(subChats)
+            .where(eq(subChats.id, execution.subChatId))
+            .get()
+
+          return {
+            ...execution,
+            subChatName: subChat?.name,
+          }
+        })
+      )
+
+      return { success: true, executions: executionsWithNames }
     }),
 
   /**
-   * Get a single execution by ID
+   * Get a single execution by ID with subChat details
    */
   getExecution: publicProcedure
     .input(z.object({ id: z.string() }))
@@ -276,7 +303,70 @@ export const clawsRouter = router({
         return { success: false, error: "Execution not found" }
       }
 
-      return { success: true, execution }
+      let subChatName = null
+      if (execution.subChatId) {
+        const subChat = db
+          .select({ name: subChats.name })
+          .from(subChats)
+          .where(eq(subChats.id, execution.subChatId))
+          .get()
+        subChatName = subChat?.name
+      }
+
+      return {
+        success: true,
+        execution: {
+          ...execution,
+          subChatName,
+        },
+      }
+    }),
+
+  /**
+   * Continue execution in main chat
+   */
+  continueInChat: publicProcedure
+    .input(z.object({ executionId: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+
+      const execution = db
+        .select()
+        .from(clawExecutions)
+        .where(eq(clawExecutions.id, input.executionId))
+        .get()
+
+      if (!execution?.subChatId) {
+        throw new Error("Execution has no associated subChat")
+      }
+
+      const subChat = db
+        .select()
+        .from(subChats)
+        .where(eq(subChats.id, execution.subChatId))
+        .get()
+
+      if (!subChat) {
+        throw new Error("SubChat not found")
+      }
+
+      // Create a new subChat in the same chat with the existing messages
+      const newSubChatId = createId()
+      db.insert(subChats)
+        .values({
+          id: newSubChatId,
+          chatId: subChat.chatId,
+          name: `Continued: ${subChat.name}`,
+          messages: subChat.messages,
+          sessionId: subChat.sessionId,
+          mode: "agent",
+        })
+        .run()
+
+      return {
+        chatId: subChat.chatId,
+        subChatId: newSubChatId,
+      }
     }),
 
   /**

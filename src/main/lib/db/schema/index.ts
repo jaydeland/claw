@@ -417,6 +417,7 @@ export const clawExecutions = sqliteTable("claw_executions", {
   clawId: text("claw_id")
     .notNull()
     .references(() => headlessClaws.id, { onDelete: "cascade" }),
+  subChatId: text("sub_chat_id").references(() => subChats.id), // Link to subChat for chat view
   status: text("status", { enum: ["running", "success", "failed"] }).notNull(),
   logs: text("logs").notNull().default(""), // Standard output/error buffer
   exitCode: integer("exit_code"), // Process exit code (null if still running)
@@ -426,12 +427,17 @@ export const clawExecutions = sqliteTable("claw_executions", {
   clawIdIdx: index("claw_executions_claw_id_idx").on(table.clawId),
   statusIdx: index("claw_executions_status_idx").on(table.status),
   startedAtIdx: index("claw_executions_started_at_idx").on(table.startedAt),
+  subChatIdIdx: index("claw_executions_sub_chat_id_idx").on(table.subChatId),
 }))
 
 export const clawExecutionsRelations = relations(clawExecutions, ({ one }) => ({
   claw: one(headlessClaws, {
     fields: [clawExecutions.clawId],
     references: [headlessClaws.id],
+  }),
+  subChat: one(subChats, {
+    fields: [clawExecutions.subChatId],
+    references: [subChats.id],
   }),
 }))
 
