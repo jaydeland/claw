@@ -20,6 +20,7 @@ import {
   githubChatContextAtom,
   githubChatLoadingAtom,
   githubStartChatAtom,
+  githubDiagramDataAtom,
   type GitHubSelection,
   type GitHubChatMessage,
   type AnalysisType,
@@ -147,6 +148,9 @@ export const GitHubChatPane = memo(function GitHubChatPane({
 
   // Track analysis generation state
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState<string | null>(null)
+
+  // Get current diagram data for visualize mode system instructions
+  const diagramData = useAtomValue(githubDiagramDataAtom)
 
   // Skip clearing on first mount so restored session/messages survive a reload
   const isFirstMount = useRef(true)
@@ -382,6 +386,8 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       case "visualize":
         return `I'm viewing the ${ANALYSIS_LABELS[sel.analysisType]} diagram for this repository in the left pane.
 
+Repository root: ${projectPath}
+
 Please help me understand this diagram by:
 1. Explaining what the diagram represents at a high level
 2. Describing the key components (nodes) and their relationships (edges)
@@ -562,12 +568,15 @@ You can also suggest modifications to the diagram if you'd like to reorganize it
 
     // Add diagram context for visualize mode if this is the first message to Claude
     // (Check if no session exists yet - UI messages may exist but no actual Claude conversation)
-    if (selection?.type === "visualize" && !session && existingDiagram) {
-      // Parse the diagram data
-      const nodes: Array<{id: string; type?: string; position: {x: number; y: number}; data: Record<string, unknown>}> = existingDiagram.nodes ? JSON.parse(existingDiagram.nodes) : []
-      const edges: Array<{id: string; source: string; target: string; type?: string; label?: string; data?: Record<string, unknown>}> = existingDiagram.edges ? JSON.parse(existingDiagram.edges) : []
-      const stats = existingDiagram.stats ? JSON.parse(existingDiagram.stats) : {}
-      const viewport = existingDiagram.viewport ? JSON.parse(existingDiagram.viewport) : null
+    if (selection?.type === "visualize" && !session) {
+      // Get the current diagram data from the atom (real-time UI state) or fall back to DB data
+      const currentDiagram = diagramData || (existingDiagram ? {
+        nodes: existingDiagram.nodes ? JSON.parse(existingDiagram.nodes) : [],
+        edges: existingDiagram.edges ? JSON.parse(existingDiagram.edges) : [],
+        viewport: existingDiagram.viewport ? JSON.parse(existingDiagram.viewport) : null,
+        summary: existingDiagram.summary || undefined,
+        stats: existingDiagram.stats ? JSON.parse(existingDiagram.stats) : undefined,
+      } : null)
 
       // Get the original prompt used to generate this diagram type
       const analysisType = selection.analysisType
@@ -579,6 +588,9 @@ You can also suggest modifications to the diagram if you'd like to reorganize it
 
 You are an AI assistant embedded in a split-view interface. A React Flow diagram is displayed in the left pane, and this chat is in the right pane. Your role is to help the user understand, analyze, and modify the diagram in real-time.
 
+The repository root is: ${projectPath}
+This is the working directory for all file operations.
+
 === DIAGRAM TYPE ===
 ${ANALYSIS_LABELS[analysisType]} Analysis
 
@@ -587,34 +599,34 @@ ${originalPrompt}
 
 === CURRENT DIAGRAM DATA ===
 
-**Nodes (${nodes.length}):**
-${JSON.stringify(nodes.map((n) => ({
+**Nodes (${currentDiagram?.nodes?.length || 0}):**
+${currentDiagram?.nodes?.length ? JSON.stringify(currentDiagram.nodes.map((n) => ({
           id: n.id,
           type: n.type,
           position: n.position,
           data: n.data
-        })), null, 2)}
+        })), null, 2) : "No nodes available"}
 
-**Edges (${edges.length}):**
-${JSON.stringify(edges.map((e) => ({
+**Edges (${currentDiagram?.edges?.length || 0}):**
+${currentDiagram?.edges?.length ? JSON.stringify(currentDiagram.edges.map((e) => ({
           id: e.id,
           source: e.source,
           target: e.target,
           type: e.type,
           label: e.label,
           data: e.data
-        })), null, 2)}
+        })), null, 2) : "No edges available"}
 
 **Viewport:**
-${viewport ? JSON.stringify(viewport, null, 2) : "Default (not saved)"}
+${currentDiagram?.viewport ? JSON.stringify(currentDiagram.viewport, null, 2) : "Default (not saved)"}
 
 **Summary:**
-${existingDiagram.summary || "No summary available"}
+${currentDiagram?.summary || existingDiagram?.summary || "No summary available"}
 
 **Stats:**
-${JSON.stringify(stats, null, 2)}
+${currentDiagram?.stats ? JSON.stringify(currentDiagram.stats, null, 2) : existingDiagram?.stats ? JSON.stringify(JSON.parse(existingDiagram.stats), null, 2) : "No stats available"}
 
-=== HOW TO MODIFY THE DIAGRAM ===
+=== HOW TO MODIFY THE DIAGRAM (RIGHT PANE UI) ===
 
 You can help the user modify the diagram by providing complete updated diagram data in your response. When the user requests changes:
 
@@ -672,6 +684,20 @@ Semantic types (in data.type field):
 - "service", "database", "frontend", "external", "layer"
 - "table", "file", "function", "class", "module"
 
+=== HOW TO SAVE DIAGRAM CHANGES (DATABASE) ===
+
+When you provide diagram updates via the JSON format above, the application will automatically:
+1. Parse your JSON response
+2. Update the React Flow diagram in the left pane (right pane UI)
+3. Save the changes to the database via the analyzer.update API
+4. Refresh the diagram view to show the updated visualization
+
+The database stores:
+- Nodes and edges as JSON strings
+- Viewport state (zoom, pan position)
+- Summary and statistics
+- Timestamps for versioning
+
 === END DIAGRAM CONTEXT ===
 
 The user is now asking about this diagram. You can:
@@ -697,7 +723,7 @@ Be specific in your explanations and always reference node IDs when discussing p
     }
 
     setPendingPrompt(prompt)
-  }, [input, isStreaming, session, selection, chatId, subChatId, createContextualChat, setSession, setChatContext, setMessages, messages, existingDiagram])
+  }, [input, isStreaming, session, selection, chatId, subChatId, createContextualChat, setSession, setChatContext, setMessages, messages, existingDiagram, diagramData, projectPath])
 
   const getActionButton = () => {
     if (!selection) return null
