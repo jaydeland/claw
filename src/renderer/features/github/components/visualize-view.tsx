@@ -19,7 +19,8 @@ import ReactFlow, {
   MarkerType,
 } from "reactflow"
 import "reactflow/dist/style.css"
-import { Loader2, AlertCircle, RefreshCw, GitBranch, Database, Layers, Wrench } from "lucide-react"
+import { toPng } from "html-to-image"
+import { Loader2, AlertCircle, Download, GitBranch, Database, Layers, Wrench } from "lucide-react"
 import { applyDiagramLayout } from "../lib/diagram-layout"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
@@ -256,6 +257,29 @@ function VisualizeViewInner({
   const Icon = analysisIcons[analysisType]
   const label = analysisLabels[analysisType]
 
+  const exportToPng = useCallback(async () => {
+    const viewport = document.querySelector(".react-flow__viewport") as HTMLElement | null
+    if (!viewport) return
+    try {
+      const dataUrl = await toPng(viewport, {
+        backgroundColor: "#ffffff",
+        pixelRatio: 2,
+        // Expand capture area to include all nodes regardless of current scroll
+        filter: (node) => {
+          if (node instanceof HTMLElement && node.classList.contains("react-flow__minimap")) return false
+          if (node instanceof HTMLElement && node.classList.contains("react-flow__controls")) return false
+          return true
+        },
+      })
+      const link = document.createElement("a")
+      link.download = `${repoName}-${label.toLowerCase().replace(/\s+/g, "-")}.png`
+      link.href = dataUrl
+      link.click()
+    } catch (err) {
+      console.error("[VisualizeView] PNG export failed:", err)
+    }
+  }, [repoName, label])
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
@@ -266,6 +290,12 @@ function VisualizeViewInner({
           <span className="text-sm text-muted-foreground">• {repoName}</span>
           {isLayouting && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
         </div>
+        {nodes.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={exportToPng} className="h-7 px-2 text-xs gap-1.5">
+            <Download className="h-3.5 w-3.5" />
+            Export PNG
+          </Button>
+        )}
       </div>
 
       {/* Content */}

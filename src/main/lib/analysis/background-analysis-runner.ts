@@ -425,9 +425,8 @@ Instructions:
 4. Do not include any explanations, markdown, or code blocks
 5. Ensure all node IDs are unique and all edges reference existing nodes`
 
-    // Execute via background task
+    // Execute via background task — model is resolved from user's configured background model
     const taskResult = await executeBackgroundTask(prompt, {
-      model: "haiku", // Use haiku for analysis - more widely available
       subagentType: "explore",
       timeout: 300000, // 5 minutes
     })
