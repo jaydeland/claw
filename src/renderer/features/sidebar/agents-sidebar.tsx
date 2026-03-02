@@ -106,7 +106,6 @@ import {
   AgentsTabContent,
   SkillsTabContent,
   McpsTabContent,
-  ClawsTabContent,
 } from "./components"
 import { CcSettingsTabContent } from "./components/cc-settings-tab-content"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
@@ -2413,8 +2412,6 @@ export function AgentsSidebar({
             <SkillsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : selectedSidebarTab === "mcps" ? (
             <McpsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
-          ) : selectedSidebarTab === "claws" ? (
-            <ClawsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : selectedSidebarTab === "settings" ? (
             <CcSettingsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : null}

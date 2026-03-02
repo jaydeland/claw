@@ -16,7 +16,7 @@ import {
   Github,
   ScrollText,
 } from "lucide-react"
-import { OriginalMCPIcon, LobsterClawIcon, SingleClawIcon } from "../../../components/ui/icons"
+import { OriginalMCPIcon, LobsterClawIcon } from "../../../components/ui/icons"
 import { ClaudeCodeIcon } from "../../../components/ui/canvas-icons"
 import {
   Tooltip,
@@ -44,7 +44,6 @@ const tabs: TabItem[] = [
   { id: "github", label: "GitHub", icon: Github },
   { id: "settings", label: "CC Settings", icon: ClaudeCodeIcon },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
-  { id: "claws", label: "Claws", icon: SingleClawIcon },
   { id: "prompts", label: "Prompts", icon: ScrollText },
 ]
 
@@ -58,13 +57,6 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
   const [isContentCollapsed, setIsContentCollapsed] = useAtom(sidebarContentCollapsedAtom)
   const [isIconBarExpanded, setIsIconBarExpanded] = React.useState(false)
 
-  // Claws tab should never be collapsed — if persisted state has it collapsed, fix it on mount/tab change
-  React.useEffect(() => {
-    if (selectedTab === "claws" && isContentCollapsed) {
-      setIsContentCollapsed(false)
-    }
-  }, [selectedTab])
-
   // Category atoms that control main content view - need to clear when switching tabs
   const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setClustersCategory = useSetAtom(selectedClustersCategoryAtom)
@@ -74,12 +66,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
 
   const handleTabClick = (tabId: SidebarTab) => {
     if (selectedTab === tabId) {
-      // Clicking same tab toggles collapse, EXCEPT for claws which should always expand
-      if (tabId === "claws") {
-        setIsContentCollapsed(false)
-      } else {
-        setIsContentCollapsed(!isContentCollapsed)
-      }
+      setIsContentCollapsed(!isContentCollapsed)
     } else {
       // Clicking different tab switches and expands
       setSelectedTab(tabId)
@@ -103,11 +90,6 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
         setIsContentCollapsed(false) // Settings has tree pane
       } else {
         setGsdCategory(null)
-        setIsContentCollapsed(false)
-      }
-
-      // Force expand for claws to ensure content is always visible
-      if (tabId === "claws") {
         setIsContentCollapsed(false)
       }
     }

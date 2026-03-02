@@ -35,7 +35,6 @@ import {
   SkillsTabContent,
   McpsTabContent,
   TerminalTabContent,
-  ClawsTabContent,
   CcSettingsTabContent,
 } from "../sidebar/components"
 import { RightIconBar } from "./right-icon-bar"
@@ -292,8 +291,6 @@ export function AgentsLayout() {
                 <SkillsTabContent className="h-full" />
               ) : selectedSidebarTab === "mcps" ? (
                 <McpsTabContent className="h-full" />
-              ) : selectedSidebarTab === "claws" ? (
-                <ClawsTabContent className="h-full" />
               ) : selectedSidebarTab === "settings" ? (
                 <CcSettingsTabContent className="h-full" />
               ) : null}

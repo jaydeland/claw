@@ -606,13 +606,10 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                     </div>
                   )}
 
-                  {/* Contextual chat sections (GitHub, Prompts, Skills, Commands) */}
+                  {/* Contextual chat sections (Skills) */}
                   {isExpanded && (
                     <div className="mt-1 space-y-1">
-                      <ContextualChatsSection sourceView="github" projectId={project.id} onChatClick={(chatId) => handleChatClick({ id: chatId }, project.id)} />
-                      <ContextualChatsSection sourceView="prompts" projectId={project.id} onChatClick={(chatId) => handleChatClick({ id: chatId }, project.id)} />
                       <ContextualChatsSection sourceView="skills" projectId={project.id} onChatClick={(chatId) => handleChatClick({ id: chatId }, project.id)} />
-                      <ContextualChatsSection sourceView="commands" projectId={project.id} onChatClick={(chatId) => handleChatClick({ id: chatId }, project.id)} />
                     </div>
                   )}
 
