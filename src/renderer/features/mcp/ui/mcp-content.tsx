@@ -4,6 +4,7 @@ import React, { useState } from "react"
 import { Plug, Plus, FileJson, Sparkles } from "lucide-react"
 import { useAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
+import { TwoPaneLayout } from "../../shared/components/tab-view-layout"
 import { McpServerList } from "./mcp-server-list"
 import { McpServerDetail } from "./mcp-server-detail"
 import { McpAuthModal } from "./mcp-auth-modal"
@@ -128,35 +129,30 @@ export function McpContent() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Plug className="h-5 w-5" />
-          <h1 className="text-lg font-semibold">MCP Servers</h1>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAddFileDialogOpen(true)}
-        >
-          <FileJson className="h-4 w-4 mr-2" />
-          Add MCP File
-        </Button>
-      </div>
-
-      {/* Two-column layout */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Server list (left) */}
-        <div className="w-[320px] border-r border-border flex-shrink-0 overflow-hidden">
-          <McpServerList />
-        </div>
-
-        {/* Server detail (right) */}
-        <div className="flex-1 overflow-hidden">
-          <McpServerDetail />
-        </div>
-      </div>
+    <>
+      <TwoPaneLayout
+        title={
+          <>
+            <Plug className="h-5 w-5 text-primary" />
+            <span className="text-lg font-semibold">MCP Servers</span>
+          </>
+        }
+        headerActions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAddFileDialogOpen(true)}
+          >
+            <FileJson className="h-4 w-4 mr-2" />
+            Add MCP File
+          </Button>
+        }
+        leftContent={<McpServerList />}
+        centerContent={<McpServerDetail />}
+        defaultLeftWidth={25}
+        minLeftWidth={250}
+        maxLeftWidth={400}
+      />
 
       {/* Auth modal */}
       <McpAuthModal />
@@ -252,6 +248,6 @@ export function McpContent() {
             : "The MCP server will be added to the default config file"
         }
       />
-    </div>
+    </>
   )
 }

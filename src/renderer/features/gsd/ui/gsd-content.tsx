@@ -46,8 +46,7 @@ import {
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { PlanningDocEditor } from "./planning-doc-editor"
 import { ChangesPanel } from "../../changes"
-// TODO: Add react-resizable-panels package for proper resizable layout
-// For now, using simple flex layout
+import { TabViewLayout } from "../../shared/components/tab-view-layout"
 
 type DocType = "planning" | "gsd"
 
@@ -288,267 +287,284 @@ export function GsdContent() {
     return projectsData.find((p) => p.id === selectedProjectId) || null
   }, [projectsData, selectedProjectId])
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header bar: LEFT (GSD logo, version, update) | RIGHT (project, branch) */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border flex-shrink-0 bg-muted/30">
-        {/* Left side: GSD branding, version, update */}
-        <div className="flex items-center gap-2">
-          <Rocket className="h-4 w-4 text-primary flex-shrink-0" />
-          <span className="text-sm font-semibold">GSD</span>
-          <VersionBadge
-            version={versionData?.version || null}
-            updateAvailable={updateInfo?.available || false}
-            isChecking={isCheckingUpdates}
-          />
-          {updateInfo?.available && updateInfo.latestVersion && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleUpdate}
-              disabled={updateInProgress}
-              className="h-6 text-[10px] px-2"
-            >
-              {updateInProgress ? (
-                <>
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Download className="h-3 w-3 mr-1" />
-                  Update to v{updateInfo.latestVersion}
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-
-        {/* Right side: Action buttons, Project selector, branch */}
-        <div className="flex items-center gap-2">
-          {/* Action buttons */}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleAddPlan}
-            disabled={!selectedProjectId || createChatMutation.isPending}
-            className="h-6 text-[10px] px-2 gap-1"
-            title="Create a plan for a phase"
-          >
-            <FileText className="h-3 w-3" />
-            Add Plan
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleAddPhase}
-            disabled={!selectedProjectId || createChatMutation.isPending}
-            className="h-6 text-[10px] px-2 gap-1"
-            title="Add a new phase to the roadmap"
-          >
-            <ListPlus className="h-3 w-3" />
-            Add Phase
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleExecutePhase}
-            disabled={!selectedProjectId || createChatMutation.isPending}
-            className="h-6 text-[10px] px-2 gap-1"
-            title="Execute a phase"
-          >
-            <Play className="h-3 w-3" />
-            Execute
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleDiscussPhase}
-            disabled={!selectedProjectId || createChatMutation.isPending}
-            className="h-6 text-[10px] px-2 gap-1"
-            title="Discuss a phase"
-          >
-            <MessageSquare className="h-3 w-3" />
-            Discuss
-          </Button>
-
-          <span className="text-muted-foreground text-xs mx-1">|</span>
-
-          {/* Edit mode toggle - only show for planning docs */}
-          {activeDocType === "planning" && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsEditMode(!isEditMode)}
-              className={cn(
-                "h-6 text-[10px] px-2 gap-1",
-                isEditMode && "bg-muted"
-              )}
-              title="Toggle edit mode"
-            >
-              <Edit className="h-3 w-3" />
-              Edit
-            </Button>
-          )}
-
-          {/* Changes panel toggle - only show when editing */}
-          {isEditMode && activeDocType === "planning" && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setChangesPanelOpen(!changesPanelOpen)}
-              className={cn(
-                "h-6 text-[10px] px-2 gap-1",
-                changesPanelOpen && "bg-muted"
-              )}
-              title="View changes and commit"
-            >
-              <GitCommit className="h-3 w-3" />
-              Changes
-            </Button>
-          )}
-
-          <span className="text-muted-foreground text-xs mx-1">|</span>
-
-          {/* Project selector */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-foreground/10 text-left">
-                <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="text-xs truncate max-w-[150px]">
-                  {selectedProjectObj?.name || "Select project..."}
-                </span>
-                <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {projectsData?.map((project) => (
-                <DropdownMenuItem
-                  key={project.id}
-                  onClick={() => setSelectedProjectId(project.id)}
-                  className="flex items-center gap-2"
-                >
-                  <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="truncate flex-1">{project.name}</span>
-                  {project.id === selectedProjectId && (
-                    <Check className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-              {(!projectsData || projectsData.length === 0) && (
-                <DropdownMenuItem disabled className="text-muted-foreground">
-                  No projects available
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {projectPath && (
+  // Header title component
+  const headerTitle = (
+    <>
+      <Rocket className="h-5 w-5 text-primary flex-shrink-0" />
+      <span className="text-lg font-semibold">GSD</span>
+      <VersionBadge
+        version={versionData?.version || null}
+        updateAvailable={updateInfo?.available || false}
+        isChecking={isCheckingUpdates}
+      />
+      {updateInfo?.available && updateInfo.latestVersion && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleUpdate}
+          disabled={updateInProgress}
+          className="h-6 text-[10px] px-2"
+        >
+          {updateInProgress ? (
             <>
-              <span className="text-muted-foreground text-xs">/</span>
-              <BranchSelector projectPath={projectPath} />
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Updating...
+            </>
+          ) : (
+            <>
+              <Download className="h-3 w-3 mr-1" />
+              Update to v{updateInfo.latestVersion}
             </>
           )}
+        </Button>
+      )}
+    </>
+  )
+
+  // Header actions component
+  const headerActions = (
+    <>
+      {/* Action buttons */}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleAddPlan}
+        disabled={!selectedProjectId || createChatMutation.isPending}
+        className="h-6 text-[10px] px-2 gap-1"
+        title="Create a plan for a phase"
+      >
+        <FileText className="h-3 w-3" />
+        Add Plan
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleAddPhase}
+        disabled={!selectedProjectId || createChatMutation.isPending}
+        className="h-6 text-[10px] px-2 gap-1"
+        title="Add a new phase to the roadmap"
+      >
+        <ListPlus className="h-3 w-3" />
+        Add Phase
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleExecutePhase}
+        disabled={!selectedProjectId || createChatMutation.isPending}
+        className="h-6 text-[10px] px-2 gap-1"
+        title="Execute a phase"
+      >
+        <Play className="h-3 w-3" />
+        Execute
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleDiscussPhase}
+        disabled={!selectedProjectId || createChatMutation.isPending}
+        className="h-6 text-[10px] px-2 gap-1"
+        title="Discuss a phase"
+      >
+        <MessageSquare className="h-3 w-3" />
+        Discuss
+      </Button>
+
+      <span className="text-muted-foreground text-xs mx-1">|</span>
+
+      {/* Edit mode toggle - only show for planning docs */}
+      {activeDocType === "planning" && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setIsEditMode(!isEditMode)}
+          className={cn(
+            "h-6 text-[10px] px-2 gap-1",
+            isEditMode && "bg-muted"
+          )}
+          title="Toggle edit mode"
+        >
+          <Edit className="h-3 w-3" />
+          Edit
+        </Button>
+      )}
+
+      {/* Changes panel toggle - only show when editing */}
+      {isEditMode && activeDocType === "planning" && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setChangesPanelOpen(!changesPanelOpen)}
+          className={cn(
+            "h-6 text-[10px] px-2 gap-1",
+            changesPanelOpen && "bg-muted"
+          )}
+          title="View changes and commit"
+        >
+          <GitCommit className="h-3 w-3" />
+          Changes
+        </Button>
+      )}
+
+      <span className="text-muted-foreground text-xs mx-1">|</span>
+
+      {/* Project selector */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-foreground/10 text-left">
+            <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            <span className="text-xs truncate max-w-[150px]">
+              {selectedProjectObj?.name || "Select project..."}
+            </span>
+            <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          {projectsData?.map((project) => (
+            <DropdownMenuItem
+              key={project.id}
+              onClick={() => setSelectedProjectId(project.id)}
+              className="flex items-center gap-2"
+            >
+              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="truncate flex-1">{project.name}</span>
+              {project.id === selectedProjectId && (
+                <Check className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+              )}
+            </DropdownMenuItem>
+          ))}
+          {(!projectsData || projectsData.length === 0) && (
+            <DropdownMenuItem disabled className="text-muted-foreground">
+              No projects available
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {projectPath && (
+        <>
+          <span className="text-muted-foreground text-xs">/</span>
+          <BranchSelector projectPath={projectPath} />
+        </>
+      )}
+    </>
+  )
+
+  // Left panel content (Documentation + Planning sections)
+  const leftPanelContent = (
+    <div className="h-full flex flex-col">
+      {/* Documentation section (README, Help) */}
+      <div className="p-2 border-b border-border/50">
+        <p className="text-[10px] uppercase text-muted-foreground/70 font-medium px-2 mb-1.5">
+          Documentation
+        </p>
+        <div className="space-y-0.5">
+          <button
+            onClick={() => handleSelectGsdDoc("README.md")}
+            className={cn(
+              "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left text-xs",
+              activeDocType === "gsd" && selectedGsdDoc === "README.md"
+                ? "bg-primary/10 text-primary"
+                : "hover:bg-foreground/10"
+            )}
+          >
+            <BookOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            <span className="truncate">README</span>
+          </button>
+          <button
+            onClick={() => handleSelectGsdDoc("commands/gsd/help.md")}
+            className={cn(
+              "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left text-xs",
+              activeDocType === "gsd" && selectedGsdDoc === "commands/gsd/help.md"
+                ? "bg-primary/10 text-primary"
+                : "hover:bg-foreground/10"
+            )}
+          >
+            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            <span className="truncate">Help</span>
+          </button>
         </div>
       </div>
 
-      {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar with Documentation + Planning sections */}
-        <div className="w-56 border-r border-border flex-shrink-0 overflow-y-auto">
-          {/* Documentation section (README, Help) */}
-          <div className="p-2 border-b border-border/50">
-            <p className="text-[10px] uppercase text-muted-foreground/70 font-medium px-2 mb-1.5">
-              Documentation
-            </p>
-            <div className="space-y-0.5">
-              <button
-                onClick={() => handleSelectGsdDoc("README.md")}
-                className={cn(
-                  "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left text-xs",
-                  activeDocType === "gsd" && selectedGsdDoc === "README.md"
-                    ? "bg-primary/10 text-primary"
-                    : "hover:bg-foreground/10"
-                )}
-              >
-                <BookOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="truncate">README</span>
-              </button>
-              <button
-                onClick={() => handleSelectGsdDoc("commands/gsd/help.md")}
-                className={cn(
-                  "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left text-xs",
-                  activeDocType === "gsd" && selectedGsdDoc === "commands/gsd/help.md"
-                    ? "bg-primary/10 text-primary"
-                    : "hover:bg-foreground/10"
-                )}
-              >
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="truncate">Help</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Planning section (file tree) */}
-          <div className="p-2">
-            <PlanningFileTree
-              projectPath={projectPath}
-              projectName={projectName}
-              selectedDoc={selectedPlanningDoc}
-              onSelectDoc={handleSelectPlanningDoc}
-              isActive={activeDocType === "planning"}
-            />
-          </div>
-        </div>
-
-        {/* Content area with changes panel */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Main content panel */}
-          <div className={changesPanelOpen ? "flex-1 overflow-y-auto p-6" : "flex-1 overflow-y-auto p-6"}>
-            {activeDocType === "gsd" && selectedGsdDoc && (
-              <GsdDocContent docPath={selectedGsdDoc} />
-            )}
-            {activeDocType === "planning" && selectedPlanningDoc && projectPath && (
-              isEditMode ? (
-                <PlanningDocEditor
-                  projectPath={projectPath}
-                  docPath={selectedPlanningDoc}
-                  onClose={() => setIsEditMode(false)}
-                />
-              ) : (
-                <PlanningDocContent projectPath={projectPath} docPath={selectedPlanningDoc} />
-              )
-            )}
-            {!activeDocType && (
-              <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-                <FileText className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm">Select a document to view</p>
-              </div>
-            )}
-          </div>
-
-          {/* Changes panel */}
-          {changesPanelOpen && projectPath && (
-            <>
-              <div className="w-px bg-border flex-shrink-0" />
-              <div className="w-96 overflow-y-auto flex-shrink-0">
-                <ChangesPanel
-                  worktreePath={projectPath}
-                  selectedFilePath={selectedFilePath}
-                  onFileSelect={(file) => setSelectedFilePath(file.path)}
-                  onCommitSuccess={() => {
-                    // Refetch planning docs list
-                    utils.gsd.listPlanningDocs.invalidate()
-                    // Clear selected file
-                    setSelectedFilePath(null)
-                  }}
-                />
-              </div>
-            </>
-          )}
-        </div>
+      {/* Planning section (file tree) */}
+      <div className="p-2 flex-1 overflow-y-auto">
+        <PlanningFileTree
+          projectPath={projectPath}
+          projectName={projectName}
+          selectedDoc={selectedPlanningDoc}
+          onSelectDoc={handleSelectPlanningDoc}
+          isActive={activeDocType === "planning"}
+        />
       </div>
     </div>
+  )
+
+  // Center panel content (main content + optional changes panel)
+  const centerPanelContent = (
+    <div className="h-full flex">
+      {/* Main content panel */}
+      <div className={changesPanelOpen && projectPath ? "flex-1 overflow-y-auto p-6" : "w-full h-full overflow-y-auto p-6"}>
+        {activeDocType === "gsd" && selectedGsdDoc && (
+          <GsdDocContent docPath={selectedGsdDoc} />
+        )}
+        {activeDocType === "planning" && selectedPlanningDoc && projectPath && (
+          isEditMode ? (
+            <PlanningDocEditor
+              projectPath={projectPath}
+              docPath={selectedPlanningDoc}
+              onClose={() => setIsEditMode(false)}
+            />
+          ) : (
+            <PlanningDocContent projectPath={projectPath} docPath={selectedPlanningDoc} />
+          )
+        )}
+        {!activeDocType && (
+          <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+            <FileText className="h-8 w-8 mb-2 opacity-50" />
+            <p className="text-sm">Select a document to view</p>
+          </div>
+        )}
+      </div>
+
+      {/* Changes panel */}
+      {changesPanelOpen && projectPath && (
+        <>
+          <div className="w-px bg-border flex-shrink-0" />
+          <div className="w-80 overflow-y-auto flex-shrink-0">
+            <ChangesPanel
+              worktreePath={projectPath}
+              selectedFilePath={selectedFilePath}
+              onFileSelect={(file) => setSelectedFilePath(file.path)}
+              onCommitSuccess={() => {
+                // Refetch planning docs list
+                utils.gsd.listPlanningDocs.invalidate()
+                // Clear selected file
+                setSelectedFilePath(null)
+              }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  )
+
+  return (
+    <TabViewLayout
+      title={headerTitle}
+      headerActions={headerActions}
+      leftPanel={{
+        id: "gsd-sidebar",
+        content: leftPanelContent,
+        defaultWidth: 18,
+        minWidth: 180,
+        maxWidth: 300,
+      }}
+      centerPanel={{
+        id: "gsd-content",
+        content: centerPanelContent,
+        defaultWidth: 82,
+      }}
+    />
   )
 }
 

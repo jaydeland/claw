@@ -158,8 +158,8 @@ export function ClusterList() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Search and Refresh */}
-      <div className="p-3 border-b border-border space-y-2">
+      {/* Search */}
+      <div className="p-3 border-b border-border">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -170,7 +170,7 @@ export function ClusterList() {
             className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mt-2">
           <span className="text-xs text-muted-foreground">
             {filteredClusters.length} cluster{filteredClusters.length !== 1 ? "s" : ""}
           </span>
