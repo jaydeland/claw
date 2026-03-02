@@ -48,6 +48,7 @@ export const GitHubContentPane = memo(function GitHubContentPane({
     case "visualize":
       return (
         <VisualizeView
+          key={`${projectId}-${selection.analysisType}`}
           projectId={projectId}
           projectPath={projectPath}
           analysisType={selection.analysisType}
