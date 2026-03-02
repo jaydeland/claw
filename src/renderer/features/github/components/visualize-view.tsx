@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import ReactFlow, {
   Background,
@@ -14,6 +14,8 @@ import ReactFlow, {
   Position,
   type Node,
   type Edge,
+  type NodeChange,
+  type Viewport,
   MarkerType,
 } from "reactflow"
 import "reactflow/dist/style.css"
@@ -85,11 +87,53 @@ function VisualizeViewInner({
   const [isLayouting, setIsLayouting] = useState(false)
   const reactFlowInstance = useReactFlow()
 
+  const updateDiagramMutation = trpc.analyzer.update.useMutation()
+  const diagramIdRef = useRef<string | null>(null)
+  const saveNodesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Fetch diagram from database
   const { data: diagram, refetch } = trpc.analyzer.get.useQuery(
     { projectId, type: analysisType },
     { enabled: !!projectId }
   )
+
+  // Keep diagramIdRef in sync so callbacks don't go stale
+  useEffect(() => {
+    if (diagram?.id) diagramIdRef.current = diagram.id
+  }, [diagram?.id])
+
+  // Persist node positions after a drag ends (debounced)
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    onNodesChange(changes)
+
+    const dragEnds = changes.filter(
+      (c): c is NodeChange & { type: "position"; id: string; position: { x: number; y: number } } =>
+        c.type === "position" && (c as any).dragging === false && !!(c as any).position
+    )
+
+    if (dragEnds.length === 0 || !diagramIdRef.current) return
+
+    if (saveNodesTimerRef.current) clearTimeout(saveNodesTimerRef.current)
+    saveNodesTimerRef.current = setTimeout(() => {
+      // Apply the drag-end positions onto current nodes and save
+      const posMap = new Map(dragEnds.map((c) => [(c as any).id, (c as any).position]))
+      const updatedNodes: FlowNode[] = nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        position: posMap.get(n.id) ?? n.position,
+        data: n.data as Record<string, unknown>,
+        width: n.width ?? undefined,
+        height: n.height ?? undefined,
+      }))
+      updateDiagramMutation.mutate({ id: diagramIdRef.current!, nodes: updatedNodes })
+    }, 400)
+  }, [nodes, onNodesChange, updateDiagramMutation])
+
+  // Persist viewport after pan / zoom ends
+  const handleMoveEnd = useCallback((_event: MouseEvent | TouchEvent, viewport: Viewport) => {
+    if (!diagramIdRef.current) return
+    updateDiagramMutation.mutate({ id: diagramIdRef.current, viewport })
+  }, [updateDiagramMutation])
 
   // Load diagram data when available
   useEffect(() => {
@@ -171,7 +215,30 @@ function VisualizeViewInner({
             .then(({ nodes: ln, edges: le }) => {
               setNodes(ln)
               setEdges(le)
-              setTimeout(() => reactFlowInstance.fitView({ padding: 0.15 }), 50)
+              // Persist ELK positions immediately so they survive the next load
+              if (diagram?.id) {
+                const flowNodes: FlowNode[] = ln.map((n) => ({
+                  id: n.id,
+                  type: n.type,
+                  position: n.position,
+                  data: n.data as Record<string, unknown>,
+                  width: n.width ?? undefined,
+                  height: n.height ?? undefined,
+                }))
+                updateDiagramMutation.mutate({ id: diagram.id, nodes: flowNodes })
+              }
+              // fitView then save resulting viewport (300ms for animation)
+              setTimeout(() => {
+                reactFlowInstance.fitView({ padding: 0.15, duration: 200 })
+                setTimeout(() => {
+                  if (diagram?.id) {
+                    updateDiagramMutation.mutate({
+                      id: diagram.id,
+                      viewport: reactFlowInstance.getViewport(),
+                    })
+                  }
+                }, 300)
+              }, 50)
             })
             .finally(() => setIsLayouting(false))
         } else {
@@ -223,8 +290,9 @@ function VisualizeViewInner({
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChange}
+            onMoveEnd={handleMoveEnd}
             nodeTypes={nodeTypes}
             defaultEdgeOptions={{
               type: "smoothstep",
@@ -233,7 +301,6 @@ function VisualizeViewInner({
             }}
             minZoom={0.1}
             maxZoom={2}
-            fitView
             attributionPosition="bottom-right"
           >
             <Background variant="dots" gap={20} size={1} />
