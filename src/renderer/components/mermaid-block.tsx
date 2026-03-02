@@ -175,31 +175,47 @@ export const MermaidBlock = memo(function MermaidBlock({
 
     try {
       // Create a canvas to render the SVG
-      const svgElement = new DOMParser().parseFromString(svg, "image/svg+xml")
-        .documentElement as unknown as SVGSVGElement
+      const svgDoc = new DOMParser().parseFromString(svg, "image/svg+xml")
+      const svgElement = svgDoc.documentElement as unknown as SVGSVGElement
 
-      // Get SVG dimensions
-      const svgRect = svgElement.getBoundingClientRect()
+      // Get SVG dimensions from attributes (getBoundingClientRect won't work on detached elements)
       let width = svgElement.getAttribute("width")
       let height = svgElement.getAttribute("height")
 
-      // Try viewBox if width/height not set
-      if (!width || !height) {
+      // Parse width/height to handle units (e.g., "100px" -> 100)
+      const parseDimension = (val: string | null): number | null => {
+        if (!val) return null
+        const parsed = parseFloat(val)
+        return isNaN(parsed) ? null : parsed
+      }
+
+      let widthNum = parseDimension(width)
+      let heightNum = parseDimension(height)
+
+      // Try viewBox if width/height not set or invalid
+      if (!widthNum || !heightNum) {
         const viewBox = svgElement.getAttribute("viewBox")
         if (viewBox) {
-          const [, , vbWidth, vbHeight] = viewBox.split(" ").map(Number)
-          width = String(vbWidth || 800)
-          height = String(vbHeight || 600)
-        } else {
-          width = "800"
-          height = "600"
+          const parts = viewBox.split(/\s+/)
+          if (parts.length === 4) {
+            const vbWidth = parseFloat(parts[2])
+            const vbHeight = parseFloat(parts[3])
+            widthNum = isNaN(vbWidth) ? 800 : vbWidth
+            heightNum = isNaN(vbHeight) ? 600 : vbHeight
+          }
         }
+      }
+
+      // Fall back to defaults if still no valid dimensions
+      if (!widthNum || !heightNum || widthNum <= 0 || heightNum <= 0) {
+        widthNum = 800
+        heightNum = 600
       }
 
       const canvas = document.createElement("canvas")
       const scale = 2 // For higher resolution
-      canvas.width = parseFloat(width) * scale
-      canvas.height = parseFloat(height) * scale
+      canvas.width = Math.max(1, Math.floor(widthNum * scale))
+      canvas.height = Math.max(1, Math.floor(heightNum * scale))
 
       const ctx = canvas.getContext("2d")
       if (!ctx) throw new Error("Failed to get canvas context")
