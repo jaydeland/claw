@@ -278,8 +278,8 @@ export function AgentsLayout() {
           )}
 
           {/* Sidebar Content Panel - shows list/navigation for selected tab */}
-          {/* Note: clusters/gsd/github/gitnexus tabs don't show sidebar content - they have their own navigation */}
-          {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && selectedSidebarTab !== "github" && selectedSidebarTab !== "gitnexus" && (
+          {/* Note: clusters/gsd/claws/prompts tabs don't show sidebar content - they have their own navigation */}
+          {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && selectedSidebarTab !== "claws" && selectedSidebarTab !== "prompts" && (
             <ResizableSidebar
               isOpen={true}
               onClose={() => {}}

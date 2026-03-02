@@ -66,6 +66,7 @@ import { PromptsView } from "../../prompts/ui/prompts-view"
 import { ExecutionHistoryViewer } from "../../sidebar/components/execution-history-viewer"
 import { ClawEditView } from "../../sidebar/components/claw-edit-view"
 import { selectedSettingsCategoryAtom } from "../atoms"
+import { Zap } from "lucide-react"
 import { CcSettingsContent } from "../../settings/ui/cc-settings-content"
 // Desktop mock
 const useIsAdmin = () => false
@@ -864,6 +865,7 @@ export function AgentsContent() {
   const showPromptsView = selectedSidebarTab === "prompts"
   const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw && !isEditingClaw
   const showClawsEditView = selectedSidebarTab === "claws" && !!selectedClaw && isEditingClaw
+  const showClawsListView = selectedSidebarTab === "claws" && !selectedClaw
   const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory && !showWorkflowsView
 
   // Workspace GitHub flex view: 2-pane content+chat when a Source Repo item is selected
@@ -880,7 +882,7 @@ export function AgentsContent() {
        (selectedProject ? { id: selectedProject.id, path: selectedProject.path } : null))
     : null
 
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showClawsEditView && !showSettingsView && !showWorkspaceGitHubView
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showClawsEditView && !showClawsListView && !showSettingsView && !showWorkspaceGitHubView
 
   return (
     <>
@@ -959,6 +961,17 @@ export function AgentsContent() {
       {showClawsEditView && selectedClaw && (
         <div className="flex-1 h-full overflow-hidden">
           <ClawEditView className="h-full" />
+        </div>
+      )}
+
+      {/* Claws list view - shown when no claw selected */}
+      {showClawsListView && (
+        <div className="flex-1 h-full overflow-hidden flex flex-col items-center justify-center p-8 text-center">
+          <Zap className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">Claws</h3>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            Select a claw from the sidebar to view its execution history, or create a new claw to automate tasks.
+          </p>
         </div>
       )}
 

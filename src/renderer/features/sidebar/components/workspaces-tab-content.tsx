@@ -540,29 +540,14 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
                   {/* Nested chats */}
                   {isExpanded && chats.length > 0 && (
-                    <div className="ml-[10px] pl-3 pt-0.5 space-y-0.5 relative">
-                      {/* Connector from workspace header to first item */}
-                      <div className="absolute -left-3 top-0 w-px h-1 bg-muted-foreground/20" />
-                      {chats.map((chat, chatIndex) => {
+                    <div className="ml-[10px] pl-3 pt-0.5 space-y-0.5">
+                      {chats.map((chat) => {
                         const isPinned = pinnedIds.has(chat.id)
                         const isActive = selectedChatId === chat.id
                         const chatStatus = chatStatuses.get(chat.id) ?? null
-                        const isLastItem = chatIndex === chats.length - 1
 
                         return (
                           <div key={chat.id} className="group relative">
-                            {/* Tree line connectors */}
-                            {/* Vertical line segment */}
-                            <div
-                              className={cn(
-                                "absolute -left-3 w-px bg-muted-foreground/20",
-                                isLastItem
-                                  ? "top-0 h-1/2" // Stop at middle for last item (L-shape)
-                                  : "top-0 bottom-0" // Full height for other items
-                              )}
-                            />
-                            {/* Horizontal branch connector */}
-                            <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
                             <button
                               type="button"
                               onClick={() => handleChatClick(chat, project.id)}
@@ -649,6 +634,21 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                     </div>
                   )}
 
+                  {/* New Chat button */}
+                  {isExpanded && (
+                    <div className="ml-[10px] pl-3 py-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 h-7 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => handleNewChat(project.id)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        New Chat
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Repo section — GitHub tree embedded in workspace */}
                   {isExpanded && (
                     <div className="ml-[10px] pl-3">
@@ -669,24 +669,6 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                           handleSourceRepoItemSelect(sel)
                         }}
                       />
-                    </div>
-                  )}
-
-                  {/* Empty state when workspace is expanded but has no chats */}
-                  {isExpanded && chats.length === 0 && (
-                    <div className="ml-[10px] pl-3 py-2 relative">
-                      {/* Tree line connector to empty state */}
-                      <div className="absolute -left-3 top-0 w-px h-1/2 bg-muted-foreground/20" />
-                      <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start gap-2 h-7 text-xs text-muted-foreground"
-                        onClick={() => handleNewChat(project.id)}
-                      >
-                        <Plus className="h-3 w-3" />
-                        New Chat
-                      </Button>
                     </div>
                   )}
                 </div>
