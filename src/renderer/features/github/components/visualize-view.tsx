@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useEffect } from "react"
+import { memo, useCallback, useEffect, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import ReactFlow, {
   Background,
@@ -18,6 +18,7 @@ import ReactFlow, {
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { Loader2, AlertCircle, RefreshCw, GitBranch, Database, Layers, Wrench } from "lucide-react"
+import { applyDiagramLayout } from "../lib/diagram-layout"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -81,6 +82,7 @@ function VisualizeViewInner({
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [isLayouting, setIsLayouting] = useState(false)
   const reactFlowInstance = useReactFlow()
 
   // Fetch diagram from database
@@ -161,13 +163,21 @@ function VisualizeViewInner({
           })
           .filter((e): e is Edge => e !== null)
 
-        setNodes(transformedNodes)
-        setEdges(transformedEdges)
-
-        if (viewport) {
-          reactFlowInstance.setViewport(viewport)
+        // Apply ELK layout when no saved viewport exists (new or regenerated diagram).
+        // When a viewport is saved the user manually arranged the diagram — preserve it.
+        if (!viewport) {
+          setIsLayouting(true)
+          applyDiagramLayout(transformedNodes, transformedEdges)
+            .then(({ nodes: ln, edges: le }) => {
+              setNodes(ln)
+              setEdges(le)
+              setTimeout(() => reactFlowInstance.fitView({ padding: 0.15 }), 50)
+            })
+            .finally(() => setIsLayouting(false))
         } else {
-          setTimeout(() => reactFlowInstance.fitView({ padding: 0.2 }), 100)
+          setNodes(transformedNodes)
+          setEdges(transformedEdges)
+          reactFlowInstance.setViewport(viewport)
         }
       } catch (err) {
         console.error("Failed to parse diagram data:", err)
@@ -187,6 +197,7 @@ function VisualizeViewInner({
           <Icon className="h-5 w-5 text-muted-foreground" />
           <h3 className="font-semibold">{label}</h3>
           <span className="text-sm text-muted-foreground">• {repoName}</span>
+          {isLayouting && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
         </div>
       </div>
 
