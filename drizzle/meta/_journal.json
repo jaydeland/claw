@@ -351,6 +351,76 @@
       "when": 1770600005000,
       "tag": "0049_headless_claws_allowed_mcps",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1770600006000,
+      "tag": "0050_add_sub_chat_id_to_claw_executions",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "6",
+      "when": 1770600007000,
+      "tag": "0051_add_hooks_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "6",
+      "when": 1770600008000,
+      "tag": "0052_add_claw_executions_sub_chat_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1770600009000,
+      "tag": "0053_add_hooks_project_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1770600010000,
+      "tag": "0054_add_hooks_scope_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "6",
+      "when": 1770600011000,
+      "tag": "0055_add_hooks_hook_type_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1770600012000,
+      "tag": "0056_add_projects_mcp_overrides",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1770600013000,
+      "tag": "0057_add_projects_env_vars",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1770600014000,
+      "tag": "0058_add_projects_skills_path",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1770600015000,
+      "tag": "0059_add_projects_agents_path",
+      "breakpoints": true
     }
   ]
 }
