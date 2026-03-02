@@ -10,6 +10,7 @@ import {
   isDesktopAtom,
   isFullscreenAtom,
   customHotkeysAtom,
+  sidebarContentWidthAtom,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom, selectedSidebarTabAtom, sidebarContentCollapsedAtom, selectedProjectDetailIdAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
@@ -37,6 +38,7 @@ import {
   TerminalTabContent,
   CcSettingsTabContent,
 } from "../sidebar/components"
+import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { RightIconBar } from "./right-icon-bar"
 import { Button } from "../../components/ui/button"
 import { SettingsIcon } from "../../components/ui/icons"
@@ -278,7 +280,17 @@ export function AgentsLayout() {
           {/* Sidebar Content Panel - shows list/navigation for selected tab */}
           {/* Note: clusters/gsd/github/gitnexus tabs don't show sidebar content - they have their own navigation */}
           {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && selectedSidebarTab !== "github" && selectedSidebarTab !== "gitnexus" && (
-            <div className="w-64 flex-shrink-0 border-r border-border/50 bg-muted/50 overflow-hidden">
+            <ResizableSidebar
+              isOpen={true}
+              onClose={() => {}}
+              widthAtom={sidebarContentWidthAtom}
+              minWidth={200}
+              maxWidth={500}
+              side="left"
+              disableClickToClose={true}
+              showResizeTooltip={true}
+              className="border-r border-border/50 bg-muted/50"
+            >
               {selectedSidebarTab === "history" ? (
                 <HistoryTabContent className="h-full" />
               ) : selectedSidebarTab === "chats" ? (
@@ -294,7 +306,7 @@ export function AgentsLayout() {
               ) : selectedSidebarTab === "settings" ? (
                 <CcSettingsTabContent className="h-full" />
               ) : null}
-            </div>
+            </ResizableSidebar>
           )}
 
           {/* Main content area */}

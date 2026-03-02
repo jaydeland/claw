@@ -234,6 +234,14 @@ export const agentsSidebarWidthAtom = atomWithStorage<number>(
   { getOnInit: true },
 )
 
+// Sidebar content panel width (left panel showing workspaces/history/etc)
+export const sidebarContentWidthAtom = atomWithStorage<number>(
+  "agents-sidebar-content-width",
+  256, // default width (was w-64)
+  undefined,
+  { getOnInit: true },
+)
+
 // Preview sidebar (right) width and open state
 export const agentsPreviewSidebarWidthAtom = atomWithStorage<number>(
   "agents-preview-sidebar-width",

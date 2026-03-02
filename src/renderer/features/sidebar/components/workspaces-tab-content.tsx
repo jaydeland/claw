@@ -434,7 +434,15 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
               const isSelected = selectedProject?.id === project.id
 
               return (
-                <div key={project.id} className="space-y-0.5">
+                <div
+                  key={project.id}
+                  className={cn(
+                    "space-y-0.5 rounded-lg border p-2",
+                    isSelected
+                      ? "bg-card border-border"
+                      : "bg-muted/30 border-transparent",
+                  )}
+                >
                   {/* Workspace header */}
                   <div className="group relative">
                     <button
@@ -641,9 +649,12 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                     </div>
                   )}
 
-                  {/* Source Repo section — GitHub tree embedded in workspace */}
+                  {/* Repo section — GitHub tree embedded in workspace */}
                   {isExpanded && (
-                    <div className="ml-[18px] pl-3">
+                    <div className="ml-[18px] pl-3 relative">
+                      {/* Tree line connector from workspace to repo */}
+                      <div className="absolute -left-3 top-0 w-px h-1/2 bg-muted-foreground/20" />
+                      <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
                       <WorkspaceSourceRepoSection
                         project={project}
                         onItemSelect={(sel) => {

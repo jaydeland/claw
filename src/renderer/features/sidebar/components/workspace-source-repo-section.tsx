@@ -57,7 +57,7 @@ export const WorkspaceSourceRepoSection = memo(function WorkspaceSourceRepoSecti
           <ChevronRight className="h-3 w-3 flex-shrink-0" />
         )}
         <GitBranch className="h-3 w-3 flex-shrink-0" />
-        <span className="font-medium">Source Repo</span>
+        <span className="font-medium">Repo</span>
         {project.gitOwner && project.gitRepo && (
           <span className="ml-auto font-mono text-[10px] opacity-60 truncate">
             {project.gitOwner}/{project.gitRepo}
