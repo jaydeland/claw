@@ -31,6 +31,9 @@ export const AgentContinueButton = memo(function AgentContinueButton({
 
   // Check if the last message was interrupted
   const isInterrupted = useCallback(() => {
+    // If chat status is "error", the session was interrupted
+    if (chatStatus === "error") return true
+
     // Must not be streaming
     if (isStreaming || chatStatus === "streaming" || chatStatus === "submitted") {
       return false

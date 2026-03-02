@@ -3492,8 +3492,11 @@ const ChatViewInner = memo(function ChatViewInner({
     return false
   }, [messages])
 
-  // Check if session was interrupted (last message has incomplete tools)
+  // Check if session was interrupted (last message has incomplete tools or status is error)
   const hasInterruptedSession = useMemo(() => {
+    // If chat status is "error", the session was interrupted
+    if (status === "error") return true
+
     if (messages.length === 0) return false
 
     const lastMessage = messages[messages.length - 1]
@@ -3513,7 +3516,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
       return hasPendingState
     })
-  }, [messages])
+  }, [messages, status])
 
   // Keep ref in sync for use in initializeScroll (which runs in useLayoutEffect)
   hasUnapprovedPlanRef.current = hasUnapprovedPlan

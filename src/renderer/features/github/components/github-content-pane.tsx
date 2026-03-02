@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useCallback } from "react"
+import React, { memo, useState, useMemo, useCallback } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, Sparkles, GitCommit, MessageSquare, Plus, Minus, ChevronDown, ChevronRight, Reply, Send, Check, X, CheckCircle, GitMerge, ExternalLink, BookOpen } from "lucide-react"
 import { cn } from "../../../lib/utils"
@@ -165,7 +165,11 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
   }
 
   const pr = data.pr
-  const stateColor = pr.state === "OPEN" ? "text-green-500 bg-green-500/10" : pr.state === "MERGED" ? "text-purple-500 bg-purple-500/10" : "text-red-500 bg-red-500/10"
+  const stateColor = pr.state === "OPEN"
+    ? "text-[hsl(var(--git-added))] bg-[hsl(var(--git-added))]/10"
+    : pr.state === "MERGED"
+      ? "text-primary bg-primary/10"
+      : "text-[hsl(var(--git-deleted))] bg-[hsl(var(--git-deleted))]/10"
 
   const tabs = [
     { id: "description" as const, label: "Description" },
@@ -181,7 +185,7 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
       {pr.state === "OPEN" && !pr.draft && (
         <div className="px-4 py-2 border-b border-border flex-shrink-0">
           {reviewSuccess ? (
-            <div className="flex items-center gap-1.5 text-xs text-green-500">
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: "hsl(var(--git-added))" }}>
               <CheckCircle className="h-3.5 w-3.5" />
               Done
             </div>
@@ -196,7 +200,7 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                     className={cn(
                       "px-2 py-1 text-xs rounded border transition-colors capitalize",
                       mergeMethod === m
-                        ? "border-purple-500 bg-purple-500/10 text-purple-400"
+                        ? "border-primary bg-primary/10 text-primary"
                         : "border-border text-muted-foreground hover:text-foreground"
                     )}
                   >
@@ -219,7 +223,7 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                 </Button>
                 <Button
                   size="sm"
-                  className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                  className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
                   disabled={mergeMutation.isPending}
                   onClick={() => mergeMutation.mutate({ projectPath, prNumber, method: mergeMethod })}
                 >
@@ -238,7 +242,8 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-xs text-green-500 border-green-500/30 hover:bg-green-500/10"
+                className="h-7 text-xs border-[hsl(var(--git-added))]/30 hover:bg-[hsl(var(--git-added))]/10"
+                style={{ color: "hsl(var(--git-added))" }}
                 onClick={() => setReviewMode("approve")}
               >
                 <Check className="h-3 w-3 mr-1" />
@@ -247,7 +252,8 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-xs text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/10"
+                className="h-7 text-xs border-[hsl(var(--git-modified))]/30 hover:bg-[hsl(var(--git-modified))]/10"
+                style={{ color: "hsl(var(--git-modified))" }}
                 onClick={() => setReviewMode("request_changes")}
               >
                 <X className="h-3 w-3 mr-1" />
@@ -257,7 +263,7 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-xs text-purple-400 border-purple-500/30 hover:bg-purple-500/10"
+                className="h-7 text-xs border-primary/30 hover:bg-primary/10 text-primary"
                 onClick={() => setMergeMode(true)}
               >
                 <GitMerge className="h-3 w-3 mr-1" />
@@ -301,10 +307,10 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                 <Button
                   size="sm"
                   className={cn(
-                    "h-7 text-xs",
+                    "h-7 text-xs text-primary-foreground",
                     reviewMode === "approve"
-                      ? "bg-green-600 hover:bg-green-700 text-white"
-                      : "bg-yellow-600 hover:bg-yellow-700 text-white"
+                      ? "bg-[hsl(var(--git-added))] hover:bg-[hsl(var(--git-added))]/90"
+                      : "bg-[hsl(var(--git-modified))] hover:bg-[hsl(var(--git-modified))]/90"
                   )}
                   disabled={
                     (reviewMode === "request_changes" && !reviewBody.trim()) ||
@@ -358,7 +364,7 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
           <div className="p-4 space-y-4">
             {/* Title + state */}
             <div className="flex items-start gap-2">
-              <GitPullRequest className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <GitPullRequest className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: "hsl(var(--git-added))" }} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-base font-semibold">{pr.title}</h2>
@@ -373,8 +379,8 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                     {pr.headBranch} → {pr.baseBranch}
                   </span>
                   <span className="flex items-center gap-1">
-                    <Plus className="h-3 w-3 text-green-500" />{pr.additions}
-                    <Minus className="h-3 w-3 text-red-500 ml-1" />{pr.deletions}
+                    <Plus className="h-3 w-3" style={{ color: "hsl(var(--git-added))" }} />{pr.additions}
+                    <Minus className="h-3 w-3 ml-1" style={{ color: "hsl(var(--git-deleted))" }} />{pr.deletions}
                     <span className="ml-1">{pr.changedFiles} files</span>
                   </span>
                 </div>
@@ -402,16 +408,31 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
           <div className="divide-y divide-border">
             {pr.files.map((file) => (
               <div key={file.path} className="px-4 py-2 flex items-center gap-3">
-                <span className={cn(
-                  "text-xs font-mono w-4 text-center",
-                  file.changeType === "added" ? "text-green-500" :
-                  file.changeType === "deleted" ? "text-red-500" : "text-yellow-500"
-                )}>
+                <span
+                  className="text-xs font-mono w-4 text-center"
+                  style={{
+                    color: file.changeType === "added"
+                      ? "hsl(var(--git-added))"
+                      : file.changeType === "deleted"
+                        ? "hsl(var(--git-deleted))"
+                        : "hsl(var(--git-modified))"
+                  }}
+                >
                   {file.changeType === "added" ? "A" : file.changeType === "deleted" ? "D" : "M"}
                 </span>
                 <span className="text-xs font-mono flex-1 truncate">{file.path}</span>
-                <span className="text-xs text-green-500 font-mono">+{file.additions}</span>
-                <span className="text-xs text-red-500 font-mono">-{file.deletions}</span>
+                <span
+                  className="text-xs font-mono"
+                  style={{ color: "hsl(var(--git-added))" }}
+                >
+                  +{file.additions}
+                </span>
+                <span
+                  className="text-xs font-mono"
+                  style={{ color: "hsl(var(--git-deleted))" }}
+                >
+                  -{file.deletions}
+                </span>
               </div>
             ))}
             {pr.files.length === 0 && (
@@ -444,11 +465,11 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
             {pr.comments.map((comment) => {
               const reviewBadge = comment.reviewState
                 ? comment.reviewState === "APPROVED"
-                  ? { label: "Approved", cls: "text-green-500 bg-green-500/10" }
+                  ? { label: "Approved", color: "hsl(var(--git-added))" }
                   : comment.reviewState === "CHANGES_REQUESTED"
-                  ? { label: "Changes requested", cls: "text-red-500 bg-red-500/10" }
+                  ? { label: "Changes requested", color: "hsl(var(--git-deleted))" }
                   : comment.reviewState === "COMMENTED"
-                  ? { label: "Reviewed", cls: "text-blue-400 bg-blue-500/10" }
+                  ? { label: "Reviewed", color: "hsl(var(--primary))" }
                   : null
                 : null
               const isReplying = replyingTo === comment.id
@@ -461,7 +482,13 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className="text-xs font-medium">{comment.author}</span>
                     {reviewBadge && (
-                      <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium", reviewBadge.cls)}>
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded font-medium"
+                        style={{
+                          color: reviewBadge.color,
+                          backgroundColor: `${reviewBadge.color}20`, // 20 hex = ~12% opacity
+                        }}
+                      >
                         {reviewBadge.label}
                       </span>
                     )}
@@ -592,28 +619,38 @@ function parseDiff(diff: string): DiffFile[] {
   return files
 }
 
-// Renders colored lines for one file's diff
+// Renders colored lines for one file's diff using theme colors
 function DiffLines({ lines }: { lines: string[] }) {
   return (
     <div className="font-mono text-xs leading-5 overflow-x-auto">
       {lines.map((line, i) => {
-        let bg = ""
-        let text = "text-foreground"
+        let style: React.CSSProperties = {}
+        let textClass = "text-foreground"
+
         if (line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("--- ") || line.startsWith("+++ ")) {
-          bg = "bg-muted/40"
-          text = "text-muted-foreground"
+          // Header lines - use muted colors
+          style = { backgroundColor: "hsl(var(--muted) / 0.4)" }
+          textClass = "text-muted-foreground"
         } else if (line.startsWith("@@")) {
-          bg = "bg-blue-500/10"
-          text = "text-blue-400"
+          // Hunk header - use primary color with low opacity
+          style = { backgroundColor: "hsl(var(--primary) / 0.1)" }
+          textClass = "text-primary"
         } else if (line.startsWith("+")) {
-          bg = "bg-green-500/10"
-          text = "text-green-400"
+          // Added lines - use theme's diff inserted colors
+          style = { backgroundColor: "hsl(var(--diff-inserted-bg) / 0.15)" }
+          textClass = "[color:hsl(var(--git-added))]"
         } else if (line.startsWith("-")) {
-          bg = "bg-red-500/10"
-          text = "text-red-400"
+          // Removed lines - use theme's diff removed colors
+          style = { backgroundColor: "hsl(var(--diff-removed-bg) / 0.15)" }
+          textClass = "[color:hsl(var(--git-deleted))]"
         }
+
         return (
-          <div key={i} className={cn("px-4 whitespace-pre", bg, text)}>
+          <div
+            key={i}
+            className={cn("px-4 whitespace-pre", textClass)}
+            style={style}
+          >
             {line || " "}
           </div>
         )
@@ -673,8 +710,18 @@ const DiffView = memo(function DiffView({ diff }: { diff: string }) {
                   className={cn("h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform", !isCollapsed && "rotate-90")}
                 />
                 <span className="text-xs font-mono flex-1 truncate">{file.path}</span>
-                <span className="text-xs font-mono text-green-400 flex-shrink-0">+{file.additions}</span>
-                <span className="text-xs font-mono text-red-400 flex-shrink-0 ml-1">-{file.deletions}</span>
+                <span
+                  className="text-xs font-mono flex-shrink-0"
+                  style={{ color: "hsl(var(--git-added))" }}
+                >
+                  +{file.additions}
+                </span>
+                <span
+                  className="text-xs font-mono flex-shrink-0 ml-1"
+                  style={{ color: "hsl(var(--git-deleted))" }}
+                >
+                  -{file.deletions}
+                </span>
               </button>
 
               {/* Diff lines */}
@@ -718,14 +765,16 @@ const IssueDetailView = memo(function IssueDetailView({ issueNumber, repoName, p
   }
 
   const issue = data.issue
-  const stateColor = issue.state === "OPEN" ? "text-green-500 bg-green-500/10" : "text-red-500 bg-red-500/10"
+  const stateColor = issue.state === "OPEN"
+    ? "text-[hsl(var(--git-added))] bg-[hsl(var(--git-added))]/10"
+    : "text-[hsl(var(--git-deleted))] bg-[hsl(var(--git-deleted))]/10"
 
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex-shrink-0">
         <div className="flex items-start gap-2">
-          <CircleDot className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+          <CircleDot className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: "hsl(var(--git-added))" }} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-semibold">{issue.title}</h2>
@@ -805,25 +854,38 @@ const CodeView = memo(function CodeView({ path, repoName, projectPath }: CodeVie
     { enabled: !!projectPath && !!path }
   )
 
-  // Get file extension for icon color
+  // Get file extension for icon color - uses theme semantic colors
   const ext = path.split(".").pop()?.toLowerCase() || ""
   const iconColor = {
-    ts: "text-blue-500",
-    tsx: "text-blue-500",
-    js: "text-yellow-500",
-    jsx: "text-yellow-500",
-    py: "text-green-500",
-    go: "text-cyan-500",
-    rs: "text-orange-500",
-    rb: "text-red-500",
-    java: "text-red-500",
-    swift: "text-orange-500",
-    kt: "text-purple-500",
-    css: "text-pink-500",
-    scss: "text-pink-500",
-    html: "text-orange-500",
-    json: "text-yellow-500",
-    md: "text-gray-500",
+    // TypeScript - primary blue
+    ts: "text-blue-400",
+    tsx: "text-blue-400",
+    // JavaScript - accent yellow
+    js: "text-yellow-400",
+    jsx: "text-yellow-400",
+    // Python - green
+    py: "text-green-400",
+    // Go - accent cyan
+    go: "text-cyan-400",
+    // Rust - accent orange
+    rs: "text-orange-400",
+    // Ruby - destructive red
+    rb: "text-red-400",
+    // Java - destructive red (slightly muted)
+    java: "text-red-400",
+    // Swift - accent orange
+    swift: "text-orange-400",
+    // Kotlin - purple
+    kt: "text-purple-400",
+    // CSS - pink/magenta
+    css: "text-pink-400",
+    scss: "text-pink-400",
+    // HTML - accent orange
+    html: "text-orange-400",
+    // JSON - yellow
+    json: "text-yellow-400",
+    // Markdown - muted
+    md: "text-muted-foreground",
   }[ext] || "text-muted-foreground"
 
   return (
@@ -930,7 +992,7 @@ const ReadmeView = memo(function ReadmeView({ repoName, projectPath }: ReadmeVie
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex-shrink-0">
         <div className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5 text-blue-500" />
+          <BookOpen className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-semibold">README</h2>
         </div>
         <p className="text-sm text-muted-foreground mt-1">{repoName}</p>
