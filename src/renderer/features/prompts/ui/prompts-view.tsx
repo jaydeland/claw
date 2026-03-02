@@ -10,6 +10,7 @@ import { cn } from "../../../lib/utils"
 import { selectedProjectAtom, pendingPromptNavigationAtom } from "../../agents/atoms"
 import { useContextualChat } from "../../shared/hooks/use-contextual-chat"
 import { ContextualChatPane } from "../../shared/components/contextual-chat-pane"
+import { TabViewLayout } from "../../shared/components/tab-view-layout"
 
 interface Prompt {
   id: string

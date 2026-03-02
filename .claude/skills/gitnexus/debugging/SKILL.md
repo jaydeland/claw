@@ -1,11 +1,12 @@
 ---
-name: gitnexus-debugging
+name: debugging
 description: Trace bugs through call chains using knowledge graph
+type: skill
 ---
 
-# Debugging with GitNexus
+# debugging
 
-## When to Use
+## When to use
 - "Why is this function failing?"
 - "Trace where this error comes from"
 - "Who calls this method?"
@@ -14,12 +15,10 @@ description: Trace bugs through call chains using knowledge graph
 
 ## Workflow
 
-```
-1. gitnexus_query({query: "<error or symptom>"})            → Find related execution flows
-2. gitnexus_context({name: "<suspect>"})                    → See callers/callees/processes
-3. READ gitnexus://repo/{name}/process/{name}                → Trace execution flow
-4. gitnexus_cypher({query: "MATCH path..."})                 → Custom traces if needed
-```
+1. `gitnexus_query({query: "<error or symptom>"})` - Find related execution flows
+2. `gitnexus_context({name: "<suspect>"})` - See callers/callees/processes
+3. `READ gitnexus://repo/{name}/process/{name}` - Trace execution flow
+4. `gitnexus_cypher({query: "MATCH path..."})` - Custom traces if needed
 
 > If "Index is stale" → run `npx gitnexus analyze` in terminal.
 
@@ -59,7 +58,7 @@ gitnexus_query({query: "payment validation error"})
 gitnexus_context({name: "validatePayment"})
 → Incoming calls: processCheckout, webhookHandler
 → Outgoing calls: verifyCard, fetchRates (external API!)
-→ Processes: CheckoutFlow (step 3/7)
+→ Processes: CheckoutFlow
 ```
 
 **gitnexus_cypher** — custom call chain traces:
