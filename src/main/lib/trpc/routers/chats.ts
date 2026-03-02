@@ -280,7 +280,8 @@ export const chatsRouter = router({
             and(
               eq(chats.projectId, input.projectId),
               isNull(chats.branch), // No branch means local chat
-              isNull(chats.archivedAt) // Only count active chats
+              isNull(chats.archivedAt), // Only count active chats
+              isNull(chats.sourceView), // Exclude contextual chats (github, prompts, commands)
             )
           )
           .get()
