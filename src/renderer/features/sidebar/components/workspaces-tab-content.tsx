@@ -316,17 +316,25 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
       .filter((w) => w.workspaceMatches || w.hasMatchingChats) // Show if workspace or chats match
   }, [projects, allChats, searchQuery, getPinnedChatIds])
 
-  // Auto-expand workspace containing selected chat
+  // For contextual chats (GitHub, Prompts, etc.) not in allChats, fetch individually to get projectId
+  const selectedChatIsContextual = !!selectedChatId && !!allChats && !allChats.find((c) => c.id === selectedChatId)
+  const { data: selectedContextualChat } = trpc.chats.get.useQuery(
+    { id: selectedChatId! },
+    { enabled: selectedChatIsContextual },
+  )
+
+  // Auto-expand workspace containing selected chat (works for both regular and contextual chats)
   useMemo(() => {
-    if (selectedChatId && allChats && projects) {
-      const chat = allChats.find((c) => c.id === selectedChatId)
-      if (chat?.projectId && !expandedWorkspaceIds.has(chat.projectId)) {
-        const newExpanded = new Set(expandedWorkspaceIds)
-        newExpanded.add(chat.projectId)
-        setExpandedWorkspaceIds(newExpanded)
-      }
+    if (!selectedChatId || !projects) return
+    const projectId =
+      allChats?.find((c) => c.id === selectedChatId)?.projectId ??
+      selectedContextualChat?.projectId
+    if (projectId && !expandedWorkspaceIds.has(projectId)) {
+      const newExpanded = new Set(expandedWorkspaceIds)
+      newExpanded.add(projectId)
+      setExpandedWorkspaceIds(newExpanded)
     }
-  }, [selectedChatId, allChats, projects, expandedWorkspaceIds, setExpandedWorkspaceIds])
+  }, [selectedChatId, allChats, selectedContextualChat, projects, expandedWorkspaceIds, setExpandedWorkspaceIds])
 
   // Collect all chat IDs for status tracking
   const allChatIds = useMemo(() => {
