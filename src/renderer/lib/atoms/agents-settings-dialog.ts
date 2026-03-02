@@ -13,10 +13,9 @@ export type SettingsTab =
   | "github"
   | "slack"
   | "whatsapp"
-  | "claude-settings"
   | "advanced"
   | "worktrees"
   | "backup"
   | "debug"
 
-export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab | null>(null)
+export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("providers")
