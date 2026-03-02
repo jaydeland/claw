@@ -45,6 +45,8 @@ interface GitHubTreePaneProps {
 
 export const GitHubTreePane = memo(function GitHubTreePane({ projects }: GitHubTreePaneProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [expandedRepos, setExpandedRepos] = useAtom(githubExpandedReposAtom)
+  const setSelection = useSetAtom(githubSelectionAtom)
 
   return (
     <div className="h-full flex flex-col bg-muted/30">
@@ -70,6 +72,20 @@ export const GitHubTreePane = memo(function GitHubTreePane({ projects }: GitHubT
               projectId={project.id}
               projectPath={project.path}
               projectName={project.name}
+              isExpanded={expandedRepos.has(project.id)}
+              onToggleExpanded={() => {
+                setExpandedRepos((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(project.id)) {
+                    next.delete(project.id)
+                  } else {
+                    next.add(project.id)
+                    // Auto-select README when expanding a repo in the full GitHub tab
+                    setSelection({ type: "readme", repoId: project.id, repoName: project.name })
+                  }
+                  return next
+                })
+              }}
             />
           ))}
         </div>
@@ -79,16 +95,27 @@ export const GitHubTreePane = memo(function GitHubTreePane({ projects }: GitHubT
 })
 
 // Per-repo component — manages its own data fetching so hooks aren't called in a loop
-const SingleRepoSection = memo(function SingleRepoSection({
+export const SingleRepoSection = memo(function SingleRepoSection({
   projectId,
   projectPath,
   projectName,
+  isExpanded,
+  onToggleExpanded,
+  hideRepoHeader = false,
+  onItemSelect,
 }: {
   projectId: string
   projectPath: string
   projectName: string
+  /** Controlled expand/collapse for the repo row — managed by the caller */
+  isExpanded: boolean
+  /** Called when the repo header row is clicked */
+  onToggleExpanded: () => void
+  /** When true, hides the repo header button (for embedded sidebar use) */
+  hideRepoHeader?: boolean
+  /** Optional side-effect called after githubSelectionAtom is set */
+  onItemSelect?: (selection: GitHubSelection) => void
 }) {
-  const [expandedRepos, setExpandedRepos] = useAtom(githubExpandedReposAtom)
   const [expandedSections, setExpandedSections] = useAtom(githubExpandedSectionsAtom)
   const [expandedFolders, setExpandedFolders] = useAtom(githubExpandedFoldersAtom)
   const [selection, setSelection] = useAtom(githubSelectionAtom)
@@ -98,7 +125,7 @@ const SingleRepoSection = memo(function SingleRepoSection({
   const prs = useAtomValue(githubPRsAtom)
   const issues = useAtomValue(githubIssuesAtom)
 
-  const isRepoExpanded = expandedRepos.has(projectId)
+  const isRepoExpanded = isExpanded
   // Section IDs are scoped per-repo so expanding "prs" in one repo doesn't affect others
   const sectionKey = useCallback((section: string) => `${projectId}-${section}`, [projectId])
   const isCodeExpanded = expandedSections.has(sectionKey("code"))
@@ -178,22 +205,8 @@ const SingleRepoSection = memo(function SingleRepoSection({
   }
 
   const toggleRepo = useCallback(() => {
-    setExpandedRepos((prev) => {
-      const next = new Set(prev)
-      if (next.has(projectId)) {
-        next.delete(projectId)
-      } else {
-        next.add(projectId)
-        // Auto-select README when expanding a repo
-        setSelection({
-          type: "readme",
-          repoId: projectId,
-          repoName: currentRepo.name,
-        })
-      }
-      return next
-    })
-  }, [projectId, setExpandedRepos, setSelection, currentRepo.name])
+    onToggleExpanded()
+  }, [onToggleExpanded])
 
   const toggleSection = useCallback((section: string) => {
     setExpandedSections((prev) => {
@@ -206,7 +219,8 @@ const SingleRepoSection = memo(function SingleRepoSection({
 
   const handleSelect = useCallback((newSelection: GitHubSelection) => {
     setSelection(newSelection)
-  }, [setSelection])
+    onItemSelect?.(newSelection)
+  }, [setSelection, onItemSelect])
 
   const analysisLabels: Record<AnalysisType, string> = {
     codeflow: "Code Flow",
@@ -250,6 +264,7 @@ const SingleRepoSection = memo(function SingleRepoSection({
       error={githubError?.message || (githubData && !githubData.success ? githubData.error : null)}
       isGitHub={githubData?.success ? githubData.isGitHub : true}
       sectionKey={sectionKey}
+      hideRepoHeader={hideRepoHeader}
     />
   )
 })
@@ -273,6 +288,8 @@ interface RepoTreeItemProps {
   error?: string | null
   isGitHub?: boolean
   sectionKey: (section: string) => string
+  /** When true, hides the repo header button row */
+  hideRepoHeader?: boolean
 }
 
 const RepoTreeItem = memo(function RepoTreeItem({
@@ -294,6 +311,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
   error,
   isGitHub,
   sectionKey,
+  hideRepoHeader = false,
 }: RepoTreeItemProps) {
   const openPRs = prs.filter((pr) => pr.state === "open").length
   const openIssues = issues.filter((i) => i.state === "open").length
@@ -431,32 +449,34 @@ const RepoTreeItem = memo(function RepoTreeItem({
 
   return (
     <div className="space-y-0.5">
-      {/* Repo header */}
-      <button
-        type="button"
-        onClick={onToggleRepo}
-        className={cn(
-          "w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm",
-          "border border-border/30",
-          "hover:bg-accent hover:text-accent-foreground",
-          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
-        )}
-      >
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        )}
-        <Folder className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium truncate">{repo.name}</span>
-        {isLoading && (
-          <Loader2 className="h-3 w-3 animate-spin ml-auto text-muted-foreground" />
-        )}
-      </button>
+      {/* Repo header — hidden when embedded in workspace sidebar */}
+      {!hideRepoHeader && (
+        <button
+          type="button"
+          onClick={onToggleRepo}
+          className={cn(
+            "w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm",
+            "border border-border/30",
+            "hover:bg-accent hover:text-accent-foreground",
+            "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+          )}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+          <Folder className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium truncate">{repo.name}</span>
+          {isLoading && (
+            <Loader2 className="h-3 w-3 animate-spin ml-auto text-muted-foreground" />
+          )}
+        </button>
+      )}
 
       {/* Error message */}
       {error && isExpanded && (
-        <div className="ml-8 px-2 py-1 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded">
+        <div className={cn("px-2 py-1 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded", hideRepoHeader ? "ml-0" : "ml-8")}>
           <AlertCircle className="h-3 w-3 inline mr-1" />
           {error}
         </div>

@@ -33,7 +33,7 @@ Before planning, discover project context:
 
 **Project instructions:** Read `./CLAUDE.md` if it exists in the working directory. Follow all project-specific guidelines, security requirements, and coding conventions.
 
-**Project skills:** Check `.agents/skills/` directory if it exists:
+**Project skills:** Check `.claude/skills/` or `.agents/skills/` directory if either exists:
 1. List available skills (subdirectories)
 2. Read `SKILL.md` for each skill (lightweight index ~130 lines)
 3. Load specific `rules/*.md` files as needed during planning
@@ -158,8 +158,18 @@ Every task has four required fields:
 - Bad: "Add authentication", "Make login work"
 
 **<verify>:** How to prove the task is complete.
-- Good: `npm test` passes, `curl -X POST /api/auth/login` returns 200 with Set-Cookie header
-- Bad: "It works", "Looks good"
+
+```xml
+<verify>
+  <automated>pytest tests/test_module.py::test_behavior -x</automated>
+</verify>
+```
+
+- Good: Specific automated command that runs in < 60 seconds
+- Bad: "It works", "Looks good", manual-only verification
+- Simple format also accepted: `npm test` passes, `curl -X POST /api/auth/login` returns 200
+
+**Nyquist Rule:** Every `<verify>` must include an `<automated>` command. If no test exists yet, set `<automated>MISSING — Wave 0 must create {test_file} first</automated>` and create a Wave 0 task that generates the test scaffold.
 
 **<done>:** Acceptance criteria - measurable state of completion.
 - Good: "Valid credentials return 200 + JWT cookie, invalid credentials return 401"
@@ -190,6 +200,16 @@ Each task: **15-60 minutes** Claude execution time.
 
 **Combine signals:** One task sets up for the next, separate tasks touch same file, neither meaningful alone.
 
+## Interface-First Task Ordering
+
+When a plan creates new interfaces consumed by subsequent tasks:
+
+1. **First task: Define contracts** — Create type files, interfaces, exports
+2. **Middle tasks: Implement** — Build against the defined contracts
+3. **Last task: Wire** — Connect implementations to consumers
+
+This prevents the "scavenger hunt" anti-pattern where executors explore the codebase to understand contracts. They receive the contracts in the plan itself.
+
 ## Specificity Examples
 
 | TOO VAGUE | JUST RIGHT |
@@ -213,6 +233,26 @@ Each task: **15-60 minutes** Claude execution time.
 **Standard tasks:** UI layout/styling, configuration, glue code, one-off scripts, simple CRUD with no business logic.
 
 **Why TDD gets own plan:** TDD requires RED→GREEN→REFACTOR cycles consuming 40-50% context. Embedding in multi-task plans degrades quality.
+
+**Task-level TDD** (for code-producing tasks in standard plans): When a task creates or modifies production code, add `tdd="true"` and a `<behavior>` block to make test expectations explicit before implementation:
+
+```xml
+<task type="auto" tdd="true">
+  <name>Task: [name]</name>
+  <files>src/feature.ts, src/feature.test.ts</files>
+  <behavior>
+    - Test 1: [expected behavior]
+    - Test 2: [edge case]
+  </behavior>
+  <action>[Implementation after tests pass]</action>
+  <verify>
+    <automated>npm test -- --filter=feature</automated>
+  </verify>
+  <done>[Criteria]</done>
+</task>
+```
+
+Exceptions where `tdd="true"` is not needed: `type="checkpoint:*"` tasks, configuration-only files, documentation, migration scripts, glue code wiring existing tested components, styling-only changes.
 
 ## User Setup Detection
 
@@ -434,6 +474,69 @@ After completion, create `.planning/phases/XX-name/{phase}-{plan}-SUMMARY.md`
 | `must_haves` | Yes | Goal-backward verification criteria |
 
 Wave numbers are pre-computed during planning. Execute-phase reads `wave` directly from frontmatter.
+
+## Interface Context for Executors
+
+**Key insight:** "The difference between handing a contractor blueprints versus telling them 'build me a house.'"
+
+When creating plans that depend on existing code or create new interfaces consumed by other plans:
+
+### For plans that USE existing code:
+After determining `files_modified`, extract the key interfaces/types/exports from the codebase that executors will need:
+
+```bash
+# Extract type definitions, interfaces, and exports from relevant files
+grep -n "export\|interface\|type\|class\|function" {relevant_source_files} 2>/dev/null | head -50
+```
+
+Embed these in the plan's `<context>` section as an `<interfaces>` block:
+
+```xml
+<interfaces>
+<!-- Key types and contracts the executor needs. Extracted from codebase. -->
+<!-- Executor should use these directly — no codebase exploration needed. -->
+
+From src/types/user.ts:
+```typescript
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: Date;
+}
+```
+
+From src/api/auth.ts:
+```typescript
+export function validateToken(token: string): Promise<User | null>;
+export function createSession(user: User): Promise<SessionToken>;
+```
+</interfaces>
+```
+
+### For plans that CREATE new interfaces:
+If this plan creates types/interfaces that later plans depend on, include a "Wave 0" skeleton step:
+
+```xml
+<task type="auto">
+  <name>Task 0: Write interface contracts</name>
+  <files>src/types/newFeature.ts</files>
+  <action>Create type definitions that downstream plans will implement against. These are the contracts — implementation comes in later tasks.</action>
+  <verify>File exists with exported types, no implementation</verify>
+  <done>Interface file committed, types exported</done>
+</task>
+```
+
+### When to include interfaces:
+- Plan touches files that import from other modules → extract those module's exports
+- Plan creates a new API endpoint → extract the request/response types
+- Plan modifies a component → extract its props interface
+- Plan depends on a previous plan's output → extract the types from that plan's files_modified
+
+### When to skip:
+- Plan is self-contained (creates everything from scratch, no imports)
+- Plan is pure configuration (no code interfaces involved)
+- Level 0 discovery (all patterns already established)
 
 ## Context Section Rules
 
@@ -817,7 +920,7 @@ Group by plan, dimension, severity.
 ### Step 6: Commit
 
 ```bash
-node ~/.claude/get-shit-done/bin/gsd-tools.cjs commit "fix($PHASE): revise plans based on checker feedback" --files .planning/phases/$PHASE-*/$PHASE-*-PLAN.md
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "fix($PHASE): revise plans based on checker feedback" --files .planning/phases/$PHASE-*/$PHASE-*-PLAN.md
 ```
 
 ### Step 7: Return Revision Summary
@@ -856,7 +959,7 @@ node ~/.claude/get-shit-done/bin/gsd-tools.cjs commit "fix($PHASE): revise plans
 Load planning context:
 
 ```bash
-INIT=$(node ~/.claude/get-shit-done/bin/gsd-tools.cjs init plan-phase "${PHASE}")
+INIT=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" init plan-phase "${PHASE}")
 ```
 
 Extract from init JSON: `planner_model`, `researcher_model`, `checker_model`, `commit_docs`, `research_enabled`, `phase_dir`, `phase_number`, `has_research`, `has_context`.
@@ -912,7 +1015,7 @@ Apply discovery level protocol (see discovery_levels section).
 
 **Step 1 — Generate digest index:**
 ```bash
-node ~/.claude/get-shit-done/bin/gsd-tools.cjs history-digest
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" history-digest
 ```
 
 **Step 2 — Select relevant phases (typically 2-4):**
@@ -944,6 +1047,16 @@ For phases not selected, retain from digest:
 - `patterns`: Conventions to follow
 
 **From STATE.md:** Decisions → constrain approach. Pending todos → candidates.
+
+**From RETROSPECTIVE.md (if exists):**
+```bash
+cat .planning/RETROSPECTIVE.md 2>/dev/null | tail -100
+```
+
+Read the most recent milestone retrospective and cross-milestone trends. Extract:
+- **Patterns to follow** from "What Worked" and "Patterns Established"
+- **Patterns to avoid** from "What Was Inefficient" and "Key Lessons"
+- **Cost patterns** to inform model selection and agent strategy
 </step>
 
 <step name="gather_phase_context">
@@ -1030,7 +1143,7 @@ Include all frontmatter fields.
 Validate each created PLAN.md using gsd-tools:
 
 ```bash
-VALID=$(node ~/.claude/get-shit-done/bin/gsd-tools.cjs frontmatter validate "$PLAN_PATH" --schema plan)
+VALID=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" frontmatter validate "$PLAN_PATH" --schema plan)
 ```
 
 Returns JSON: `{ valid, missing, present, schema }`
@@ -1043,7 +1156,7 @@ Required plan frontmatter fields:
 Also validate plan structure:
 
 ```bash
-STRUCTURE=$(node ~/.claude/get-shit-done/bin/gsd-tools.cjs verify plan-structure "$PLAN_PATH")
+STRUCTURE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" verify plan-structure "$PLAN_PATH")
 ```
 
 Returns JSON: `{ valid, errors, warnings, task_count, tasks }`
@@ -1080,7 +1193,7 @@ Plans:
 
 <step name="git_commit">
 ```bash
-node ~/.claude/get-shit-done/bin/gsd-tools.cjs commit "docs($PHASE): create phase plan" --files .planning/phases/$PHASE-*/$PHASE-*-PLAN.md .planning/ROADMAP.md
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs($PHASE): create phase plan" --files .planning/phases/$PHASE-*/$PHASE-*-PLAN.md .planning/ROADMAP.md
 ```
 </step>
 

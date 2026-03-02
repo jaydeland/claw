@@ -6,6 +6,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-02-27
+
+### Added
+- Codex multi-agent support: `request_user_input` mapping, multi-agent config, and agent role generation for Codex runtime
+- Analysis paralysis guard in agents to prevent over-deliberation during planning
+- Exhaustive cross-check and task-level TDD patterns in agent workflows
+- Code-aware discuss phase with codebase scouting — `/gsd:discuss-phase` now analyzes relevant source files before asking questions
+
+### Fixed
+- Update checker clears both cache paths to prevent stale version notifications
+- Statusline migration regex no longer clobbers third-party statuslines
+- Subagent paths use `$HOME` instead of `~` to prevent `MODULE_NOT_FOUND` errors
+- Skill discovery supports both `.claude/skills/` and `.agents/skills/` paths
+- `resolve-model` variable names aligned with template placeholders
+- Regex metacharacters properly escaped in `stateExtractField`
+- `model_overrides` and `nyquist_validation` correctly loaded from config
+- `phase-plan-index` no longer returns null/empty for `files_modified`, `objective`, and `task_count`
+
+## [1.21.1] - 2026-02-27
+
+### Added
+- Comprehensive test suite: 428 tests across 13 test files covering core, commands, config, dispatcher, frontmatter, init, milestone, phase, roadmap, state, and verify modules
+- CI pipeline with GitHub Actions: 9-matrix (3 OS × 3 Node versions), c8 coverage enforcement at 70% line threshold
+- Cross-platform test runner (`scripts/run-tests.cjs`) for Windows compatibility
+
+### Fixed
+- `getMilestoneInfo()` returns wrong version when shipped milestones are collapsed in `<details>` blocks
+- Milestone completion stats and archive now scoped to current milestone phases only (previously counted all phases on disk including prior milestones)
+- MILESTONES.md entries now insert in reverse chronological order (newest first)
+- Cross-platform path separators: all user-facing file paths use forward slashes on Windows
+- JSON quoting and dollar sign handling in CLI arguments on Windows
+- `model_overrides` loaded from config and `resolveModelInternal` used in CLI
+
+## [1.21.0] - 2026-02-25
+
+### Added
+- YAML frontmatter sync to STATE.md for machine-readable status tracking
+- `/gsd:add-tests` command for post-phase test generation
+- Codex runtime support with skills-first installation
+- Standard `project_context` block in gsd-verifier output
+- Codex changelog and usage documentation
+
+### Changed
+- Improved onboarding UX: installer now suggests `/gsd:new-project` instead of `/gsd:help`
+- Updated Discord invite to vanity URL (discord.gg/gsd)
+- Compressed Nyquist validation layer to align with GSD meta-prompt conventions
+- Requirements propagation now includes `phase_req_ids` from ROADMAP to workflow agents
+- Debug sessions require human verification before resolution
+
+### Fixed
+- Multi-level decimal phase handling (e.g., 72.1.1) with proper regex escaping
+- `/gsd:update` always installs latest package version
+- STATE.md decision corruption and dollar sign handling
+- STATE.md frontmatter mapping for requirements-completed status
+- Progress bar percent clamping to prevent RangeError crashes
+- `--cwd` override support in state-snapshot command
+
+## [1.20.6] - 2025-02-23
+
+### Added
+- Context window monitor hook with WARNING/CRITICAL alerts when agent context usage exceeds thresholds
+- Nyquist validation layer in plan-phase pipeline to catch quality issues before execution
+- Option highlighting and gray area looping in discuss-phase for clearer preference capture
+
+### Changed
+- Refactored installer tools into 11 domain modules for maintainability
+
+### Fixed
+- Auto-advance chain no longer breaks when skills fail to resolve inside Task subagents
+- Gemini CLI workflows and templates no longer incorrectly convert to TOML format
+- Universal phase number parsing handles all formats consistently (decimal phases, plain numbers)
+
 ## [1.20.5] - 2026-02-19
 
 ### Fixed
@@ -1319,7 +1391,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - YOLO mode for autonomous execution
 - Interactive mode with checkpoints
 
-[Unreleased]: https://github.com/glittercowboy/get-shit-done/compare/v1.20.5...HEAD
+[Unreleased]: https://github.com/glittercowboy/get-shit-done/compare/v1.22.0...HEAD
+[1.22.0]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.22.0
+[1.21.1]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.21.1
+[1.21.0]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.21.0
+[1.20.6]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.20.6
 [1.20.5]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.20.5
 [1.20.4]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.20.4
 [1.20.3]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.20.3

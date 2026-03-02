@@ -55,6 +55,9 @@ import { ClustersContent } from "../../clusters/ui/clusters-content"
 import { selectedGsdCategoryAtom } from "../../gsd/atoms"
 import { GsdContent } from "../../gsd/ui/gsd-content"
 import { GitHubView } from "../../github/components/github-view"
+import { GitHubContentPane } from "../../github/components/github-content-pane"
+import { GitHubChatPane } from "../../github/components/github-chat-pane"
+import { workspaceGithubSelectionAtom } from "../../github/atoms"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { HistoryChatView } from "../../history"
@@ -80,6 +83,7 @@ export function AgentsContent() {
   const selectedSettingsCategory = useAtomValue(selectedSettingsCategoryAtom)
   const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
   const [isEditingClaw, setIsEditingClaw] = useAtom(isEditingClawAtom)
+  const workspaceGithubSelection = useAtomValue(workspaceGithubSelectionAtom)
 
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
@@ -861,7 +865,22 @@ export function AgentsContent() {
   const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw && !isEditingClaw
   const showClawsEditView = selectedSidebarTab === "claws" && !!selectedClaw && isEditingClaw
   const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory && !showWorkflowsView
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showClawsEditView && !showSettingsView
+
+  // Workspace GitHub flex view: 2-pane content+chat when a Source Repo item is selected
+  // from the workspace sidebar (chats tab), with no active chat
+  const showWorkspaceGitHubView =
+    selectedSidebarTab === "chats" &&
+    !!workspaceGithubSelection &&
+    !selectedChatId &&
+    !showProjectDetail
+
+  // Derive the project for the 2-pane view from the selection's repoId
+  const workspaceGitHubProject = showWorkspaceGitHubView && workspaceGithubSelection
+    ? (projectsMap.get(workspaceGithubSelection.repoId) ??
+       (selectedProject ? { id: selectedProject.id, path: selectedProject.path } : null))
+    : null
+
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showClawsEditView && !showSettingsView && !showWorkspaceGitHubView
 
   return (
     <>
@@ -892,6 +911,28 @@ export function AgentsContent() {
           projects={(projects ?? []).map((p) => ({ id: p.id, path: p.path, name: p.name }))}
         />
       </div>
+
+      {/* Workspace GitHub flex view — 2-pane content+chat when Source Repo item selected */}
+      {showWorkspaceGitHubView && workspaceGitHubProject && workspaceGithubSelection && (
+        <div className="flex-1 h-full flex overflow-hidden">
+          {/* Content pane — PR details, issue, file viewer, visualize diagram */}
+          <div className="flex-1 min-w-0 overflow-hidden border-r border-border">
+            <GitHubContentPane
+              projectId={workspaceGitHubProject.id}
+              projectPath={workspaceGitHubProject.path}
+              selection={workspaceGithubSelection}
+            />
+          </div>
+          {/* Chat pane — contextual Claude chat for the selected item */}
+          <div className="w-96 flex-shrink-0 overflow-hidden">
+            <GitHubChatPane
+              projectId={workspaceGitHubProject.id}
+              projectPath={workspaceGitHubProject.path}
+              selection={workspaceGithubSelection}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Prompts view */}
       <div className={showPromptsView ? "flex-1 h-full overflow-hidden" : "hidden"}>

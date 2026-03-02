@@ -15,10 +15,10 @@ Read all files referenced by the invoking prompt's execution_context before star
 Load all context in one call (paths only to minimize orchestrator context):
 
 ```bash
-INIT=$(node ~/.claude/get-shit-done/bin/gsd-tools.cjs init plan-phase "$PHASE")
+INIT=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" init plan-phase "$PHASE")
 ```
 
-Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`.
+Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `nyquist_validation_enabled`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `phase_req_ids`.
 
 **File paths (for <files_to_read> blocks):** `state_path`, `roadmap_path`, `requirements_path`, `context_path`, `research_path`, `verification_path`, `uat_path`. These are null if files don't exist.
 
@@ -26,7 +26,9 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 
 ## 2. Parse and Normalize Arguments
 
-Extract from $ARGUMENTS: phase number (integer or decimal like `2.1`), flags (`--research`, `--skip-research`, `--gaps`, `--skip-verify`).
+Extract from $ARGUMENTS: phase number (integer or decimal like `2.1`), flags (`--research`, `--skip-research`, `--gaps`, `--skip-verify`, `--prd <filepath>`).
+
+Extract `--prd <filepath>` from $ARGUMENTS. If present, set PRD_FILE to the filepath.
 
 **If no phase number:** Detect next unplanned phase from roadmap.
 
@@ -40,12 +42,102 @@ mkdir -p ".planning/phases/${padded_phase}-${phase_slug}"
 ## 3. Validate Phase
 
 ```bash
-PHASE_INFO=$(node ~/.claude/get-shit-done/bin/gsd-tools.cjs roadmap get-phase "${PHASE}")
+PHASE_INFO=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}")
 ```
 
 **If `found` is false:** Error with available phases. **If `found` is true:** Extract `phase_number`, `phase_name`, `goal` from JSON.
 
+## 3.5. Handle PRD Express Path
+
+**Skip if:** No `--prd` flag in arguments.
+
+**If `--prd <filepath>` provided:**
+
+1. Read the PRD file:
+```bash
+PRD_CONTENT=$(cat "$PRD_FILE" 2>/dev/null)
+if [ -z "$PRD_CONTENT" ]; then
+  echo "Error: PRD file not found: $PRD_FILE"
+  exit 1
+fi
+```
+
+2. Display banner:
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GSD ► PRD EXPRESS PATH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Using PRD: {PRD_FILE}
+Generating CONTEXT.md from requirements...
+```
+
+3. Parse the PRD content and generate CONTEXT.md. The orchestrator should:
+   - Extract all requirements, user stories, acceptance criteria, and constraints from the PRD
+   - Map each to a locked decision (everything in the PRD is treated as a locked decision)
+   - Identify any areas the PRD doesn't cover and mark as "Claude's Discretion"
+   - Create CONTEXT.md in the phase directory
+
+4. Write CONTEXT.md:
+```markdown
+# Phase [X]: [Name] - Context
+
+**Gathered:** [date]
+**Status:** Ready for planning
+**Source:** PRD Express Path ({PRD_FILE})
+
+<domain>
+## Phase Boundary
+
+[Extracted from PRD — what this phase delivers]
+
+</domain>
+
+<decisions>
+## Implementation Decisions
+
+{For each requirement/story/criterion in the PRD:}
+### [Category derived from content]
+- [Requirement as locked decision]
+
+### Claude's Discretion
+[Areas not covered by PRD — implementation details, technical choices]
+
+</decisions>
+
+<specifics>
+## Specific Ideas
+
+[Any specific references, examples, or concrete requirements from PRD]
+
+</specifics>
+
+<deferred>
+## Deferred Ideas
+
+[Items in PRD explicitly marked as future/v2/out-of-scope]
+[If none: "None — PRD covers phase scope"]
+
+</deferred>
+
+---
+
+*Phase: XX-name*
+*Context gathered: [date] via PRD Express Path*
+```
+
+5. Commit:
+```bash
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs(${padded_phase}): generate context from PRD" --files "${phase_dir}/${padded_phase}-CONTEXT.md"
+```
+
+6. Set `context_content` to the generated CONTEXT.md content and continue to step 5 (Handle Research).
+
+**Effect:** This completely bypasses step 4 (Load CONTEXT.md) since we just created it. The rest of the workflow (research, planning, verification) proceeds normally with the PRD-derived context.
+
 ## 4. Load CONTEXT.md
+
+**Skip if:** PRD express path was used (CONTEXT.md already created in step 3.5).
 
 Check `context_path` from init JSON.
 
@@ -83,8 +175,7 @@ Display banner:
 ### Spawn gsd-phase-researcher
 
 ```bash
-PHASE_DESC=$(node ~/.claude/get-shit-done/bin/gsd-tools.cjs roadmap get-phase "${PHASE}" | jq -r '.section')
-PHASE_REQ_IDS=$(node ~/.claude/get-shit-done/bin/gsd-tools.cjs roadmap get-phase "${PHASE}" | jq -r '.section // empty' | grep -i "Requirements:" | head -1 | sed 's/.*Requirements:\*\*\s*//' | sed 's/[\[\]]//g' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+PHASE_DESC=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}" | jq -r '.section')
 ```
 
 Research prompt:
@@ -106,7 +197,7 @@ Answer: "What do I need to know to PLAN this phase well?"
 **Phase requirement IDs (MUST address):** {phase_req_ids}
 
 **Project instructions:** Read ./CLAUDE.md if exists — follow project-specific guidelines
-**Project skills:** Check .agents/skills/ directory (if exists) — read SKILL.md files, research should account for project skill patterns
+**Project skills:** Check .claude/skills/ or .agents/skills/ directory (if either exists) — read SKILL.md files, research should account for project skill patterns
 </additional_context>
 
 <output>
@@ -127,6 +218,31 @@ Task(
 
 - **`## RESEARCH COMPLETE`:** Display confirmation, continue to step 6
 - **`## RESEARCH BLOCKED`:** Display blocker, offer: 1) Provide context, 2) Skip research, 3) Abort
+
+## 5.5. Create Validation Strategy (if Nyquist enabled)
+
+**Skip if:** `nyquist_validation_enabled` is false from INIT JSON.
+
+After researcher completes, check if RESEARCH.md contains a Validation Architecture section:
+
+```bash
+grep -l "## Validation Architecture" "${PHASE_DIR}"/*-RESEARCH.md 2>/dev/null
+```
+
+**If found:**
+1. Read validation template from `~/.claude/get-shit-done/templates/VALIDATION.md`
+2. Write to `${PHASE_DIR}/${PADDED_PHASE}-VALIDATION.md`
+3. Fill frontmatter: replace `{N}` with phase number, `{phase-slug}` with phase slug, `{date}` with current date
+4. If `commit_docs` is true:
+```bash
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit-docs "docs(phase-${PHASE}): add validation strategy"
+```
+
+**If not found (and nyquist enabled):** Display warning:
+```
+⚠ Nyquist validation enabled but researcher did not produce a Validation Architecture section.
+  Continuing without validation strategy. Plans may fail Dimension 8 check.
+```
 
 ## 6. Check Existing Plans
 
@@ -181,7 +297,7 @@ Planner prompt:
 **Phase requirement IDs (every ID MUST appear in a plan's `requirements` field):** {phase_req_ids}
 
 **Project instructions:** Read ./CLAUDE.md if exists — follow project-specific guidelines
-**Project skills:** Check .agents/skills/ directory (if exists) — read SKILL.md files, plans should account for project skill rules
+**Project skills:** Check .claude/skills/ or .agents/skills/ directory (if either exists) — read SKILL.md files, plans should account for project skill rules
 </planning_context>
 
 <downstream_consumer>
@@ -240,12 +356,13 @@ Checker prompt:
 - {roadmap_path} (Roadmap)
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- {research_path} (Technical Research — includes Validation Architecture)
 </files_to_read>
 
 **Phase requirement IDs (MUST ALL be covered):** {phase_req_ids}
 
 **Project instructions:** Read ./CLAUDE.md if exists — verify plans honor project guidelines
-**Project skills:** Check .agents/skills/ directory (if exists) — verify plans account for project skill rules
+**Project skills:** Check .claude/skills/ or .agents/skills/ directory (if either exists) — verify plans account for project skill rules
 </verification_context>
 
 <expected_output>
@@ -326,7 +443,7 @@ Check for auto-advance trigger:
 1. Parse `--auto` flag from $ARGUMENTS
 2. Read `workflow.auto_advance` from config:
    ```bash
-   AUTO_CFG=$(node ~/.claude/get-shit-done/bin/gsd-tools.cjs config-get workflow.auto_advance 2>/dev/null || echo "false")
+   AUTO_CFG=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.auto_advance 2>/dev/null || echo "false")
    ```
 
 **If `--auto` flag present OR `AUTO_CFG` is true:**
@@ -340,10 +457,36 @@ Display banner:
 Plans ready. Spawning execute-phase...
 ```
 
-Spawn execute-phase as Task:
+Spawn execute-phase as Task with direct workflow file reference (do NOT use Skill tool — Skills don't resolve inside Task subagents):
 ```
 Task(
-  prompt="Run /gsd:execute-phase ${PHASE} --auto",
+  prompt="
+    <objective>
+    You are the execute-phase orchestrator. Execute all plans for Phase ${PHASE}: ${PHASE_NAME}.
+    </objective>
+
+    <execution_context>
+    @~/.claude/get-shit-done/workflows/execute-phase.md
+    @~/.claude/get-shit-done/references/checkpoints.md
+    @~/.claude/get-shit-done/references/tdd.md
+    @~/.claude/get-shit-done/references/model-profile-resolution.md
+    </execution_context>
+
+    <arguments>
+    PHASE=${PHASE}
+    ARGUMENTS='${PHASE} --auto --no-transition'
+    </arguments>
+
+    <instructions>
+    1. Read execute-phase.md from execution_context for your complete workflow
+    2. Follow ALL steps: initialize, handle_branching, validate_phase, discover_and_group_plans, execute_waves, aggregate_results, close_parent_artifacts, verify_phase_goal, update_roadmap
+    3. The --no-transition flag means: after verification + roadmap update, STOP and return status. Do NOT run transition.md.
+    4. When spawning executor agents, use subagent_type='gsd-executor' with the existing @file pattern from the workflow
+    5. When spawning verifier agents, use subagent_type='gsd-verifier'
+    6. Preserve the classifyHandoffIfNeeded workaround (spot-check on that specific error)
+    7. Do NOT use the Skill tool or /gsd: commands
+    </instructions>
+  ",
   subagent_type="general-purpose",
   description="Execute Phase ${PHASE}"
 )

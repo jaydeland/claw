@@ -373,3 +373,41 @@ export const githubSelectedBranchAtom = atomWithStorage<Record<string, string>>(
   undefined,
   { getOnInit: true }
 )
+
+// ============ WORKSPACE SIDEBAR STATE ============
+
+/**
+ * Which workspace "Source Repo" sections are expanded in the workspace sidebar.
+ * Separate from githubExpandedReposAtom (which controls the full GitHub tab)
+ * so the two views have fully independent expand/collapse state.
+ */
+export const workspaceSidebarGithubExpandedAtom = atomWithStorage<Set<string>>(
+  "github:workspaceSidebarExpanded",
+  new Set(),
+  {
+    getItem: (key, initialValue) => {
+      const stored = localStorage.getItem(key)
+      if (!stored) return initialValue
+      try {
+        const arr = JSON.parse(stored) as string[]
+        return new Set(arr)
+      } catch {
+        return initialValue
+      }
+    },
+    setItem: (key, value) => {
+      localStorage.setItem(key, JSON.stringify(Array.from(value)))
+    },
+    removeItem: (key) => {
+      localStorage.removeItem(key)
+    },
+  },
+  { getOnInit: true }
+)
+
+/**
+ * GitHub selection made from the workspace sidebar (non-persisted).
+ * Drives the showWorkspaceGitHubView routing in agents-content.tsx.
+ * Cleared when a chat is selected; does NOT bleed across tab switches.
+ */
+export const workspaceGithubSelectionAtom = atom<GitHubSelection>(null)

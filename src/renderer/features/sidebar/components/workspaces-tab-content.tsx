@@ -32,10 +32,12 @@ import {
 import { ChatStatusBadge } from "./chat-status-badge"
 import { useChatStatuses } from "../hooks/use-chat-status"
 import { ContextualChatsSection } from "./contextual-chats-section"
+import { WorkspaceSourceRepoSection } from "./workspace-source-repo-section"
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { selectedGsdCategoryAtom } from "../../gsd/atoms"
+import { workspaceGithubSelectionAtom, type GitHubSelection } from "../../github/atoms"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +62,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
   const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const setSelectedClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const setSelectedGsdCategory = useSetAtom(selectedGsdCategoryAtom)
+  const setWorkspaceGithubSelection = useSetAtom(workspaceGithubSelectionAtom)
 
   // Fetch all projects
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
@@ -176,6 +179,25 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     setExpandedWorkspaceIds(newExpanded)
   }, [expandedWorkspaceIds, setExpandedWorkspaceIds])
 
+  // Handle Source Repo item click — clears competing views so the workspace GitHub flex view shows
+  const handleSourceRepoItemSelect = useCallback((_sel: GitHubSelection) => {
+    setSelectedChatId(null)
+    setSelectedDraftId(null)
+    setSelectedWorkflowCategory(null)
+    setSelectedMcpCategory(null)
+    setSelectedClustersCategory(null)
+    setSelectedGsdCategory(null)
+    setSelectedProjectDetailId(null)
+  }, [
+    setSelectedChatId,
+    setSelectedDraftId,
+    setSelectedWorkflowCategory,
+    setSelectedMcpCategory,
+    setSelectedClustersCategory,
+    setSelectedGsdCategory,
+    setSelectedProjectDetailId,
+  ])
+
   // Handle chat click
   const handleChatClick = useCallback((chat: any, projectId: string) => {
     // Clear project detail view when selecting a chat
@@ -205,7 +227,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     setSelectedClustersCategory(null)
     // Clear GSD category when chat is selected
     setSelectedGsdCategory(null)
-  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory, setSelectedProjectDetailId])
+    // Clear workspace GitHub selection so chat view takes over
+    setWorkspaceGithubSelection(null)
+  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory, setSelectedProjectDetailId, setWorkspaceGithubSelection])
 
   // Handle workspace click
   const handleWorkspaceClick = useCallback((workspace: any) => {
@@ -220,7 +244,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
       gitOwner: workspace.gitOwner,
       gitRepo: workspace.gitRepo,
     })
-  }, [toggleWorkspaceExpanded, setSelectedProject])
+    // Return to chat/new-chat view when clicking workspace header
+    setWorkspaceGithubSelection(null)
+  }, [toggleWorkspaceExpanded, setSelectedProject, setWorkspaceGithubSelection])
 
   // Handle settings icon click - open project detail page
   const handleProjectSettingsClick = useCallback((workspace: any, e: React.MouseEvent) => {
@@ -267,7 +293,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     setSelectedClustersCategory(null)
     // Clear GSD category when creating new chat
     setSelectedGsdCategory(null)
-  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory, setSelectedProjectDetailId])
+    // Clear workspace GitHub selection to show new chat form
+    setWorkspaceGithubSelection(null)
+  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory, setSelectedProjectDetailId, setWorkspaceGithubSelection])
 
   // Group chats by project and filter by search
   const workspacesWithChats = useMemo(() => {
@@ -610,6 +638,29 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                   {isExpanded && (
                     <div className="mt-1 space-y-1">
                       <ContextualChatsSection sourceView="skills" projectId={project.id} onChatClick={(chatId) => handleChatClick({ id: chatId }, project.id)} />
+                    </div>
+                  )}
+
+                  {/* Source Repo section — GitHub tree embedded in workspace */}
+                  {isExpanded && (
+                    <div className="ml-[18px] pl-3">
+                      <WorkspaceSourceRepoSection
+                        project={project}
+                        onItemSelect={(sel) => {
+                          // Set the project so agents-content can derive the path
+                          setSelectedProject({
+                            id: project.id,
+                            name: project.name,
+                            path: project.path,
+                            gitRemoteUrl: project.gitRemoteUrl,
+                            gitProvider: project.gitProvider as "github" | "gitlab" | "bitbucket" | null,
+                            gitOwner: project.gitOwner,
+                            gitRepo: project.gitRepo,
+                          })
+                          setWorkspaceGithubSelection(sel)
+                          handleSourceRepoItemSelect(sel)
+                        }}
+                      />
                     </div>
                   )}
 
