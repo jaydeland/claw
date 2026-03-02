@@ -37,6 +37,7 @@ import {
   McpsTabContent,
   TerminalTabContent,
   CcSettingsTabContent,
+  ClawsTabContent,
 } from "../sidebar/components"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { RightIconBar } from "./right-icon-bar"
@@ -279,7 +280,7 @@ export function AgentsLayout() {
 
           {/* Sidebar Content Panel - shows list/navigation for selected tab */}
           {/* Note: clusters/gsd/claws/prompts tabs don't show sidebar content - they have their own navigation */}
-          {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && selectedSidebarTab !== "claws" && selectedSidebarTab !== "prompts" && (
+          {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && selectedSidebarTab !== "prompts" && (
             <ResizableSidebar
               isOpen={true}
               onClose={() => {}}
@@ -305,6 +306,8 @@ export function AgentsLayout() {
                 <McpsTabContent className="h-full" />
               ) : selectedSidebarTab === "settings" ? (
                 <CcSettingsTabContent className="h-full" />
+              ) : selectedSidebarTab === "claws" ? (
+                <ClawsTabContent className="h-full" />
               ) : null}
             </ResizableSidebar>
           )}
