@@ -540,7 +540,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
                   {/* Nested chats */}
                   {isExpanded && chats.length > 0 && (
-                    <div className="ml-[18px] pl-3 pt-0.5 space-y-0.5 relative">
+                    <div className="ml-[10px] pl-3 pt-0.5 space-y-0.5 relative">
                       {/* Connector from workspace header to first item */}
                       <div className="absolute -left-3 top-0 w-px h-1 bg-muted-foreground/20" />
                       {chats.map((chat, chatIndex) => {
@@ -651,10 +651,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
                   {/* Repo section — GitHub tree embedded in workspace */}
                   {isExpanded && (
-                    <div className="ml-[18px] pl-3 relative">
-                      {/* Tree line connector from workspace to repo */}
-                      <div className="absolute -left-3 top-0 w-px h-1/2 bg-muted-foreground/20" />
-                      <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
+                    <div className="ml-[10px] pl-3">
                       <WorkspaceSourceRepoSection
                         project={project}
                         onItemSelect={(sel) => {
@@ -677,7 +674,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
                   {/* Empty state when workspace is expanded but has no chats */}
                   {isExpanded && chats.length === 0 && (
-                    <div className="ml-[18px] pl-3 py-2 relative">
+                    <div className="ml-[10px] pl-3 py-2 relative">
                       {/* Tree line connector to empty state */}
                       <div className="absolute -left-3 top-0 w-px h-1/2 bg-muted-foreground/20" />
                       <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />

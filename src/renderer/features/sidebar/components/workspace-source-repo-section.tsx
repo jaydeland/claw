@@ -47,19 +47,19 @@ export const WorkspaceSourceRepoSection = memo(function WorkspaceSourceRepoSecti
         type="button"
         onClick={toggle}
         className={cn(
-          "w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left transition-colors",
-          "text-xs text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
+          "w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left transition-colors",
+          "text-sm text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
         )}
       >
         {isExpanded ? (
-          <ChevronDown className="h-3 w-3 flex-shrink-0" />
+          <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" />
         ) : (
-          <ChevronRight className="h-3 w-3 flex-shrink-0" />
+          <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />
         )}
-        <GitBranch className="h-3 w-3 flex-shrink-0" />
+        <GitBranch className="h-3.5 w-3.5 flex-shrink-0" />
         <span className="font-medium">Repo</span>
         {project.gitOwner && project.gitRepo && (
-          <span className="ml-auto font-mono text-[10px] opacity-60 truncate">
+          <span className="ml-auto font-mono text-xs opacity-60 truncate">
             {project.gitOwner}/{project.gitRepo}
           </span>
         )}
