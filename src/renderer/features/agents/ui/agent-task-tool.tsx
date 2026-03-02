@@ -37,8 +37,8 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 }: AgentTaskToolProps) {
   const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
 
-  // Default: collapsed
-  const [isExpanded, setIsExpanded] = useState(false)
+  // Default: expanded
+  const [isExpanded, setIsExpanded] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Track elapsed time for running tasks
