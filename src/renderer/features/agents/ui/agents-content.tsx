@@ -860,7 +860,7 @@ export function AgentsContent() {
   const showPromptsView = selectedSidebarTab === "prompts"
   const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw && !isEditingClaw
   const showClawsEditView = selectedSidebarTab === "claws" && !!selectedClaw && isEditingClaw
-  const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory
+  const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory && !showWorkflowsView
   const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showClawsEditView && !showSettingsView
 
   return (
