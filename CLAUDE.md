@@ -161,6 +161,253 @@ src/
         └── mock-api.ts      # DEPRECATED - being replaced with real tRPC
 ```
 
+## UI Architecture
+
+This section provides a comprehensive map of the UI components, state management, and navigation patterns. When making UI changes, **you MUST update this section** to keep the documentation synchronized with the codebase.
+
+### Visual Layout Overview
+
+```
+┌─ WindowsTitleBar (Windows only) ─────────────────────────────────────┐
+├─ Header Bar ──────────────────────────────────────────────────────────┤
+│  ├─ TrafficLights (macOS)                                             │
+│  ├─ "{C}law" branding                                                 │
+│  └─ Settings button (right)                                           │
+├─ Main Content Grid ──────────────────────────────────────────────────┤
+│  ┌─────────┬────────────────┬──────────────────────┬──────────────┐  │
+│  │ Sidebar │ Sidebar        │ Main Content Area    │ Right Icon   │  │
+│  │ Tab Bar │ Content        │ (AgentsContent)      │ Bar          │  │
+│  │ (icons) │ (w-64)         │ (flex-1)             │ (toggles)    │  │
+│  │         │                │                      │              │  │
+│  │ - chats │ Context-based: │ Routed view:         │ - Preview    │  │
+│  │ - hist  │ • WorkspacesTC │ • ChatView           │ - Diff       │  │
+│  │ - agents│ • HistoryTC    │ • NewChatForm        │ - Terminal   │  │
+│  │ - skills│ • AgentsTC     │ • TerminalMainView   │ - Flow       │  │
+│  │ - mcps  │ • SkillsTC     │ • HistoryChatView    │ - Context    │  │
+│  │ - term  │ • McpsTC       │ • ProjectDetailPage  │ - GSD        │  │
+│  │ - clust │ • TerminalTC   │ • PromptsView        │              │  │
+│  │ - gsd   │ • ClawsTC      │ • WorkflowsContent   │              │  │
+│  │ - github│ • SettingsTC   │ • McpContent         │              │  │
+│  │ - promts│                │ • ClustersContent    │              │  │
+│  │ - claws │                │ • GsdContent         │              │  │
+│  │ - settng│                │ • GitHubView         │              │  │
+│  └─────────┴────────────────┴──────────────────────┴──────────────┘  │
+├─ Update Banner (conditional) ─────────────────────────────────────────┤
+└─ AWS Status Bar (conditional) ───────────────────────────────────────┘
+```
+
+### Feature-to-Component Mapping
+
+| User Feature | Component Location | Key Files |
+|--------------|-------------------|-----------|
+| **Main Chat Interface** | `features/agents/main/` | `active-chat.tsx` (219KB), `chat-input-area.tsx` |
+| **Sub-Chat Tabs** | Top of chat area | `sub-chat-store.ts`, `sub-chat-tabs.tsx` |
+| **Preview Sidebar** | Right sidebar | `agent-preview.tsx`, preview atoms in `atoms/index.ts` |
+| **Diff/Changes View** | Right sidebar | `agent-diff-view.tsx` (75KB), changes panel |
+| **Terminal** | Right sidebar + dedicated view | `terminal/terminal.tsx`, `terminal-sidebar.tsx` |
+| **Session Flow Visualization** | Right sidebar | `session-flow/session-flow-renderer.tsx` |
+| **Workspace List** | Sidebar content (chats tab) | `sidebar/components/workspaces-tab-content.tsx` |
+| **New Chat Form** | Main area (no chat selected) | `new-chat-form.tsx` (73KB) |
+| **Chat Search** | Sidebar overlay | `search/chat-search.tsx` |
+| **Archive/History** | Sidebar tab (history) | `history/history-view.tsx` |
+| **Quick Switch Dialogs** | Modal overlays | `agents-quick-switch-dialog.tsx`, `subchats-quick-switch-dialog.tsx` |
+| **Settings Dialog** | Modal | `components/dialogs/agents-settings-dialog.tsx` |
+| **Project Settings** | Main area (via detail icon) | `ui/project-detail-page.tsx` |
+| **Workflows** | Main area (settings > workflows) | `workflows/ui/workflows-content.tsx` |
+| **MCP Servers** | Main area (mcps tab) | `mcp/ui/mcp-content.tsx` |
+| **Kubernetes Clusters** | Main area (clusters tab) | `clusters/ui/clusters-content.tsx` |
+| **GSD Planning** | Main area (gsd tab) + right sidebar | `gsd/ui/gsd-content.tsx`, `gsd-chat-sidebar.tsx` |
+| **GitHub Integration** | Main area (github tab) | `github/components/github-view.tsx` |
+| **System Prompts** | Main area (prompts tab) | `prompts/ui/prompts-view.tsx` |
+
+### State Management Quick Reference
+
+**Source of Truth:** `src/renderer/features/agents/atoms/index.ts`
+
+**Core Jotai Atoms:**
+
+```typescript
+// Chat Selection
+selectedAgentChatIdAtom           // Current workspace ID (null = new chat)
+selectedDraftIdAtom               // Draft restoration
+previousAgentChatIdAtom           // For post-archive navigation
+
+// Sidebar Navigation
+selectedSidebarTabAtom            // Active tab ("chats" | "history" | "agents" | etc.)
+agentsSidebarOpenAtom             // Sidebar visibility
+sidebarContentCollapsedAtom       // Content panel collapsed (icon-only mode)
+selectedProjectDetailIdAtom       // Project settings view
+
+// Preview (per-chat via atomFamily)
+previewPathAtomFamily(chatId)     // Current preview path
+viewportModeAtomFamily(chatId)    // Desktop vs mobile preview
+previewScaleAtomFamily(chatId)    // Zoom level
+mobileDeviceAtomFamily(chatId)    // Device dimensions
+
+// Diff View (per-chat via atomFamily)
+diffSidebarOpenAtomFamily(chatId) // Diff sidebar visibility
+diffViewDisplayModeAtom           // "side-peek" | "center-peek" | "full-page"
+filteredDiffFilesAtom             // File path filter
+selectedDiffFilePathAtom          // Highlighted file
+filteredSubChatIdAtom             // Filter by sub-chat
+viewedFilesAtomFamily(chatId)     // GitHub-style "Viewed" tracking
+
+// Mode & Preferences
+agentModeAtom                     // "agent" | "plan"
+lastSelectedAgentIdAtom           // Default agent selection
+lastSelectedModelIdAtom           // Default model selection
+lastSelectedWorkModeAtom          // "local" | "worktree"
+
+// UI State
+loadingSubChatsAtom               // Map<subChatId, parentChatId>
+pendingUserQuestionsAtom          // AskUserQuestion dialogs
+pendingPlanApprovalsAtom          // Sub-chats awaiting plan approval
+pendingPrMessageAtom              // PR creation message
+pendingReviewMessageAtom          // Review message
+```
+
+**Zustand Stores:**
+
+```typescript
+// Sub-Chat Tab Management (src/renderer/lib/stores/sub-chat-store.ts)
+useAgentSubChatStore
+  - chatId                        // Current workspace
+  - allSubChats                   // All sub-chats metadata
+  - openSubChatIds                // Tab order
+  - activeSubChatId               // Currently visible tab
+  - pinnedSubChatIds              // Pinned tabs
+
+  // Methods
+  - setChatId(id)                 // Switch workspace
+  - setActiveSubChat(id)          // Switch tab
+  - addToOpenSubChats(id)         // Open new tab
+  - togglePinSubChat(id)          // Pin/unpin
+```
+
+### Sidebar Tab Routing
+
+**How Tabs Work:**
+1. User clicks tab icon in `SidebarTabBar` (vertical icons)
+2. `selectedSidebarTabAtom` updates
+3. `AgentsLayout` shows corresponding sidebar content (if not collapsed)
+4. `AgentsContent` routes to corresponding main view
+
+**Tab → Sidebar Content → Main View:**
+
+| Tab ID | Sidebar Content | Main Content | Notes |
+|--------|----------------|--------------|-------|
+| `"chats"` | WorkspacesTabContent | ChatView / NewChatForm | Default tab, shows workspace list |
+| `"history"` | HistoryTabContent | HistoryChatView | Read-only archive view |
+| `"agents"` | AgentsTabContent | (detail view) | Available agents list |
+| `"skills"` | SkillsTabContent | (detail view) | Skills/commands list |
+| `"mcps"` | McpsTabContent | McpContent | MCP servers |
+| `"terminal"` | TerminalTabContent | TerminalMainView | Terminal sessions |
+| `"clusters"` | (no sidebar) | ClustersContent | Kubernetes management |
+| `"gsd"` | (no sidebar) | GsdContent | GSD planning framework |
+| `"github"` | (no sidebar) | GitHubView | GitHub integration |
+| `"prompts"` | (no sidebar) | PromptsView | System prompts |
+| `"claws"` | ClawsTabContent | ExecutionHistoryViewer | Claw executions |
+| `"settings"` | CcSettingsTabContent | CcSettingsContent | App settings |
+
+### Right Sidebar Display Modes
+
+The right sidebar supports 3 display modes (controlled by `RightIconBar`):
+
+1. **side-peek** (sidebar) - Resizable sidebar panel, state persisted across sessions
+2. **center-peek** (dialog) - Modal overlay, runtime state only (doesn't auto-restore)
+3. **full-page** (fullscreen) - Fullscreen view, runtime state only
+
+**Applicable to:**
+- Preview (`agentsPreviewSidebarOpenAtom`)
+- Diff View (`diffSidebarOpenAtomFamily` + `diffViewDisplayModeAtom`)
+- GSD Planning (`gsdChatSidebarOpenAtom` + `gsdDisplayModeAtom`)
+
+### Reusable UI Components
+
+**Location:** `src/renderer/components/ui/`
+
+All components are Radix UI wrappers with Tailwind styling:
+
+| Component | Purpose | Key Props |
+|-----------|---------|-----------|
+| Button | Primary action buttons | variant, size, onClick |
+| Dialog | Modal dialogs | open, onOpenChange |
+| DropdownMenu | Context menus | trigger, items, onSelect |
+| Tabs | Tab navigation | defaultValue, onValueChange |
+| Input/Textarea | Form inputs | value, onChange, placeholder |
+| Select | Dropdown select | value, onValueChange, items |
+| Checkbox/Switch | Toggle controls | checked, onCheckedChange |
+| Tooltip | Hover tooltips | content, delayDuration |
+| Card | Content containers | className, children |
+| Badge | Tag labels | variant, children |
+| Accordion | Collapsible sections | type, items |
+| ScrollArea | Custom scrollbars | className, children |
+| Kbd | Keyboard key labels | children |
+| Skeleton | Loading placeholders | className |
+
+**Custom Components:**
+- **ResizableSidebar** - Draggable resizable sidebar with width persistence
+- **PromptInput** - Main chat input with attachments, slash commands, image paste
+- **ButtonGroup** - Grouped button controls
+- **NetworkStatus** - Connection indicator
+- **Canvas Icons** - Large icon library (lucide-react based)
+- **Text Shimmer** - Animated text effect
+- **Typewriter Text** - Typing animation for AI responses
+
+### Finding UI Elements (Quick Reference)
+
+**"Where do I find...?"**
+
+| UI Element | Location | File Path |
+|------------|----------|-----------|
+| Main chat input box | ChatView → ChatInputArea | `features/agents/main/chat-input-area.tsx` |
+| Message list | ChatView → MessagesListWrapper | `features/agents/main/messages-list.tsx` |
+| Sub-chat tabs | Top of ChatView | `features/sub-chats/sub-chat-tabs.tsx` |
+| Workspace list | Sidebar → WorkspacesTabContent | `features/sidebar/components/workspaces-tab-content.tsx` |
+| New chat button | Sidebar header | `features/sidebar/agents-sidebar.tsx` |
+| Settings dialog | Modal | `components/dialogs/agents-settings-dialog.tsx` |
+| Traffic lights (macOS) | Header bar | `features/agents/components/traffic-light-spacer.tsx` |
+| Preview iframe | Right sidebar | `features/agents/ui/agent-preview.tsx` |
+| File diff viewer | Right sidebar | `features/agents/ui/agent-diff-view.tsx` |
+| Terminal panel | Right sidebar + main view | `features/terminal/terminal.tsx` |
+| Session flow tree | Right sidebar | `features/session-flow/session-flow-renderer.tsx` |
+| Tool renderers | Message list | `features/ui/agent-*-tool.tsx` files |
+| Slash commands | ChatInputArea | `features/agents/commands/` |
+| Quick switch (workspaces) | Modal overlay | `features/agents/components/agents-quick-switch-dialog.tsx` |
+| Quick switch (tabs) | Modal overlay | `features/agents/components/subchats-quick-switch-dialog.tsx` |
+| Archive view | Main area (history tab) | `features/history/history-view.tsx` |
+| GitHub integration | Main area (github tab) | `features/github/components/github-view.tsx` |
+| System prompts | Main area (prompts tab) | `features/prompts/ui/prompts-view.tsx` |
+
+### Component Organization Pattern
+
+**Standard Feature Structure:**
+```
+features/<feature-name>/
+├── ui/                  # Main UI components
+├── components/          # Sub-components
+├── atoms/               # Jotai atoms (feature-specific state)
+├── stores/              # Zustand stores (if needed)
+├── hooks/               # Custom React hooks
+└── lib/                 # Utilities, helpers
+```
+
+### Maintaining This Documentation
+
+**CRITICAL:** When making UI changes, you MUST update the relevant sections above:
+
+1. **Add new components** → Update "Feature-to-Component Mapping" table
+2. **Add new atoms/stores** → Update "State Management Quick Reference"
+3. **Add new sidebar tabs** → Update "Sidebar Tab Routing" table
+4. **Add new right sidebar panels** → Update "Right Sidebar Display Modes"
+5. **Reorganize layout** → Update "Visual Layout Overview" diagram
+6. **Add new features** → Update "Finding UI Elements" quick reference
+
+**Why this matters:**
+- CLAUDE.md is Claude Code's primary reference for understanding the codebase
+- Outdated documentation leads to incorrect assumptions and wasted effort
+- Keeping it current ensures Claude Code can leverage existing patterns
+
 ## Database (Drizzle ORM)
 
 **Location:** `{userData}/data/agents.db` (SQLite)
