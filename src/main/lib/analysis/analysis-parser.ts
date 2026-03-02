@@ -17,10 +17,28 @@ export function parseAnalysisResult(responseText: string, toolOutput?: string): 
     if (toolOutput && toolOutput.trim()) {
       try {
         const parsed = JSON.parse(toolOutput)
-        if (parsed.nodes && parsed.edges) {
+        if (parsed.nodes && parsed.edges && Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
+          const validNodeIds = new Set(parsed.nodes.map((n: { id: string }) => n.id))
+          const validEdges = parsed.edges.filter((edge: { source?: string; target?: string; id?: string }, index: number) => {
+            const { source, target } = edge
+            if (!source || !target || source === "undefined" || target === "undefined") {
+              console.warn(`[parseAnalysisResult] toolOutput edge ${index} (${edge.id || 'no-id'}) missing source/target`)
+              return false
+            }
+            if (!validNodeIds.has(source)) {
+              console.warn(`[parseAnalysisResult] toolOutput edge ${index} (${edge.id || 'no-id'}) invalid source: "${source}"`)
+              return false
+            }
+            if (!validNodeIds.has(target)) {
+              console.warn(`[parseAnalysisResult] toolOutput edge ${index} (${edge.id || 'no-id'}) invalid target: "${target}"`)
+              return false
+            }
+            return true
+          })
+          console.log(`[parseAnalysisResult] toolOutput: validated ${validEdges.length}/${parsed.edges.length} edges`)
           return {
             nodes: parsed.nodes,
-            edges: parsed.edges,
+            edges: validEdges,
             summary: parsed.summary,
             stats: parsed.stats,
           }

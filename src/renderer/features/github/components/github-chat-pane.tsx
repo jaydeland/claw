@@ -139,6 +139,9 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   const [streamingContent, setStreamingContent] = useState("")
   const streamingTextRef = useRef("")
 
+  // Track auto-retry attempts for invalid session errors (prevents infinite loops)
+  const retryCountRef = useRef(0)
+
   // Sync DB session into local state when it becomes available
   useEffect(() => {
     if (chatId && subChatId && !session) {
@@ -186,11 +189,23 @@ export const GitHubChatPane = memo(function GitHubChatPane({
         return
       }
 
+      // Validate edges — filter out any that reference non-existent node IDs
+      const validNodeIds = new Set(data.nodes.map((n: { id: string }) => n.id))
+      const validEdges = data.edges.filter((edge: { source?: string; target?: string; id?: string }) => {
+        const { source, target } = edge
+        if (!source || !target || source === "undefined" || target === "undefined") return false
+        if (!validNodeIds.has(source) || !validNodeIds.has(target)) {
+          console.warn(`[GitHubChatPane] Dropping edge ${edge.id}: source "${source}" or target "${target}" not in nodes`)
+          return false
+        }
+        return true
+      })
+
       // Apply the update
       await updateDiagramMutation.mutateAsync({
         id: existingDiagram.id,
         nodes: data.nodes,
-        edges: data.edges,
+        edges: validEdges,
         summary: data.summary || existingDiagram.summary || undefined,
       })
 
@@ -272,8 +287,24 @@ export const GitHubChatPane = memo(function GitHubChatPane({
           setStreamingContent("")
           setPendingPrompt(null)
           setIsStreaming(false)
+          retryCountRef.current = 0
         } else if (chunk.type === "error" || chunk.type === "auth-error") {
           const errorMsg = (chunk as any).errorText || "An error occurred"
+          const debugInfo = (chunk as any).debugInfo
+
+          // Auto-retry on invalid session — backend already cleared sessionId from DB,
+          // so re-triggering the subscription will start a fresh session
+          if (debugInfo?.category === "INVALID_SESSION" && pendingPrompt && retryCountRef.current < 1) {
+            console.log("[GitHubChatPane] Invalid session detected, auto-retrying with fresh session")
+            retryCountRef.current++
+            streamingTextRef.current = ""
+            setStreamingContent("")
+            const savedPrompt = pendingPrompt
+            setPendingPrompt(null)
+            setTimeout(() => setPendingPrompt(savedPrompt), 50)
+            return
+          }
+
           setMessages((prev) => [
             ...prev,
             {
@@ -291,6 +322,22 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       },
       onError: (err) => {
         console.error("[GitHubChatPane] Chat subscription error:", err)
+
+        // Auto-retry on invalid session errors
+        const isInvalidSession =
+          err.message?.includes("No conversation found") ||
+          err.message?.includes("Invalid session ID")
+        if (isInvalidSession && pendingPrompt && retryCountRef.current < 1) {
+          console.log("[GitHubChatPane] Invalid session (onError), auto-retrying with fresh session")
+          retryCountRef.current++
+          streamingTextRef.current = ""
+          setStreamingContent("")
+          const savedPrompt = pendingPrompt
+          setPendingPrompt(null)
+          setTimeout(() => setPendingPrompt(savedPrompt), 50)
+          return
+        }
+
         setMessages((prev) => [
           ...prev,
           {
@@ -512,6 +559,7 @@ You can also suggest modifications to the diagram if you'd like to reorganize it
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || isStreaming) return
+    retryCountRef.current = 0
 
     // For visualize mode without a session, create one first
     let resolvedSession = session

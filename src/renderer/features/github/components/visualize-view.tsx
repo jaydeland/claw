@@ -10,6 +10,8 @@ import ReactFlow, {
   useEdgesState,
   ReactFlowProvider,
   useReactFlow,
+  Handle,
+  Position,
   type Node,
   type Edge,
   MarkerType,
@@ -113,6 +115,8 @@ function VisualizeViewInner({
           height: n.height,
         }))
 
+        const nodeIdSet = new Set(transformedNodes.map((n) => n.id))
+
         const strokeColor = "#64748b"
         const transformedEdges: Edge[] = flowEdges
           .map((e, index) => {
@@ -124,6 +128,11 @@ function VisualizeViewInner({
             if (target === "undefined") target = undefined
 
             if (!source || !target) {
+              return null
+            }
+
+            // Skip edges that reference non-existent nodes
+            if (!nodeIdSet.has(source) || !nodeIdSet.has(target)) {
               return null
             }
 
@@ -297,20 +306,24 @@ function AnalysisNode({ data, id }: { data: Record<string, unknown>; id: string 
   }
 
   return (
-    <div
-      className={cn(
-        "border-2 p-3 shadow-sm cursor-pointer transition-all hover:shadow-md min-w-[150px]",
-        getNodeStyle()
-      )}
-    >
-      <div className="font-semibold text-sm truncate">{(data.label as string) || id}</div>
-      {data.description && (
-        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{data.description as string}</div>
-      )}
-      {data.tech && (
-        <div className="text-xs text-muted-foreground mt-1 font-mono">{data.tech as string}</div>
-      )}
-    </div>
+    <>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 !border-slate-500" />
+      <div
+        className={cn(
+          "border-2 p-3 shadow-sm cursor-pointer transition-all hover:shadow-md min-w-[150px]",
+          getNodeStyle()
+        )}
+      >
+        <div className="font-semibold text-sm truncate">{(data.label as string) || id}</div>
+        {data.description && (
+          <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{data.description as string}</div>
+        )}
+        {data.tech && (
+          <div className="text-xs text-muted-foreground mt-1 font-mono">{data.tech as string}</div>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !border-slate-500" />
+    </>
   )
 }
 
