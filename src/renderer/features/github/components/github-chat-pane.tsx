@@ -238,6 +238,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
       cwd: projectPath,
       projectPath,
       mode: "agent",
+      disableMcpAndSkills: selection?.type === "visualize",
     },
     {
       enabled: !!session && !!pendingPrompt,

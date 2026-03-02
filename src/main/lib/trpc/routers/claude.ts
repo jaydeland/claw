@@ -677,6 +677,7 @@ export const claudeRouter = router({
         maxThinkingTokens: z.number().optional(), // Enable extended thinking
         images: z.array(imageAttachmentSchema).optional(), // Image attachments
         historyEnabled: z.boolean().optional(),
+        disableMcpAndSkills: z.boolean().optional(), // Skip MCP servers and skill loading (e.g. visualization chat)
       }),
     )
     .subscription(({ input }) => {
@@ -969,15 +970,18 @@ export const claudeRouter = router({
             try {
               await ensureSymlinks(isolatedConfigDir)
 
-              // Get merged MCP config from all sources (project, custom, user, custom)
-              // This consolidates configs in priority order: project (10) → custom (20) → user (100)
-              try {
-                const lookupPath = input.projectPath || input.cwd
-                const mergedConfig = await getMergedMcpConfig(lookupPath)
-                // Inject stored OAuth credentials into server configs
-                mcpServersForSdk = await injectAllStoredCredentials(mergedConfig.mcpServers)
-              } catch (configErr) {
-                console.error(`[claude] Failed to get merged MCP config:`, configErr)
+              // Skip MCP loading when disabled (e.g. visualization split chat)
+              if (!input.disableMcpAndSkills) {
+                // Get merged MCP config from all sources (project, custom, user, custom)
+                // This consolidates configs in priority order: project (10) → custom (20) → user (100)
+                try {
+                  const lookupPath = input.projectPath || input.cwd
+                  const mergedConfig = await getMergedMcpConfig(lookupPath)
+                  // Inject stored OAuth credentials into server configs
+                  mcpServersForSdk = await injectAllStoredCredentials(mergedConfig.mcpServers)
+                } catch (configErr) {
+                  console.error(`[claude] Failed to get merged MCP config:`, configErr)
+                }
               }
             } catch (mkdirErr) {
               console.error(`[claude] Failed to setup isolated config dir:`, mkdirErr)
@@ -1106,7 +1110,10 @@ export const claudeRouter = router({
                 }),
                 includePartialMessages: true,
                 // Load skills from project, user, and local plugin directories
-                settingSources: ["project" as const, "user" as const, "local" as const],
+                // Skipped when disableMcpAndSkills is set (e.g. visualization split chat)
+                ...(!input.disableMcpAndSkills && {
+                  settingSources: ["project" as const, "user" as const, "local" as const],
+                }),
                 canUseTool: async (
                   toolName: string,
                   toolInput: Record<string, unknown>,
