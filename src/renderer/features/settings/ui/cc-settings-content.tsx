@@ -2,7 +2,7 @@
 
 import React, { useState } from "react"
 import { useAtomValue } from "jotai"
-import { ShieldCheck, Webhook, TerminalSquare, LayoutDashboard, Plus, Trash2, Loader2, AlertCircle, CheckCircle2, FolderOpen, Lock } from "lucide-react"
+import { ShieldCheck, Webhook, TerminalSquare, LayoutDashboard, Plus, Trash2, Loader2, AlertCircle, CheckCircle2, FolderOpen, Lock, Network, Cpu, Server } from "lucide-react"
 import { trpc } from "../../../lib/trpc"
 import { selectedSettingsCategoryAtom } from "../../agents/atoms"
 import { cn } from "../../../lib/utils"
@@ -10,6 +10,9 @@ import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
 import { ScrollArea } from "../../../components/ui/scroll-area"
 import { ClaudeCodeIcon } from "../../../components/ui/canvas-icons"
+import { AgentsCustomAgentsTab } from "../../../components/dialogs/settings-tabs/agents-custom-agents-tab"
+import { AgentsSkillsTab } from "../../../components/dialogs/settings-tabs/agents-skills-tab"
+import { AgentsMcpTab } from "../../../components/dialogs/settings-tabs/agents-mcp-tab"
 
 // ─── Overview ────────────────────────────────────────────────────────────────
 
@@ -373,8 +376,18 @@ export function CcSettingsContent() {
           {category === "permissions" && <ShieldCheck className="h-4 w-4 text-primary" />}
           {category === "hooks" && <Webhook className="h-4 w-4 text-primary" />}
           {category === "status-line" && <TerminalSquare className="h-4 w-4 text-primary" />}
+          {(category === "agents-overview" || category === "agents-permissions") && <Network className="h-4 w-4 text-primary" />}
+          {(category === "skills-overview" || category === "skills-hooks") && <Cpu className="h-4 w-4 text-primary" />}
+          {(category === "mcps-overview" || category === "mcps-permissions") && <Server className="h-4 w-4 text-primary" />}
           <span className="text-sm font-semibold capitalize">
-            {category === "status-line" ? "Status Line" : category}
+            {category === "status-line" ? "Status Line" :
+             category === "agents-overview" ? "Agents" :
+             category === "agents-permissions" ? "Agent Permissions" :
+             category === "skills-overview" ? "Skills" :
+             category === "skills-hooks" ? "Skill Hooks" :
+             category === "mcps-overview" ? "MCP Servers" :
+             category === "mcps-permissions" ? "MCP Permissions" :
+             category}
           </span>
         </div>
 
@@ -415,6 +428,38 @@ export function CcSettingsContent() {
             />
           )}
         </div>
+
+        {/* Full-bleed sections for Agents / Skills / MCPs */}
+        {category === "agents-overview" && <AgentsCustomAgentsTab />}
+        {category === "agents-permissions" && (
+          <div className="p-4">
+            <PermissionsSection
+              settings={settings}
+              onSave={handleSave}
+              isSaving={writeMutation.isPending}
+            />
+          </div>
+        )}
+        {category === "skills-overview" && <AgentsSkillsTab />}
+        {category === "skills-hooks" && (
+          <div className="p-4">
+            <HooksSection
+              settings={settings}
+              onSave={handleSave}
+              isSaving={writeMutation.isPending}
+            />
+          </div>
+        )}
+        {category === "mcps-overview" && <AgentsMcpTab />}
+        {category === "mcps-permissions" && (
+          <div className="p-4">
+            <PermissionsSection
+              settings={settings}
+              onSave={handleSave}
+              isSaving={writeMutation.isPending}
+            />
+          </div>
+        )}
       </ScrollArea>
     </div>
   )
