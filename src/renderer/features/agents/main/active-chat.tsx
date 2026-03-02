@@ -4304,7 +4304,8 @@ export function ChatView({
   const sandboxId = agentChat?.sandbox_id
   const sandboxUrl = sandboxId ? `https://3003-${sandboxId}.e2b.app` : null
   // Desktop uses worktreePath, web uses sandboxUrl
-  const chatWorkingDir = worktreePath || sandboxUrl
+  // Contextual chats (GitHub, Prompts, Commands) have no worktree — fall back to project path
+  const chatWorkingDir = worktreePath || sandboxUrl || originalProjectPath || null
 
   // Listen for file changes from Claude Write/Edit tools and invalidate git status
   useFileChangeListener(worktreePath)
@@ -4965,12 +4966,14 @@ Make sure to preserve all functionality from both branches when resolving confli
       // Desktop: use IPCChatTransport for local Claude Code execution
       // Note: Extended thinking setting is read dynamically inside the transport
       // projectPath: original project path for MCP config lookup (worktreePath is the cwd)
+      // For contextual chats (no worktree), fall back to projectPath as cwd
       const projectPath = (agentChat as any)?.project?.path as string | undefined
-      const transport = worktreePath
+      const cwd = worktreePath || projectPath
+      const transport = cwd
         ? new IPCChatTransport({
             chatId,
             subChatId,
-            cwd: worktreePath,
+            cwd,
             projectPath,
             mode: subChatMode,
           })
