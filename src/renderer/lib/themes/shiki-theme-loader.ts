@@ -142,6 +142,10 @@ const THEME_TO_SHIKI_MAP: Record<string, shiki.BundledTheme> = {
   "min-light": "min-light",
   // Cursor themes have their own tokenColors - use them directly via loadFullTheme
   // (not in this map, so they'll use their own tokenColors)
+  // Themes without tokenColors - fall back to github-dark for syntax highlighting
+  "synthwave-84": "github-dark",
+  "cobalt2": "github-dark",
+  "dracula": "github-dark",
 }
 
 /**
@@ -212,9 +216,13 @@ function getShikiThemeForHighlighting(themeId: string): string {
     return themeId
   }
   
-  // If the theme is loaded in our cache (has tokenColors), use it directly
+  // If the theme is loaded in our cache AND has actual tokenColors, use it directly
   if (fullThemesCache.has(themeId)) {
-    return themeId
+    const cached = fullThemesCache.get(themeId)
+    if (cached && Array.isArray(cached.tokenColors) && cached.tokenColors.length > 0) {
+      return themeId
+    }
+    // Theme cached but has no tokenColors - fall through to builtin fallback
   }
   
   // Check the theme type and use appropriate default
