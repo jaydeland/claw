@@ -150,6 +150,38 @@ export const VSCODE_TO_CSS_MAP: Record<string, string[]> = {
     "panel.background",
     "editor.background",
   ],
+
+  // Diff editor colors (for git diff highlighting)
+  "--diff-inserted-bg": [
+    "diffEditor.insertedLineBackground",
+    "diffEditor.insertedTextBackground",
+  ],
+  "--diff-removed-bg": [
+    "diffEditor.removedLineBackground",
+    "diffEditor.removedTextBackground",
+  ],
+  "--diff-inserted-text": [
+    "diffEditor.insertedTextForeground",
+    "editor.foreground",
+  ],
+  "--diff-removed-text": [
+    "diffEditor.removedTextForeground",
+    "editor.foreground",
+  ],
+
+  // Git decoration colors (for file status indicators)
+  "--git-added": [
+    "gitDecoration.addedResourceForeground",
+    "terminal.ansiGreen",
+  ],
+  "--git-modified": [
+    "gitDecoration.modifiedResourceForeground",
+    "terminal.ansiYellow",
+  ],
+  "--git-deleted": [
+    "gitDecoration.deletedResourceForeground",
+    "terminal.ansiRed",
+  ],
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { AlignJustify, Plus } from "lucide-react"
+import { AlignJustify, Plus, MessageCircle, Hash, Link2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Button } from "../../../components/ui/button"
@@ -185,6 +185,7 @@ export function NewChatForm({
 }: NewChatFormProps = {}) {
   // UNCONTROLLED: just track if editor has content for send button
   const [hasContent, setHasContent] = useState(false)
+  const [selectedConnection, setSelectedConnection] = useState<"none" | "whatsapp" | "slack">("none")
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
@@ -202,6 +203,10 @@ export function NewChatForm({
   // Fetch projects to validate selectedProject exists
   const { data: projectsList, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
+
+  // Check connection service availability
+  const { data: whatsappStatus } = trpc.whatsapp.getStatus.useQuery(undefined, { refetchInterval: 10000 })
+  const { data: slackCredentials } = trpc.slack.hasCredentials.useQuery()
 
   // Validate selected project exists in DB
   // While loading, trust the stored value to prevent flicker
@@ -767,6 +772,10 @@ export function NewChatForm({
       return bDate - aDate
     })
 
+  // Connection claw mutations
+  const createClawMutation = trpc.claws.create.useMutation()
+  const setupSlackClawMutation = trpc.slack.setupChannelClaw.useMutation()
+
   // Create chat mutation (real tRPC)
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
@@ -922,7 +931,7 @@ export function NewChatForm({
     }
 
     // Create chat with selected project, branch, and initial message
-    createChatMutation.mutate({
+    const chatData = await createChatMutation.mutateAsync({
       projectId: selectedProject.id,
       name: message.trim().slice(0, 50), // Use first 50 chars as chat name
       initialMessageParts: parts.length > 0 ? parts : undefined,
@@ -932,10 +941,46 @@ export function NewChatForm({
       mode: agentMode,
     })
     // Editor and images are cleared in onSuccess callback
+
+    // Auto-connect a Claw to the selected chat connection
+    if (selectedConnection !== "none" && selectedProject?.path) {
+      try {
+        if (selectedConnection === "whatsapp") {
+          await createClawMutation.mutateAsync({
+            name: `WhatsApp: ${chatData.name || message.trim().slice(0, 30) || "Chat"}`,
+            instruction: message.trim() || `Handle WhatsApp messages for the ${selectedProject.name} project.`,
+            targetWorktree: selectedProject.path,
+            triggerType: "whatsapp_message",
+            triggerConfig: {},
+            isEnabled: true,
+          })
+          toast.success("Connected to WhatsApp")
+        } else if (selectedConnection === "slack") {
+          const channelName = (message.trim().slice(0, 30) || selectedProject.name)
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 80) || "claw-chat"
+          await setupSlackClawMutation.mutateAsync({
+            channelName,
+            projectPath: selectedProject.path,
+            projectName: selectedProject.name,
+          })
+          toast.success("Connected to Slack")
+        }
+      } catch (err) {
+        console.error("[NewChatForm] Failed to create connection claw:", err)
+        toast.error(`Chat created but failed to connect to ${selectedConnection === "whatsapp" ? "WhatsApp" : "Slack"}`)
+      }
+    }
   }, [
     selectedProject,
     validatedProject?.path,
     createChatMutation,
+    createClawMutation,
+    setupSlackClawMutation,
+    selectedConnection,
     hasContent,
     selectedBranch,
     workMode,
@@ -1523,6 +1568,70 @@ export function NewChatForm({
                         onGsdSelect={handleSkillSelect}
                         disabled={createChatMutation.isPending}
                       />
+
+                      {/* Chat Connection Dropdown - WhatsApp / Slack */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-50 disabled:pointer-events-none"
+                          disabled={createChatMutation.isPending}
+                        >
+                          {selectedConnection === "whatsapp" ? (
+                            <MessageCircle className="h-3.5 w-3.5 text-green-500" />
+                          ) : selectedConnection === "slack" ? (
+                            <Hash className="h-3.5 w-3.5 text-purple-500" />
+                          ) : (
+                            <Link2 className="h-3.5 w-3.5" />
+                          )}
+                          <span>
+                            {selectedConnection === "none"
+                              ? "Connect"
+                              : selectedConnection === "whatsapp"
+                              ? "WhatsApp"
+                              : "Slack"}
+                          </span>
+                          <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" sideOffset={6} className="!min-w-[150px]" onCloseAutoFocus={(e) => e.preventDefault()}>
+                          <DropdownMenuItem
+                            onClick={() => setSelectedConnection("none")}
+                            className="justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Link2 className="w-4 h-4 text-muted-foreground" />
+                              <span>No connection</span>
+                            </div>
+                            {selectedConnection === "none" && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setSelectedConnection("whatsapp")}
+                            disabled={!whatsappStatus?.isConnected}
+                            className="justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <MessageCircle className="w-4 h-4 text-green-500" />
+                              <span>WhatsApp</span>
+                            </div>
+                            {selectedConnection === "whatsapp" && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setSelectedConnection("slack")}
+                            disabled={!slackCredentials?.hasAppToken || !slackCredentials?.hasBotToken}
+                            className="justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Hash className="w-4 h-4 text-purple-500" />
+                              <span>Slack</span>
+                            </div>
+                            {selectedConnection === "slack" && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
 
                     <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">

@@ -27,9 +27,10 @@ export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps
   const activeProjectId = activeProject?.id ?? ""
   const activeProjectPath = activeProject?.path ?? ""
 
-  // Panel widths (as percentages for responsive layout)
+  // Panel widths (as percentages of total container width)
+  // Three panels: tree | content | chat
   const [treeWidth, setTreeWidth] = useState(20) // percentage
-  const [contentWidth, setContentWidth] = useState(50) // percentage of remaining space
+  const [contentWidth, setContentWidth] = useState(50) // percentage
   const [isDraggingTree, setIsDraggingTree] = useState(false)
   const [isDraggingContent, setIsDraggingContent] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -54,18 +55,25 @@ export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps
       const containerRect = containerRef.current.getBoundingClientRect()
       const x = e.clientX - containerRect.left
       const containerWidth = containerRect.width
+      const mousePercent = (x / containerWidth) * 100
 
       if (isDraggingTree) {
-        // Calculate tree width as percentage
-        const newTreeWidth = Math.max(15, Math.min(30, (x / containerWidth) * 100))
+        // Tree panel: min 15%, max 35%
+        // Must leave at least 25% for content + 20% for chat = 45% minimum remaining
+        const maxTreeWidth = Math.min(35, 100 - 45)
+        const newTreeWidth = Math.max(15, Math.min(maxTreeWidth, mousePercent))
         setTreeWidth(newTreeWidth)
       } else if (isDraggingContent) {
-        // Calculate content width relative to remaining space
-        const remainingWidth = containerWidth * ((100 - treeWidth) / 100)
-        const contentX = x - containerWidth * (treeWidth / 100)
-        // Allow content to be as small as 20% or as large as 80% of remaining space
-        // This gives more flexibility for the chat pane to be wider
-        const newContentWidth = Math.max(20, Math.min(80, (contentX / remainingWidth) * 100))
+        // Content ends where the mouse is (minus tree width)
+        // Content width = mouseX - treeWidth
+        const rawContentWidth = mousePercent - treeWidth
+
+        // Content min: 25%, Content max: whatever leaves 20% for chat
+        const minContentWidth = 25
+        const maxContentWidth = 100 - treeWidth - 20 // Leave at least 20% for chat
+
+        // Clamp to valid range
+        const newContentWidth = Math.max(minContentWidth, Math.min(maxContentWidth, rawContentWidth))
         setContentWidth(newContentWidth)
       }
     }
@@ -83,9 +91,10 @@ export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps
         document.removeEventListener("mouseup", handleMouseUp)
       }
     }
-  }, [isDraggingTree, isDraggingContent, treeWidth])
+  }, [isDraggingTree, isDraggingContent, treeWidth, contentWidth])
 
-  const chatWidth = 100 - contentWidth
+  // Calculate chat width as remaining space (min 20%)
+  const chatWidth = Math.max(20, 100 - treeWidth - contentWidth)
 
   return (
     <div
@@ -98,7 +107,7 @@ export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps
         <h2 className="text-lg font-semibold">GitHub</h2>
       </div>
 
-      {/* Main content with resizable panels */}
+      {/* Main content with resizable panels - flat structure for absolute percentages */}
       <div className="flex-1 flex overflow-hidden">
         {/* Tree Pane */}
         <div
@@ -108,53 +117,58 @@ export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps
           <GitHubTreePane projects={projects} />
         </div>
 
-        {/* Tree resize handle */}
+        {/* Tree/Content resize handle */}
         <div
           className={cn(
-            "w-1 flex-shrink-0 bg-border hover:bg-primary/50 cursor-col-resize flex items-center justify-center transition-colors",
+            "w-1.5 flex-shrink-0 bg-border/50 hover:bg-primary/30 cursor-col-resize flex items-center justify-center transition-all",
             isDraggingTree && "bg-primary"
           )}
           onMouseDown={handleTreeMouseDown}
+          title="Drag to resize tree panel"
         >
-          <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 hover:opacity-100" />
+          <GripVertical className={cn(
+            "h-4 w-4 text-muted-foreground transition-opacity",
+            isDraggingTree ? "opacity-100" : "opacity-0 hover:opacity-70"
+          )} />
         </div>
 
-        {/* Content + Chat Panes */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Content Pane */}
-          <div
-            className="overflow-hidden"
-            style={{ width: `${contentWidth}%` }}
-          >
-            <GitHubContentPane
-              projectId={activeProjectId}
-              projectPath={activeProjectPath}
-              selection={selection}
-            />
-          </div>
+        {/* Content Pane */}
+        <div
+          className="flex-shrink-0 overflow-hidden border-r border-border"
+          style={{ width: `${contentWidth}%` }}
+        >
+          <GitHubContentPane
+            projectId={activeProjectId}
+            projectPath={activeProjectPath}
+            selection={selection}
+          />
+        </div>
 
-          {/* Content/Chat resize handle */}
-          <div
-            className={cn(
-              "w-1 flex-shrink-0 bg-border hover:bg-primary/50 cursor-col-resize flex items-center justify-center transition-colors",
-              isDraggingContent && "bg-primary"
-            )}
-            onMouseDown={handleContentMouseDown}
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 hover:opacity-100" />
-          </div>
+        {/* Content/Chat resize handle */}
+        <div
+          className={cn(
+            "w-1.5 flex-shrink-0 bg-border/50 hover:bg-primary/30 cursor-col-resize flex items-center justify-center transition-all",
+            isDraggingContent && "bg-primary"
+          )}
+          onMouseDown={handleContentMouseDown}
+          title="Drag to resize chat panel"
+        >
+          <GripVertical className={cn(
+            "h-4 w-4 text-muted-foreground transition-opacity",
+            isDraggingContent ? "opacity-100" : "opacity-0 hover:opacity-70"
+          )} />
+        </div>
 
-          {/* Chat Pane */}
-          <div
-            className="overflow-hidden border-l border-border"
-            style={{ width: `${chatWidth}%` }}
-          >
-            <GitHubChatPane
-              projectId={activeProjectId}
-              projectPath={activeProjectPath}
-              selection={selection}
-            />
-          </div>
+        {/* Chat Pane */}
+        <div
+          className="flex-shrink-0 overflow-hidden"
+          style={{ width: `${chatWidth}%` }}
+        >
+          <GitHubChatPane
+            projectId={activeProjectId}
+            projectPath={activeProjectPath}
+            selection={selection}
+          />
         </div>
       </div>
     </div>
