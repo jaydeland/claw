@@ -81,13 +81,16 @@ export class SlackTrigger {
         await this.handleMessage(event)
       })
 
-      // Handle direct messages
+      // Handle all messages (channel messages, DMs, group DMs)
       this.socketClient.on("message", async ({ event, ack }) => {
         await ack()
-        // Only respond to direct messages (IM = instant message)
-        if (event.channel_type === "im" && !event.bot_id) {
-          await this.handleMessage(event)
+        // Ignore bot messages to prevent loops
+        if (event.bot_id) {
+          return
         }
+        // Handle all message types (channel, IM, MPIM, group)
+        // Channel filtering happens in handleMessage via slackChannelFilter
+        await this.handleMessage(event)
       })
 
       // Handle errors

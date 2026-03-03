@@ -574,9 +574,9 @@ export function AgentsSlackTab() {
             <li>Click &quot;Create New App&quot; &rarr; &quot;From scratch&quot;</li>
             <li>Enable <strong>Socket Mode</strong> in Settings &rarr; Socket Mode</li>
             <li>Generate an <strong>App-Level Token</strong> with <code>connections:write</code> scope</li>
-            <li>Go to OAuth &amp; Permissions and add scopes: <code>chat:write</code>, <code>app_mentions:read</code>, <code>im:read</code>, <code>im:write</code>, <code>channels:manage</code>, <code>channels:read</code></li>
+            <li>Go to OAuth &amp; Permissions and add scopes: <code>chat:write</code>, <code>app_mentions:read</code>, <code>channels:history</code>, <code>channels:read</code>, <code>im:history</code>, <code>im:read</code>, <code>im:write</code>, <code>channels:manage</code></li>
             <li>Install the app to your workspace and copy the <strong>Bot User OAuth Token</strong></li>
-            <li>Subscribe to events: <code>app_mention</code> and <code>message.im</code></li>
+            <li>Subscribe to events: <code>app_mention</code>, <code>message.channels</code>, and <code>message.im</code></li>
           </ol>
         </CardContent>
       </Card>
