@@ -269,13 +269,13 @@ export class SlackTrigger {
 
     const client = this.webClient ?? new WebClient(tokens.botToken)
     try {
-      const result = await client.conversations.list({
+      const result = await client.users.conversations({
         types: "public_channel,private_channel",
         exclude_archived: true,
         limit: 200,
       })
       return (result.channels ?? [])
-        .filter((c: any) => c.is_member && c.id && c.name)
+        .filter((c: any) => c.id && c.name)
         .map((c: any) => ({ id: c.id as string, name: c.name as string }))
     } catch (err) {
       console.error("[SlackTrigger] Failed to list bot channels:", err)
