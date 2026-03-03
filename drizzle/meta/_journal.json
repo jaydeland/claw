@@ -421,6 +421,69 @@
       "when": 1770600015000,
       "tag": "0059_add_projects_agents_path",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0060_add_chat_sessions_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0061_add_chat_sessions_claw_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0062_add_chat_sessions_external_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0063_add_chat_sessions_platform_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0064_add_chat_sessions_status_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0065_add_chat_sessions_last_activity_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0066_add_chat_sessions_unique_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0067_add_claw_executions_session_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0068_add_claw_executions_session_id_idx",
+      "breakpoints": true
     }
   ]
 }

@@ -423,7 +423,6 @@ class ClawDaemon {
       if (session) {
         sessionContextText = formatSessionContextForPrompt(session)
         await updateSessionStatus(session.id, "active")
-        await addMessageToSession(session.id, "user", context.originalMessage || "Trigger received")
       }
     } else if (context?.triggerSource === "whatsapp" && context.whatsappFrom) {
       // Create or get WhatsApp session

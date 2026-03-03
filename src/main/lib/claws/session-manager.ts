@@ -5,7 +5,7 @@
  * Enables conversation context to be maintained across multiple messages.
  */
 
-import { eq, and, desc } from "drizzle-orm"
+import { eq, and, desc, lt } from "drizzle-orm"
 import {
   getDatabase,
   chatSessions,
@@ -277,7 +277,7 @@ export async function cleanupOldSessions(maxAgeDays: number = 30): Promise<numbe
     .where(
       and(
         eq(chatSessions.status, "completed"),
-        desc(chatSessions.lastActivityAt) < cutoffDate.getTime()
+        lt(chatSessions.lastActivityAt, cutoffDate.getTime())
       )
     )
     .run()
