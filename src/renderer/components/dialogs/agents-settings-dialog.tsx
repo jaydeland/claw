@@ -422,6 +422,15 @@ export function AgentsSettingsDialog({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.2 }}
+              style={{ willChange: "transform, opacity" }}
+              onAnimationComplete={() => {
+                // Remove will-change after animation completes to avoid blurriness
+                const element = document.querySelector('[data-modal="agents-settings"]') as HTMLElement
+                if (element) {
+                  element.style.willChange = "auto"
+                  element.style.transform = "none"
+                }
+              }}
               className="w-[90vw] h-[80vh] max-w-[900px] p-0 flex flex-col rounded-[20px] bg-background border-none bg-clip-padding shadow-2xl overflow-hidden select-none"
               role="dialog"
               aria-modal="true"
@@ -471,7 +480,7 @@ export function AgentsSettingsDialog({
 
                 {/* Right Content Area */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex flex-col relative h-full bg-tl-background rounded-xl w-full transition-all duration-300 overflow-y-auto">
+                  <div className="flex flex-col relative h-full bg-tl-background rounded-xl w-full overflow-y-auto">
                     {renderTabContent()}
                   </div>
                 </div>

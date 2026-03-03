@@ -747,4 +747,111 @@ export const githubRouter = router({
       // If no README found, return empty content (not an error)
       return { success: true as const, content: "" }
     }),
+
+  /**
+   * Add an image to the repository and insert it into the README
+   */
+  addImageToReadme: publicProcedure
+    .input(
+      z.object({
+        projectPath: z.string(),
+        imageData: z.string(), // base64 data URL
+        imageName: z.string(),
+        caption: z.string().optional(),
+        section: z.enum(["top", "bottom"]).default("bottom"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Get remote info
+        const remote = await getRepoRemote(input.projectPath)
+
+        // Ensure .github/assets directory exists
+        const assetsDir = path.join(input.projectPath, ".github", "assets")
+        if (!fs.existsSync(assetsDir)) {
+          fs.mkdirSync(assetsDir, { recursive: true })
+        }
+
+        // Extract base64 data from data URL
+        const base64Data = input.imageData.replace(/^data:image\/\w+;base64,/, "")
+        const buffer = Buffer.from(base64Data, "base64")
+
+        // Save image to .github/assets
+        const imagePath = path.join(assetsDir, input.imageName)
+        fs.writeFileSync(imagePath, buffer)
+
+        // Get current README content
+        const readmePaths = ["README.md", "readme.md", "Readme.md"]
+        let readmePath = "README.md"
+        let currentContent = ""
+
+        for (const testPath of readmePaths) {
+          try {
+            const { stdout } = await execAsync(
+              `gh api repos/${remote.owner}/${remote.repo}/contents/${testPath}`,
+              { cwd: input.projectPath }
+            )
+            const fileData = JSON.parse(stdout)
+            if (fileData.content) {
+              currentContent = Buffer.from(fileData.content, "base64").toString("utf-8")
+              readmePath = testPath
+              break
+            }
+          } catch {
+            continue
+          }
+        }
+
+        // If no README exists, create one
+        if (!currentContent) {
+          currentContent = `# ${path.basename(input.projectPath)}\n\n`
+        }
+
+        // Create markdown image reference
+        const imageRef = `.github/assets/${input.imageName}`
+        const imageMarkdown = input.caption
+          ? `![${input.caption}](${imageRef})\n\n*${input.caption}*\n\n`
+          : `![Diagram](${imageRef})\n\n`
+
+        // Insert image into README
+        let newContent: string
+        if (input.section === "top") {
+          // Insert after the first heading
+          const lines = currentContent.split("\n")
+          const firstHeadingIndex = lines.findIndex((line) => line.startsWith("#"))
+          if (firstHeadingIndex !== -1) {
+            lines.splice(firstHeadingIndex + 1, 0, "", imageMarkdown)
+            newContent = lines.join("\n")
+          } else {
+            newContent = imageMarkdown + currentContent
+          }
+        } else {
+          // Append to bottom
+          newContent = currentContent + "\n\n" + imageMarkdown
+        }
+
+        // Write updated README
+        const readmeFullPath = path.join(input.projectPath, readmePath)
+        fs.writeFileSync(readmeFullPath, newContent)
+
+        // Stage and commit changes
+        await execAsync(`git add "${imagePath}" "${readmeFullPath}"`, { cwd: input.projectPath })
+        await execAsync(
+          `git commit -m "docs: add ${input.imageName} to README"`,
+          { cwd: input.projectPath }
+        )
+
+        return {
+          success: true as const,
+          imagePath: imageRef,
+          message: "Image added to README successfully",
+        }
+      } catch (error) {
+        console.error("[github] Failed to add image to README:", error)
+        return {
+          success: false as const,
+          error: error instanceof Error ? error.message : "Failed to add image to README",
+        }
+      }
+    }),
 })

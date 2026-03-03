@@ -55,7 +55,7 @@ export function AgentsSlackTab() {
   )
   const { data: slackClaws } = trpc.slack.listSlackClaws.useQuery(undefined, { enabled: !!credentials?.hasAppToken })
   const { data: projects } = trpc.projects.list.useQuery(undefined, { enabled: !!credentials?.hasAppToken })
-  const { data: botChannels, refetch: refetchBotChannels } = trpc.slack.listBotChannels.useQuery(
+  const { data: botChannels, isLoading: isLoadingChannels, refetch: refetchBotChannels } = trpc.slack.listBotChannels.useQuery(
     undefined,
     { enabled: !!credentials?.hasAppToken }
   )
@@ -431,17 +431,25 @@ export function AgentsSlackTab() {
                 {channelSetupMode === "select" ? (
                   <div className="space-y-1.5">
                     <Label>Channel (bot must already be a member)</Label>
-                    <Select value={selectedExistingChannel} onValueChange={setSelectedExistingChannel}>
+                    <Select value={selectedExistingChannel} onValueChange={setSelectedExistingChannel} disabled={isLoadingChannels}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a channel..." />
+                        <SelectValue placeholder={isLoadingChannels ? "Loading channels..." : "Select a channel..."} />
                       </SelectTrigger>
                       <SelectContent>
-                        {botChannels?.map(ch => (
-                          <SelectItem key={ch.id} value={ch.id}>
-                            #{ch.name}
+                        {isLoadingChannels ? (
+                          <SelectItem value="__loading__" disabled>
+                            <div className="flex items-center gap-2">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Loading channels...
+                            </div>
                           </SelectItem>
-                        ))}
-                        {!botChannels?.length && (
+                        ) : botChannels && botChannels.length > 0 ? (
+                          botChannels.map(ch => (
+                            <SelectItem key={ch.id} value={ch.id}>
+                              #{ch.name}
+                            </SelectItem>
+                          ))
+                        ) : (
                           <SelectItem value="__none__" disabled>
                             No channels found — invite the bot to a channel first
                           </SelectItem>

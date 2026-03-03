@@ -28,6 +28,7 @@ import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
 import { TrafficLights } from "../agents/components/traffic-light-spacer"
+import { SingleClawIcon } from "../../components/ui/icons"
 import {
   SidebarTabBar,
   HistoryTabContent,
@@ -232,10 +233,13 @@ export function AgentsLayout() {
                 isDesktop={isDesktop}
               />
 
-              {/* App branding: {C}law */}
-              <span className="text-sm font-medium text-foreground tracking-tight">
-                {"{C}law"}
-              </span>
+              {/* App branding: Claw icon + text */}
+              <div className="flex items-center gap-2">
+                <SingleClawIcon className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-primary tracking-tight">
+                  Claw
+                </span>
+              </div>
             </div>
 
             {/* Spacer to push settings to the right */}

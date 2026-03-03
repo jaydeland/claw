@@ -223,20 +223,6 @@ export function NewChatForm({
     return exists ? selectedProject : null
   }, [selectedProject, projectsList, isLoadingProjects])
 
-  // Query chats for the selected project to check for existing local chat
-  const { data: projectChats } = trpc.chats.list.useQuery(
-    { projectId: validatedProject?.id },
-    {
-      enabled: !!validatedProject?.id,
-      refetchOnWindowFocus: false,
-    }
-  )
-
-  // Check if a local chat (branch === null) already exists for this project
-  const hasExistingLocalChat = useMemo(() => {
-    if (!projectChats) return false
-    return projectChats.some(chat => chat.branch === null)
-  }, [projectChats])
 
   // DISABLED: Clear invalid project from storage
   // This was causing issues where projects would be cleared incorrectly
@@ -1703,10 +1689,6 @@ export function NewChatForm({
                       value={workMode}
                       onChange={setWorkMode}
                       disabled={createChatMutation.isPending}
-                      disabledOptions={hasExistingLocalChat ? ["local"] : []}
-                      disabledReasons={{
-                        local: "Only one local chat allowed per project. Archive or delete the existing local chat, or use worktree mode."
-                      }}
                     />
                   )}
 

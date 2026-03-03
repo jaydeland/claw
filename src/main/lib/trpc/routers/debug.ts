@@ -29,21 +29,56 @@ function getClaudeAgentSdkVersion(): string {
   return "unknown"
 }
 
-// Get Claude Code binary version from VERSION file
-function getClaudeCodeBinaryVersion(): string {
+// Get Claude Code binary version and path
+function getClaudeCodeBinaryInfo(): { version: string; path: string } {
   try {
-    // In development, check directly in resources/bin
+    // In development, check resources/bin/VERSION relative to project root
     // In production, the binary is in app.asar.unpacked/resources/bin
-    const versionFilePath = join(process.resourcesPath || process.cwd(), "bin", "VERSION")
+    let versionFilePath: string
+    let binaryPath: string
+
+    if (IS_DEV) {
+      // Development: resources/bin/VERSION relative to project root
+      const binDir = join(process.cwd(), "resources", "bin")
+      versionFilePath = join(binDir, "VERSION")
+      // Determine binary path based on platform
+      const platformDir = `${process.platform}-${process.arch}`
+      binaryPath = join(binDir, platformDir, "claude")
+      console.log("[Debug] DEV mode - Version file path:", versionFilePath)
+      console.log("[Debug] DEV mode - Binary path:", binaryPath)
+    } else {
+      // Production: use process.resourcesPath
+      const binDir = join(process.resourcesPath, "bin")
+      versionFilePath = join(binDir, "VERSION")
+      const platformDir = `${process.platform}-${process.arch}`
+      binaryPath = join(binDir, platformDir, "claude")
+      console.log("[Debug] PROD mode - Version file path:", versionFilePath)
+      console.log("[Debug] PROD mode - Binary path:", binaryPath)
+    }
+
+    let version = "unknown"
     if (existsSync(versionFilePath)) {
       const versionContent = readFileSync(versionFilePath, "utf-8")
       // VERSION file format: version\nISO date\n
-      return versionContent.split("\n")[0]?.trim() || "unknown"
+      version = versionContent.split("\n")[0]?.trim() || "unknown"
+      console.log("[Debug] Found version:", version)
+    } else {
+      console.log("[Debug] VERSION file not found at:", versionFilePath)
     }
+
+    // Verify binary exists
+    if (!existsSync(binaryPath)) {
+      console.log("[Debug] Binary not found at:", binaryPath)
+      binaryPath = "not found"
+    } else {
+      console.log("[Debug] Binary found at:", binaryPath)
+    }
+
+    return { version, path: binaryPath }
   } catch (error) {
-    console.error("[Debug] Failed to read binary version:", error)
+    console.error("[Debug] Failed to read binary info:", error)
+    return { version: "unknown", path: "error" }
   }
-  return "unknown"
 }
 
 export const debugRouter = router({
@@ -51,6 +86,7 @@ export const debugRouter = router({
    * Get system information for debug display
    */
   getSystemInfo: publicProcedure.query(() => {
+    const binaryInfo = getClaudeCodeBinaryInfo()
     return {
       version: app.getVersion(),
       platform: process.platform,
@@ -58,7 +94,8 @@ export const debugRouter = router({
       isDev: IS_DEV,
       userDataPath: app.getPath("userData"),
       claudeAgentSdkVersion: getClaudeAgentSdkVersion(),
-      claudeCodeBinaryVersion: getClaudeCodeBinaryVersion(),
+      claudeCodeBinaryVersion: binaryInfo.version,
+      claudeCodeBinaryPath: binaryInfo.path,
     }
   }),
 

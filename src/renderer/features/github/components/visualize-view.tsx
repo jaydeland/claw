@@ -19,8 +19,9 @@ import ReactFlow, {
   MarkerType,
 } from "reactflow"
 import "reactflow/dist/style.css"
-import { toPng } from "html-to-image"
+import { toPng, toSvg } from "html-to-image"
 import { Loader2, AlertCircle, Download, GitBranch, Database, Layers, Wrench } from "lucide-react"
+import { toast } from "sonner"
 import { applyDiagramLayout } from "../lib/diagram-layout"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
@@ -257,28 +258,325 @@ function VisualizeViewInner({
   const Icon = analysisIcons[analysisType]
   const label = analysisLabels[analysisType]
 
-  const exportToPng = useCallback(async () => {
-    const viewport = document.querySelector(".react-flow__viewport") as HTMLElement | null
-    if (!viewport) return
-    try {
-      const dataUrl = await toPng(viewport, {
-        backgroundColor: "#ffffff",
-        pixelRatio: 2,
-        // Expand capture area to include all nodes regardless of current scroll
-        filter: (node) => {
-          if (node instanceof HTMLElement && node.classList.contains("react-flow__minimap")) return false
-          if (node instanceof HTMLElement && node.classList.contains("react-flow__controls")) return false
-          return true
-        },
-      })
-      const link = document.createElement("a")
-      link.download = `${repoName}-${label.toLowerCase().replace(/\s+/g, "-")}.png`
-      link.href = dataUrl
-      link.click()
-    } catch (err) {
-      console.error("[VisualizeView] PNG export failed:", err)
+  const generatePngDataUrl = useCallback(async (): Promise<string | null> => {
+    if (!reactFlowInstance || nodes.length === 0) {
+      console.error("[VisualizeView] ReactFlow instance not available or no nodes")
+      return null
     }
-  }, [repoName, label])
+
+    try {
+      // Fit view to ensure all nodes are visible
+      reactFlowInstance.fitView({ padding: 0.2 })
+
+      // Wait for layout to settle
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Calculate bounds from all nodes with extra space for descriptions
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+
+      nodes.forEach((node) => {
+        const x = node.position.x
+        const y = node.position.y
+        // Increase default width/height to accommodate text
+        const width = (node.width || 180)
+        const height = (node.height || 80)
+
+        minX = Math.min(minX, x)
+        minY = Math.min(minY, y)
+        maxX = Math.max(maxX, x + width)
+        maxY = Math.max(maxY, y + height)
+      })
+
+      // Add generous padding
+      const padding = 80
+      minX -= padding
+      minY -= padding
+      maxX += padding
+      maxY += padding
+
+      const width = maxX - minX
+      const height = maxY - minY
+
+      console.log("[VisualizeView] Canvas dimensions:", { width, height, nodeCount: nodes.length })
+
+      // Create a canvas and draw the graph manually with higher resolution
+      const canvas = document.createElement("canvas")
+      const scale = 3 // Higher resolution for better text quality
+      canvas.width = width * scale
+      canvas.height = height * scale
+      const ctx = canvas.getContext("2d")
+
+      if (!ctx) {
+        console.error("[VisualizeView] Canvas context not available")
+        return null
+      }
+
+      // Scale context for high DPI
+      ctx.scale(scale, scale)
+
+      // Fill white background
+      ctx.fillStyle = "#ffffff"
+      ctx.fillRect(0, 0, width, height)
+
+      // Draw edges first (so they're behind nodes)
+      ctx.strokeStyle = "#64748b"
+      ctx.lineWidth = 2
+
+      edges.forEach((edge) => {
+        const sourceNode = nodes.find(n => n.id === edge.source)
+        const targetNode = nodes.find(n => n.id === edge.target)
+
+        if (sourceNode && targetNode) {
+          const sx = sourceNode.position.x + (sourceNode.width || 180) / 2 - minX
+          const sy = sourceNode.position.y + (sourceNode.height || 80) - minY
+          const tx = targetNode.position.x + (targetNode.width || 180) / 2 - minX
+          const ty = targetNode.position.y - minY
+
+          ctx.beginPath()
+          ctx.moveTo(sx, sy)
+          ctx.lineTo(tx, ty)
+          ctx.stroke()
+
+          // Draw arrow head
+          const angle = Math.atan2(ty - sy, tx - sx)
+          const arrowLength = 12
+          ctx.beginPath()
+          ctx.moveTo(tx, ty)
+          ctx.lineTo(
+            tx - arrowLength * Math.cos(angle - Math.PI / 6),
+            ty - arrowLength * Math.sin(angle - Math.PI / 6)
+          )
+          ctx.lineTo(
+            tx - arrowLength * Math.cos(angle + Math.PI / 6),
+            ty - arrowLength * Math.sin(angle + Math.PI / 6)
+          )
+          ctx.closePath()
+          ctx.fillStyle = "#64748b"
+          ctx.fill()
+
+          // Draw edge label if available
+          if (edge.label) {
+            const midX = (sx + tx) / 2
+            const midY = (sy + ty) / 2
+
+            // Draw label background
+            ctx.font = "400 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+            const labelText = edge.label as string
+            const metrics = ctx.measureText(labelText)
+            const labelPadding = 6
+            const labelWidth = metrics.width + labelPadding * 2
+            const labelHeight = 18
+
+            ctx.fillStyle = "#ffffff"
+            ctx.strokeStyle = "#e5e7eb"
+            ctx.lineWidth = 1
+            ctx.beginPath()
+            ctx.roundRect(
+              midX - labelWidth / 2,
+              midY - labelHeight / 2,
+              labelWidth,
+              labelHeight,
+              4
+            )
+            ctx.fill()
+            ctx.stroke()
+
+            // Draw label text
+            ctx.fillStyle = "#64748b"
+            ctx.textAlign = "center"
+            ctx.textBaseline = "middle"
+            ctx.fillText(labelText, midX, midY)
+
+            // Reset text alignment
+            ctx.textAlign = "left"
+            ctx.textBaseline = "top"
+          }
+        }
+      })
+
+      // Helper to get node colors based on type
+      const getNodeColors = (flowType: string): { bg: string; border: string } => {
+        switch (flowType) {
+          case "start":
+          case "end":
+            return { bg: "#ecfdf5", border: "#10b981" } // emerald
+          case "process":
+            return { bg: "#eff6ff", border: "#3b82f6" } // blue
+          case "decision":
+            return { bg: "#fffbeb", border: "#f59e0b" } // amber
+          case "data":
+            return { bg: "#faf5ff", border: "#a855f7" } // purple
+          case "subprocess":
+            return { bg: "#fff7ed", border: "#f97316" } // orange
+          case "table":
+            return { bg: "#eff6ff", border: "#93c5fd" } // blue-300
+          case "service":
+            return { bg: "#f0fdf4", border: "#86efac" } // green
+          case "database":
+            return { bg: "#faf5ff", border: "#d8b4fe" } // purple-300
+          case "frontend":
+            return { bg: "#fff7ed", border: "#fdba74" } // orange-300
+          case "external":
+            return { bg: "#f9fafb", border: "#d1d5db" } // gray
+          case "entry":
+          case "input":
+            return { bg: "#ecfdf5", border: "#86efac" } // emerald-300
+          case "output":
+            return { bg: "#fff1f2", border: "#fda4af" } // rose-300
+          default:
+            return { bg: "#ffffff", border: "#e5e7eb" } // default
+        }
+      }
+
+      // Draw nodes with proper styling
+      ctx.textAlign = "left"
+      ctx.textBaseline = "top"
+
+      nodes.forEach((node) => {
+        const x = node.position.x - minX
+        const y = node.position.y - minY
+        const w = node.width || 180
+        const h = node.height || 80
+
+        const flowType = (node.data?.flowType as string) || (node.data?.type as string) || "default"
+        const colors = getNodeColors(flowType)
+
+        // Draw node background with shadow
+        ctx.shadowColor = "rgba(0, 0, 0, 0.15)"
+        ctx.shadowBlur = 8
+        ctx.shadowOffsetX = 0
+        ctx.shadowOffsetY = 3
+
+        ctx.fillStyle = colors.bg
+        ctx.strokeStyle = colors.border
+        ctx.lineWidth = 2
+        ctx.beginPath()
+
+        // Use different shapes for different types
+        if (flowType === "start" || flowType === "end") {
+          // Rounded pill shape
+          ctx.roundRect(x, y, w, h, h / 2)
+        } else {
+          // Regular rounded rectangle
+          ctx.roundRect(x, y, w, h, 10)
+        }
+
+        ctx.fill()
+        ctx.stroke()
+
+        // Reset shadow for text
+        ctx.shadowColor = "transparent"
+        ctx.shadowBlur = 0
+
+        // Draw node label (bold, larger text)
+        ctx.fillStyle = "#111827" // gray-900 for better contrast
+        const label = (node.data?.label as string) || node.id
+        const padding = 14
+
+        // Set font for label measurement
+        ctx.font = "600 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+
+        // Truncate label if too long
+        const maxWidth = w - padding * 2
+        let displayLabel = label
+        if (ctx.measureText(label).width > maxWidth) {
+          while (ctx.measureText(displayLabel + "...").width > maxWidth && displayLabel.length > 0) {
+            displayLabel = displayLabel.slice(0, -1)
+          }
+          displayLabel += "..."
+        }
+
+        ctx.fillText(displayLabel, x + padding, y + padding)
+
+        // Draw description if available
+        if (node.data?.description) {
+          ctx.font = "400 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          ctx.fillStyle = "#6b7280" // gray-500
+          const desc = node.data.description as string
+
+          // Word wrap description if needed
+          const words = desc.split(" ")
+          let line = ""
+          let lineY = y + padding + 22
+          const lineHeight = 16
+          const maxLines = 2
+
+          let lineCount = 0
+          for (let i = 0; i < words.length && lineCount < maxLines; i++) {
+            const testLine = line + words[i] + " "
+            const metrics = ctx.measureText(testLine)
+
+            if (metrics.width > maxWidth && i > 0) {
+              ctx.fillText(line.trim(), x + padding, lineY)
+              line = words[i] + " "
+              lineY += lineHeight
+              lineCount++
+            } else {
+              line = testLine
+            }
+          }
+
+          // Draw last line (possibly truncated)
+          if (lineCount < maxLines && line.trim()) {
+            let displayLine = line.trim()
+            if (ctx.measureText(displayLine).width > maxWidth) {
+              while (ctx.measureText(displayLine + "...").width > maxWidth && displayLine.length > 0) {
+                displayLine = displayLine.slice(0, -1)
+              }
+              displayLine += "..."
+            }
+            ctx.fillText(displayLine, x + padding, lineY)
+          }
+        }
+
+        // Draw tech info if available
+        if (node.data?.tech) {
+          ctx.font = "400 11px 'SF Mono', 'Monaco', 'Courier New', monospace"
+          ctx.fillStyle = "#6b7280" // gray-500
+          const tech = node.data.tech as string
+          const techY = node.data?.description ? y + h - padding - 12 : y + padding + 22
+
+          // Truncate tech if needed
+          let displayTech = tech
+          if (ctx.measureText(tech).width > maxWidth) {
+            while (ctx.measureText(displayTech + "...").width > maxWidth && displayTech.length > 0) {
+              displayTech = displayTech.slice(0, -1)
+            }
+            displayTech += "..."
+          }
+          ctx.fillText(displayTech, x + padding, techY)
+        }
+      })
+
+      const pngDataUrl = canvas.toDataURL("image/png")
+      console.log("[VisualizeView] PNG generated from canvas (length):", pngDataUrl.length)
+
+      if (!pngDataUrl || pngDataUrl.length < 100) {
+        console.error("[VisualizeView] Generated PNG is empty")
+        return null
+      }
+
+      return pngDataUrl
+    } catch (err) {
+      console.error("[VisualizeView] PNG generation failed:", err)
+      return null
+    }
+  }, [reactFlowInstance, nodes, edges])
+
+  const exportToPng = useCallback(async () => {
+    const dataUrl = await generatePngDataUrl()
+    if (!dataUrl) {
+      toast.error("Failed to generate PNG")
+      return
+    }
+
+    const link = document.createElement("a")
+    link.download = `${repoName}-${label.toLowerCase().replace(/\s+/g, "-")}.png`
+    link.href = dataUrl
+    link.click()
+    toast.success("PNG exported successfully")
+  }, [generatePngDataUrl, repoName, label])
+
 
   return (
     <div className="h-full flex flex-col bg-background">
