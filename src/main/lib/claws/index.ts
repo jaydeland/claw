@@ -10,10 +10,20 @@ import { spawn, ChildProcess } from "node:child_process"
 import { existsSync, statSync, unlinkSync } from "fs"
 import { join } from "path"
 import { eq, desc } from "drizzle-orm"
-import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, chats, subChats, projects, type HeadlessClaw, type ClawExecution } from "../db"
+import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, chats, subChats, projects, chatSessions, type HeadlessClaw, type ClawExecution, type ChatSession } from "../db"
 import { createId } from "../db/utils"
 import { getSlackTrigger } from "./slack-trigger"
 import { getWhatsAppTrigger } from "./whatsapp-trigger"
+import {
+  getOrCreateSession,
+  updateSessionStatus,
+  addMessageToSession,
+  formatSessionContextForPrompt,
+  type SessionContext,
+} from "./session-manager"
+
+// Re-export session manager functions
+export * from "./session-manager"
 
 // Type definitions
 type TriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
@@ -389,6 +399,7 @@ class ClawDaemon {
       whatsappSender?: string
       originalMessage?: string
       triggerSource?: "slack" | "whatsapp" | "github" | "cron" | "manual"
+      sessionId?: string // Optional: existing session ID for persistence
     }
   ): Promise<string> {
     const db = getDatabase()
@@ -402,6 +413,36 @@ class ClawDaemon {
       throw new Error(`Claw is disabled: ${claw.name}`)
     }
 
+    // Handle session persistence for WhatsApp and Slack
+    let session: ChatSession | null = null
+    let sessionContextText = ""
+
+    if (context?.sessionId) {
+      // Use existing session
+      session = db.select().from(chatSessions).where(eq(chatSessions.id, context.sessionId)).get()
+      if (session) {
+        sessionContextText = formatSessionContextForPrompt(session)
+        await updateSessionStatus(session.id, "active")
+      }
+    } else if (context?.triggerSource === "whatsapp" && context.whatsappFrom) {
+      // Create or get WhatsApp session
+      session = await getOrCreateSession(claw.id, context.whatsappFrom, "whatsapp", {
+        metadata: { sender: context.whatsappSender },
+      })
+      sessionContextText = formatSessionContextForPrompt(session)
+      await updateSessionStatus(session.id, "active")
+      await addMessageToSession(session.id, "user", context.originalMessage || "Trigger received")
+    } else if (context?.triggerSource === "slack" && context.slackChannel) {
+      // Create or get Slack session (use thread TS if available, otherwise channel)
+      const externalId = context.slackThreadTs || context.slackChannel
+      session = await getOrCreateSession(claw.id, externalId, "slack", {
+        metadata: { channel: context.slackChannel, user: context.slackUser, threadTs: context.slackThreadTs },
+      })
+      sessionContextText = formatSessionContextForPrompt(session)
+      await updateSessionStatus(session.id, "active")
+      await addMessageToSession(session.id, "user", context.originalMessage || "Trigger received")
+    }
+
     // Create or get the Claw Chat (parent chat for this claw)
     const clawChat = await this.getOrCreateClawChat(claw)
 
@@ -413,7 +454,7 @@ class ClawDaemon {
     const subChatId = createId()
 
     // Initial messages array with system context
-    const initialMessages = this.buildInitialMessages(claw, context)
+    const initialMessages = this.buildInitialMessages(claw, context, sessionContextText)
 
     db.insert(subChats)
       .values({
@@ -425,17 +466,23 @@ class ClawDaemon {
       })
       .run()
 
-    // Create execution record with subChat link
+    // Create execution record with subChat and session links
     db.insert(clawExecutions)
       .values({
         id: executionId,
         clawId: claw.id,
         subChatId: subChatId,
+        sessionId: session?.id || null,
         status: "running",
         logs: `Starting execution at ${new Date().toISOString()}\n`,
         startedAt: new Date(),
       })
       .run()
+
+    // Update session with current execution
+    if (session) {
+      await updateSessionStatus(session.id, "active", executionId)
+    }
 
     // Build the instruction with context
     let instruction = claw.instruction
@@ -466,8 +513,13 @@ class ClawDaemon {
       }
     }
 
+    // Add session context to instruction for WhatsApp/Slack
+    if (sessionContextText) {
+      instruction = sessionContextText + instruction
+    }
+
     // Execute using Claude SDK with subChat tracking
-    this.executeClaudeSDK(claw, executionId, subChatId, instruction)
+    this.executeClaudeSDK(claw, executionId, subChatId, instruction, session)
 
     return executionId
   }
@@ -543,7 +595,7 @@ class ClawDaemon {
   /**
    * Build initial messages with context
    */
-  private buildInitialMessages(claw: HeadlessClaw, context?: any): any[] {
+  private buildInitialMessages(claw: HeadlessClaw, context?: any, sessionContextText?: string): any[] {
     const messages = []
 
     // System/context message
@@ -554,12 +606,18 @@ class ClawDaemon {
       if (context.originalMessage) {
         contextParts.push(`Message: "${context.originalMessage}"`)
       }
+      if (sessionContextText) {
+        contextParts.push(`This conversation has session history that will be included in the prompt.`)
+      }
     }
 
     if (context?.triggerSource === "slack") {
       contextParts.push(`From: ${context.slackUser} in ${context.slackChannel}`)
       if (context.originalMessage) {
         contextParts.push(`Message: "${context.originalMessage}"`)
+      }
+      if (sessionContextText) {
+        contextParts.push(`This conversation has session history that will be included in the prompt.`)
       }
     }
 
@@ -592,7 +650,8 @@ class ClawDaemon {
     claw: HeadlessClaw,
     executionId: string,
     subChatId: string,
-    instruction: string
+    instruction: string,
+    session?: ChatSession | null
   ): Promise<void> {
     const db = getDatabase()
     let logs = ""
@@ -775,6 +834,13 @@ class ClawDaemon {
         .where(eq(clawExecutions.id, executionId))
         .run()
 
+      // Update session status and add response to session history
+      if (session) {
+        const sessionStatus = hasError ? "error" : "completed"
+        await updateSessionStatus(session.id, sessionStatus)
+        await addMessageToSession(session.id, "assistant", logs.substring(0, 2000) || "Execution completed")
+      }
+
       // Remove from active triggers
       if (trigger) {
         trigger.childProcess = undefined
@@ -805,6 +871,12 @@ class ClawDaemon {
         })
         .where(eq(clawExecutions.id, executionId))
         .run()
+
+      // Update session status on error
+      if (session) {
+        await updateSessionStatus(session.id, "error")
+        await addMessageToSession(session.id, "assistant", `Execution error: ${error.message || String(error)}`)
+      }
 
       const trigger = this.activeTriggers.get(claw.id)
       if (trigger) {

@@ -10,7 +10,7 @@
 import { app } from "electron"
 import { getDatabase, headlessClaws, whatsappSettings, clawExecutions } from "../db"
 import { eq } from "drizzle-orm"
-import { clawDaemon } from "./index"
+import { clawDaemon, getOrCreateSession, updateSessionStatus, addMessageToSession } from "./index"
 import { EventEmitter } from "events"
 import * as path from "path"
 import * as fs from "fs"
@@ -478,23 +478,41 @@ export class WhatsAppTrigger {
           console.error(`[WhatsAppTrigger] ERROR: Failed to send acknowledgment to ${from}:`, ackError)
         }
 
-        // Execute the claw with WhatsApp context
+        // Get or create session for this chat
+        const session = await getOrCreateSession(claw.id, from, "whatsapp", {
+          metadata: { sender },
+        })
+
+        // Check if there's already an active execution for this session
+        if (session.status === "active") {
+          console.log(`[WhatsAppTrigger] Session ${session.id} already has an active execution, skipping`)
+          await this.sendMessage(from, `⏳ *${claw.name}* is still processing your previous request. Please wait for it to complete.`)
+          continue
+        }
+
+        // Execute the claw with WhatsApp context and session
         console.log(`[WhatsAppTrigger] Executing claw "${claw.name}" (id=${claw.id})`)
         if (!clawDaemon) {
           console.error("[WhatsAppTrigger] ERROR: clawDaemon is undefined! Cannot execute claw.")
           await this.sendMessage(from, "❌ Internal error: Claw daemon not available.")
           return
         }
+
+        // Update session with user message
+        await addMessageToSession(session.id, "user", messageText)
+        await updateSessionStatus(session.id, "active")
+
         const executionId = await clawDaemon.executeClaw(claw.id, {
           whatsappFrom: from,
           whatsappSender: sender,
           originalMessage: messageText,
           triggerSource: "whatsapp",
+          sessionId: session.id, // Pass session ID for persistence
         })
         console.log(`[WhatsAppTrigger] Claw execution started: ${executionId}`)
 
         // Monitor execution and send result
-        this.monitorExecution(executionId, claw.name, from)
+        this.monitorExecution(executionId, claw.name, from, session.id)
       }
     } catch (error: any) {
       console.error("[WhatsAppTrigger] Error handling message:", error)
@@ -623,7 +641,7 @@ export class WhatsAppTrigger {
   /**
    * Monitor a claw execution and send the result when complete
    */
-  private monitorExecution(executionId: string, clawName: string, chatId: string): void {
+  private monitorExecution(executionId: string, clawName: string, chatId: string, sessionId?: string): void {
     console.log(`[WhatsAppTrigger] Starting execution monitor for ${clawName} (${executionId})`)
     let checkCount = 0
     const checkInterval = setInterval(async () => {
@@ -650,6 +668,12 @@ export class WhatsAppTrigger {
         console.log(`[WhatsAppTrigger] Monitor check #${checkCount}: execution ${executionId} completed with status=${execution.status}`)
         clearInterval(checkInterval)
 
+        // Update session status if provided
+        if (sessionId) {
+          const sessionStatus = execution.status === "success" ? "completed" : "error"
+          await updateSessionStatus(sessionId, sessionStatus)
+        }
+
         // Limit logs to avoid message size limits
         const logs = execution.logs || ""
         const truncatedLogs = logs.length > 1500 ? "..." + logs.slice(-1500) : logs
@@ -666,6 +690,11 @@ export class WhatsAppTrigger {
           console.log(`[WhatsAppTrigger] Result sent successfully to ${chatId}`)
         } else {
           console.error(`[WhatsAppTrigger] Failed to send execution result to ${chatId}`)
+        }
+
+        // Add response to session history
+        if (sessionId) {
+          await addMessageToSession(sessionId, "assistant", `${clawName} ${statusText}\n\n${truncatedLogs}`)
         }
       } catch (error) {
         console.error(`[WhatsAppTrigger] Error monitoring execution (check #${checkCount}):`, error)

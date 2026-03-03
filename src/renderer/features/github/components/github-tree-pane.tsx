@@ -18,6 +18,7 @@ import {
   File,
   RefreshCw,
   AlertCircle,
+  Sparkles,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../../components/ui/button"
@@ -31,6 +32,7 @@ import {
   githubIssuesAtom,
   githubFilesAtom,
   githubExpandedFoldersAtom,
+  githubStartChatAtom,
   type GitHubRepo,
   type GitHubSelection,
   type AnalysisType,
@@ -38,6 +40,46 @@ import {
 
 // Analysis types and labels
 const ANALYSIS_TYPES: AnalysisType[] = ["codeflow", "db", "architecture", "build"]
+
+/**
+ * Build the prompt for the "Get App Overview" chat feature
+ */
+function buildAppOverviewPrompt(repoName: string, projectPath?: string): string {
+  return `Please provide a comprehensive overview of this codebase: ${repoName}
+
+Project path: ${projectPath || "unknown"}
+
+I need you to analyze the codebase structure and provide a high-level overview covering:
+
+1. **Project Architecture**
+   - What type of application is this? (web, mobile, CLI, library, etc.)
+   - What are the main frameworks and technologies used?
+   - What is the overall architectural pattern? (MVC, microservices, monolith, etc.)
+
+2. **Directory Structure**
+   - Key directories and their purposes
+   - Where is the main source code located?
+   - Where are tests, configuration, and documentation?
+
+3. **Key Components/Modules**
+   - Major features or modules
+   - Entry points (main files)
+   - Core business logic locations
+
+4. **Technology Stack**
+   - Programming languages used
+   - Frameworks and libraries
+   - Database, caching, messaging systems
+   - Build tools and CI/CD setup
+
+5. **Dependencies**
+   - Key external dependencies
+   - Internal module relationships
+
+Please use the Agent tool with sub-agents to explore different parts of the codebase in parallel for faster analysis. Start by exploring the root directory structure, key configuration files, and then dive into the main source directories.
+
+Focus on giving me a clear, high-level understanding that would help a new developer get oriented with this project.`
+}
 
 interface GitHubTreePaneProps {
   projects: Array<{ id: string; path: string; name: string }>
@@ -122,6 +164,7 @@ export const SingleRepoSection = memo(function SingleRepoSection({
   const setPRs = useSetAtom(githubPRsAtom)
   const setIssues = useSetAtom(githubIssuesAtom)
   const [, setFiles] = useAtom(githubFilesAtom)
+  const setStartChat = useSetAtom(githubStartChatAtom)
   const prs = useAtomValue(githubPRsAtom)
   const issues = useAtomValue(githubIssuesAtom)
 
@@ -236,6 +279,10 @@ export const SingleRepoSection = memo(function SingleRepoSection({
     build: Wrench,
   }
 
+  const handleStartChat = useCallback((message: string, type: "explain" | "diagram") => {
+    setStartChat({ message, type, autoStart: true })
+  }, [setStartChat])
+
   return (
     <RepoTreeItem
       repo={currentRepo}
@@ -258,6 +305,7 @@ export const SingleRepoSection = memo(function SingleRepoSection({
         setExpandedFolders(next)
       }}
       onSelect={handleSelect}
+      onStartChat={handleStartChat}
       analysisLabels={analysisLabels}
       analysisIcons={analysisIcons}
       isLoading={isLoadingGitHub}
@@ -282,6 +330,7 @@ interface RepoTreeItemProps {
   onToggleSection: (section: string) => void
   onToggleFolder: (folderPath: string) => void
   onSelect: (selection: GitHubSelection) => void
+  onStartChat?: (message: string, type: "explain" | "diagram") => void
   analysisLabels: Record<AnalysisType, string>
   analysisIcons: Record<AnalysisType, React.ComponentType<{ className?: string }>>
   isLoading?: boolean
@@ -305,6 +354,7 @@ const RepoTreeItem = memo(function RepoTreeItem({
   onToggleSection,
   onToggleFolder,
   onSelect,
+  onStartChat,
   analysisLabels,
   analysisIcons,
   isLoading,
@@ -471,6 +521,23 @@ const RepoTreeItem = memo(function RepoTreeItem({
           {isLoading && (
             <Loader2 className="h-3 w-3 animate-spin ml-auto text-muted-foreground" />
           )}
+        </button>
+      )}
+
+      {/* Get App Overview button — shown at repo level when expanded */}
+      {isExpanded && onStartChat && (
+        <button
+          type="button"
+          onClick={() => onStartChat(buildAppOverviewPrompt(repo.name, repo.localPath), "explain")}
+          className={cn(
+            "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm",
+            "hover:bg-accent hover:text-accent-foreground",
+            "text-blue-600 dark:text-blue-400",
+            hideRepoHeader ? "ml-0" : "ml-6"
+          )}
+        >
+          <Sparkles className="h-4 w-4" />
+          <span>Get App Overview</span>
         </button>
       )}
 

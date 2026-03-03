@@ -1,10 +1,21 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, headlessClaws, clawExecutions, subChats, mcpToolCache } from "../../db"
-import { eq, desc } from "drizzle-orm"
+import { getDatabase, headlessClaws, clawExecutions, subChats, mcpToolCache, chatSessions } from "../../db"
+import { eq, desc, and } from "drizzle-orm"
 import { createId } from "../../db/utils"
 import { clawDaemon } from "../../claws"
 import { safeStorage } from "electron"
+import {
+  getOrCreateSession,
+  getSession,
+  getSessionWithExecutions,
+  getSessionsForClaw,
+  updateSessionStatus,
+  addMessageToSession,
+  deleteSession,
+  getSessionContext,
+  type SessionContext,
+} from "../../claws/session-manager"
 
 /**
  * Encrypt text using Electron's safeStorage
@@ -377,4 +388,101 @@ export const clawsRouter = router({
     const servers = db.select().from(mcpToolCache).all()
     return servers.map(s => ({ id: s.serverId, name: s.serverId, toolCount: s.toolCount }))
   }),
+
+  /**
+   * Get chat sessions for a claw
+   */
+  getSessions: publicProcedure
+    .input(z.object({ clawId: z.string() }))
+    .query(async ({ input }) => {
+      const sessions = await getSessionsForClaw(input.clawId)
+      return {
+        success: true,
+        sessions: sessions.map(session => ({
+          ...session,
+          context: JSON.parse(session.context),
+        })),
+      }
+    }),
+
+  /**
+   * Get a single session with execution history
+   */
+  getSession: publicProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .query(async ({ input }) => {
+      const { session, executions } = await getSessionWithExecutions(input.sessionId)
+
+      if (!session) {
+        return { success: false, error: "Session not found" }
+      }
+
+      return {
+        success: true,
+        session: {
+          ...session,
+          context: JSON.parse(session.context),
+        },
+        executions: executions.map(exec => ({
+          id: exec.id,
+          status: exec.status,
+          logs: exec.logs,
+          exitCode: exec.exitCode,
+          startedAt: exec.startedAt,
+          completedAt: exec.completedAt,
+        })),
+      }
+    }),
+
+  /**
+   * Delete a session
+   */
+  deleteSession: publicProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .mutation(async ({ input }) => {
+      await deleteSession(input.sessionId)
+      return { success: true }
+    }),
+
+  /**
+   * Continue a session (trigger a new execution with session context)
+   */
+  continueSession: publicProcedure
+    .input(z.object({ sessionId: z.string(), message: z.string() }))
+    .mutation(async ({ input }) => {
+      const session = await getSession(input.sessionId)
+
+      if (!session) {
+        return { success: false, error: "Session not found" }
+      }
+
+      const db = getDatabase()
+      const claw = db
+        .select()
+        .from(headlessClaws)
+        .where(eq(headlessClaws.id, session.clawId))
+        .get()
+
+      if (!claw) {
+        return { success: false, error: "Claw not found" }
+      }
+
+      // Check if session is already active
+      if (session.status === "active") {
+        return { success: false, error: "Session already has an active execution" }
+      }
+
+      // Add user message to session
+      await addMessageToSession(session.id, "user", input.message)
+      await updateSessionStatus(session.id, "active")
+
+      // Execute claw with session context
+      const executionId = await clawDaemon.executeClaw(claw.id, {
+        originalMessage: input.message,
+        triggerSource: session.platform === "whatsapp" ? "whatsapp" : "slack",
+        sessionId: session.id,
+      })
+
+      return { success: true, executionId }
+    }),
 })
