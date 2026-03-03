@@ -67,6 +67,8 @@ import {
   updateSessionQuery,
   updateSessionId,
 } from "../../session/session-registry"
+import { getWhatsAppTrigger } from "../../claws/whatsapp-trigger"
+import { getSlackTrigger } from "../../claws/slack-trigger"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -1169,6 +1171,24 @@ export const claudeRouter = router({
                       questions: coercedQuestions,
                     } as UIMessageChunk)
 
+                    // Forward question to connected channel/group (fire-and-forget)
+                    try {
+                      const parentChat = getDatabase().select().from(chats).where(eq(chats.id, input.chatId)).get()
+                      if (parentChat?.connectionType && parentChat.connectionType !== "none" && parentChat.connectionTarget) {
+                        const questionText = (coercedQuestions as any[]).map((q: any) => {
+                          const opts = q.options?.map((o: any) => o.label || String(o)).join(", ")
+                          return `❓ ${q.question}${opts ? `\nOptions: ${opts}` : ""}`
+                        }).join("\n")
+                        if (parentChat.connectionType === "whatsapp") {
+                          getWhatsAppTrigger().sendMessage(parentChat.connectionTarget, questionText).catch(console.error)
+                        } else if (parentChat.connectionType === "slack") {
+                          getSlackTrigger().sendToChannel(parentChat.connectionTarget, questionText).catch(console.error)
+                        }
+                      }
+                    } catch (e) {
+                      console.error("[claude] Failed to forward question to channel:", e)
+                    }
+
                     // Wait for response (no timeout - question remains open until user responds)
                     const response = await new Promise<{
                       approved: boolean
@@ -2130,6 +2150,28 @@ export const claudeRouter = router({
               // Warn if stream yielded no messages
               if (messageCount === 0) {
                 console.error(`[claude] Stream yielded no messages - model not responding`)
+              }
+
+              // Forward final assistant response to connected channel/group (fire-and-forget)
+              if (resultReceived) {
+                try {
+                  const parentChat = getDatabase().select().from(chats).where(eq(chats.id, input.chatId)).get()
+                  if (parentChat?.connectionType && parentChat.connectionType !== "none" && parentChat.connectionTarget) {
+                    const finalText = parts
+                      .filter((p: any) => p.type === "text" && p.text)
+                      .map((p: any) => String(p.text))
+                      .join("")
+                    if (finalText.trim()) {
+                      if (parentChat.connectionType === "whatsapp") {
+                        getWhatsAppTrigger().sendMessage(parentChat.connectionTarget, finalText).catch(console.error)
+                      } else if (parentChat.connectionType === "slack") {
+                        getSlackTrigger().sendToChannel(parentChat.connectionTarget, finalText).catch(console.error)
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.error("[claude] Failed to forward final response to channel:", e)
+                }
               }
             } catch (streamError) {
               // This catches errors during streaming (like process exit)

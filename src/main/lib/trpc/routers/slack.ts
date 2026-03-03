@@ -208,6 +208,21 @@ export const slackRouter = router({
     }),
 
   /**
+   * Send a message to a Slack channel (used for chat connection bridging)
+   */
+  sendToChannel: publicProcedure
+    .input(z.object({ channelId: z.string().min(1), text: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        const trigger = getSlackTrigger()
+        await trigger.sendToChannel(input.channelId, input.text)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    }),
+
+  /**
    * Clear Slack credentials
    */
   clearCredentials: publicProcedure.mutation(async () => {

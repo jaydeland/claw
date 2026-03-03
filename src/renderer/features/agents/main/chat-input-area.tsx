@@ -3,7 +3,7 @@
 import { memo, useCallback, useRef, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { useAtom, useAtomValue } from "jotai"
-import { ChevronDown, RotateCcw, Zap } from "lucide-react"
+import { ChevronDown, Hash, MessageCircle, RotateCcw, Zap } from "lucide-react"
 
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
@@ -187,6 +187,9 @@ export interface ChatInputAreaProps {
   isClearingChat?: boolean
   // Current tool status for status indicator
   currentToolStatus?: CurrentToolStatus | null
+  // External messaging connection (WhatsApp group or Slack channel)
+  connectionType?: "none" | "whatsapp" | "slack"
+  connectionName?: string
 }
 
 /**
@@ -206,7 +209,9 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.repository !== nextProps.repository ||
     prevProps.sandboxId !== nextProps.sandboxId ||
     prevProps.projectPath !== nextProps.projectPath ||
-    prevProps.isMobile !== nextProps.isMobile
+    prevProps.isMobile !== nextProps.isMobile ||
+    prevProps.connectionType !== nextProps.connectionType ||
+    prevProps.connectionName !== nextProps.connectionName
   ) {
     return false
   }
@@ -379,6 +384,8 @@ export const ChatInputArea = memo(function ChatInputArea({
   onClearChat,
   isClearingChat = false,
   currentToolStatus,
+  connectionType,
+  connectionName,
 }: ChatInputAreaProps) {
   // Local state - changes here don't re-render parent
   const [hasContent, setHasContent] = useState(false)
@@ -1080,6 +1087,16 @@ export const ChatInputArea = memo(function ChatInputArea({
                     onGsdSelect={handleSkillSelect}
                     disabled={isStreaming}
                   />
+
+                  {/* Connection badge - shows connected WhatsApp group or Slack channel */}
+                  {connectionType && connectionType !== "none" && connectionName && (
+                    <div className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground rounded-md bg-muted/40 border border-border/50 shrink-0 select-none">
+                      {connectionType === "whatsapp"
+                        ? <MessageCircle className="h-3 w-3 text-green-500 shrink-0" />
+                        : <Hash className="h-3 w-3 text-purple-500 shrink-0" />}
+                      <span className="truncate max-w-[120px]">{connectionName}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">

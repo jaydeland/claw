@@ -1889,6 +1889,8 @@ const ChatViewInner = memo(function ChatViewInner({
   isActive = true,
   pendingGsdCommand,
   onGsdCommandExecuted,
+  connectionType,
+  connectionName,
 }: {
   chat: Chat<any>
   subChatId: string
@@ -1913,6 +1915,8 @@ const ChatViewInner = memo(function ChatViewInner({
   isActive?: boolean
   pendingGsdCommand?: string | null
   onGsdCommandExecuted?: () => void
+  connectionType?: "none" | "whatsapp" | "slack"
+  connectionName?: string
 }) {
   const hasTriggeredRenameRef = useRef(false)
   const hasTriggeredAutoGenerateRef = useRef(false)
@@ -3807,6 +3811,8 @@ const ChatViewInner = memo(function ChatViewInner({
         isClearingChat={clearSubChatMessagesMutation.isPending}
         onSubmitWithQuestionAnswer={submitWithQuestionAnswerCallback}
         currentToolStatus={currentToolStatus}
+        connectionType={connectionType}
+        connectionName={connectionName}
       />
 
         {/* Scroll to bottom button - isolated component to avoid re-renders during streaming */}
@@ -5850,6 +5856,8 @@ Make sure to preserve all functionality from both branches when resolving confli
                       isActive={isActive}
                       pendingGsdCommand={pendingGsdCommand}
                       onGsdCommandExecuted={() => setPendingGsdCommand(null)}
+                      connectionType={(agentChat as any)?.connectionType as "none" | "whatsapp" | "slack" | undefined}
+                      connectionName={(agentChat as any)?.connectionName as string | undefined}
                     />
                   </div>
                 )

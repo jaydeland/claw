@@ -173,6 +173,21 @@ export const whatsappRouter = router({
   }),
 
   /**
+   * Send a message to a WhatsApp group JID (used for chat connection bridging)
+   */
+  sendToGroup: publicProcedure
+    .input(z.object({ jid: z.string().min(1), text: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        const trigger = getWhatsAppTrigger()
+        const success = await trigger.sendMessage(input.jid, input.text)
+        return { success }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    }),
+
+  /**
    * Send a test message to a chat/group
    */
   sendTestMessage: publicProcedure

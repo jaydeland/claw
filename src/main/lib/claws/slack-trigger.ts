@@ -383,6 +383,13 @@ export class SlackTrigger {
   }
 
   /**
+   * Send a message to a Slack channel (public — used for chat connection bridging)
+   */
+  async sendToChannel(channelId: string, text: string): Promise<void> {
+    await this.postMessage(channelId, text)
+  }
+
+  /**
    * Post a message to a Slack channel
    */
   private async postMessage(channelId: string, text: string, threadTs?: string): Promise<void> {

@@ -775,6 +775,8 @@ export function NewChatForm({
   // Connection claw mutations
   const createClawMutation = trpc.claws.create.useMutation()
   const setupSlackClawMutation = trpc.slack.setupChannelClaw.useMutation()
+  const createWhatsAppGroupMutation = trpc.whatsapp.createGroup.useMutation()
+  const updateConnectionMutation = trpc.chats.updateConnection.useMutation()
 
   // Create chat mutation (real tRPC)
   const utils = trpc.useUtils()
@@ -942,35 +944,49 @@ export function NewChatForm({
     })
     // Editor and images are cleared in onSuccess callback
 
-    // Auto-connect a Claw to the selected chat connection
+    // Auto-connect to the selected chat connection and create the named group/channel
     if (selectedConnection !== "none" && selectedProject?.path) {
+      const chatDisplayName = chatData.name || message.trim().slice(0, 30) || "Claw Chat"
       try {
         if (selectedConnection === "whatsapp") {
-          await createClawMutation.mutateAsync({
-            name: `WhatsApp: ${chatData.name || message.trim().slice(0, 30) || "Chat"}`,
-            instruction: message.trim() || `Handle WhatsApp messages for the ${selectedProject.name} project.`,
-            targetWorktree: selectedProject.path,
-            triggerType: "whatsapp_message",
-            triggerConfig: {},
-            isEnabled: true,
+          // Create a WhatsApp group named after the chat
+          const groupResult = await createWhatsAppGroupMutation.mutateAsync({
+            name: chatDisplayName,
           })
-          toast.success("Connected to WhatsApp")
+          if (groupResult.success && groupResult.groupId) {
+            await updateConnectionMutation.mutateAsync({
+              chatId: chatData.id,
+              connectionType: "whatsapp",
+              connectionTarget: groupResult.groupId,
+              connectionName: chatDisplayName,
+            })
+            toast.success(`Connected to WhatsApp group "${chatDisplayName}"`)
+          } else {
+            toast.error("WhatsApp group created but could not get group ID")
+          }
         } else if (selectedConnection === "slack") {
-          const channelName = (message.trim().slice(0, 30) || selectedProject.name)
+          // Sanitize chat name for Slack channel naming rules
+          const channelName = chatDisplayName
             .toLowerCase()
             .replace(/[^a-z0-9]/g, "-")
             .replace(/-+/g, "-")
             .replace(/^-|-$/g, "")
             .slice(0, 80) || "claw-chat"
-          await setupSlackClawMutation.mutateAsync({
+          const slackResult = await setupSlackClawMutation.mutateAsync({
             channelName,
             projectPath: selectedProject.path,
             projectName: selectedProject.name,
           })
-          toast.success("Connected to Slack")
+          await updateConnectionMutation.mutateAsync({
+            chatId: chatData.id,
+            connectionType: "slack",
+            connectionTarget: slackResult.channelId,
+            connectionName: slackResult.channelName,
+          })
+          toast.success(`Connected to Slack channel #${slackResult.channelName}`)
         }
       } catch (err) {
-        console.error("[NewChatForm] Failed to create connection claw:", err)
+        console.error("[NewChatForm] Failed to create connection:", err)
         toast.error(`Chat created but failed to connect to ${selectedConnection === "whatsapp" ? "WhatsApp" : "Slack"}`)
       }
     }
@@ -980,6 +996,8 @@ export function NewChatForm({
     createChatMutation,
     createClawMutation,
     setupSlackClawMutation,
+    createWhatsAppGroupMutation,
+    updateConnectionMutation,
     selectedConnection,
     hasContent,
     selectedBranch,

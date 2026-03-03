@@ -460,6 +460,31 @@ export const chatsRouter = router({
     }),
 
   /**
+   * Update the external messaging connection for a chat (WhatsApp group or Slack channel)
+   */
+  updateConnection: publicProcedure
+    .input(z.object({
+      chatId: z.string(),
+      connectionType: z.enum(["none", "whatsapp", "slack"]),
+      connectionTarget: z.string().optional(),
+      connectionName: z.string().optional(),
+    }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(chats)
+        .set({
+          connectionType: input.connectionType,
+          connectionTarget: input.connectionTarget ?? null,
+          connectionName: input.connectionName ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(chats.id, input.chatId))
+        .returning()
+        .get()
+    }),
+
+  /**
    * Rename a chat
    */
   rename: publicProcedure

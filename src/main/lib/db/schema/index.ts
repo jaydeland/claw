@@ -76,6 +76,10 @@ export const chats = sqliteTable("chats", {
   // Contextual chat source tracking (for GitHub/Prompts/Skills/Commands views)
   sourceView: text("source_view"),    // "github" | "prompts" | "skills" | "commands"
   sourceContext: text("source_context"), // JSON key for per-context lookup, e.g. '{"promptId":"abc"}'
+  // External messaging connection (WhatsApp group or Slack channel)
+  connectionType: text("connection_type").default("none"), // "none" | "whatsapp" | "slack"
+  connectionTarget: text("connection_target"),             // WhatsApp group JID or Slack channel ID
+  connectionName: text("connection_name"),                 // Display name for the channel/group
 })
 
 export const chatsRelations = relations(chats, ({ one, many }) => ({
