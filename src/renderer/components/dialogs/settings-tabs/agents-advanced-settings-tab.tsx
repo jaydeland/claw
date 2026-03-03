@@ -315,9 +315,16 @@ export function AgentsAdvancedSettingsTab() {
               <span className="text-sm text-muted-foreground">Claude Agent SDK</span>
               <span className="text-sm font-mono text-foreground">{systemInfo?.claudeAgentSdkVersion || "loading..."}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Claude Code Binary</span>
-              <span className="text-sm font-mono text-foreground">{systemInfo?.claudeCodeBinaryVersion || "loading..."}</span>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Claude Code Binary</span>
+                <span className="text-sm font-mono text-foreground">{systemInfo?.claudeCodeBinaryVersion || "loading..."}</span>
+              </div>
+              {systemInfo?.claudeCodeBinaryPath && (
+                <div className="text-xs font-mono text-muted-foreground truncate" title={systemInfo.claudeCodeBinaryPath}>
+                  {systemInfo.claudeCodeBinaryPath}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -524,27 +531,24 @@ export function AgentsAdvancedSettingsTab() {
 
       {/* Config Resolution Section */}
       <div className="space-y-3">
-        <button
-          onClick={() => toggleSection('resolution')}
-          className="w-full flex items-center justify-between text-left"
-        >
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => toggleSection('resolution')}
+            className="flex items-center gap-2 text-left"
+          >
             {sectionsCollapsed.resolution ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             <h3 className="text-sm font-semibold text-foreground">Config Resolution</h3>
-          </div>
+          </button>
           <Button
             variant="outline"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowConsolidatedView(true)
-            }}
+            onClick={() => setShowConsolidatedView(true)}
             className="h-7 px-2 text-xs"
           >
             <Eye className="h-3 w-3 mr-1" />
             View Merged Config
           </Button>
-        </button>
+        </div>
 
         {!sectionsCollapsed.resolution && (
           <div className="pl-6 space-y-3">
