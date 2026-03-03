@@ -1569,6 +1569,55 @@ export const workflowsRouter = router({
         }
       })
     }),
+
+  /**
+   * Delete a workflow file
+   * Validates the path is a .md file within safe directories to prevent path traversal
+   * Allows deleting from:
+   * - User Claude config: ~/.claude/
+   * - Project .claude directories
+   * - Custom plugin directories
+   */
+  deleteFile: publicProcedure
+    .input(z.object({
+      path: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log('[workflows.deleteFile] Requested path:', input.path)
+
+      const resolvedTarget = path.resolve(input.path)
+      console.log('[workflows.deleteFile] Resolved path:', resolvedTarget)
+
+      // Security: Only allow deleting .md files
+      if (!resolvedTarget.endsWith('.md')) {
+        console.error('[workflows.deleteFile] Security error: not .md file')
+        throw new Error("Access denied: only .md files can be deleted")
+      }
+
+      // Security: Ensure path contains a claude directory somewhere
+      if (!resolvedTarget.includes('/.claude/') && !resolvedTarget.includes('/claude/')) {
+        console.error('[workflows.deleteFile] Security error: not in claude directory')
+        throw new Error("Access denied: path must be within a claude directory")
+      }
+
+      // Check if file exists and is a file
+      try {
+        const stats = await fs.stat(resolvedTarget)
+        if (!stats.isFile()) {
+          console.error('[workflows.deleteFile] Error: path is not a file')
+          throw new Error("Path is not a file")
+        }
+      } catch (err) {
+        console.error('[workflows.deleteFile] Error stating file:', err)
+        throw new Error(`File not found: ${input.path}`)
+      }
+
+      // Delete the file
+      console.log('[workflows.deleteFile] Deleting file...')
+      await fs.unlink(resolvedTarget)
+      console.log('[workflows.deleteFile] Success, file deleted')
+      return { success: true }
+    }),
 })
 
 // ============ TYPE EXPORTS ============

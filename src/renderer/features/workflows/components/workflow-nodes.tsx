@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Handle, Position } from "reactflow"
-import { ChevronRight, Terminal, Zap, Lock, Unlock, FileEdit, BookOpen, Settings, GitFork } from "lucide-react"
+import { ChevronRight, Terminal, Zap, Lock, Unlock, FileEdit, BookOpen, Settings, GitFork, ListOrdered } from "lucide-react"
 
 // Permission mode badge configuration
 type PermissionMode = 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'plan'
@@ -340,6 +340,34 @@ export function BackgroundTaskNode({ data }: { data: { tasks: BackgroundTaskMeta
           )
         })}
       </div>
+    </div>
+  )
+}
+
+export function WorkflowStepNode({ data }: { data: { stepNumber: number; title: string; description?: string } }) {
+  return (
+    <div className="px-4 py-3 shadow-md rounded-md bg-indigo-500 text-white border border-indigo-600 min-w-[180px]">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-indigo-600"
+        style={{ top: -6 }}
+      />
+      <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-700 text-xs font-bold">
+          {data.stepNumber}
+        </div>
+        <div className="text-sm font-medium truncate">{data.title}</div>
+      </div>
+      {data.description && (
+        <div className="text-xs opacity-80 mt-1 line-clamp-2">{data.description}</div>
+      )}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-indigo-600"
+        style={{ bottom: -6 }}
+      />
     </div>
   )
 }

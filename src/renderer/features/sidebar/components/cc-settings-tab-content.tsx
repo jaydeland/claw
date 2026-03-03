@@ -18,6 +18,7 @@ import {
   CheckCircle,
   Network,
   Cpu,
+  Trash2,
 } from "lucide-react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { cn } from "../../../lib/utils"
@@ -26,6 +27,17 @@ import { selectWorkflowItemAtom, selectedWorkflowCategoryAtom } from "../../work
 import { trpc } from "../../../lib/trpc"
 import { AiAssistantDialog } from "../../../components/ai-assistant-dialog"
 import { parseMcpConfig, MCP_GREETING, MCP_COMPLETION_PHRASES } from "../../mcp/ui/mcp-config-chat"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../components/ui/alert-dialog"
+import { toast } from "sonner"
 
 // ─── Settings sub-categories (static) ───────────────────────────────────────
 
@@ -42,11 +54,26 @@ function AgentsSection({ isExpanded }: { isExpanded: boolean }) {
   const selectedProject = useAtomValue(selectedProjectAtom)
   const selectWorkflowItem = useSetAtom(selectWorkflowItemAtom)
   const setSettingsCategory = useSetAtom(selectedSettingsCategoryAtom)
+  const utils = trpc.useUtils()
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<{ name: string; path: string } | null>(null)
 
   const { data: agents = [], isLoading } = trpc.agents.list.useQuery(
     { cwd: selectedProject?.path },
     { enabled: isExpanded }
   )
+
+  const deleteMutation = trpc.workflows.deleteFile.useMutation({
+    onSuccess: () => {
+      toast.success(`Deleted ${itemToDelete?.name}`)
+      utils.agents.list.invalidate({ cwd: selectedProject?.path })
+      setItemToDelete(null)
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete: ${error.message}`)
+    },
+  })
 
   const handleClick = (agent: { name: string; path: string }) => {
     setSettingsCategory(null)
@@ -56,41 +83,84 @@ function AgentsSection({ isExpanded }: { isExpanded: boolean }) {
     })
   }
 
+  const handleDelete = (e: React.MouseEvent, agent: { name: string; path: string }) => {
+    e.stopPropagation()
+    setItemToDelete(agent)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (itemToDelete?.path) {
+      deleteMutation.mutate({ path: itemToDelete.path })
+    }
+    setDeleteDialogOpen(false)
+  }
+
   if (!isExpanded) return null
 
   return (
-    <div className="ml-[18px] pl-3 space-y-0.5 relative">
-      <div className="absolute -left-3 top-0 bottom-0 w-px bg-muted-foreground/20" />
-      {isLoading ? (
-        <p className="text-[11px] text-muted-foreground/60 px-2 py-1 italic">Loading agents…</p>
-      ) : agents.length === 0 ? (
-        <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-muted-foreground/60 italic">
-          <Bot className="h-3 w-3 flex-shrink-0" />
-          No agents found
-        </div>
-      ) : (
-        agents.map((agent, idx) => {
-          const isLast = idx === agents.length - 1
-          return (
-            <div key={agent.path} className="relative">
-              <div className={cn("absolute -left-3 w-px bg-muted-foreground/20", isLast ? "top-0 h-1/2" : "top-0 bottom-0")} />
-              <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
-              <button
-                type="button"
-                onClick={() => handleClick(agent)}
-                className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-left transition-colors text-muted-foreground hover:text-foreground hover:bg-foreground/8"
-              >
-                <Bot className="h-3 w-3 flex-shrink-0" />
-                <span className="text-xs font-medium truncate flex-1">{agent.name}</span>
-                {agent.source === "project" && (
-                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
-                )}
-              </button>
-            </div>
-          )
-        })
-      )}
-    </div>
+    <>
+      <div className="ml-[18px] pl-3 space-y-0.5 relative">
+        <div className="absolute -left-3 top-0 bottom-0 w-px bg-muted-foreground/20" />
+        {isLoading ? (
+          <p className="text-[11px] text-muted-foreground/60 px-2 py-1 italic">Loading agents…</p>
+        ) : agents.length === 0 ? (
+          <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-muted-foreground/60 italic">
+            <Bot className="h-3 w-3 flex-shrink-0" />
+            No agents found
+          </div>
+        ) : (
+          agents.map((agent, idx) => {
+            const isLast = idx === agents.length - 1
+            return (
+              <div key={agent.path} className="relative group">
+                <div className={cn("absolute -left-3 w-px bg-muted-foreground/20", isLast ? "top-0 h-1/2" : "top-0 bottom-0")} />
+                <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
+                <button
+                  type="button"
+                  onClick={() => handleClick(agent)}
+                  className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-left transition-colors text-muted-foreground hover:text-foreground hover:bg-foreground/8"
+                >
+                  <Bot className="h-3 w-3 flex-shrink-0" />
+                  <span className="text-xs font-medium truncate flex-1">{agent.name}</span>
+                  {agent.source === "project" && (
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
+                  )}
+                  {/* Delete button - only for project files */}
+                  {agent.source === "project" && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(e, agent)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 hover:text-destructive rounded transition-all"
+                      title="Delete agent"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </button>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Agent</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{itemToDelete?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -100,11 +170,26 @@ function SkillsSection({ isExpanded }: { isExpanded: boolean }) {
   const selectedProject = useAtomValue(selectedProjectAtom)
   const selectWorkflowItem = useSetAtom(selectWorkflowItemAtom)
   const setSettingsCategory = useSetAtom(selectedSettingsCategoryAtom)
+  const utils = trpc.useUtils()
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<{ name: string; path: string; type: "skill" | "command" } | null>(null)
 
   const { data: items = [], isLoading } = trpc.skills.listCombined.useQuery(
     { cwd: selectedProject?.path },
     { enabled: isExpanded }
   )
+
+  const deleteMutation = trpc.workflows.deleteFile.useMutation({
+    onSuccess: () => {
+      toast.success(`Deleted ${itemToDelete?.name}`)
+      utils.skills.listCombined.invalidate({ cwd: selectedProject?.path })
+      setItemToDelete(null)
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete: ${error.message}`)
+    },
+  })
 
   const handleClick = (item: { name: string; path: string; type: "skill" | "command" }) => {
     setSettingsCategory(null)
@@ -114,41 +199,84 @@ function SkillsSection({ isExpanded }: { isExpanded: boolean }) {
     })
   }
 
+  const handleDelete = (e: React.MouseEvent, item: { name: string; path: string; type: "skill" | "command" }) => {
+    e.stopPropagation()
+    setItemToDelete(item)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (itemToDelete?.path) {
+      deleteMutation.mutate({ path: itemToDelete.path })
+    }
+    setDeleteDialogOpen(false)
+  }
+
   if (!isExpanded) return null
 
   return (
-    <div className="ml-[18px] pl-3 space-y-0.5 relative">
-      <div className="absolute -left-3 top-0 bottom-0 w-px bg-muted-foreground/20" />
-      {isLoading ? (
-        <p className="text-[11px] text-muted-foreground/60 px-2 py-1 italic">Loading skills…</p>
-      ) : items.length === 0 ? (
-        <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-muted-foreground/60 italic">
-          <Sparkles className="h-3 w-3 flex-shrink-0" />
-          No skills found
-        </div>
-      ) : (
-        items.map((item, idx) => {
-          const isLast = idx === items.length - 1
-          return (
-            <div key={item.path} className="relative">
-              <div className={cn("absolute -left-3 w-px bg-muted-foreground/20", isLast ? "top-0 h-1/2" : "top-0 bottom-0")} />
-              <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
-              <button
-                type="button"
-                onClick={() => handleClick(item)}
-                className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-left transition-colors text-muted-foreground hover:text-foreground hover:bg-foreground/8"
-              >
-                <Sparkles className="h-3 w-3 flex-shrink-0" />
-                <span className="text-xs font-medium truncate flex-1">{item.name}</span>
-                {item.source === "project" && (
-                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
-                )}
-              </button>
-            </div>
-          )
-        })
-      )}
-    </div>
+    <>
+      <div className="ml-[18px] pl-3 space-y-0.5 relative">
+        <div className="absolute -left-3 top-0 bottom-0 w-px bg-muted-foreground/20" />
+        {isLoading ? (
+          <p className="text-[11px] text-muted-foreground/60 px-2 py-1 italic">Loading skills…</p>
+        ) : items.length === 0 ? (
+          <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-muted-foreground/60 italic">
+            <Sparkles className="h-3 w-3 flex-shrink-0" />
+            No skills found
+          </div>
+        ) : (
+          items.map((item, idx) => {
+            const isLast = idx === items.length - 1
+            return (
+              <div key={item.path} className="relative group">
+                <div className={cn("absolute -left-3 w-px bg-muted-foreground/20", isLast ? "top-0 h-1/2" : "top-0 bottom-0")} />
+                <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
+                <button
+                  type="button"
+                  onClick={() => handleClick(item)}
+                  className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-left transition-colors text-muted-foreground hover:text-foreground hover:bg-foreground/8"
+                >
+                  <Sparkles className="h-3 w-3 flex-shrink-0" />
+                  <span className="text-xs font-medium truncate flex-1">{item.name}</span>
+                  {item.source === "project" && (
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Project-specific" />
+                  )}
+                  {/* Delete button - only for project files */}
+                  {item.source === "project" && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(e, item)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 hover:text-destructive rounded transition-all"
+                      title={`Delete ${item.type}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </button>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {itemToDelete?.type === "command" ? "Command" : "Skill"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{itemToDelete?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -159,6 +287,8 @@ function McpsSection({ isExpanded }: { isExpanded: boolean }) {
   const selectWorkflowItem = useSetAtom(selectWorkflowItemAtom)
   const setSettingsCategory = useSetAtom(selectedSettingsCategoryAtom)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [serverToDelete, setServerToDelete] = useState<{ id: string; name: string } | null>(null)
 
   const { data: mcpServers, isLoading } = trpc.mcp.listServers.useQuery(
     { projectPath: selectedProject?.path },
@@ -168,12 +298,36 @@ function McpsSection({ isExpanded }: { isExpanded: boolean }) {
 
   const servers = mcpServers?.servers ?? []
 
+  const deleteMutation = trpc.mcp.deleteServer.useMutation({
+    onSuccess: () => {
+      toast.success(`Deleted ${serverToDelete?.name}`)
+      utils.mcp.listServers.invalidate({ projectPath: selectedProject?.path })
+      setServerToDelete(null)
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete: ${error.message}`)
+    },
+  })
+
   const handleClick = (server: { id: string; name: string }) => {
     setSettingsCategory(null)
     selectWorkflowItem({
       node: { id: server.id, name: server.name, type: "mcpServer", sourcePath: server.id },
       category: "mcps",
     })
+  }
+
+  const handleDelete = (e: React.MouseEvent, server: { id: string; name: string }) => {
+    e.stopPropagation()
+    setServerToDelete(server)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (serverToDelete?.id) {
+      deleteMutation.mutate({ serverId: serverToDelete.id, projectPath: selectedProject?.path })
+    }
+    setDeleteDialogOpen(false)
   }
 
   if (!isExpanded) return null
@@ -213,7 +367,7 @@ function McpsSection({ isExpanded }: { isExpanded: boolean }) {
             const needsAuth = server.authStatus === "missing_credentials"
 
             return (
-              <div key={server.id} className="relative">
+              <div key={server.id} className="relative group">
                 <div className={cn("absolute -left-3 w-px bg-muted-foreground/20", isLast ? "top-0 h-1/2" : "top-0 bottom-0")} />
                 <div className="absolute -left-3 top-1/2 w-2.5 h-px bg-muted-foreground/20" />
                 <button
@@ -228,6 +382,15 @@ function McpsSection({ isExpanded }: { isExpanded: boolean }) {
                   <span className="text-xs font-medium truncate flex-1">{server.name}</span>
                   {needsAuth && <AlertTriangle className="h-3 w-3 text-amber-500 flex-shrink-0" />}
                   {(isReady || isConfigured) && <CheckCircle className="h-3 w-3 text-green-500/60 flex-shrink-0" />}
+                  {/* Delete button */}
+                  <button
+                    type="button"
+                    onClick={(e) => handleDelete(e, server)}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 hover:text-destructive rounded transition-all"
+                    title="Delete MCP server"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
                 </button>
               </div>
             )
@@ -253,6 +416,23 @@ function McpsSection({ isExpanded }: { isExpanded: boolean }) {
         }}
         completeMessage="Configuration complete"
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete MCP Server</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{serverToDelete?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

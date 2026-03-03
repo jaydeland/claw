@@ -6,10 +6,12 @@ import { FileCode, GitPullRequest, CircleDot, GitBranch, Loader2, AlertCircle, S
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../../components/ui/button"
-import { type GitHubSelection, type AnalysisType, githubStartChatAtom, githubPRActiveTabAtom } from "../atoms"
+import { type GitHubSelection, type AnalysisType, githubStartChatAtom, githubPRActiveTabAtom, githubMarkdownViewModeAtom } from "../atoms"
 import { VisualizeView } from "./visualize-view"
 import { CodeBlock } from "../../agents/ui/code-block"
 import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
+import { Switch } from "../../../components/ui/switch"
+import { Label } from "../../../components/ui/label"
 
 interface GitHubContentPaneProps {
   projectId: string
@@ -854,8 +856,15 @@ const CodeView = memo(function CodeView({ path, repoName, projectPath }: CodeVie
     { enabled: !!projectPath && !!path }
   )
 
+  // Get markdown view mode from global state (persisted)
+  const [markdownViewMode, setMarkdownViewMode] = useAtom(githubMarkdownViewModeAtom)
+
   // Get file extension for icon color - uses theme semantic colors
   const ext = path.split(".").pop()?.toLowerCase() || ""
+
+  // Check if this is a markdown file
+  const isMarkdown = ext === "md" || ext === "mdx" || ext === "markdown"
+
   const iconColor = {
     // TypeScript - primary blue
     ts: "text-blue-400",
@@ -892,9 +901,28 @@ const CodeView = memo(function CodeView({ path, repoName, projectPath }: CodeVie
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <FileCode className={cn("h-5 w-5", iconColor)} />
-          <h2 className="text-lg font-semibold truncate">{path}</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileCode className={cn("h-5 w-5", iconColor)} />
+            <h2 className="text-lg font-semibold truncate">{path}</h2>
+          </div>
+          {/* Markdown view mode toggle */}
+          {isMarkdown && (
+            <div className="flex items-center gap-2">
+              <Label htmlFor="markdown-view-toggle" className="text-xs text-muted-foreground cursor-pointer">
+                Raw
+              </Label>
+              <Switch
+                id="markdown-view-toggle"
+                checked={markdownViewMode === "rendered"}
+                onCheckedChange={(checked) => setMarkdownViewMode(checked ? "rendered" : "raw")}
+                className="data-[state=checked]:bg-primary"
+              />
+              <Label htmlFor="markdown-view-toggle" className="text-xs text-muted-foreground cursor-pointer">
+                Rendered
+              </Label>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-1">
           <p className="text-sm text-muted-foreground">{repoName}</p>
@@ -920,13 +948,20 @@ const CodeView = memo(function CodeView({ path, repoName, projectPath }: CodeVie
           </div>
         ) : data?.success ? (
           <div className="p-4">
-            <CodeBlock
-              code={data.content}
-              language={data.language}
-              showLineNumbers={true}
-              wrap={false}
-              className="rounded-lg border border-border bg-muted/30"
-            />
+            {/* For markdown files, show rendered view if in rendered mode */}
+            {isMarkdown && markdownViewMode === "rendered" ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <MemoizedMarkdown content={data.content} id={`code-${path}`} size="sm" />
+              </div>
+            ) : (
+              <CodeBlock
+                code={data.content}
+                language={data.language}
+                showLineNumbers={true}
+                wrap={false}
+                className="rounded-lg border border-border bg-muted/30"
+              />
+            )}
           </div>
         ) : data?.error ? (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">

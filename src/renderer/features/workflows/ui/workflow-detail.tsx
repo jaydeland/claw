@@ -27,11 +27,11 @@ export function WorkflowDetail() {
 
   // Per-node persistent chat session
   const { chatId, subChatId, isLoading: isChatLoading, create: createChat, reset: resetChat } = useContextualChat({
-    sourceView,
+    sourceView: selectedNode?.type === "mcpServer" ? "skills" : sourceView,
     sourceContext: { name: selectedNode?.name ?? "", type: selectedNode?.type ?? "" },
     projectId: selectedProject?.id ?? "",
-    chatName: selectedNode ? `${sourceView === "skills" ? "Skill" : "Command"}: ${selectedNode.name}` : undefined,
-    enabled: !!selectedNode && !!selectedProject && (selectedNode.type === "command" || selectedNode.type === "skill"),
+    chatName: selectedNode ? `${selectedNode.type === "command" ? "Command" : selectedNode.type === "mcpServer" ? "MCP" : "Skill"}: ${selectedNode.name}` : undefined,
+    enabled: !!selectedNode && !!selectedProject && (selectedNode.type === "command" || selectedNode.type === "skill" || selectedNode.type === "mcpServer"),
   })
 
   // Always reset to markdown view when a new file is selected
@@ -54,25 +54,47 @@ export function WorkflowDetail() {
     )
   }
 
-  // MCPs have custom view (no markdown files)
+  // MCPs have custom view with split chat
   if (selectedNode.type === "mcpServer") {
     return (
       <div className="flex flex-col h-full">
         <WorkflowDetailHeader />
-        <WorkflowMcpView />
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left panel: MCP View */}
+          <div className="flex-1 overflow-hidden">
+            <WorkflowMcpView />
+          </div>
+          {/* Right panel: Chat */}
+          <div className="w-[400px] border-l border-border overflow-hidden">
+            <ContextualChatPane
+              chatId={chatId}
+              subChatId={subChatId}
+              projectId={selectedProject?.id ?? ""}
+              projectPath={selectedProject?.path ?? ""}
+              isSessionLoading={isChatLoading}
+              onReset={resetChat}
+              onCreate={createChat}
+              placeholder={`Ask about this MCP server...`}
+              systemContext={`You are helping the user understand and work with an MCP server.\n\nName: ${selectedNode.name}\nPath: ${selectedNode.sourcePath}`}
+            />
+          </div>
+        </div>
       </div>
     )
   }
 
-  // Agents, Commands, Skills show markdown, flowchart, or chat
+  // Agents, Commands, Skills show markdown/flowchart with split view chat
   return (
     <div className="flex flex-col h-full">
       <WorkflowDetailHeader />
-
-      {viewMode === "markdown" && <WorkflowMarkdownView />}
-      {viewMode === "flowchart" && <WorkflowReactFlowView />}
-      {viewMode === "chat" && (
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left panel: Markdown or Flowchart */}
         <div className="flex-1 overflow-hidden">
+          {viewMode === "markdown" && <WorkflowMarkdownView />}
+          {viewMode === "flowchart" && <WorkflowReactFlowView />}
+        </div>
+        {/* Right panel: Chat */}
+        <div className="w-[400px] border-l border-border overflow-hidden">
           <ContextualChatPane
             chatId={chatId}
             subChatId={subChatId}
@@ -85,7 +107,7 @@ export function WorkflowDetail() {
             systemContext={`You are helping the user understand and work with a Claude ${selectedNode.type} file.\n\nName: ${selectedNode.name}\nPath: ${selectedNode.sourcePath}`}
           />
         </div>
-      )}
+      </div>
     </div>
   )
 }

@@ -25,6 +25,7 @@ import {
   ToolGroupNode,
   CliAppNode,
   BackgroundTaskNode,
+  WorkflowStepNode,
 } from "../components/workflow-nodes"
 import { Loader2 } from "lucide-react"
 
@@ -38,6 +39,7 @@ const nodeTypes = {
   toolGroup: ToolGroupNode,
   cli: CliAppNode,
   backgroundTask: BackgroundTaskNode,
+  workflowStep: WorkflowStepNode,
 }
 
 interface CliAppMetadata {
@@ -637,23 +639,86 @@ function convertSkillToReactFlow(
   return { nodes, edges }
 }
 
+/**
+ * Parse workflow steps from markdown content
+ * Looks for sections like "## Workflow" or "## Steps to follow" and extracts numbered steps
+ */
+function parseWorkflowSteps(content: string): Array<{ title: string; description: string }> {
+  const steps: Array<{ title: string; description: string }> = []
+
+  // Look for Workflow or Steps to follow sections
+  const workflowSectionRegex = /##\s+(?:Workflow|Steps to follow)[\s\S]*?(?=##\s|$)/i
+  const workflowSection = content.match(workflowSectionRegex)
+
+  if (!workflowSection) return steps
+
+  const sectionContent = workflowSection[0]
+
+  // Match numbered steps (1. Step title, 2. Step title, etc.)
+  const stepRegex = /^(\d+)\.\s+(.+)$/gm
+  let match
+
+  while ((match = stepRegex.exec(sectionContent)) !== null) {
+    const stepNumber = parseInt(match[1], 10)
+    const stepTitle = match[2].trim()
+
+    // Extract description from the following lines until next step or section
+    const stepStartIndex = match.index + match[0].length
+    const nextMatch = stepRegex.exec(sectionContent)
+    stepRegex.lastIndex = stepStartIndex // Reset for next iteration
+
+    const stepEndIndex = nextMatch ? nextMatch.index : sectionContent.length
+    const stepContent = sectionContent.slice(stepStartIndex, stepEndIndex)
+
+    // Clean up description - take first non-empty paragraph
+    const description = stepContent
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'))
+      .slice(0, 2)
+      .join(' ')
+      .substring(0, 100)
+
+    steps.push({
+      title: stepTitle,
+      description: description || `Step ${stepNumber}`,
+    })
+  }
+
+  return steps
+}
+
 function WorkflowReactFlowInner() {
   const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
   const { data: workflowGraph } = trpc.workflows.getWorkflowGraph.useQuery()
   const [isLayouting, setIsLayouting] = useState(true)
 
-  // Convert dependencies to ReactFlow nodes/edges
+  // Fetch file content to parse workflow steps
+  const { data: fileContent } = trpc.workflows.readFileContent.useQuery(
+    { path: selectedNode?.sourcePath || "" },
+    { enabled: !!selectedNode?.sourcePath && selectedNode?.type !== "mcpServer" }
+  )
+
+  // Parse workflow steps from file content
+  const workflowSteps = useMemo(() => {
+    if (!fileContent) return []
+    return parseWorkflowSteps(fileContent)
+  }, [fileContent])
+
+  // Convert dependencies to ReactFlow nodes/edges and merge with workflow steps
   const rawNodesAndEdges = useMemo(() => {
     if (!selectedNode || !workflowGraph) return { nodes: [], edges: [] }
+
+    let result: { nodes: Node[]; edges: Edge[] }
 
     if (selectedNode.type === "agent") {
       const agent = workflowGraph.agents.find((a) => a.id === selectedNode.id)
       if (!agent) return { nodes: [], edges: [] }
-      return convertAgentToReactFlow(agent)
+      result = convertAgentToReactFlow(agent)
     } else if (selectedNode.type === "command") {
       const command = workflowGraph.commands.find((c) => c.id === selectedNode.id)
       if (!command) return { nodes: [], edges: [] }
-      return convertCommandToReactFlow(command)
+      result = convertCommandToReactFlow(command)
     } else if (selectedNode.type === "skill") {
       // Find skill metadata for context badge
       const skill = workflowGraph.skills.find((s) => s.id === selectedNode.id)
@@ -667,11 +732,68 @@ function WorkflowReactFlowInner() {
         userInvocable: (skill as any).userInvocable,
         supportingFiles: (skill as any).supportingFiles,
       } : undefined
-      return convertSkillToReactFlow(selectedNode.name, workflowGraph.agents, skillMetadata)
+      result = convertSkillToReactFlow(selectedNode.name, workflowGraph.agents, skillMetadata)
+    } else {
+      return { nodes: [], edges: [] }
     }
 
-    return { nodes: [], edges: [] }
-  }, [selectedNode, workflowGraph])
+    // Add workflow steps as nodes if found
+    if (workflowSteps.length > 0) {
+      const stepNodes: Node[] = []
+      const stepEdges: Edge[] = []
+
+      workflowSteps.forEach((step, index) => {
+        const nodeId = `workflow-step-${index}`
+        stepNodes.push({
+          id: nodeId,
+          type: "workflowStep",
+          position: { x: 0, y: 0 },
+          data: {
+            stepNumber: index + 1,
+            title: step.title,
+            description: step.description,
+            width: 180,
+            height: 60,
+          },
+        })
+
+        // Connect steps in sequence
+        if (index > 0) {
+          stepEdges.push({
+            id: `workflow-step-${index - 1}-${index}`,
+            source: `workflow-step-${index - 1}`,
+            target: nodeId,
+            animated: true,
+            style: { stroke: "#6366f1", strokeWidth: 2 },
+          })
+        }
+      })
+
+      // Connect first step from main node
+      if (stepNodes.length > 0) {
+        const mainNodeId = result.nodes.find(n => n.id === "agent" || n.id === "command" || n.id === "main")?.id
+        if (mainNodeId) {
+          stepEdges.unshift({
+            id: `${mainNodeId}-workflow-step-0`,
+            source: mainNodeId,
+            target: "workflow-step-0",
+            animated: true,
+            style: { stroke: "#6366f1", strokeWidth: 2 },
+            label: "workflow",
+            labelBgStyle: { fill: "#1e293b", fillOpacity: 0.8 },
+            labelStyle: { fill: "#6366f1", fontSize: 10 },
+          })
+        }
+      }
+
+      result = {
+        nodes: [...result.nodes, ...stepNodes],
+        edges: [...result.edges, ...stepEdges],
+      }
+    }
+
+    return result
+  }, [selectedNode, workflowGraph, workflowSteps])
 
   // Apply ELK auto-layout
   const [layoutedNodes, setLayoutedNodes] = useState<Node[]>([])
@@ -744,7 +866,7 @@ function WorkflowReactFlowInner() {
   if (nodes.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-sm text-muted-foreground">No dependencies to display</p>
+        <p className="text-sm text-muted-foreground">No dependencies or workflow steps to display</p>
       </div>
     )
   }
@@ -782,6 +904,8 @@ function WorkflowReactFlowInner() {
                 return "#f59e0b"
               case "mcp":
                 return "#ec4899"
+              case "workflowStep":
+                return "#6366f1"
               default:
                 return "#64748b"
             }

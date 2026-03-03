@@ -362,6 +362,20 @@ export const githubDiagramLoadingAtom = atom<boolean>(false)
 // Diagram error state
 export const githubDiagramErrorAtom = atom<string | null>(null)
 
+// ============ MARKDOWN VIEW STATE ============
+
+/**
+ * View mode for markdown files in the code tree.
+ * "rendered" shows formatted prose; "raw" shows the source with syntax highlighting.
+ * Persisted so the user's preferred mode is remembered across sessions.
+ */
+export const githubMarkdownViewModeAtom = atomWithStorage<"rendered" | "raw">(
+  "github:markdownViewMode",
+  "rendered",
+  undefined,
+  { getOnInit: true }
+)
+
 // ============ BRANCH STATE ============
 
 /**

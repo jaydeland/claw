@@ -15,11 +15,11 @@ description: Navigate unfamiliar code using GitNexus knowledge graph
 ## Workflow
 
 ```
-1. READ gitnexus://repos                          → Discover indexed repos
-2. READ gitnexus://repo/{name}/context             → Codebase overview, check staleness
-3. gitnexus_query({query: "<what you want to understand>"})  → Find related execution flows
-4. gitnexus_context({name: "<symbol>"})            → Deep dive on specific symbol
-5. READ gitnexus://repo/{name}/process/{name}      → Trace full execution flow
+1. READ gitnexus://repos                                 → Discover indexed repos
+2. READ gitnexus://repo/{repo}/context                   → Codebase overview, check staleness
+3. gitnexus_query({query: "{concept}"})                  → Find related execution flows
+4. gitnexus_context({name: "{symbol}"})                  → Deep dive on specific symbol
+5. READ gitnexus://repo/{repo}/process/{process}         → Trace full execution flow
 ```
 
 > If step 2 says "Index is stale" → run `npx gitnexus analyze` in terminal.
@@ -39,10 +39,11 @@ description: Navigate unfamiliar code using GitNexus knowledge graph
 
 | Resource | What you get |
 |----------|-------------|
-| `gitnexus://repo/{name}/context` | Stats, staleness warning (~150 tokens) |
-| `gitnexus://repo/{name}/clusters` | All functional areas with cohesion scores (~300 tokens) |
-| `gitnexus://repo/{name}/cluster/{name}` | Area members with file paths (~500 tokens) |
-| `gitnexus://repo/{name}/process/{name}` | Step-by-step execution trace (~200 tokens) |
+| `gitnexus://repos` | List of all indexed repositories |
+| `gitnexus://repo/{repo}/context` | Stats, staleness warning (~150 tokens) |
+| `gitnexus://repo/{repo}/clusters` | All functional areas with cohesion scores (~300 tokens) |
+| `gitnexus://repo/{repo}/cluster/{cluster}` | Area members with file paths (~500 tokens) |
+| `gitnexus://repo/{repo}/process/{process}` | Step-by-step execution trace (~200 tokens) |
 
 ## Tools
 
