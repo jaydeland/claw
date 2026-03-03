@@ -134,7 +134,7 @@ export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps
 
         {/* Content Pane */}
         <div
-          className="overflow-hidden border-r border-border"
+          className="flex-shrink-0 overflow-hidden border-r border-border"
           style={{ width: `${contentWidth}%` }}
         >
           <GitHubContentPane
@@ -159,9 +159,10 @@ export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps
           )} />
         </div>
 
-        {/* Chat Pane - takes remaining space */}
+        {/* Chat Pane */}
         <div
-          className="flex-1 overflow-hidden"
+          className="flex-shrink-0 overflow-hidden"
+          style={{ width: `${chatWidth}%` }}
         >
           <GitHubChatPane
             projectId={activeProjectId}

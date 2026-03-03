@@ -55,8 +55,7 @@ import { ClustersContent } from "../../clusters/ui/clusters-content"
 import { selectedGsdCategoryAtom } from "../../gsd/atoms"
 import { GsdContent } from "../../gsd/ui/gsd-content"
 import { GitHubView } from "../../github/components/github-view"
-import { GitHubContentPane } from "../../github/components/github-content-pane"
-import { GitHubChatPane } from "../../github/components/github-chat-pane"
+import { WorkspaceGitHubView } from "../../github/components/workspace-github-view"
 import { workspaceGithubSelectionAtom } from "../../github/atoms"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
@@ -916,24 +915,11 @@ export function AgentsContent() {
 
       {/* Workspace GitHub flex view — 2-pane content+chat when Source Repo item selected */}
       {showWorkspaceGitHubView && workspaceGitHubProject && workspaceGithubSelection && (
-        <div className="flex-1 h-full flex overflow-hidden">
-          {/* Content pane — PR details, issue, file viewer, visualize diagram */}
-          <div className="flex-1 min-w-0 overflow-hidden border-r border-border">
-            <GitHubContentPane
-              projectId={workspaceGitHubProject.id}
-              projectPath={workspaceGitHubProject.path}
-              selection={workspaceGithubSelection}
-            />
-          </div>
-          {/* Chat pane — contextual Claude chat for the selected item */}
-          <div className="w-96 flex-shrink-0 overflow-hidden">
-            <GitHubChatPane
-              projectId={workspaceGitHubProject.id}
-              projectPath={workspaceGitHubProject.path}
-              selection={workspaceGithubSelection}
-            />
-          </div>
-        </div>
+        <WorkspaceGitHubView
+          projectId={workspaceGitHubProject.id}
+          projectPath={workspaceGitHubProject.path}
+          selection={workspaceGithubSelection}
+        />
       )}
 
       {/* Prompts view */}
