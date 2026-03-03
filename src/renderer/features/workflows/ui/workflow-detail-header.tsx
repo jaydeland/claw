@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { useAtomValue } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { ChevronRight, FileText, GitBranch, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle } from "lucide-react"
 import {
   selectedWorkflowNodeAtom,
