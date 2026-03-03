@@ -63,7 +63,9 @@ export const GitHubView = memo(function GitHubView({ projects }: GitHubViewProps
         // Calculate content width relative to remaining space
         const remainingWidth = containerWidth * ((100 - treeWidth) / 100)
         const contentX = x - containerWidth * (treeWidth / 100)
-        const newContentWidth = Math.max(30, Math.min(70, (contentX / remainingWidth) * 100))
+        // Allow content to be as small as 20% or as large as 80% of remaining space
+        // This gives more flexibility for the chat pane to be wider
+        const newContentWidth = Math.max(20, Math.min(80, (contentX / remainingWidth) * 100))
         setContentWidth(newContentWidth)
       }
     }
