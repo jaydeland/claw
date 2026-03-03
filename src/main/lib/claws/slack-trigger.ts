@@ -10,7 +10,7 @@ import { WebClient } from "@slack/web-api"
 import { getDatabase, headlessClaws, slackSettings, clawExecutions } from "../db"
 import { eq } from "drizzle-orm"
 import { safeStorage } from "electron"
-import { clawDaemon } from "./index"
+import { clawDaemon, getOrCreateSession, updateSessionStatus, addMessageToSession } from "./index"
 
 // Singleton instance
 let slackTriggerInstance: SlackTrigger | null = null
@@ -188,8 +188,25 @@ export class SlackTrigger {
           continue
         }
 
+        // Get or create session for this thread (use thread if available, otherwise channel)
+        const externalId = threadTs || channelId
+        const session = await getOrCreateSession(claw.id, externalId, "slack", {
+          metadata: { channel: channelId, user: userId, threadTs },
+        })
+
+        // Check if there's already an active execution for this session
+        if (session.status === "active") {
+          console.log(`[SlackTrigger] Session ${session.id} already has an active execution, skipping`)
+          await this.postMessage(channelId, `⏳ *${claw.name}* is still processing your previous request. Please wait for it to complete.`, threadTs)
+          continue
+        }
+
         // Send acknowledgment
         await this.postMessage(channelId, `🤖 *${claw.name}* is working on it...`, threadTs)
+
+        // Update session with user message
+        await addMessageToSession(session.id, "user", userText)
+        await updateSessionStatus(session.id, "active")
 
         // Execute the claw with Slack context
         const executionId = await clawDaemon.executeClaw(claw.id, {
@@ -198,10 +215,11 @@ export class SlackTrigger {
           slackThreadTs: threadTs,
           originalMessage: userText,
           triggerSource: "slack",
+          sessionId: session.id, // Pass session ID for persistence
         })
 
         // Monitor execution and post result
-        this.monitorExecution(executionId, claw.name, channelId, threadTs)
+        this.monitorExecution(executionId, claw.name, channelId, threadTs, session.id)
       }
     } catch (error) {
       console.error("[SlackTrigger] Error handling message:", error)
@@ -388,7 +406,7 @@ export class SlackTrigger {
   /**
    * Monitor a claw execution and post the result when complete
    */
-  private monitorExecution(executionId: string, clawName: string, channelId: string, threadTs?: string): void {
+  private monitorExecution(executionId: string, clawName: string, channelId: string, threadTs?: string, sessionId?: string): void {
     const checkInterval = setInterval(async () => {
       try {
         const db = getDatabase()
@@ -406,6 +424,12 @@ export class SlackTrigger {
         // Execution complete
         clearInterval(checkInterval)
 
+        // Update session status if provided
+        if (sessionId) {
+          const sessionStatus = execution.status === "success" ? "completed" : "error"
+          await updateSessionStatus(sessionId, sessionStatus)
+        }
+
         // Limit logs to last 2000 characters to avoid message size limits
         const logs = execution.logs || ""
         const truncatedLogs = logs.length > 2000 ? "..." + logs.slice(-2000) : logs
@@ -417,6 +441,11 @@ export class SlackTrigger {
         const message = `${statusEmoji} *${clawName}* ${statusText}\n\n\`\`\`${truncatedLogs}\`\`\``
 
         await this.postMessage(channelId, message, threadTs)
+
+        // Add response to session history
+        if (sessionId) {
+          await addMessageToSession(sessionId, "assistant", `${clawName} ${statusText}\n\n${truncatedLogs}`)
+        }
       } catch (error) {
         console.error("[SlackTrigger] Error monitoring execution:", error)
         clearInterval(checkInterval)

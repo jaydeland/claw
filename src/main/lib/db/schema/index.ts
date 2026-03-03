@@ -411,6 +411,7 @@ export const headlessClaws = sqliteTable("headless_claws", {
 
 export const headlessClawsRelations = relations(headlessClaws, ({ many }) => ({
   executions: many(clawExecutions),
+  chatSessions: many(chatSessions),
 }))
 
 // ============ CLAW EXECUTIONS ============
@@ -423,6 +424,7 @@ export const clawExecutions = sqliteTable("claw_executions", {
     .notNull()
     .references(() => headlessClaws.id, { onDelete: "cascade" }),
   subChatId: text("sub_chat_id").references(() => subChats.id), // Link to subChat for chat view
+  sessionId: text("session_id").references(() => chatSessions.id, { onDelete: "set null" }), // Link to chat session
   status: text("status", { enum: ["running", "success", "failed"] }).notNull(),
   logs: text("logs").notNull().default(""), // Standard output/error buffer
   exitCode: integer("exit_code"), // Process exit code (null if still running)
@@ -433,6 +435,7 @@ export const clawExecutions = sqliteTable("claw_executions", {
   statusIdx: index("claw_executions_status_idx").on(table.status),
   startedAtIdx: index("claw_executions_started_at_idx").on(table.startedAt),
   subChatIdIdx: index("claw_executions_sub_chat_id_idx").on(table.subChatId),
+  sessionIdIdx: index("claw_executions_session_id_idx").on(table.sessionId),
 }))
 
 export const clawExecutionsRelations = relations(clawExecutions, ({ one }) => ({
@@ -443,6 +446,10 @@ export const clawExecutionsRelations = relations(clawExecutions, ({ one }) => ({
   subChat: one(subChats, {
     fields: [clawExecutions.subChatId],
     references: [subChats.id],
+  }),
+  session: one(chatSessions, {
+    fields: [clawExecutions.sessionId],
+    references: [chatSessions.id],
   }),
 }))
 
@@ -532,10 +539,52 @@ export const hooksRelations = relations(hooks, ({ one }) => ({
   }),
 }))
 
+// ============ CHAT SESSIONS ============
+// Stores chat sessions for WhatsApp and Slack integrations
+// Enables persistent conversation context across multiple messages
+export const chatSessions = sqliteTable("chat_sessions", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  clawId: text("claw_id")
+    .notNull()
+    .references(() => headlessClaws.id, { onDelete: "cascade" }),
+  externalId: text("external_id").notNull(), // WhatsApp JID or Slack channel/thread ID
+  platform: text("platform", { enum: ["whatsapp", "slack"] }).notNull(),
+  status: text("status", { enum: ["idle", "active", "completed", "error"] }).notNull().default("idle"),
+  currentExecutionId: text("current_execution_id").references(() => clawExecutions.id), // Currently running execution
+  context: text("context").notNull().default("{}"), // JSON: conversation context, user preferences, etc.
+  lastActivityAt: integer("last_activity_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+}, (table) => ({
+  clawIdIdx: index("chat_sessions_claw_id_idx").on(table.clawId),
+  externalIdIdx: index("chat_sessions_external_id_idx").on(table.externalId),
+  platformIdx: index("chat_sessions_platform_idx").on(table.platform),
+  statusIdx: index("chat_sessions_status_idx").on(table.status),
+  lastActivityIdx: index("chat_sessions_last_activity_idx").on(table.lastActivityAt),
+  // Unique constraint on clawId + externalId + platform combination
+  uniqueSession: index("chat_sessions_unique_idx").on(table.clawId, table.externalId, table.platform),
+}))
+
+export const chatSessionsRelations = relations(chatSessions, ({ one, many }) => ({
+  claw: one(headlessClaws, {
+    fields: [chatSessions.clawId],
+    references: [headlessClaws.id],
+  }),
+  currentExecution: one(clawExecutions, {
+    fields: [chatSessions.currentExecutionId],
+    references: [clawExecutions.id],
+  }),
+  executions: many(clawExecutions),
+}))
+
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
 export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
 export type SourceView = "github" | "prompts" | "skills" | "commands"
+export type ChatSessionStatus = "idle" | "active" | "completed" | "error"
+export type ChatPlatform = "whatsapp" | "slack"
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -591,3 +640,7 @@ export type Hook = typeof hooks.$inferSelect
 export type NewHook = typeof hooks.$inferInsert
 export type HookType = "PreToolUse" | "PostToolUse" | "SubagentStart" | "SubagentStop" | "Stop"
 export type HookScope = "global" | "project"
+
+// Chat session types
+export type ChatSession = typeof chatSessions.$inferSelect
+export type NewChatSession = typeof chatSessions.$inferInsert
