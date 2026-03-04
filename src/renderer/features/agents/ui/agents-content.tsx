@@ -67,6 +67,7 @@ import { ClawEditView } from "../../sidebar/components/claw-edit-view"
 import { selectedSettingsCategoryAtom } from "../atoms"
 import { Zap } from "lucide-react"
 import { CcSettingsContent } from "../../settings/ui/cc-settings-content"
+import { PinnedTabsBar } from "../components/pinned-tabs-bar"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -970,22 +971,28 @@ export function AgentsContent() {
         >
           {/* Show appropriate content based on selected sidebar tab */}
           {selectedSidebarTab === "chats" ? (
-            // Workspaces tab - show chat view
-            selectedChatId ? (
-              <div className="h-full flex flex-col relative overflow-hidden">
-                <ChatView
-                  chatId={selectedChatId}
-                  isSidebarOpen={sidebarOpen}
-                  onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-                  selectedTeamName={selectedTeam?.name}
-                  selectedTeamImageUrl={selectedTeam?.image_url}
-                />
-              </div>
-            ) : (
-              <div className="h-full flex flex-col relative overflow-hidden">
-                <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
-              </div>
-            )
+            // Workspaces tab - show chat view with pinned tabs bar
+            <div className="h-full flex flex-col relative overflow-hidden">
+              {/* Pinned tabs bar */}
+              <PinnedTabsBar />
+
+              {/* Chat content */}
+              {selectedChatId ? (
+                <div className="flex-1 flex flex-col relative overflow-hidden">
+                  <ChatView
+                    chatId={selectedChatId}
+                    isSidebarOpen={sidebarOpen}
+                    onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+                    selectedTeamName={selectedTeam?.name}
+                    selectedTeamImageUrl={selectedTeam?.image_url}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col relative overflow-hidden">
+                  <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
+                </div>
+              )}
+            </div>
           ) : selectedSidebarTab === "terminal" ? (
             // Terminal tab - show terminal main view
             <div className="h-full flex flex-col relative overflow-hidden">
