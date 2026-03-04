@@ -549,7 +549,25 @@ sqlite3 "$DB_PATH" "ALTER TABLE chats ADD COLUMN connection_name text;"
 - Session resume via `sessionId` stored in SubChat
 - Message streaming via tRPC subscription (`claude.onMessage`)
 
-## Tech Stack
+### External Messaging Integration (WhatsApp/Slack 2-Way Sync)
+
+Chats can be connected to external messaging platforms for 2-way synchronization:
+
+**How it works:**
+1. When creating a new chat, users can select "Connect to WhatsApp" or "Connect to Slack"
+2. A new WhatsApp group or Slack channel is automatically created with the chat name
+3. The chat is stored with `connectionType`, `connectionTarget` (group/channel ID), and `connectionName`
+
+**2-Way Sync:**
+- **Incoming → Claw:** When messages arrive in the WhatsApp group or Slack channel, configured Claws trigger and execute with the message content
+- **Outgoing ← Claw:** When Claude responds in the chat, the response text is forwarded to the connected WhatsApp group or Slack channel (fire-and-forget)
+
+**Key Files:**
+- `src/main/lib/claws/whatsapp-trigger.ts` - WhatsApp Web integration using Baileys
+- `src/main/lib/claws/slack-trigger.ts` - Slack API integration
+- `src/main/lib/trpc/routers/claude.ts` - Forwards Claude responses to connected channels (lines ~1180, ~2165)
+- `src/main/lib/trpc/routers/chats.ts` - Chat connection management (`updateConnection`)
+- `src/renderer/features/agents/main/new-chat-form.tsx` - Connection setup during chat creation
 
 | Layer | Tech |
 |-------|------|
