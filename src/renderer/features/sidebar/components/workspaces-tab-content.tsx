@@ -64,6 +64,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
   const setSelectedGsdCategory = useSetAtom(selectedGsdCategoryAtom)
   const setWorkspaceGithubSelection = useSetAtom(workspaceGithubSelectionAtom)
 
+  // Force re-render when pins change
+  const [, forceUpdate] = useState(0)
+
   // Fetch all projects
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
 
@@ -71,6 +74,15 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
   const { data: allChats, isLoading: isLoadingChats} = trpc.chats.list.useQuery({})
 
   const utils = trpc.useUtils()
+
+  // Listen for pin changes to trigger re-render
+  useEffect(() => {
+    const handlePinChange = () => {
+      forceUpdate(prev => prev + 1)
+    }
+    window.addEventListener('pinned-chats-changed', handlePinChange)
+    return () => window.removeEventListener('pinned-chats-changed', handlePinChange)
+  }, [])
 
   // Open folder mutation for "New Workspace" button
   const openFolderMutation = trpc.projects.openFolder.useMutation({
@@ -164,9 +176,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
       pinnedIds.add(chatId)
     }
     localStorage.setItem(`agent-pinned-chats-${projectId}`, JSON.stringify(Array.from(pinnedIds)))
-    // Trigger re-render by invalidating chats list
-    utils.chats.list.invalidate()
-  }, [getPinnedChatIds, utils.chats.list])
+    // Trigger re-render by dispatching a custom storage event
+    window.dispatchEvent(new CustomEvent('pinned-chats-changed', { detail: { projectId } }))
+  }, [getPinnedChatIds])
 
   // Toggle workspace expansion
   const toggleWorkspaceExpanded = useCallback((workspaceId: string) => {

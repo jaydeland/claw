@@ -4,7 +4,7 @@ import { useAtom, useAtomValue } from "jotai"
 import { X, MessageSquare, House } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { useMemo } from "react"
+import { useMemo, useState, useEffect } from "react"
 import {
   selectedAgentChatIdAtom,
   selectedProjectAtom,
@@ -19,18 +19,40 @@ export function PinnedTabsBar({ className }: PinnedTabsBarProps) {
   const selectedProject = useAtomValue(selectedProjectAtom)
 
   const { data: allChats } = trpc.chats.list.useQuery({})
-  const utils = trpc.useUtils()
 
-  // Get pinned chat IDs for current project
-  const pinnedChatIds = useMemo(() => {
-    if (!selectedProject?.id) return new Set<string>()
-    try {
-      const stored = localStorage.getItem(`agent-pinned-chats-${selectedProject.id}`)
-      return new Set(stored ? JSON.parse(stored) : [])
-    } catch {
-      return new Set<string>()
+  // Local state to track pinned IDs and trigger re-renders
+  const [pinnedChatIds, setPinnedChatIds] = useState<Set<string>>(new Set())
+
+  // Load pinned IDs from localStorage when project changes
+  useEffect(() => {
+    if (!selectedProject?.id) {
+      setPinnedChatIds(new Set())
+      return
     }
-  }, [selectedProject?.id, allChats]) // Re-compute when chats change (for invalidation)
+
+    const loadPinnedIds = () => {
+      try {
+        const stored = localStorage.getItem(`agent-pinned-chats-${selectedProject.id}`)
+        setPinnedChatIds(new Set(stored ? JSON.parse(stored) : []))
+      } catch {
+        setPinnedChatIds(new Set())
+      }
+    }
+
+    // Initial load
+    loadPinnedIds()
+
+    // Listen for pin changes from sidebar
+    const handlePinChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ projectId: string }>
+      if (customEvent.detail?.projectId === selectedProject.id) {
+        loadPinnedIds()
+      }
+    }
+
+    window.addEventListener('pinned-chats-changed', handlePinChange)
+    return () => window.removeEventListener('pinned-chats-changed', handlePinChange)
+  }, [selectedProject?.id])
 
   // Filter to get pinned chats for current project
   const pinnedChats = useMemo(() => {
@@ -56,15 +78,17 @@ export function PinnedTabsBar({ className }: PinnedTabsBarProps) {
     e.stopPropagation()
     if (!selectedProject?.id) return
 
-    const pinnedIds = new Set(pinnedChatIds)
-    pinnedIds.delete(chatId)
+    const newPinnedIds = new Set(pinnedChatIds)
+    newPinnedIds.delete(chatId)
+
+    // Update localStorage
     localStorage.setItem(
       `agent-pinned-chats-${selectedProject.id}`,
-      JSON.stringify(Array.from(pinnedIds))
+      JSON.stringify(Array.from(newPinnedIds))
     )
 
-    // Invalidate to trigger re-render
-    utils.chats.list.invalidate()
+    // Update local state to trigger re-render
+    setPinnedChatIds(newPinnedIds)
   }
 
   // Don't show bar if no pinned chats
