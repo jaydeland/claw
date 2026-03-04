@@ -714,6 +714,8 @@ export const claudeRouter = router({
         let lastChunkType = ""
         // Shared sessionId for cleanup to save on abort
         let currentSessionId: string | null = null
+        // Flag to prevent cleanup from re-writing an invalid session ID back to DB
+        let sessionInvalid = false
         console.log(`[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`)
 
         // Track if observable is still active (not unsubscribed)
@@ -2086,6 +2088,7 @@ export const claudeRouter = router({
                         chunk.errorText.includes("Invalid session ID")
                       ) {
                         console.log(`[claude] Detected invalid session error, clearing from database`)
+                        sessionInvalid = true // Prevent cleanup from re-writing stale session ID
 
                         // Clear from database to start fresh on next message
                         db.update(subChats)
@@ -2222,6 +2225,7 @@ export const claudeRouter = router({
                 errorCategory = "INVALID_SESSION"
 
                 console.log(`[claude] Detected invalid session error, clearing from database`)
+                sessionInvalid = true // Prevent cleanup from re-writing stale session ID
 
                 // Clear invalid sessionId from database to start fresh on next message
                 db.update(subChats)
@@ -2381,11 +2385,12 @@ export const claudeRouter = router({
 
           // Save sessionId on abort so conversation can be resumed
           // Clear streamId since we're no longer streaming
+          // Skip saving sessionId if session was invalid (already cleared from DB above)
           const db = getDatabase()
           db.update(subChats)
             .set({
               streamId: null,
-              ...(currentSessionId && { sessionId: currentSessionId })
+              ...(currentSessionId && !sessionInvalid && { sessionId: currentSessionId })
             })
             .where(eq(subChats.id, input.subChatId))
             .run()
