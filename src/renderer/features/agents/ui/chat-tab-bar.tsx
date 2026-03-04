@@ -2,6 +2,12 @@
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../../components/ui/dialog"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -38,7 +44,8 @@ import {
   QuestionIcon,
   SettingsIcon,
 } from "../../../components/ui/icons"
-import { ChevronDown, MoreHorizontal, X } from "lucide-react"
+import { ChevronDown, MoreHorizontal, X, MessageCircle } from "lucide-react"
+import { WhatsAppBridgeManager } from "../../../components/dialogs/settings-tabs/whatsapp-bridge-manager"
 
 // Tab item component
 interface TabItemProps {
@@ -142,6 +149,15 @@ export function ChatTabBar({ onNewChat, onOpenSettings }: ChatTabBarProps) {
   const [showLeftScroll, setShowLeftScroll] = useState(false)
   const [showRightScroll, setShowRightScroll] = useState(false)
   const [showOverflowMenu, setShowOverflowMenu] = useState(false)
+  const [showBridgeDialog, setShowBridgeDialog] = useState(false)
+
+  // Fetch WhatsApp status
+  const { data: whatsappStatus } = trpc.whatsapp.getStatus.useQuery(undefined, {
+    refetchInterval: 10000, // Poll every 10 seconds
+  })
+
+  // Get active subchat for bridge manager
+  const activeSubChatId = useAgentSubChatStore((state) => state.activeSubChatId)
 
   // Fetch all chats
   const { data: agentChats } = trpc.chats.list.useQuery({})
@@ -409,6 +425,38 @@ export function ChatTabBar({ onNewChat, onOpenSettings }: ChatTabBarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+
+      {/* WhatsApp Bridge button - only show when connected and a chat is selected */}
+      {whatsappStatus?.isConnected && selectedChatId && (
+        <Tooltip delayDuration={500}>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowBridgeDialog(true)}
+              className="h-7 w-7 flex-shrink-0"
+            >
+              <MessageCircle className="h-4 w-4 text-green-600" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>WhatsApp Bridge</TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* WhatsApp Bridge Dialog */}
+      <Dialog open={showBridgeDialog} onOpenChange={setShowBridgeDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>WhatsApp Bridge Settings</DialogTitle>
+          </DialogHeader>
+          {selectedChatId && (
+            <WhatsAppBridgeManager
+              chatId={selectedChatId}
+              subChatId={activeSubChatId || selectedChatId}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Settings button */}
       <Tooltip delayDuration={500}>

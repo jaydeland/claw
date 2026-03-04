@@ -8,7 +8,7 @@
 // Baileys v7 is pure ESM — must be dynamically imported at runtime.
 // It is externalized in electron.vite.config.ts so esbuild leaves it as-is.
 import { app } from "electron"
-import { getDatabase, headlessClaws, whatsappSettings, clawExecutions } from "../db"
+import { getDatabase, headlessClaws, whatsappSettings, clawExecutions, whatsappBridges } from "../db"
 import { eq } from "drizzle-orm"
 import { clawDaemon, getOrCreateSession, updateSessionStatus, addMessageToSession } from "./index"
 import { EventEmitter } from "events"
@@ -53,6 +53,22 @@ type WASocket = any
 // Global event emitter for QR codes and status changes
 export const whatsAppQREmitter = new EventEmitter()
 export const whatsAppStatusEmitter = new EventEmitter()
+
+// Global event emitter for WhatsApp bridge messages (forwarded to chat UI)
+export const whatsAppBridgeEmitter = new EventEmitter()
+
+// WhatsApp bridge message type
+export interface WhatsAppBridgeMessage {
+  bridgeId: string
+  chatId: string
+  subChatId: string
+  whatsappJid: string
+  sender: string
+  text: string
+  timestamp: number
+  messageId: string
+  fromMe: boolean
+}
 
 // Singleton instance
 let whatsappTriggerInstance: WhatsAppTrigger | null = null
@@ -514,6 +530,10 @@ export class WhatsAppTrigger {
         // Monitor execution and send result
         this.monitorExecution(executionId, claw.name, from, session.id)
       }
+
+      // Also check for WhatsApp bridges and forward messages to connected chats
+      await this.forwardToBridges(msg, from, sender, messageText)
+
     } catch (error: any) {
       console.error("[WhatsAppTrigger] Error handling message:", error)
       console.error("[WhatsAppTrigger] Error stack:", error?.stack || 'No stack')
@@ -580,6 +600,54 @@ export class WhatsAppTrigger {
     // Direct match on chat ID or phone number
     return normalizedChatId.includes(normalizedFilter) ||
            normalizedChatId.replace(/\D/g, "").includes(normalizedFilter.replace(/\D/g, ""))
+  }
+
+  /**
+   * Forward WhatsApp messages to bridged chats
+   */
+  private async forwardToBridges(msg: any, from: string, sender: string, messageText: string): Promise<void> {
+    try {
+      const db = getDatabase()
+
+      // Find active bridges for this WhatsApp JID
+      const bridges = db
+        .select()
+        .from(whatsappBridges)
+        .where(eq(whatsappBridges.whatsappJid, from))
+        .all()
+
+      const activeBridges = bridges.filter(b => b.isActive)
+
+      if (activeBridges.length === 0) {
+        console.log(`[WhatsAppTrigger] No active bridges found for ${from}`)
+        return
+      }
+
+      console.log(`[WhatsAppTrigger] Found ${activeBridges.length} active bridge(s) for ${from}`)
+
+      const timestamp = Date.now()
+
+      for (const bridge of activeBridges) {
+        const bridgeMessage: WhatsAppBridgeMessage = {
+          bridgeId: bridge.id,
+          chatId: bridge.chatId,
+          subChatId: bridge.subChatId,
+          whatsappJid: from,
+          sender: sender,
+          text: messageText,
+          timestamp: timestamp,
+          messageId: msg.key.id || `wa_${timestamp}`,
+          fromMe: msg.key.fromMe || false,
+        }
+
+        // Emit to the bridge event emitter for the renderer to pick up
+        console.log(`[WhatsAppTrigger] Emitting bridge message to chat ${bridge.chatId}, subChat ${bridge.subChatId}`)
+        whatsAppBridgeEmitter.emit("message", bridgeMessage)
+      }
+    } catch (error) {
+      console.error("[WhatsAppTrigger] Error forwarding to bridges:", error)
+      // Don't throw - this is non-critical
+    }
   }
 
   /**

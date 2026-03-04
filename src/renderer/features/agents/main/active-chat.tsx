@@ -170,6 +170,7 @@ import {
 } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
 import { PreviewSetupHoverCard } from "../components/preview-setup-hover-card"
+import { WhatsAppBridgeHandler } from "../components/whatsapp-bridge-handler"
 import { TextSelectionProvider } from "../context/text-selection-context"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
@@ -3635,6 +3636,9 @@ const ChatViewInner = memo(function ChatViewInner({
     <TextSelectionProvider>
     <SearchHighlightProvider>
       <div className="flex flex-col flex-1 min-h-0 relative">
+        {/* WhatsApp Bridge Handler - receives messages from bridged WhatsApp groups */}
+        <WhatsAppBridgeHandler chatId={parentChatId} subChatId={subChatId} />
+
         {/* Text selection popover for adding text to context */}
         {/* CRITICAL: Only render for active tab - portals escape pointerEvents isolation */}
         {isActive && (
