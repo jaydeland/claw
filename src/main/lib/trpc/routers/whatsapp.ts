@@ -1,8 +1,8 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, whatsappSettings } from "../../db"
-import { eq } from "drizzle-orm"
-import { getWhatsAppTrigger, whatsAppQREmitter, whatsAppStatusEmitter } from "../../claws/whatsapp-trigger"
+import { getDatabase, whatsappSettings, whatsappBridges } from "../../db"
+import { eq, and } from "drizzle-orm"
+import { getWhatsAppTrigger, whatsAppQREmitter, whatsAppStatusEmitter, whatsAppBridgeEmitter, type WhatsAppBridgeMessage } from "../../claws/whatsapp-trigger"
 import { observable } from "@trpc/server/observable"
 
 /**
@@ -228,5 +228,152 @@ export const whatsappRouter = router({
         error: error instanceof Error ? error.message : String(error),
       }
     }
+  }),
+
+  /**
+   * Get WhatsApp bridges for a chat
+   */
+  getBridges: publicProcedure
+    .input(z.object({ chatId: z.string().min(1) }))
+    .query(async ({ input }) => {
+      try {
+        const db = getDatabase()
+        const bridges = db
+          .select()
+          .from(whatsappBridges)
+          .where(eq(whatsappBridges.chatId, input.chatId))
+          .all()
+        return {
+          success: true,
+          bridges,
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Create a WhatsApp bridge for a chat
+   */
+  createBridge: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string().min(1),
+        subChatId: z.string().min(1),
+        whatsappJid: z.string().min(1),
+        whatsappGroupName: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const db = getDatabase()
+
+        // Check if bridge already exists
+        const existing = db
+          .select()
+          .from(whatsappBridges)
+          .where(
+            and(
+              eq(whatsappBridges.chatId, input.chatId),
+              eq(whatsappBridges.whatsappJid, input.whatsappJid)
+            )
+          )
+          .get()
+
+        if (existing) {
+          return {
+            success: false,
+            error: "Bridge already exists for this chat and WhatsApp group",
+          }
+        }
+
+        const bridge = db
+          .insert(whatsappBridges)
+          .values({
+            chatId: input.chatId,
+            subChatId: input.subChatId,
+            whatsappJid: input.whatsappJid,
+            whatsappGroupName: input.whatsappGroupName,
+            isActive: true,
+          })
+          .returning()
+          .get()
+
+        return {
+          success: true,
+          bridge,
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Delete a WhatsApp bridge
+   */
+  deleteBridge: publicProcedure
+    .input(z.object({ bridgeId: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        const db = getDatabase()
+        db.delete(whatsappBridges).where(eq(whatsappBridges.id, input.bridgeId)).run()
+        return {
+          success: true,
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Toggle bridge active status
+   */
+  toggleBridge: publicProcedure
+    .input(z.object({ bridgeId: z.string().min(1), isActive: z.boolean() }))
+    .mutation(async ({ input }) => {
+      try {
+        const db = getDatabase()
+        db
+          .update(whatsappBridges)
+          .set({ isActive: input.isActive, updatedAt: new Date() })
+          .where(eq(whatsappBridges.id, input.bridgeId))
+          .run()
+        return {
+          success: true,
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Subscribe to WhatsApp bridge messages
+   * Emits messages from bridged WhatsApp groups to the chat UI
+   */
+  onBridgeMessage: publicProcedure.subscription(() => {
+    return observable<WhatsAppBridgeMessage>((emit) => {
+      const handler = (message: WhatsAppBridgeMessage) => {
+        emit.next(message)
+      }
+
+      whatsAppBridgeEmitter.on("message", handler)
+
+      // Cleanup when subscription ends
+      return () => {
+        whatsAppBridgeEmitter.off("message", handler)
+      }
+    })
   }),
 })

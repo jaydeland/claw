@@ -33,3 +33,6 @@ export { useHaptic } from "./use-haptic"
 export { useTextContextSelection } from "./use-text-context-selection"
 export { useToggleFocusOnCmdEsc } from "./use-toggle-focus-on-cmd-esc"
 export { useCurrentToolStatus, type CurrentToolStatus } from "./use-current-tool-status"
+
+// WhatsApp bridge hook
+export { useWhatsAppBridge } from "./use-whatsapp-bridge"
