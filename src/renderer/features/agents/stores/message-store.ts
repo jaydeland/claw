@@ -58,7 +58,7 @@ export const messageIdsAtom = atom<string[]>([])
 
 // Message roles cache - updated only when messages are added/removed
 // This avoids reading all message atoms just to check roles
-const messageRolesAtom = atom<Map<string, "user" | "assistant" | "system">>(new Map())
+export const messageRolesAtom = atom<Map<string, "user" | "assistant" | "system">>(new Map())
 
 // Currently streaming message ID (null if not streaming)
 export const streamingMessageIdAtom = atom<string | null>(null)
