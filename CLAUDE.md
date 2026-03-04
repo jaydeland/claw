@@ -499,6 +499,38 @@ sqlite3 "$DB_PATH" "SELECT * FROM __drizzle_migrations"
 sqlite3 "$DB_PATH" ".schema"
 ```
 
+### Migration Collisions (Duplicate Numbers)
+
+**Symptom:** "no such column" errors after pulling new code, even though the migration file exists.
+
+**Cause:** When two migration files share the same number prefix (e.g., `0060_add_chat_connection_type.sql` and `0060_add_chat_sessions_table.sql`), Drizzle only runs the **first one alphabetically**. Additional migrations with the same number are silently skipped.
+
+**Check for collisions:**
+```bash
+ls drizzle/ | grep -E "^0060"
+# If you see multiple files with the same number, that's the problem
+```
+
+**Fix manually:**
+```bash
+# 1. Identify which migrations were skipped
+cat drizzle/meta/_journal.json | grep -E '"tag"' | tail -20
+
+# 2. Apply skipped migrations manually
+sqlite3 "$DB_PATH" "ALTER TABLE chats ADD COLUMN connection_type text DEFAULT 'none';"
+sqlite3 "$DB_PATH" "ALTER TABLE chats ADD COLUMN connection_target text;"
+sqlite3 "$DB_PATH" "ALTER TABLE chats ADD COLUMN connection_name text;"
+
+# 3. Update _journal.json to include skipped entries
+# Edit drizzle/meta/_journal.json and add entries for the skipped migrations
+# Use sequential idx numbers (e.g., 60, 61, 62, 63) and unique timestamps
+```
+
+**Prevention:**
+- Always use `bun run db:generate` instead of manually creating migrations - it handles sequencing
+- Before creating a manual migration, check `drizzle/` for existing files with the same number
+- If you must create manual migrations, use the next available number (check `_journal.json` for the highest idx)
+
 ## Key Patterns
 
 ### IPC Communication
