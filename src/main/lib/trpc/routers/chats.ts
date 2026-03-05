@@ -6,7 +6,7 @@ import { statSync } from "fs"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { chats, getDatabase, projects, subChats } from "../../db"
+import { chats, getDatabase, headlessClaws, projects, subChats } from "../../db"
 import {
   createWorktreeForChat,
   fetchGitHubPRStatus,
@@ -20,6 +20,7 @@ import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
 import { terminalManager } from "../../terminal/manager"
 import { queryBackgroundSession, isBackgroundSessionReady } from "../../claude/background-session"
+import { clawDaemon } from "../../claws"
 import { getPromptByKey, PROMPT_KEYS } from "../../prompts/prompt-service"
 import { publicProcedure, router } from "../index"
 
@@ -461,6 +462,7 @@ export const chatsRouter = router({
 
   /**
    * Update the external messaging connection for a chat (WhatsApp group or Slack channel)
+   * Auto-creates a WhatsApp claw when connectionType is "whatsapp" and connectionTarget is provided
    */
   updateConnection: publicProcedure
     .input(z.object({
@@ -469,8 +471,57 @@ export const chatsRouter = router({
       connectionTarget: z.string().optional(),
       connectionName: z.string().optional(),
     }))
-    .mutation(({ input }) => {
+    .mutation(async ({ input }) => {
       const db = getDatabase()
+
+      // Get the chat to access project info
+      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
+      if (!chat) {
+        throw new Error("Chat not found")
+      }
+
+      // Get the project for worktree path
+      const project = db.select().from(projects).where(eq(projects.id, chat.projectId)).get()
+      const targetWorktree = chat.worktreePath || project?.path || "/tmp"
+
+      // Auto-create WhatsApp claw when connection is established
+      if (input.connectionType === "whatsapp" && input.connectionTarget) {
+        // Check for existing WhatsApp claw for this group (query by triggerType and filter by config)
+        const allWhatsAppClaws = db
+          .select()
+          .from(headlessClaws)
+          .where(eq(headlessClaws.triggerType, "whatsapp_message"))
+          .all()
+        const existingClaw = allWhatsAppClaws.find(c => {
+          try { return JSON.parse(c.triggerConfig || "{}").whatsappChatFilter === input.connectionTarget } catch { return false }
+        })
+
+        if (!existingClaw) {
+          const clawId = createId()
+          const chatName = input.connectionName || chat.name || "WhatsApp Chat"
+
+          db.insert(headlessClaws)
+            .values({
+              id: clawId,
+              name: `WhatsApp: ${chatName}`,
+              instruction: `You are an AI assistant integrated with WhatsApp. You receive messages from the WhatsApp group "${chatName}" and should respond helpfully.\n\nWhen responding:\n- Be concise but informative\n- Use markdown formatting when helpful\n- If the user asks about code or technical topics, provide clear explanations\n- Always respond in the same language as the user's message`,
+              targetWorktree,
+              triggerType: "whatsapp_message",
+              triggerConfig: JSON.stringify({ whatsappChatFilter: input.connectionTarget }),
+              isEnabled: true,
+              allowedDirectories: JSON.stringify([]),
+              allowedMcpServers: JSON.stringify([]),
+            })
+            .run()
+
+          console.log(`[updateConnection] Auto-created WhatsApp claw ${clawId} for chat ${input.chatId} with filter ${input.connectionTarget}`)
+
+          await clawDaemon.reload()
+        } else {
+          console.log(`[updateConnection] WhatsApp claw already exists for ${input.connectionTarget}, skipping creation`)
+        }
+      }
+
       return db
         .update(chats)
         .set({
