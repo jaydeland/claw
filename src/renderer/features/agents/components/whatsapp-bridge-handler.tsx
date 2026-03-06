@@ -41,7 +41,7 @@ export function WhatsAppBridgeHandler({ chatId, subChatId }: WhatsAppBridgeHandl
       console.log("[WhatsAppBridgeHandler] Received bridge message:", message)
 
       // Only process messages for the current chat/subChat
-      if (subChatId && message.subChatId === subChatId) {
+      if (chatId && message.chatId === chatId) {
         // Add the message to the chat store
         const messageId = `wa_${message.messageId}_${Date.now()}`
 

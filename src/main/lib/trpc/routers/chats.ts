@@ -6,7 +6,7 @@ import { statSync } from "fs"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { chats, getDatabase, headlessClaws, projects, subChats } from "../../db"
+import { chats, getDatabase, headlessClaws, projects, subChats, whatsappBridges } from "../../db"
 import {
   createWorktreeForChat,
   fetchGitHubPRStatus,
@@ -519,6 +519,38 @@ export const chatsRouter = router({
           await clawDaemon.reload()
         } else {
           console.log(`[updateConnection] WhatsApp claw already exists for ${input.connectionTarget}, skipping creation`)
+        }
+      }
+
+      // Auto-create WhatsApp bridge when connection is established
+      if (input.connectionType === "whatsapp" && input.connectionTarget) {
+        const existingBridge = db
+          .select()
+          .from(whatsappBridges)
+          .where(
+            and(
+              eq(whatsappBridges.chatId, input.chatId),
+              eq(whatsappBridges.whatsappJid, input.connectionTarget)
+            )
+          )
+          .get()
+
+        if (!existingBridge) {
+          const chatSubChats = db.select().from(subChats).where(eq(subChats.chatId, input.chatId)).all()
+          const targetSubChatId = chatSubChats[0]?.id
+
+          if (targetSubChatId) {
+            db.insert(whatsappBridges)
+              .values({
+                chatId: input.chatId,
+                subChatId: targetSubChatId,
+                whatsappJid: input.connectionTarget,
+                whatsappGroupName: input.connectionName,
+                isActive: true,
+              })
+              .run()
+            console.log(`[updateConnection] Auto-created WhatsApp bridge for chat ${input.chatId}`)
+          }
         }
       }
 
