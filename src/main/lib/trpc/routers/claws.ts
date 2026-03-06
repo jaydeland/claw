@@ -117,6 +117,7 @@ export const clawsRouter = router({
     .input(
       z.object({
         name: z.string().min(1),
+        purpose: z.string().min(1, "Purpose is required"),
         instruction: z.string().min(1),
         targetWorktree: z.string().min(1),
         triggerType: z.enum(["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"]),
@@ -134,6 +135,7 @@ export const clawsRouter = router({
         .values({
           id,
           name: input.name,
+          purpose: input.purpose,
           instruction: input.instruction,
           targetWorktree: input.targetWorktree,
           triggerType: input.triggerType,
@@ -158,6 +160,7 @@ export const clawsRouter = router({
       z.object({
         id: z.string(),
         name: z.string().min(1).optional(),
+        purpose: z.string().min(1).optional(),
         instruction: z.string().min(1).optional(),
         targetWorktree: z.string().min(1).optional(),
         triggerType: z.enum(["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"]).optional(),
@@ -173,6 +176,7 @@ export const clawsRouter = router({
       const updateData: Record<string, string | boolean | Date | undefined> = { updatedAt: new Date() }
 
       if (updates.name !== undefined) updateData.name = updates.name
+      if (updates.purpose !== undefined) updateData.purpose = updates.purpose
       if (updates.instruction !== undefined) updateData.instruction = updates.instruction
       if (updates.targetWorktree !== undefined) updateData.targetWorktree = updates.targetWorktree
       if (updates.triggerType !== undefined) updateData.triggerType = updates.triggerType

@@ -402,6 +402,7 @@ export const headlessClaws = sqliteTable("headless_claws", {
     .primaryKey()
     .$defaultFn(() => createId()),
   name: text("name").notNull(),
+  purpose: text("purpose").notNull().default(""), // Short description of what this claw does (required for new claws)
   instruction: text("instruction").notNull(), // The prompt/task passed to Claude
   targetWorktree: text("target_worktree").notNull(), // Absolute path to the isolated Git worktree
   triggerType: text("trigger_type", { enum: ["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"] }).notNull(),

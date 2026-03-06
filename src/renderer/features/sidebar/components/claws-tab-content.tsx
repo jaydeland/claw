@@ -38,6 +38,7 @@ interface ClawsTabContentProps {
 type ClawWithParsedConfig = {
   id: string
   name: string
+  purpose: string
   instruction: string
   targetWorktree: string
   triggerType: "cron" | "github_poll" | "manual"
@@ -89,6 +90,7 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
       result = result.filter(
         (c) =>
           c.name.toLowerCase().includes(query) ||
+          c.purpose?.toLowerCase().includes(query) ||
           c.instruction.toLowerCase().includes(query) ||
           c.targetWorktree.toLowerCase().includes(query)
       )
@@ -199,6 +201,13 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
                     className="h-4 w-7"
                   />
                 </div>
+
+                {/* Purpose */}
+                {claw.purpose && (
+                  <div className="text-xs text-muted-foreground/80 truncate pl-5.5">
+                    {claw.purpose}
+                  </div>
+                )}
 
                 {/* Row 2: Trigger info */}
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground pl-5.5">

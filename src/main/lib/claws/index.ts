@@ -601,6 +601,11 @@ class ClawDaemon {
     // System/context message
     const contextParts = [`Claw "${claw.name}" triggered via ${claw.triggerType}`]
 
+    // Add purpose if set
+    if (claw.purpose) {
+      contextParts.push(`Purpose: ${claw.purpose}`)
+    }
+
     if (context?.triggerSource === "whatsapp") {
       contextParts.push(`From: ${context.whatsappSender} (${context.whatsappFrom})`)
       if (context.originalMessage) {

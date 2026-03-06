@@ -20,6 +20,7 @@ interface CreateClawModalProps {
   claw?: {
     id: string
     name: string
+    purpose: string
     instruction: string
     targetWorktree: string
     triggerType: TriggerType
@@ -55,6 +56,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       updateMutation.mutate({
         id: claw.id,
         name: formData.name,
+        purpose: formData.purpose,
         instruction: formData.instruction,
         targetWorktree: formData.targetWorktree,
         triggerType: formData.triggerType,
@@ -65,6 +67,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
     } else {
       createMutation.mutate({
         name: formData.name,
+        purpose: formData.purpose,
         instruction: formData.instruction,
         targetWorktree: formData.targetWorktree,
         triggerType: formData.triggerType,
@@ -80,6 +83,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
     const config = claw.triggerConfig || {}
     return {
       name: claw.name,
+      purpose: claw.purpose || "",
       instruction: claw.instruction,
       targetWorktree: claw.targetWorktree,
       triggerType: claw.triggerType as TriggerType,

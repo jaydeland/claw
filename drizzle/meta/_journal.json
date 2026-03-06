@@ -512,6 +512,13 @@
       "when": 1770600016012,
       "tag": "0069_add_whatsapp_bridges_table",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1741142400000,
+      "tag": "0070_add_headless_claws_purpose",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,7 @@ export type TriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | 
 
 export interface FormData {
   name: string
+  purpose: string
   instruction: string
   targetWorktree: string
   triggerType: TriggerType
@@ -46,6 +47,7 @@ export interface ClawFormProps {
 
 const defaultFormData: FormData = {
   name: "",
+  purpose: "",
   instruction: "",
   targetWorktree: "",
   triggerType: "manual",
@@ -126,6 +128,10 @@ export function ClawForm({
 
     if (!formData.name.trim()) {
       newErrors.name = "Name is required"
+    }
+
+    if (!formData.purpose.trim()) {
+      newErrors.purpose = "Purpose is required"
     }
 
     if (!formData.instruction.trim()) {
@@ -241,6 +247,22 @@ export function ClawForm({
           className={cn(errors.name && "border-destructive")}
         />
         {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+      </div>
+
+      {/* Purpose */}
+      <div className="space-y-2">
+        <Label htmlFor="purpose">Purpose <span className="text-destructive">*</span></Label>
+        <Input
+          id="purpose"
+          placeholder="e.g., Review pull requests and suggest improvements"
+          value={formData.purpose}
+          onChange={(e) => setFormData((prev) => ({ ...prev, purpose: e.target.value }))}
+          className={cn(errors.purpose && "border-destructive")}
+        />
+        {errors.purpose && <p className="text-xs text-destructive">{errors.purpose}</p>}
+        <p className="text-xs text-muted-foreground">
+          A short description of what this claw does (displayed in list view)
+        </p>
       </div>
 
       {/* Project/Worktree Selection */}
