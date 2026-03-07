@@ -60,6 +60,38 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
     }
   }
 
+  // Reset all state to prevent memory leaks in long-running sessions
+  // Called after each message finishes to clear accumulated data
+  function resetState(): void {
+    // Clear collections that accumulate throughout a session
+    emittedToolIds.clear()
+    toolIdMapping.clear()
+
+    // Reset counters
+    compactCounter = 0
+
+    // Clear tracking IDs
+    lastCompactId = null
+    lastTextId = null
+    currentParentToolUseId = null
+
+    // Reset thinking state
+    currentThinkingId = null
+    accumulatedThinking = ""
+    inThinkingBlock = false
+
+    // Reset streaming state
+    textId = null
+    textStarted = false
+    currentToolCallId = null
+    currentToolName = null
+    accumulatedToolInput = ""
+
+    // Note: We intentionally do NOT reset:
+    // - 'started' - remains true for session lifetime
+    // - 'startTime' - reset per message in the result handler
+  }
+
   // Helper to end current tool input
   function* endToolInput(): Generator<UIMessageChunk> {
     if (currentToolCallId) {
@@ -634,6 +666,12 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
       yield { type: "finish-step" }
       console.log("[transform] YIELDING FINISH from result message")
       yield { type: "finish", messageMetadata: metadata }
+
+      // Reset all state to prevent memory leaks in long-running sessions
+      // This clears accumulated tool IDs, mappings, and tracking variables
+      resetState()
+      // Reset startTime for next message
+      startTime = null
     }
   }
 }
