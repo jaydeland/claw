@@ -21,10 +21,11 @@ import {
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { setPendingMessageMetadataAtom } from "../stores/message-store"
+import type { ErrorCategory } from "../../../shared/error-types"
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
-  string,
+  ErrorCategory,
   {
     title: string
     description: string
@@ -105,6 +106,10 @@ const ERROR_TOAST_CONFIG: Record<
     title: "Conversation too long",
     description:
       "The conversation has exceeded the context limit. Starting a new chat is recommended.",
+  },
+  UNKNOWN: {
+    title: "Something went wrong",
+    description: "An unexpected error occurred. Please try again.",
   },
 }
 
