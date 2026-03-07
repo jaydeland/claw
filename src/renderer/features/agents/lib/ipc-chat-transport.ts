@@ -5,6 +5,7 @@ import {
   activeConfigAtom,
   agentsLoginModalOpenAtom,
   extendedThinkingEnabledAtom,
+  thinkingEffortAtom,
   historyEnabledAtom,
   sessionInfoAtom,
 } from "../../../lib/atoms"
@@ -142,7 +143,12 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     // Read extended thinking setting dynamically (so toggle applies to existing chats)
     const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
+    const thinkingEffort = appStore.get(thinkingEffortAtom)
     const historyEnabled = appStore.get(historyEnabledAtom)
+
+    // Effort parameter: controls thinking depth when adaptive thinking is enabled
+    // Only pass when thinking is enabled and effort differs from default "high"
+    const effortValue = thinkingEnabled && thinkingEffort !== "high" ? thinkingEffort : undefined
 
     // Read model selection dynamically (so model changes apply to existing chats)
     const selectedModelId = appStore.get(lastSelectedModelIdAtom)
@@ -187,6 +193,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             // When disabled, explicitly disable thinking
             ...(thinkingEnabled && { thinking: "adaptive" as const }),
             ...(!thinkingEnabled && { thinking: "disabled" as const }),
+            ...(effortValue && { effort: effortValue }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
             historyEnabled,

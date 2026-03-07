@@ -454,6 +454,16 @@ export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Preferences - Thinking Effort
+// Controls thinking depth when extended thinking is enabled.
+// low = minimal thinking (cost-saving), medium = balanced, high = default, max = deepest (Opus 4.6 only)
+export const thinkingEffortAtom = atomWithStorage<"low" | "medium" | "high" | "max">(
+  "preferences:thinking-effort",
+  "high",
+  undefined,
+  { getOnInit: true },
+)
+
 // Preferences - History (Rollback)
 // When enabled, allow rollback to previous assistant messages
 export const historyEnabledAtom = atomWithStorage<boolean>(

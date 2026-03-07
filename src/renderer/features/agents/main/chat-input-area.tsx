@@ -63,6 +63,7 @@ import {
   normalizeCustomClaudeConfig,
   activeConfigAtom,
   extendedThinkingEnabledAtom,
+  thinkingEffortAtom,
   activeProviderAtom,
   anthropicModelAtom,
   bedrockModelAtom,
@@ -477,6 +478,9 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+
+  // Thinking effort level (only applies when thinking is enabled)
+  const [thinkingEffort, setThinkingEffort] = useAtom(thinkingEffortAtom)
 
   // Agent mode - global atom (agent, plan, or swarm)
   const [agentMode, setAgentMode] = useAtom(agentModeAtom)
@@ -1073,6 +1077,33 @@ export const ChatInputArea = memo(function ChatInputArea({
                             className="scale-75"
                           />
                         </div>
+                        {/* Effort level selector - only shown when thinking is enabled */}
+                        {thinkingEnabled && (
+                          <div
+                            className="px-1.5 py-1.5 mx-1 border-t border-border/50"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center gap-1 mb-1.5">
+                              <span className="text-[11px] text-muted-foreground">Effort</span>
+                            </div>
+                            <div className="flex gap-1">
+                              {(["low", "medium", "high", "max"] as const).map((level) => (
+                                <button
+                                  key={level}
+                                  className={cn(
+                                    "px-2 py-0.5 text-[11px] rounded transition-colors",
+                                    thinkingEffort === level
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
+                                  )}
+                                  onClick={() => setThinkingEffort(level)}
+                                >
+                                  {level.charAt(0).toUpperCase() + level.slice(1)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </DropdownMenuContent>
                   </DropdownMenu>
 
