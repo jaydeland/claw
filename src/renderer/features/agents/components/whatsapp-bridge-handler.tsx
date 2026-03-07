@@ -1,13 +1,11 @@
 "use client"
 
-import { useCallback, useEffect } from "react"
 import { useSetAtom } from "jotai"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
 import {
-  messageIdsAtom,
-  messageAtomFamily,
-  messageRolesAtom,
+  syncMessagesWithStatusAtom,
+  type Message,
 } from "../stores/message-store"
 
 interface WhatsAppBridgeMessage {
@@ -24,16 +22,15 @@ interface WhatsAppBridgeMessage {
 
 interface WhatsAppBridgeHandlerProps {
   chatId: string | null
-  subChatId: string | null
 }
 
 /**
  * Component that handles WhatsApp bridge messages
  * Adds them to the chat message store so they appear in the UI
  */
-export function WhatsAppBridgeHandler({ chatId, subChatId }: WhatsAppBridgeHandlerProps) {
-  const setMessageIds = useSetAtom(messageIdsAtom)
-  const setMessageRole = useSetAtom(messageRolesAtom)
+export function WhatsAppBridgeHandler({ chatId }: WhatsAppBridgeHandlerProps) {
+  // Use the sync atom for atomic message updates
+  const syncMessages = useSetAtom(syncMessagesWithStatusAtom)
 
   // Subscribe to bridge messages
   trpc.whatsapp.onBridgeMessage.useSubscription(undefined, {
@@ -42,13 +39,13 @@ export function WhatsAppBridgeHandler({ chatId, subChatId }: WhatsAppBridgeHandl
 
       // Only process messages for the current chat/subChat
       if (chatId && message.chatId === chatId) {
-        // Add the message to the chat store
+        // Create unique message ID
         const messageId = `wa_${message.messageId}_${Date.now()}`
 
         // Create the message object
-        const msg = {
+        const msg: Message = {
           id: messageId,
-          role: "user" as const,
+          role: "user",
           parts: [
             {
               type: "text",
@@ -65,17 +62,13 @@ export function WhatsAppBridgeHandler({ chatId, subChatId }: WhatsAppBridgeHandl
           createdAt: new Date(message.timestamp),
         }
 
-        // Add to message family
-        messageAtomFamily(messageId).init(msg)
-
-        // Add ID to list
-        setMessageIds((prev) => [...prev, messageId])
-
-        // Update roles cache
-        setMessageRole((prev) => {
-          const next = new Map(prev)
-          next.set(messageId, "user")
-          return next
+        // Sync the message using the proper store method
+        // This handles all atom updates atomically (message, IDs, roles)
+        // Use the subChatId from the bridge message for proper isolation
+        syncMessages({
+          messages: [msg],
+          status: "ready", // WhatsApp messages are complete (not streaming)
+          subChatId: message.subChatId,
         })
 
         // Show toast notification

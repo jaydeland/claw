@@ -1,3 +1,25 @@
+/**
+ * UI Message Chunk Types
+ *
+ * These types represent streaming chunks sent from the main process to the renderer.
+ * They are transformed from SDK stream events (BetaRawMessageStreamEvent) into
+ * application-specific events for the UI.
+ *
+ * SDK Type Reference:
+ * - SDKMessage: Union type for complete messages (assistant, user, result, system)
+ * - SDKResultMessage: Complete result with usage stats
+ * - SDKPartialAssistantMessage: Streaming events from the SDK
+ * - ModelUsage: Token usage metrics (inputTokens, outputTokens, cacheReadInputTokens, etc.)
+ *
+ * Our UIMessageChunk includes application-specific events not in the SDK:
+ * - ask-user-question: Interactive question dialogs
+ * - background-task-*: Background process tracking
+ * - session-init: MCP servers and tools initialization
+ * - teammate-idle, task-completed: Agent team events
+ *
+ * For SDK types, see: @anthropic-ai/claude-agent-sdk (SDKMessage, ModelUsage, NonNullableUsage)
+ */
+
 // AI SDK UIMessageChunk format
 export type UIMessageChunk =
   // Message lifecycle
