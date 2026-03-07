@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Claw** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
 
+## Development Guidelines
+
+**Always load the Claude API skill** when working with this codebase. Since Claw integrates deeply with the Claude SDK (`@anthropic-ai/claude-code`), the skill provides essential patterns for:
+- Streaming responses and tool use
+- Session resumption and message handling
+- Extended thinking / adaptive thinking
+- Error handling with typed exceptions
+
+Use `/claude-api` to load the skill before implementing or modifying Claude-related functionality.
+
 ## Commands
 
 ```bash

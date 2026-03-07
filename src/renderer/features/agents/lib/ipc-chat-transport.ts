@@ -142,10 +142,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     // Read extended thinking setting dynamically (so toggle applies to existing chats)
     const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
-    // Don't pass maxThinkingTokens - let the backend use settings from database
-    // The backend reads maxThinkingTokens from claudeCodeSettings which has
-    // auto-configured limits based on the Bedrock model (32k for Sonnet 4.5)
-    const maxThinkingTokens = undefined // Backend will use database settings
     const historyEnabled = appStore.get(historyEnabledAtom)
 
     // Read model selection dynamically (so model changes apply to existing chats)
@@ -186,7 +182,11 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
             ...(this.config.maxTokens && { maxTokens: this.config.maxTokens }),
-            ...(maxThinkingTokens && { maxThinkingTokens }),
+            // Thinking configuration - use adaptive for modern models (Opus 4.6, Sonnet 4.6)
+            // When enabled, use "adaptive" which lets the model decide when/how much to think
+            // When disabled, explicitly disable thinking
+            ...(thinkingEnabled && { thinking: "adaptive" as const }),
+            ...(!thinkingEnabled && { thinking: "disabled" as const }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
             historyEnabled,

@@ -191,6 +191,7 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   bedrockHaikuModel: text("bedrock_haiku_model").default("us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"),
   maxMcpOutputTokens: integer("max_mcp_output_tokens").notNull().default(150000), // MCP tool output limit
   maxThinkingTokens: integer("max_thinking_tokens").notNull().default(60000), // Thinking token limit (64k max for Bedrock)
+  extendedThinkingEnabled: integer("extended_thinking_enabled", { mode: "boolean" }).notNull().default(true), // Enable/disable extended thinking (adaptive on modern models)
 
   // Experimental features (SDK 0.2.34+)
   enableAgentTeams: integer("enable_agent_teams", { mode: "boolean" }).notNull().default(false), // Enable multi-agent collaboration (experimental)

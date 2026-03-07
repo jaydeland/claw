@@ -676,7 +676,11 @@ export const claudeRouter = router({
           })
           .optional(),
         maxTokens: z.number().optional(), // Maximum output tokens
-        maxThinkingTokens: z.number().optional(), // Enable extended thinking
+        // Thinking configuration
+        thinking: z.enum(["adaptive", "enabled", "disabled"]).optional(), // Thinking mode
+        budgetTokens: z.number().optional(), // Only used when thinking="enabled" (older models)
+        maxThinkingTokens: z.number().optional(), // Legacy: budget for extended thinking (deprecated, use thinking="enabled" instead)
+        effort: z.enum(["low", "medium", "high", "max"]).optional(), // Thinking depth (works with adaptive)
         images: z.array(imageAttachmentSchema).optional(), // Image attachments
         historyEnabled: z.boolean().optional(),
         disableMcpAndSkills: z.boolean().optional(), // Skip MCP servers and skill loading (e.g. visualization chat)
@@ -1299,9 +1303,46 @@ export const claudeRouter = router({
                   debug: true,
                   debugFile: path.join(app.getPath('userData'), 'logs', `claude-debug-${Date.now()}.log`),
                 }),
-                ...(input.maxThinkingTokens && {
-                  maxThinkingTokens: input.maxThinkingTokens,
-                }),
+                // Thinking configuration - replaces deprecated maxThinkingTokens
+                // For Opus 4.6 and Sonnet 4.6, use adaptive thinking (model decides when/how much to think)
+                // For older models, use enabled with budgetTokens
+                // Reference: https://docs.anthropic.com/en/docs/build-with-claude/adaptive-thinking
+                ...(() => {
+                  // If thinking mode is explicitly specified, use it
+                  if (input.thinking) {
+                    if (input.thinking === "adaptive") {
+                      return { thinking: { type: "adaptive" as const } }
+                    } else if (input.thinking === "enabled") {
+                      return { thinking: { type: "enabled" as const, budgetTokens: input.budgetTokens ?? 16000 } }
+                    } else if (input.thinking === "disabled") {
+                      return { thinking: { type: "disabled" as const } }
+                    }
+                  }
+                  // Legacy support: maxThinkingTokens from frontend (deprecated)
+                  if (input.maxThinkingTokens) {
+                    // Treat as "enabled" mode with budget
+                    return { thinking: { type: "enabled" as const, budgetTokens: input.maxThinkingTokens } }
+                  }
+                  // Default: check database for thinking settings
+                  const db = getDatabase()
+                  const settings = db
+                    .select()
+                    .from(claudeCodeSettings)
+                    .where(eq(claudeCodeSettings.id, "default"))
+                    .get()
+
+                  // If extended thinking is enabled in settings, use adaptive for modern models
+                  if (settings?.extendedThinkingEnabled) {
+                    return { thinking: { type: "adaptive" as const } }
+                  }
+
+                  // No thinking configuration
+                  return {}
+                })(),
+                // Effort parameter - controls thinking depth (low/medium/high/max)
+                // Works with adaptive thinking for cost-quality tradeoffs
+                // max is Opus 4.6 only, default is high
+                ...(input.effort && { output_config: { effort: input.effort } }),
                 // Budget limit for cost control (from settings)
                 ...((() => {
                   const db = getDatabase()

@@ -91,6 +91,7 @@ export const claudeSettingsRouter = router({
         bedrockHaikuModel: "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
         maxMcpOutputTokens: 48000, // Safe limit for Bedrock
         maxThinkingTokens: 15000, // Total must not exceed 64k
+        extendedThinkingEnabled: true, // Enable adaptive thinking by default (Opus 4.6, Sonnet 4.6)
         enableAgentTeams: false,
         maxBudgetUsd: null,
         // SSO fields (not used in fallback)
@@ -114,6 +115,11 @@ export const claudeSettingsRouter = router({
         vpnCheckEnabled: false,
         vpnCheckUrl: null,
         defaultStartCommands: "[]",
+        // Background model fields
+        anthropicBackgroundModel: "haiku",
+        bedrockBackgroundModel: null,
+        ollamaBackgroundModel: null,
+        customApiBackgroundModel: null,
       }
     }
 
@@ -148,6 +154,7 @@ export const claudeSettingsRouter = router({
       bedrockHaikuModel: s.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
       maxMcpOutputTokens: s.maxMcpOutputTokens ?? 48000, // Safe limit for Bedrock
       maxThinkingTokens: s.maxThinkingTokens ?? 15000, // Total must not exceed 64k
+      extendedThinkingEnabled: s.extendedThinkingEnabled ?? true, // Enable adaptive thinking by default
       // Experimental features
       enableAgentTeams: s.enableAgentTeams ?? false,
       // AWS connection method
@@ -185,6 +192,7 @@ export const claudeSettingsRouter = router({
         bedrockHaikuModel: z.string().optional(),
         maxMcpOutputTokens: z.number().optional(),
         maxThinkingTokens: z.number().optional(),
+        extendedThinkingEnabled: z.boolean().optional(), // Enable/disable adaptive thinking
         // Experimental features
         enableAgentTeams: z.boolean().optional(),
         // AWS connection method
@@ -271,6 +279,9 @@ export const claudeSettingsRouter = router({
             }),
             ...(input.maxThinkingTokens !== undefined && {
               maxThinkingTokens: input.maxThinkingTokens,
+            }),
+            ...(input.extendedThinkingEnabled !== undefined && {
+              extendedThinkingEnabled: input.extendedThinkingEnabled,
             }),
             // Experimental features
             ...(input.enableAgentTeams !== undefined && {

@@ -444,8 +444,9 @@ export const activeConfigAtom = atom((get) => {
 })
 
 // Preferences - Extended Thinking
-// When enabled, Claude will use extended thinking for deeper reasoning (128K tokens)
-// Note: Extended thinking disables response streaming
+// When enabled, Claude will use adaptive thinking for deeper reasoning.
+// Adaptive thinking (Opus 4.6, Sonnet 4.6) automatically determines when and
+// how much to think, and is compatible with streaming.
 export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
   "preferences:extended-thinking-enabled",
   false,
