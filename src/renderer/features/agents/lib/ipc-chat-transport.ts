@@ -21,7 +21,7 @@ import {
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { setPendingMessageMetadataAtom } from "../stores/message-store"
-import type { ErrorCategory } from "../../../shared/error-types"
+import type { ErrorCategory } from "../../../../shared/error-types"
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -176,6 +176,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
         .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
         ?.mode || this.config.mode
 
+    // Map swarm mode to agent for API calls (swarm is just agent mode with specialized behavior)
+    const apiMode: "agent" | "plan" = currentMode === "swarm" ? "agent" : currentMode
+
     // Stream debug logging
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
@@ -191,7 +194,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             prompt,
             cwd: this.config.cwd,
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
-            mode: currentMode,
+            mode: apiMode,
             ...(this.config.maxTokens && { maxTokens: this.config.maxTokens }),
             // Thinking configuration - use adaptive for modern models (Opus 4.6, Sonnet 4.6)
             // When enabled, use "adaptive" which lets the model decide when/how much to think
@@ -347,7 +350,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle errors - show toast to user FIRST before anything else
               if (chunk.type === "error") {
-                const category = chunk.debugInfo?.category || "UNKNOWN"
+                const category = (chunk.debugInfo?.category || "UNKNOWN") as ErrorCategory
 
                 // Show toast based on error category
                 const config = ERROR_TOAST_CONFIG[category]

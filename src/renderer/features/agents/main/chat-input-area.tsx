@@ -301,8 +301,8 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
   // Compare messageTokenData - only re-render when token counts actually change
   // This is much more stable than comparing messages array reference
   if (
-    prevProps.messageTokenData.totalInputTokens !== nextProps.messageTokenData.totalInputTokens ||
-    prevProps.messageTokenData.totalOutputTokens !== nextProps.messageTokenData.totalOutputTokens ||
+    prevProps.messageTokenData.inputTokens !== nextProps.messageTokenData.inputTokens ||
+    prevProps.messageTokenData.outputTokens !== nextProps.messageTokenData.outputTokens ||
     prevProps.messageTokenData.messageCount !== nextProps.messageTokenData.messageCount
   ) {
     return false
