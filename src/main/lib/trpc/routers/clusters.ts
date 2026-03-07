@@ -636,13 +636,13 @@ export const clustersRouter = router({
               // Try to get the service from the cluster to extract label selectors
               try {
                 const svcResponse = await k8sClient.readCoreV1NamespacedService(
-                  { path: { name: serviceName, namespace: input.namespace } },
+                  { path: { name: serviceName, namespace: input.namespace }, query: {} },
                   getAuthOpts(k8sClient)
                 )
 
                 const selector = svcResponse.spec?.selector || {}
                 if (Object.keys(selector).length > 0) {
-                  serviceLabels.set(serviceName, selector)
+                  serviceLabels.set(serviceName, selector as Record<string, string>)
                 }
               } catch (error) {
                 console.warn(`[clusters] Could not get service ${serviceName}:`, error)

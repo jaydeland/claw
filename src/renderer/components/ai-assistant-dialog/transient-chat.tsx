@@ -241,7 +241,7 @@ export function TransientChat({
           projectPath,
         },
         {
-          onData: (chunk) => {
+          onData: (chunk: { type: string; delta?: string; text?: string; errorText?: string }) => {
             if (chunk.type === "text-delta" && chunk.delta) {
               setMessages((prev) => {
                 const last = prev[prev.length - 1]
@@ -366,7 +366,7 @@ export function TransientChatMessages({
   isComplete,
 }: {
   messages: Message[]
-  messagesEndRef: React.RefObject<HTMLDivElement>
+  messagesEndRef: React.RefObject<HTMLDivElement | null>
   error: string | null
   setError: (error: string | null) => void
   detectedResult: unknown
@@ -431,7 +431,7 @@ export function TransientChatMessages({
       ))}
 
       {/* Result Preview */}
-      {detectedResult && renderResultPreview && (
+      {detectedResult !== null && renderResultPreview && (
         <>{renderResultPreview(detectedResult, onUseResult)}</>
       )}
 
@@ -460,7 +460,7 @@ export function TransientChatInput({
   isLoading: boolean
   isCreatingSession: boolean
   isComplete: boolean
-  inputRef: React.RefObject<HTMLInputElement>
+  inputRef: React.RefObject<HTMLInputElement | null>
   placeholder: string
   hint: string
 }) {

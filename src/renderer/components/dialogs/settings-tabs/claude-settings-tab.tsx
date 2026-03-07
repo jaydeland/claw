@@ -24,6 +24,30 @@ interface TreeItem {
   source?: string
 }
 
+interface McpSource {
+  type: string
+  path: string
+  exists: boolean
+}
+
+interface SkillItem {
+  name: string
+  path: string
+  source: string
+}
+
+interface AgentItem {
+  name: string
+  path: string
+  source: string
+}
+
+interface HookItem {
+  id: string
+  name: string
+  scope: string
+}
+
 export function ClaudeSettingsTab() {
   const [selectedProject] = useAtom(selectedProjectAtom)
   const [expandedCategories, setExpandedCategories] = useState<string[]>([
@@ -36,9 +60,9 @@ export function ClaudeSettingsTab() {
   const [scope, setScope] = useState<SettingsScope>("global")
 
   // Fetch data from tRPC
-  const { data: mcpConfig } = trpc.configManagement.listMcpConfigFiles.useQuery()
-  const { data: skills } = trpc.skills.listCombined.useQuery()
-  const { data: agents } = trpc.agents.listEnabled.useQuery()
+  const { data: mcpConfig } = trpc.configManagement.listMcpConfigFiles.useQuery({})
+  const { data: skills } = trpc.skills.listCombined.useQuery({})
+  const { data: agents } = trpc.agents.listEnabled.useQuery({})
   const { data: hooks } = trpc.hooks.list.useQuery({
     projectId: selectedProject?.id,
     scope: "all",
@@ -52,16 +76,16 @@ export function ClaudeSettingsTab() {
       icon: Puzzle,
       expanded: expandedCategories.includes("mcps"),
       items:
-        mcpConfig?.sources
-          ?.filter((source) => source.exists)
-          .map((source) => ({
+        (mcpConfig?.configs
+          ?.flatMap((config: McpSource) => config.exists ? [config] : [])
+          .map((source: McpSource) => ({
             id: `mcp-${source.path}`,
             type: "mcp" as TreeItemType,
             name: source.type === "user" ? "~/.claude/mcp.json" : source.path.split("/").pop() || source.path,
             path: source.path,
             scope: (source.type === "project" ? "project" : "global") as SettingsScope,
             source: source.type,
-          })) || [],
+          })) || []),
     },
     {
       id: "skills",
@@ -69,14 +93,14 @@ export function ClaudeSettingsTab() {
       icon: FileText,
       expanded: expandedCategories.includes("skills"),
       items:
-        skills?.map((skill) => ({
+        (skills?.map((skill: SkillItem) => ({
           id: `skill-${skill.name}`,
           type: "skill" as TreeItemType,
           name: skill.name,
           path: skill.path,
           scope: (skill.source === "project" ? "project" : "global") as SettingsScope,
           source: skill.source,
-        })) || [],
+        })) || []),
     },
     {
       id: "agents",
@@ -84,14 +108,14 @@ export function ClaudeSettingsTab() {
       icon: Bot,
       expanded: expandedCategories.includes("agents"),
       items:
-        agents?.map((agent) => ({
+        (agents?.map((agent: AgentItem) => ({
           id: `agent-${agent.name}`,
           type: "agent" as TreeItemType,
           name: agent.name,
           path: agent.path,
           scope: (agent.source === "project" ? "project" : "global") as SettingsScope,
           source: agent.source,
-        })) || [],
+        })) || []),
     },
     {
       id: "hooks",
@@ -99,12 +123,12 @@ export function ClaudeSettingsTab() {
       icon: Webhook,
       expanded: expandedCategories.includes("hooks"),
       items:
-        hooks?.map((hook) => ({
+        (hooks?.map((hook: HookItem) => ({
           id: `hook-${hook.id}`,
           type: "hook" as TreeItemType,
           name: hook.name,
           scope: hook.scope as SettingsScope,
-        })) || [],
+        })) || []),
     },
   ]
 

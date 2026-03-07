@@ -334,7 +334,7 @@ export function AgentsModelsTab() {
                 ) : (
                   <Select
                     onValueChange={(value) => {
-                      const model = availableCloudModels.find((m) => m.id === value)
+                      const model = availableCloudModels.find((m: { id: string }) => m.id === value)
                       if (model) {
                         handleAddModel({
                           id: model.id,
@@ -349,7 +349,7 @@ export function AgentsModelsTab() {
                       <SelectValue placeholder="Select a model to add..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableCloudModels.map((model) => (
+                      {availableCloudModels.map((model: { id: string; name: string; description?: string; size?: string }) => (
                         <SelectItem key={model.id} value={model.id}>
                           <div className="flex flex-col">
                             <span className="font-medium">{model.name}</span>

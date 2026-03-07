@@ -39,7 +39,8 @@ export class TaskWatcher {
 
     // Dynamically import Claude SDK
     try {
-      this.claudeModule = await import("@anthropic-ai/claude-code")
+      // Use @anthropic-ai/claude-agent-sdk instead of claude-code
+      this.claudeModule = await import("@anthropic-ai/claude-agent-sdk")
       console.log("[TaskWatcher] Claude SDK loaded successfully")
     } catch (err) {
       console.error("[TaskWatcher] Failed to load Claude SDK:", err)

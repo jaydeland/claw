@@ -64,7 +64,7 @@ export function PinnedTabsBar({ className }: PinnedTabsBarProps) {
       )
       .sort((a, b) => {
         // Sort by creation date, newest first
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
       })
   }, [allChats, selectedProject?.id, pinnedChatIds])
 

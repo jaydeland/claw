@@ -117,7 +117,7 @@ export function startOAuthFlow(
 
       if (!oauthWindow.isDestroyed()) {
         oauthWindow.removeBrowserView(view)
-        view.webContents.destroy()
+        view.webContents.close()
         oauthWindow.close()
       }
     }

@@ -103,10 +103,11 @@ export function GsdChatSidebar({ onRunCommand, onViewDocument }: GsdChatSidebarP
 
   // Group files by directory
   const fileTree = useMemo(() => {
-    if (!planningDocs?.files) return { root: [], folders: {} }
+    if (!planningDocs?.files) return { root: [] as Array<{ name: string; path: string; isDirectory: boolean }>, folders: {} as Record<string, Array<{ name: string; path: string; isDirectory: boolean }>> }
 
-    const root: typeof planningDocs.files = []
-    const folders: Record<string, typeof planningDocs.files> = {}
+    type FileType = { name: string; path: string; isDirectory: boolean }
+    const root: FileType[] = []
+    const folders: Record<string, FileType[]> = {}
 
     for (const file of planningDocs.files) {
       if (!file.isDirectory) {

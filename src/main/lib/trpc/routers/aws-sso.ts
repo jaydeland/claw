@@ -792,14 +792,14 @@ export const awsSsoRouter = router({
       // Fall back to foundation models if inference profiles returned nothing
       if (models.length === 0) {
         const foundationResponse = await client.send(
-          new ListFoundationModelsCommand({ provider: "anthropic" })
+          new ListFoundationModelsCommand({ byProvider: "anthropic" })
         )
         models = (foundationResponse.modelSummaries || [])
           .filter((m) => m.modelId?.includes("claude"))
           .map((m) => ({
             modelId: m.modelId || "",
             name: m.modelName || m.modelId?.split(".").pop() || "Unknown",
-            supportedStreamingModes: m.supportedStreamingModes || [],
+            supportedStreamingModes: [] as string[],
           }))
           .sort((a, b) => tierOrder(a.modelId) - tierOrder(b.modelId))
         console.log("[bedrock] Found foundation models:", models.length)

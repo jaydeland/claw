@@ -15,7 +15,7 @@ const ClawSettingsExportSchema = z.object({
   exportedAt: z.string(),
   settings: z.object({
     customBinaryPath: z.string().nullable().optional(),
-    customEnvVars: z.record(z.string()).nullable().optional(),
+    customEnvVars: z.record(z.string(), z.string()).nullable().optional(),
     customConfigDir: z.string().nullable().optional(),
     customWorktreeLocation: z.string().nullable().optional(),
     authMode: z.enum(["oauth", "aws", "apiKey"]).optional(),
@@ -58,7 +58,7 @@ const ClawSettingsExportSchema = z.object({
     selectedThemeId: z.string().optional(),
     systemLightThemeId: z.string().optional(),
     systemDarkThemeId: z.string().optional(),
-    customHotkeys: z.record(z.string()).optional(),
+    customHotkeys: z.record(z.string(), z.string()).optional(),
     extendedThinkingEnabled: z.boolean().optional(),
     soundNotificationsEnabled: z.boolean().optional(),
     ctrlTabTarget: z.enum(["tabs", "chats"]).optional(),
@@ -89,7 +89,7 @@ export const settingsExportRouter = router({
   exportSettings: publicProcedure
     .input(
       z.object({
-        uiPreferences: z.record(z.any()).optional(), // UI preferences from localStorage
+        uiPreferences: z.record(z.string(), z.any()).optional(), // UI preferences from localStorage
       }).optional()
     )
     .query(async ({ input }): Promise<ClawSettingsExport> => {
@@ -271,7 +271,7 @@ export const settingsExportRouter = router({
         if (err instanceof z.ZodError) {
           return {
             valid: false,
-            error: `Invalid export format: ${err.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
+            error: `Invalid export format: ${err.issues.map((e: z.ZodIssue) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
           }
         }
         return {
@@ -289,7 +289,7 @@ export const settingsExportRouter = router({
     .input(
       z.object({
         data: ClawSettingsExportSchema,
-        uiPreferences: z.record(z.any()).optional(), // UI preferences to write to localStorage
+        uiPreferences: z.record(z.string(), z.any()).optional(), // UI preferences to write to localStorage
       })
     )
     .mutation(async ({ input }) => {

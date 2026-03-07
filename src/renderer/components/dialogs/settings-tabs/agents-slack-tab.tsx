@@ -167,6 +167,7 @@ export function AgentsSlackTab() {
       const chName = ch?.name ?? selectedExistingChannel
       connectMutation.mutate({
         name: `Slack: #${chName}`,
+        purpose: `Respond to mentions in #${chName} Slack channel`,
         instruction: `You are a helpful AI assistant responding to messages in the #${chName} Slack channel. Help users with their questions and tasks related to the project at ${selectedProjectPath}.`,
         targetWorktree: selectedProjectPath,
         triggerType: "slack_mention",

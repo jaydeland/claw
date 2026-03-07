@@ -53,7 +53,7 @@ describe("Pagination Integration Test with Real Database", () => {
         chatId: "integration-chat",
         sessionId: "integration-session",
         mode: "agent",
-        messages: [],
+        messages: "[]",
       })
       .run()
 

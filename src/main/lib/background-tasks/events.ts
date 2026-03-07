@@ -17,17 +17,17 @@ export interface TaskStatusUpdate {
  */
 class TaskEventEmitter extends EventEmitter {
   emit(event: "status-change", update: TaskStatusUpdate): boolean
-  emit(event: string, ...args: unknown[]): boolean {
+  emit(event: string, ...args: any[]): boolean {
     return super.emit(event, ...args)
   }
 
   on(event: "status-change", listener: (update: TaskStatusUpdate) => void): this
-  on(event: string, listener: (...args: unknown[]) => void): this {
+  on(event: string | symbol, listener: (...args: any[]) => void): this {
     return super.on(event, listener)
   }
 
   off(event: "status-change", listener: (update: TaskStatusUpdate) => void): this
-  off(event: string, listener: (...args: unknown[]) => void): this {
+  off(event: string | symbol, listener: (...args: any[]) => void): this {
     return super.off(event, listener)
   }
 }

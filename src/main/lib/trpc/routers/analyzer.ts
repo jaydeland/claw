@@ -110,7 +110,7 @@ const flowNodeSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
   position: z.object({ x: z.number(), y: z.number() }),
-  data: z.record(z.unknown()),
+  data: z.record(z.string(), z.unknown()),
   width: z.number().optional(),
   height: z.number().optional(),
 })
@@ -123,7 +123,7 @@ const flowEdgeSchema = z.object({
   targetHandle: z.string().nullable().optional(),
   type: z.string().optional(),
   label: z.string().optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 })
 
 const viewportSchema = z.object({
@@ -224,7 +224,7 @@ export const analyzerRouter = router({
         edges: z.array(flowEdgeSchema).optional(),
         viewport: viewportSchema.optional(),
         summary: z.string().optional(),
-        stats: z.record(z.unknown()).optional(),
+        stats: z.record(z.string(), z.unknown()).optional(),
         lastCommitHash: z.string().optional(),
         fileHash: z.string().optional(),
       })
@@ -424,7 +424,6 @@ export const analyzerRouter = router({
 
         const updates: Partial<AnalysisJob> = {
           status: input.status,
-          updatedAt: new Date(),
         }
 
         if (input.errorMessage !== undefined) {

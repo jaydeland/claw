@@ -101,7 +101,7 @@ export function GitStatusBar() {
         {gitStatus.currentBranch && (
           <div className="flex items-center gap-1.5">
             {gitStatus.isWorktree ? (
-              <GitFork className="h-3 w-3" title="Worktree branch" />
+              <GitFork className="h-3 w-3" />
             ) : (
               <GitBranch className="h-3 w-3" />
             )}

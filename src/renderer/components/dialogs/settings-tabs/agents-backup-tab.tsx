@@ -328,7 +328,7 @@ export function AgentsBackupTab() {
                 <div className="space-y-2">
                   <h4 className="font-medium text-sm">MCP Config Paths ({validationResult.data.mcpConfigPaths.length})</h4>
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                    {validationResult.data.mcpConfigPaths.map((config, i) => (
+                    {validationResult.data.mcpConfigPaths.map((config: { path: string }, i: number) => (
                       <div key={i} className="text-xs font-mono truncate">
                         {config.path}
                       </div>
@@ -342,7 +342,7 @@ export function AgentsBackupTab() {
                 <div className="space-y-2">
                   <h4 className="font-medium text-sm">Plugin Directories ({validationResult.data.pluginDirectories.length})</h4>
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                    {validationResult.data.pluginDirectories.map((plugin, i) => (
+                    {validationResult.data.pluginDirectories.map((plugin: { path: string }, i: number) => (
                       <div key={i} className="text-xs font-mono truncate">
                         {plugin.path}
                       </div>

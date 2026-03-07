@@ -217,7 +217,7 @@ export class WhatsAppTrigger {
     })
 
     // Listen for connection updates
-    this.sock.ev.on("connection.update", async (update) => {
+    this.sock.ev.on("connection.update", async (update: any) => {
       const { connection, lastDisconnect, qr } = update
 
       // QR code generated - emit to renderer
@@ -322,13 +322,13 @@ export class WhatsAppTrigger {
     })
 
     // Keep group metadata cache warm so relayMessage can resolve participant sessions
-    this.sock.ev.on("groups.upsert", (groups) => {
+    this.sock.ev.on("groups.upsert", (groups: any) => {
       for (const group of groups) {
         this.groupMetadataCache.set(group.id, group)
       }
     })
 
-    this.sock.ev.on("groups.update", (updates) => {
+    this.sock.ev.on("groups.update", (updates: any) => {
       for (const update of updates) {
         if (update.id) {
           const existing = this.groupMetadataCache.get(update.id)
@@ -340,7 +340,7 @@ export class WhatsAppTrigger {
     })
 
     // Listen for incoming messages
-    this.sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    this.sock.ev.on("messages.upsert", async ({ messages, type }: { messages: any[]; type: string }) => {
       console.log(`[WhatsAppTrigger] messages.upsert: type=${type}, count=${messages.length}`)
       for (const msg of messages) {
         console.log(`[WhatsAppTrigger] raw msg: jid=${msg.key.remoteJid}, fromMe=${msg.key.fromMe}, hasMessage=${!!msg.message}, msgType=${Object.keys(msg.message || {}).join(",")}`)
@@ -381,7 +381,7 @@ export class WhatsAppTrigger {
     })
 
     // Save credentials when updated
-    this.sock.ev.on("creds.update", (creds) => {
+    this.sock.ev.on("creds.update", (creds: any) => {
       const keys = Object.keys(creds)
       const hasAccountSync = 'accountSyncCounter' in creds
       const hasDeviceId = 'me' in creds && creds.me?.id
@@ -401,11 +401,11 @@ export class WhatsAppTrigger {
       console.log("[WhatsAppTrigger] History sync completed")
     })
 
-    this.sock.ev.on("chats.upsert", (chats) => {
+    this.sock.ev.on("chats.upsert", (chats: any) => {
       console.log(`[WhatsAppTrigger] Chats upsert: ${chats.length} chats`)
     })
 
-    this.sock.ev.on("contacts.upsert", (contacts) => {
+    this.sock.ev.on("contacts.upsert", (contacts: any) => {
       console.log(`[WhatsAppTrigger] Contacts upsert: ${contacts.length} contacts`)
     })
 

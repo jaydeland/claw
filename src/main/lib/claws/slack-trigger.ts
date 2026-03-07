@@ -322,7 +322,7 @@ export class SlackTrigger {
         const existing = list.channels?.find((c: any) => c.name === cleanName)
         if (!existing?.id) throw new Error(`Channel #${cleanName} already exists but could not be found in the list`)
         channelId = existing.id
-        resolvedName = existing.name
+        resolvedName = existing.name! // Channel name must exist if id exists
         alreadyExisted = true
       } else if (slackErr === "missing_scope") {
         throw new Error(

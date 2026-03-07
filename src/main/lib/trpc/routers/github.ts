@@ -764,7 +764,10 @@ export const githubRouter = router({
     .mutation(async ({ input }) => {
       try {
         // Get remote info
-        const remote = await getRepoRemote(input.projectPath)
+        const remote = await getGitHubRemote(input.projectPath)
+        if (!remote) {
+          throw new Error("No GitHub remote found for this project")
+        }
 
         // Ensure .github/assets directory exists
         const assetsDir = path.join(input.projectPath, ".github", "assets")

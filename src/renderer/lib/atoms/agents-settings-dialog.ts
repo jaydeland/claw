@@ -17,5 +17,6 @@ export type SettingsTab =
   | "worktrees"
   | "backup"
   | "debug"
+  | "models"
 
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("providers")

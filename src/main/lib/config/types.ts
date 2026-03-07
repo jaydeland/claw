@@ -3,6 +3,30 @@
  */
 
 /**
+ * SDK-compatible MCP server config types (discriminated union)
+ */
+export interface McpStdioServerConfig {
+  type?: "stdio"
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+}
+
+export interface McpSSEServerConfig {
+  type: "sse"
+  url: string
+  headers?: Record<string, string>
+}
+
+export interface McpHttpServerConfig {
+  type: "http"
+  url: string
+  headers?: Record<string, string>
+}
+
+export type SdkMcpServerConfig = McpStdioServerConfig | McpSSEServerConfig | McpHttpServerConfig
+
+/**
  * MCP server configuration from mcp.json
  * Supports both command-based (stdio) and URL-based (http/sse) servers
  */
@@ -23,6 +47,54 @@ export interface McpServerConfig {
   url?: string
   /** HTTP headers for HTTP/SSE servers */
   headers?: Record<string, string>
+}
+
+/**
+ * Convert local McpServerConfig to SDK-compatible format
+ */
+export function toSdkMcpConfig(config: McpServerConfig): SdkMcpServerConfig {
+  // HTTP server
+  if (config.type === "http" && config.url) {
+    return {
+      type: "http",
+      url: config.url,
+      headers: config.headers,
+    }
+  }
+
+  // SSE server
+  if (config.type === "sse" && config.url) {
+    return {
+      type: "sse",
+      url: config.url,
+      headers: config.headers,
+    }
+  }
+
+  // Stdio server (default)
+  // Must have a command for stdio servers
+  if (!config.command) {
+    throw new Error("Stdio MCP server must have a command")
+  }
+  return {
+    type: "stdio",
+    command: config.command,
+    args: config.args,
+    env: config.env,
+  }
+}
+
+/**
+ * Convert a map of local McpServerConfig to SDK format
+ */
+export function toSdkMcpConfigs(
+  servers: Record<string, McpServerConfig>
+): Record<string, SdkMcpServerConfig> {
+  const result: Record<string, SdkMcpServerConfig> = {}
+  for (const [name, config] of Object.entries(servers)) {
+    result[name] = toSdkMcpConfig(config)
+  }
+  return result
 }
 
 /**

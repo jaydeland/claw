@@ -9,7 +9,7 @@ import { safeStorage, Notification, app } from "electron"
 import { spawn, ChildProcess } from "node:child_process"
 import { existsSync, statSync, unlinkSync } from "fs"
 import { join } from "path"
-import { eq, desc } from "drizzle-orm"
+import { eq, desc, and } from "drizzle-orm"
 import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, chats, subChats, projects, chatSessions, type HeadlessClaw, type ClawExecution, type ChatSession } from "../db"
 import { createId } from "../db/utils"
 import { getSlackTrigger } from "./slack-trigger"
@@ -419,7 +419,7 @@ class ClawDaemon {
 
     if (context?.sessionId) {
       // Use existing session
-      session = db.select().from(chatSessions).where(eq(chatSessions.id, context.sessionId)).get()
+      session = db.select().from(chatSessions).where(eq(chatSessions.id, context.sessionId)).get() ?? null
       if (session) {
         sessionContextText = formatSessionContextForPrompt(session)
         await updateSessionStatus(session.id, "active")
@@ -1011,8 +1011,10 @@ class ClawDaemon {
     return db
       .select()
       .from(clawExecutions)
-      .where(eq(clawExecutions.clawId, clawId))
-      .where(eq(clawExecutions.status, "running"))
+      .where(and(
+        eq(clawExecutions.clawId, clawId),
+        eq(clawExecutions.status, "running")
+      ))
       .all()
   }
 }

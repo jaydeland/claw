@@ -43,6 +43,7 @@ import { buildAgentsOption } from "./agent-utils"
 import { getMergedMcpConfig } from "../../config/consolidator"
 import { taskEvents, taskWatcher } from "../../background-tasks"
 import { injectAllStoredCredentials } from "../../mcp/credential-injection"
+import { toSdkMcpConfigs, type SdkMcpServerConfig } from "../../config/types"
 import { getBundledGsdPath } from "./gsd"
 import { ensureSymlinks } from "../../session/symlink-manager"
 import {
@@ -318,12 +319,15 @@ export async function warmupMcpCache(): Promise<void> {
         // Inject stored OAuth credentials into server configs
         const serversWithCredentials = await injectAllStoredCredentials(project.servers)
 
+        // Convert to SDK-compatible format
+        const sdkServers = toSdkMcpConfigs(serversWithCredentials)
+
         // Create a minimal query to initialize MCP servers
         const warmupQuery = claudeQuery({
           prompt: "ping",
           options: {
             cwd: project.path,
-            mcpServers: serversWithCredentials,
+            mcpServers: sdkServers,
             systemPrompt: {
               type: "preset" as const,
               preset: "claude_code" as const,
@@ -970,7 +974,7 @@ export const claudeRouter = router({
             )
 
             // MCP servers to pass to SDK (merged from all config sources)
-            let mcpServersForSdk: Record<string, any> | undefined
+            let mcpServersForSdk: Record<string, SdkMcpServerConfig> | undefined
 
             // Ensure isolated config dir exists and symlink skills/agents from ~/.claude/
             // This is idempotent - recreates symlinks if directory was deleted
@@ -986,7 +990,9 @@ export const claudeRouter = router({
                   const lookupPath = input.projectPath || input.cwd
                   const mergedConfig = await getMergedMcpConfig(lookupPath)
                   // Inject stored OAuth credentials into server configs
-                  mcpServersForSdk = await injectAllStoredCredentials(mergedConfig.mcpServers)
+                  const serversWithCredentials = await injectAllStoredCredentials(mergedConfig.mcpServers || {})
+                  // Convert to SDK-compatible format
+                  mcpServersForSdk = toSdkMcpConfigs(serversWithCredentials)
                 } catch (configErr) {
                   console.error(`[claude] Failed to get merged MCP config:`, configErr)
                 }
@@ -1069,7 +1075,7 @@ export const claudeRouter = router({
             // Filter MCP servers: skip ONLY non-working servers (failed, needs-auth)
             // Pass working/unknown servers in options so Claude can see them
             // OPTIMIZATION: Cache is populated at app startup via warmupMcpCache()
-            let mcpServersFiltered: Record<string, any> | undefined
+            let mcpServersFiltered: Record<string, SdkMcpServerConfig> | undefined
 
             if (mcpServersForSdk) {
               const lookupPath = input.projectPath || input.cwd
@@ -1135,14 +1141,14 @@ export const claudeRouter = router({
                           : ""
                       if (!/\.md$/i.test(filePath)) {
                         return {
-                          behavior: "deny",
+                          behavior: "deny" as const,
                           message:
                             'Only ".md" files can be modified in plan mode.',
                         }
                       }
                     } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `Tool "${toolName}" blocked in plan mode.`,
                       }
                     }
@@ -1228,7 +1234,7 @@ export const claudeRouter = router({
                         result: errorMessage,
                       } as unknown as UIMessageChunk)
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: errorMessage,
                       }
                     }
@@ -1247,8 +1253,8 @@ export const claudeRouter = router({
                       result: answerResult,
                     } as unknown as UIMessageChunk)
                     return {
-                      behavior: "allow",
-                      updatedInput: response.updatedInput,
+                      behavior: "allow" as const,
+                      updatedInput: response.updatedInput as Record<string, unknown>,
                     }
                   }
                   // Coerce ExitPlanMode's allowedPrompts: model sometimes emits
@@ -1262,13 +1268,13 @@ export const claudeRouter = router({
                           : item
                       )
                       return {
-                        behavior: "allow",
+                        behavior: "allow" as const,
                         updatedInput: { ...toolInput, allowedPrompts: coerced },
                       }
                     }
                   }
                   return {
-                    behavior: "allow",
+                    behavior: "allow" as const,
                     updatedInput: toolInput,
                   }
                 },

@@ -56,9 +56,11 @@ export function useWhatsAppBridge({ chatId, subChatId, onBridgeMessage }: UseWha
   })
 
   // Send message to WhatsApp function
+  const sendToWhatsAppMutation = trpc.whatsapp.sendToGroup.useMutation()
+
   const sendToWhatsApp = async (jid: string, text: string) => {
     try {
-      const result = await trpc.whatsapp.sendToGroup.mutate({ jid, text })
+      const result = await sendToWhatsAppMutation.mutateAsync({ jid, text })
       return result.success
     } catch (error) {
       console.error("[useWhatsAppBridge] Failed to send message:", error)

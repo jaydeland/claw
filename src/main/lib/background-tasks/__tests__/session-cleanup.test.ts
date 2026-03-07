@@ -38,7 +38,7 @@ describe("Session Cleanup", () => {
 
     // Mock app.getPath
     if (app) {
-      ;(app as any).getPath = (name: string) => {
+      ;(app as any).getPath = (name: "userData" | "home" | "appData" | "sessionData" | "temp" | "exe" | "module" | "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos" | "recent" | "crashDumps" | "logs") => {
         if (name === "userData") return testUserDataPath
         return originalGetPath.call(app, name)
       }

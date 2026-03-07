@@ -202,7 +202,7 @@ function ClaudeCodeProvider() {
         sandboxUrl: currentState.sandboxUrl,
         sessionId: currentState.sessionId,
       })
-    } else if (flowState.step === "has_url" && authStatus?.state === "success") {
+    } else if (flowState.step === "has_url" && (authStatus as { state?: string })?.state === "success") {
       // OAuth redirect was handled automatically by local server - mark as connected
       toast.success("Claude Code connected successfully!")
       setFlowState({ step: "idle" })
@@ -723,12 +723,12 @@ function AWSBedrockProvider() {
             vpnCheckEnabled,
             vpnCheckUrl,
             bedrockConnectionMethod: connectionMethod,
-            awsProfileName: connectionMethod === "profile" ? awsProfileName : null,
+            awsProfileName: connectionMethod === "profile" ? awsProfileName : undefined,
             maxMcpOutputTokens,
             maxThinkingTokens,
-            bedrockOpusModel: opusModelId || null,
-            bedrockSonnetModel: sonnetModelId || null,
-            bedrockHaikuModel: haikuModelId || null,
+            bedrockOpusModel: opusModelId || undefined,
+            bedrockSonnetModel: sonnetModelId || undefined,
+            bedrockHaikuModel: haikuModelId || undefined,
           })
         }}
         isSaving={updateSettings.isPending}
@@ -754,7 +754,9 @@ function AWSBedrockProvider() {
 // ============================================
 
 // Fallback models if API fetch fails
-const OLLAMA_FALLBACK_MODELS = [
+type OllamaModelOption = { id: string; name: string; description: string }
+
+const OLLAMA_FALLBACK_MODELS: OllamaModelOption[] = [
   { id: "glm-5", name: "GLM 5", description: "Latest GLM model" },
   { id: "kimi-k2.5:cloud", name: "Kimi K2.5 Cloud", description: "Cloud-based Kimi model" },
   { id: "qwen3-coder", name: "Qwen 3 Coder", description: "Strong coding performance" },
@@ -834,9 +836,9 @@ function OllamaProvider() {
   )
 
   // Get model options from API or use fallback
-  const modelOptions = useMemo(() => {
+  const modelOptions: OllamaModelOption[] = useMemo(() => {
     if (ollamaModelsData?.success && ollamaModelsData.models.length > 0) {
-      return ollamaModelsData.models.map((m) => ({
+      return ollamaModelsData.models.map((m: { id: string; name: string; displayName?: string; description?: string }) => ({
         id: m.id,
         name: m.displayName || m.name,
         description: m.description || 'Ollama model',

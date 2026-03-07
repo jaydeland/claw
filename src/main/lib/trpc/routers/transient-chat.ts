@@ -321,10 +321,7 @@ export const transientChatRouter = router({
               options: {
                 abortController,
                 cwd,
-                systemPrompt: {
-                  type: "text" as const,
-                  text: getSystemPrompt(input.systemPromptType || "mcp"),
-                },
+                systemPrompt: getSystemPrompt(input.systemPromptType || "mcp"),
                 env: claudeEnv,
                 permissionMode: "bypassPermissions" as const,
                 allowDangerouslySkipPermissions: true,
@@ -389,7 +386,7 @@ export const transientChatRouter = router({
                 console.log(`[transient-chat] Emitting ${chunkList.length} chunks`)
                 for (const chunk of chunkList) {
                   console.log(`[transient-chat] Chunk type: ${chunk.type}`, chunk)
-                  if (chunk.type === "text" && chunk.text) {
+                  if (chunk.type === "reasoning" && "text" in chunk && chunk.text) {
                     currentText += chunk.text
                   }
                   if (chunk.type === "text-delta" && chunk.delta) {
@@ -466,7 +463,7 @@ export const transientChatRouter = router({
                   console.log(`[transient-chat] Retry emitting ${chunkList.length} chunks`)
                   for (const chunk of chunkList) {
                     console.log(`[transient-chat] Retry chunk type: ${chunk.type}`, chunk)
-                    if (chunk.type === "text" && chunk.text) {
+                    if (chunk.type === "reasoning" && "text" in chunk && chunk.text) {
                       currentText += chunk.text
                     }
                     if (chunk.type === "text-delta" && chunk.delta) {

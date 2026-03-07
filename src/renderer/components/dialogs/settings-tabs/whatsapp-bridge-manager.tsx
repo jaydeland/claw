@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Link2, LinkBreak, Plus, Trash2, MessageCircle, RefreshCw, Info } from "lucide-react"
+import { Link2, Link2Off, Plus, Trash2, MessageCircle, RefreshCw, Info } from "lucide-react"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../ui/button"
 import {
@@ -127,7 +127,7 @@ export function WhatsAppBridgeManager({ chatId, subChatId }: WhatsAppBridgeManag
     }
   }
 
-  const bridges = bridgesData?.success ? bridgesData.bridges : []
+  const bridges = bridgesData?.success && bridgesData.bridges ? bridgesData.bridges : []
 
   return (
     <div className="space-y-4">
@@ -238,7 +238,7 @@ export function WhatsAppBridgeManager({ chatId, subChatId }: WhatsAppBridgeManag
       </div>
 
       {/* Info */}
-      {bridges.length > 0 && (
+      {bridges && bridges.length > 0 && (
         <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md">
           <p className="font-medium mb-1">How it works:</p>
           <ul className="space-y-1 list-disc list-inside">

@@ -808,7 +808,7 @@ export async function executeBackgroundTask(
                          (finalEnv.ANTHROPIC_BASE_URL?.includes("ollama.com") ?? false)
     const isCustomApiMode = finalEnv.ANTHROPIC_BASE_URL && !finalEnv.CLAUDE_CODE_USE_BEDROCK
 
-    let model = options?.model || "sonnet"
+    let model: string = options?.model || "sonnet"
 
     // Use the stored model from settings when using Ollama or Custom API
     if ((isOllamaMode || isCustomApiMode) && finalEnv.ANTHROPIC_MODEL) {
@@ -828,7 +828,7 @@ export async function executeBackgroundTask(
       console.log(`[background-session] Ollama mode detected, using mapped model: ${model}`)
     }
 
-    const resolvedModel = model
+    const resolvedModel: string = model
 
     // Create abort controller for this task
     const taskAbortController = new AbortController()

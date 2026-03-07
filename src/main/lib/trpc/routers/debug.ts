@@ -1,5 +1,5 @@
 import { router, publicProcedure } from "../index"
-import { getDatabase, projects, chats, subChats } from "../../db"
+import { getDatabase, projects, chats, subChats, claudeCodeCredentials } from "../../db"
 import { app, shell } from "electron"
 import { z } from "zod"
 import {
@@ -14,6 +14,9 @@ import { join } from "path"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
+
+// Offline simulation state (in-memory)
+let offlineSimulationEnabled = false
 
 // Get Claude Agent SDK version from package.json
 function getClaudeAgentSdkVersion(): string {
@@ -85,8 +88,20 @@ export const debugRouter = router({
   /**
    * Get system information for debug display
    */
-  getSystemInfo: publicProcedure.query(() => {
+  getSystemInfo: publicProcedure.query(async () => {
     const binaryInfo = getClaudeCodeBinaryInfo()
+
+    // Check if protocol is registered
+    let protocolRegistered = false
+    try {
+      // Check if the app is set as default protocol handler
+      if (app.isDefaultProtocolClient) {
+        protocolRegistered = app.isDefaultProtocolClient("claw") || false
+      }
+    } catch (error) {
+      console.error("[Debug] Failed to check protocol registration:", error)
+    }
+
     return {
       version: app.getVersion(),
       platform: process.platform,
@@ -96,6 +111,7 @@ export const debugRouter = router({
       claudeAgentSdkVersion: getClaudeAgentSdkVersion(),
       claudeCodeBinaryVersion: binaryInfo.version,
       claudeCodeBinaryPath: binaryInfo.path,
+      protocolRegistered,
     }
   }),
 
@@ -182,4 +198,37 @@ export const debugRouter = router({
       const title = await generateChatTitle(input.message)
       return { title }
     }),
+
+  /**
+   * Get offline simulation state
+   */
+  getOfflineSimulation: publicProcedure.query(() => {
+    return { enabled: offlineSimulationEnabled }
+  }),
+
+  /**
+   * Set offline simulation state
+   */
+  setOfflineSimulation: publicProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(({ input }) => {
+      offlineSimulationEnabled = input.enabled
+      return { enabled: offlineSimulationEnabled }
+    }),
+
+  /**
+   * Logout - clear credentials and reset session
+   */
+  logout: publicProcedure.mutation(() => {
+    try {
+      const db = getDatabase()
+      // Clear credentials
+      db.delete(claudeCodeCredentials).run()
+      console.log("[Debug] Cleared credentials and logged out")
+      return { success: true }
+    } catch (error) {
+      console.error("[Debug] Logout failed:", error)
+      return { success: false, error: String(error) }
+    }
+  }),
 })

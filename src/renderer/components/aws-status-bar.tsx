@@ -87,7 +87,7 @@ export function AwsStatusBar() {
 
   // Open auth settings
   const openAuthSettings = useCallback(() => {
-    setSettingsTab("claude-code")
+    setSettingsTab("providers")
     setSettingsOpen(true)
   }, [setSettingsTab, setSettingsOpen])
 

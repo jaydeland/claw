@@ -313,12 +313,12 @@ interface EnhancedTask {
   toolCallId: string
   outputFile: string | null
   pid: number | null
-  sdkTaskId?: string | null
-  sdkStatus?: string | null
+  sdkTaskId: string | null
+  sdkStatus: string | null
   status: TaskStatus
   exitCode?: number
-  command?: string
-  description?: string
+  command: string | null
+  description: string | null
   output?: string
 }
 

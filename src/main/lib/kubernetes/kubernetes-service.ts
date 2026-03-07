@@ -190,7 +190,7 @@ export async function listPods(
       nodeName: pod.spec?.nodeName || "",
       containerCount: totalCount,
       metadata: {
-        labels: pod.metadata?.labels || {},
+        labels: (pod.metadata?.labels || {}) as Record<string, string>,
       },
     }
   })
@@ -550,7 +550,7 @@ async function streamPodLogsSingle(
   try {
     // Get pod details to find containers
     const pod = await client.readCoreV1NamespacedPod(
-      { path: { name: podName, namespace } },
+      { path: { name: podName, namespace }, query: {} },
       opts
     )
 

@@ -152,6 +152,10 @@ contextBridge.exposeInMainWorld("desktopApi", {
   // Subscribe to git watcher for a worktree (from renderer)
   subscribeToGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
   unsubscribeFromGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
+
+  // User management (placeholder - returns null for desktop app)
+  getUser: () => Promise.resolve(null),
+  updateUser: (updates: { name?: string; imageUrl?: string; username?: string }) => Promise.resolve(null),
 })
 
 // Type definitions
@@ -165,6 +169,14 @@ export interface UpdateProgress {
   bytesPerSecond: number
   transferred: number
   total: number
+}
+
+export interface DesktopUser {
+  id: string
+  email: string
+  name: string | null
+  imageUrl: string | null
+  username: string | null
 }
 
 export interface DesktopApi {
@@ -227,6 +239,9 @@ export interface DesktopApi {
   onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => () => void
   subscribeToGitWatcher: (worktreePath: string) => Promise<void>
   unsubscribeFromGitWatcher: (worktreePath: string) => Promise<void>
+  // User management
+  getUser: () => Promise<DesktopUser | null>
+  updateUser: (updates: { name?: string; imageUrl?: string; username?: string }) => Promise<DesktopUser | null>
 }
 
 declare global {

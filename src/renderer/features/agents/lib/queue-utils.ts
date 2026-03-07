@@ -66,8 +66,6 @@ export type AgentQueueItem = {
   mode?: AgentMode // Mode captured at queue time (agent, plan, or swarm)
   timestamp: Date
   status: "pending" | "processing"
-  // Mode and model captured at queue time
-  mode?: "agent" | "plan" | "swarm"
   modelId?: string
 }
 
@@ -82,7 +80,7 @@ export function createQueueItem(
   files?: QueuedFile[],
   textContexts?: QueuedTextContext[],
   diffTextContexts?: QueuedDiffTextContext[],
-  mode?: "agent" | "plan" | "swarm",
+  mode?: AgentMode,
   modelId?: string
 ): AgentQueueItem {
   return {

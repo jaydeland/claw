@@ -430,7 +430,7 @@ export const clawExecutions = sqliteTable("claw_executions", {
     .notNull()
     .references(() => headlessClaws.id, { onDelete: "cascade" }),
   subChatId: text("sub_chat_id").references(() => subChats.id), // Link to subChat for chat view
-  sessionId: text("session_id").references(() => chatSessions.id, { onDelete: "set null" }), // Link to chat session
+  sessionId: text("session_id").references((): any => chatSessions.id, { onDelete: "set null" }), // Link to chat session
   status: text("status", { enum: ["running", "success", "failed"] }).notNull(),
   logs: text("logs").notNull().default(""), // Standard output/error buffer
   exitCode: integer("exit_code"), // Process exit code (null if still running)
@@ -558,7 +558,7 @@ export const chatSessions = sqliteTable("chat_sessions", {
   externalId: text("external_id").notNull(), // WhatsApp JID or Slack channel/thread ID
   platform: text("platform", { enum: ["whatsapp", "slack"] }).notNull(),
   status: text("status", { enum: ["idle", "active", "completed", "error"] }).notNull().default("idle"),
-  currentExecutionId: text("current_execution_id").references(() => clawExecutions.id), // Currently running execution
+  currentExecutionId: text("current_execution_id").references((): any => clawExecutions.id), // Currently running execution
   context: text("context").notNull().default("{}"), // JSON: conversation context, user preferences, etc.
   lastActivityAt: integer("last_activity_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),

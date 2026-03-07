@@ -42,7 +42,7 @@ export const ClaudeSettingsSchema = z.object({
   attribution: z.object({
     commit: z.string().optional(),
   }).optional(),
-  experimental: z.record(z.unknown()).optional(),
+  experimental: z.record(z.string(), z.unknown()).optional(),
 }).passthrough() // Allow additional fields
 
 export type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>
@@ -92,7 +92,7 @@ export const claudeConfigRouter = router({
    * Write settings to the settings.json file
    */
   writeSettings: publicProcedure
-    .input(z.object({ settings: z.record(z.unknown()) }))
+    .input(z.object({ settings: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ input }) => {
       const configDir = getClaudeConfigDir()
       const settingsPath = path.join(configDir, "settings.json")

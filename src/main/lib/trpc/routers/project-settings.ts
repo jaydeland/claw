@@ -68,8 +68,8 @@ export const projectSettingsRouter = router({
     .input(
       z.object({
         projectId: z.string(),
-        mcpOverrides: z.record(z.unknown()).optional(),
-        envVars: z.record(z.string()).optional(),
+        mcpOverrides: z.record(z.string(), z.unknown()).optional(),
+        envVars: z.record(z.string(), z.string()).optional(),
         skillsPath: z.string().optional(),
         agentsPath: z.string().optional(),
       }),
