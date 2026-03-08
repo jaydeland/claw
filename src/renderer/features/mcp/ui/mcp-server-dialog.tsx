@@ -300,8 +300,8 @@ export function McpServerDialog({
               {/* Content */}
               <div className="flex-1 overflow-hidden">
                 <McpConfigChat
-                  onConfigGenerated={(config) => {
-                    setAiGeneratedConfig(config)
+                  detectedConfig={aiGeneratedConfig}
+                  onUseConfig={() => {
                     handleUseGenerated()
                   }}
                   onCancel={() => onOpenChange(false)}

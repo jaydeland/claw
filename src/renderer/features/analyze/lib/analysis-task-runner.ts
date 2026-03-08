@@ -133,7 +133,7 @@ export function parseAnalysisResponse(responseText: string): AnalysisResult | nu
     console.error("[AnalysisTaskRunner] Failed to parse response:", error)
     return {
       success: false,
-      type: "unknown",
+      type: "codeflow",
       diagramId: "",
       error: error instanceof Error ? error.message : "Failed to parse response",
     }

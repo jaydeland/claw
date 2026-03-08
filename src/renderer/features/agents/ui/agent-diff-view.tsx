@@ -777,10 +777,10 @@ export interface DiffStats {
 
 interface AgentDiffViewProps {
   chatId: string
-  sandboxId: string
+  sandboxId?: string | null
   /** Worktree path for local file access (desktop only) */
   worktreePath?: string
-  repository?: string
+  repository?: string | { owner: string; name: string } | null
   onStatsChange?: (stats: DiffStats) => void
   /** Pre-loaded diff content to avoid duplicate fetch */
   initialDiff?: string | null

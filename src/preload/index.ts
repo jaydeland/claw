@@ -242,6 +242,12 @@ export interface DesktopApi {
   // User management
   getUser: () => Promise<DesktopUser | null>
   updateUser: (updates: { name?: string; imageUrl?: string; username?: string }) => Promise<DesktopUser | null>
+  isAuthenticated: () => Promise<boolean>
+  logout: () => Promise<void>
+  startAuthFlow: () => Promise<void>
+  submitAuthCode: (code: string) => Promise<void>
+  onAuthSuccess: (callback: (user: any) => void) => () => void
+  onAuthError: (callback: (error: string) => void) => () => void
 }
 
 declare global {

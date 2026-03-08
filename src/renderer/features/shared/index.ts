@@ -9,4 +9,4 @@ export {
 
 // Shared hooks exports
 export { useContextualChat } from "./hooks/use-contextual-chat"
-export type { ContextualChat } from "./hooks/use-contextual-chat"
+export type { SourceView, UseContextualChatOptions, UseContextualChatResult } from "./hooks/use-contextual-chat"

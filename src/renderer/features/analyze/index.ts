@@ -17,5 +17,5 @@ export { AnalyzeDialog } from "./ui/analyze-dialog"
 export { AnalyzeFullscreen } from "./ui/analyze-fullscreen"
 
 // Types
-export type { AnalysisType } from "../../main/lib/trpc/routers/analyzer"
-export { ANALYSIS_TYPES, ANALYSIS_LABELS, ANALYSIS_ICONS } from "../../main/lib/trpc/routers/analyzer"
+export type { AnalysisType } from "../../../main/lib/trpc/routers/analyzer"
+export { ANALYSIS_TYPES, ANALYSIS_LABELS, ANALYSIS_ICONS } from "../../../main/lib/trpc/routers/analyzer"

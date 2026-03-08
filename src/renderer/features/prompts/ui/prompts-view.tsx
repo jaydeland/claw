@@ -20,9 +20,9 @@ interface Prompt {
   content: string
   category: string
   isEditable: boolean
-  defaultValue: string | null
-  createdAt: Date
-  updatedAt: Date
+  defaultValue?: string | null
+  createdAt: Date | null
+  updatedAt: Date | null
 }
 
 export function PromptsView() {

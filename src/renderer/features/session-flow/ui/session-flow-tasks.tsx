@@ -110,7 +110,7 @@ export function SessionFlowTasks() {
       taskId: task.id,
       toolCallId: task.toolCallId,
       command: task.command || "",
-      description: task.description,
+      description: task.description ?? undefined,
       status: task.status as "running" | "completed" | "failed" | "unknown",
       messageId: "",
       partIndex: 0,

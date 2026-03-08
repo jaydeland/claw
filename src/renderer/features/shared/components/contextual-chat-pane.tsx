@@ -20,8 +20,8 @@ export interface ContextualChatPaneProps {
   projectId: string
   projectPath: string
   isSessionLoading: boolean
-  onReset: () => Promise<void>
-  onCreate: () => Promise<void>
+  onReset: () => Promise<{ chatId: string; subChatId: string } | void>
+  onCreate: () => Promise<{ chatId: string; subChatId: string } | void>
   placeholder?: string
   /** Optional extra context prepended to the first message */
   systemContext?: string
@@ -233,14 +233,16 @@ export const ContextualChatPane = memo(function ContextualChatPane({
 
     if (!activeChatId) {
       // No session yet — create one first
-      const { chatId: newChatId, subChatId: newSubChatId } = await onCreate()
+      const result = await onCreate()
+      const newChatId = result?.chatId ?? activeChatId
+      const newSubChatId = result?.subChatId ?? activeSubChatId
       setActiveChatId(newChatId)
       setActiveSubChatId(newSubChatId)
       await sendMessage(userInput, newChatId, newSubChatId)
     } else {
       await sendMessage(userInput)
     }
-  }, [input, isStreaming, activeChatId, onCreate, sendMessage])
+  }, [input, isStreaming, activeChatId, activeSubChatId, onCreate, sendMessage])
 
   const handleReset = useCallback(async () => {
     setIsResetting(true)

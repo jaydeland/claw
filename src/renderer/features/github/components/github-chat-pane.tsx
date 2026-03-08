@@ -648,7 +648,7 @@ ${originalPrompt}
 === CURRENT DIAGRAM DATA ===
 
 **Nodes (${currentDiagram?.nodes?.length || 0}):**
-${currentDiagram?.nodes?.length ? JSON.stringify(currentDiagram.nodes.map((n) => ({
+${currentDiagram?.nodes?.length ? JSON.stringify(currentDiagram.nodes.map((n: { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }) => ({
           id: n.id,
           type: n.type,
           position: n.position,
@@ -656,7 +656,7 @@ ${currentDiagram?.nodes?.length ? JSON.stringify(currentDiagram.nodes.map((n) =>
         })), null, 2) : "No nodes available"}
 
 **Edges (${currentDiagram?.edges?.length || 0}):**
-${currentDiagram?.edges?.length ? JSON.stringify(currentDiagram.edges.map((e) => ({
+${currentDiagram?.edges?.length ? JSON.stringify(currentDiagram.edges.map((e: { id: string; source: string; target: string; type?: string; label?: string; data?: Record<string, unknown> }) => ({
           id: e.id,
           source: e.source,
           target: e.target,

@@ -198,9 +198,9 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   // This keeps the creation tool in sync with all updates
   useEffect(() => {
     if (newTodos.length > 0) {
-      setSyncedTodos(newTodos)
+      setSyncedTodos({ todos: newTodos, creationToolCallId: part.toolCallId || null })
     }
-  }, [newTodos, setSyncedTodos])
+  }, [newTodos, setSyncedTodos, part.toolCallId])
 
   // Auto-expand on creation
   useEffect(() => {

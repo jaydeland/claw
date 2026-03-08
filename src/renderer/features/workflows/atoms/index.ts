@@ -45,7 +45,7 @@ export const workflowsSidebarOpenAtom = atomWithStorage<boolean>(
  * atomWithStorage serializes Set to JSON, so we store as array and convert to Set in the derived atom
  * Storage key: "workflows:expanded-nodes"
  */
-const workflowsTreeExpandedNodesStorageAtom = atomWithStorage<string[]>(
+const workflowsTreeExpandedNodesStorageAtom = atomWithStorage<unknown[]>(
   "workflows:expanded-nodes",
   ["agents", "commands", "skills"], // Default: top-level categories expanded (as array)
   undefined,
@@ -57,15 +57,12 @@ const workflowsTreeExpandedNodesStorageAtom = atomWithStorage<string[]>(
  * Converts between array (storage) and Set (usage)
  * Handles corrupted localStorage data gracefully
  */
-export const workflowsTreeExpandedNodesAtom = atom<Set<string>>(
-  (get) => {
+export const workflowsTreeExpandedNodesAtom = atom(
+  (get): Set<string> => {
     const stored = get(workflowsTreeExpandedNodesStorageAtom)
     // Handle various storage formats: array, Set, object, or invalid data
     if (Array.isArray(stored)) {
-      return new Set(stored)
-    }
-    if (stored instanceof Set) {
-      return stored
+      return new Set(stored as string[])
     }
     // Fallback: if it's an object or invalid, treat as keys array
     if (typeof stored === 'object' && stored !== null) {
@@ -79,7 +76,7 @@ export const workflowsTreeExpandedNodesAtom = atom<Set<string>>(
     // Default for null/undefined/invalid
     return new Set(['agents', 'commands', 'skills'])
   },
-  (get, set, newSet: Set<string>) => {
+  (_get, set, newSet: Set<string>) => {
     set(workflowsTreeExpandedNodesStorageAtom, Array.from(newSet))
   },
 )
@@ -128,7 +125,7 @@ export const workflowsCollapseCategoryAtom = atom(
   (get, set, nodeKeys: string[]) => {
     const currentSet = get(workflowsTreeExpandedNodesAtom)
     // Filter out category keys from set, store as array
-    const newSet = new Set()
+    const newSet = new Set<string>()
     for (const item of currentSet) {
       if (!nodeKeys.includes(item)) {
         newSet.add(item)

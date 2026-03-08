@@ -8,7 +8,7 @@ import { trpc } from "../../../lib/trpc"
 import { Loader2, CheckCircle, XCircle, AlertTriangle, Plug, Key } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../../components/ui/button"
-import type { McpServer } from "../../../../../main/lib/trpc/routers/mcp"
+import type { McpServer } from "../../../../../src/main/lib/trpc/routers/mcp"
 
 /**
  * Available Tools Section Component

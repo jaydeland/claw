@@ -676,8 +676,6 @@ export function AgentsSubChatsSidebar({
       state.addToOpenSubChats(subChat.id)
     }
     state.setActiveSubChat(subChat.id)
-
-    setIsHistoryOpen(false)
   }, [])
 
   // Sort sub-chats by most recent first for history

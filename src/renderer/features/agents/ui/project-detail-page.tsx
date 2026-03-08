@@ -163,43 +163,42 @@ function ProjectWorktreeSettings({ projectId }: { projectId: string }) {
 
   // Local state for form fields
   const [configLocation, setConfigLocation] = useState(
-    configData?.configLocation ?? ".claw/worktree.json"
+    configData?.config?.["worktree-location"] ?? ".claw/worktree.json"
   )
-  const [worktreeBaseDir, setWorktreeBaseDir] = useState(
-    configData?.worktreeBaseDir ?? ""
-  )
+  const [worktreeBaseDir, setWorktreeBaseDir] = useState("")
   const [setupCommands, setSetupCommands] = useState("")
   const [terminalStartCommand, setTerminalStartCommand] = useState("")
 
   // Update local state when config data loads
   useEffect(() => {
-    if (configData) {
-      setConfigLocation(configData.configLocation ?? ".claw/worktree.json")
-      setWorktreeBaseDir(configData.worktreeBaseDir ?? "")
+    if (configData?.config) {
+      setConfigLocation(configData.config["worktree-location"] ?? ".claw/worktree.json")
+      // worktreeBaseDir would come from a different source if needed
     }
   }, [configData])
 
   // Update local state when start commands load
   useEffect(() => {
     if (startCommandsData) {
-      setSetupCommands(startCommandsData.setupCommands ?? "")
-      setTerminalStartCommand(startCommandsData.terminalStartCommand ?? "")
+      setSetupCommands(startCommandsData.commands?.join("\n") ?? "")
     }
   }, [startCommandsData])
 
   const handleSaveConfig = () => {
     saveMutation.mutate({
       projectId,
-      configLocation,
-      worktreeBaseDir: worktreeBaseDir || null,
+      config: {
+        "worktree-location": configLocation || undefined,
+      },
+      target: "claw",
     })
   }
 
   const handleSaveStartCommands = () => {
+    const commands = setupCommands.split("\n").filter(c => c.trim())
     saveStartCommandsMutation.mutate({
       id: projectId,
-      setupCommands,
-      terminalStartCommand,
+      commands,
     })
   }
 

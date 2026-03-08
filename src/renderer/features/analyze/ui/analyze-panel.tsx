@@ -199,9 +199,17 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
           .map((e, index) => {
             // Handle multiple edge data formats
             // Try various property names for source/target
-            const rawEdge = e as Record<string, unknown>
-            let source = e.source || rawEdge.from as string || rawEdge.sourceNode as string || rawEdge.start as string
-            let target = e.target || rawEdge.to as string || rawEdge.targetNode as string || rawEdge.end as string
+            const rawEdge = e as unknown as Record<string, unknown>
+            let source =
+              e.source ||
+              (rawEdge.from as string | undefined) ||
+              (rawEdge.sourceNode as string | undefined) ||
+              (rawEdge.start as string | undefined)
+            let target =
+              e.target ||
+              (rawEdge.to as string | undefined) ||
+              (rawEdge.targetNode as string | undefined) ||
+              (rawEdge.end as string | undefined)
 
             // Filter out the string "undefined" which can happen from JSON parsing
             if (source === "undefined") source = undefined
@@ -222,7 +230,7 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
               type: e.type || "smoothstep",
               label: e.label,
               data: e.data,
-              animated: e.data?.critical || false,
+              animated: !!e.data?.critical,
               style: {
                 stroke: color,
                 strokeWidth: 2,

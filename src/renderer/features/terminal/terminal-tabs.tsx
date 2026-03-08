@@ -269,6 +269,7 @@ interface TerminalTabsProps {
   onCloseOtherTerminals: (id: string) => void
   onCloseTerminalsToRight: (id: string) => void
   onRenameTerminal: (id: string, name: string) => void
+  onCreateTerminal: () => void
 }
 
 export const TerminalTabs = memo(function TerminalTabs({

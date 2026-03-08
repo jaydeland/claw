@@ -926,7 +926,7 @@ const CodeView = memo(function CodeView({ path, repoName, projectPath }: CodeVie
         </div>
         <div className="flex items-center gap-2 mt-1">
           <p className="text-sm text-muted-foreground">{repoName}</p>
-          {data?.success && (
+          {data?.success && data.sizeBytes !== undefined && (
             <span className="text-xs text-muted-foreground">
               • {data.lineCount} lines • {formatBytes(data.sizeBytes)}
             </span>

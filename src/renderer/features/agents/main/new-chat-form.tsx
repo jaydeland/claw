@@ -467,32 +467,39 @@ export function NewChatForm({
 
   // Fetch repos from team
   // Desktop: no remote repos, we use local projects
-  const reposData = { repositories: [] }
+  type RepoItem = {
+    id: string
+    name: string
+    full_name: string
+    sandbox_status?: "not_setup" | "in_progress" | "ready" | "error"
+    pushed_at?: string
+  }
+  const reposData: { repositories: RepoItem[] } = { repositories: [] }
   const isLoadingRepos = false
 
   // Memoize repos arrays to prevent useEffect from running on every keystroke
   // Apply debug mode simulations
-  const repos = useMemo(() => {
+  const repos = useMemo<RepoItem[]>(() => {
     if (debugMode.enabled && debugMode.simulateNoRepos) {
       return []
     }
     return reposData?.repositories || []
   }, [reposData?.repositories, debugMode.enabled, debugMode.simulateNoRepos])
 
-  const readyRepos = useMemo(() => {
+  const readyRepos = useMemo<RepoItem[]>(() => {
     if (debugMode.enabled && debugMode.simulateNoReadyRepos) {
       return []
     }
     return repos.filter((r) => r.sandbox_status === "ready")
   }, [repos, debugMode.enabled, debugMode.simulateNoReadyRepos])
 
-  const notReadyRepos = useMemo(
+  const notReadyRepos = useMemo<RepoItem[]>(
     () => repos.filter((r) => r.sandbox_status !== "ready"),
     [repos],
   )
 
   // Use state to avoid hydration mismatch
-  const [resolvedRepo, setResolvedRepo] = useState<(typeof repos)[0] | null>(
+  const [resolvedRepo, setResolvedRepo] = useState<RepoItem | null>(
     null,
   )
 

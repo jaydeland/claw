@@ -91,6 +91,9 @@ export interface StoredMessageMetadata {
   finalTextId?: string
   sdkMessageUuid?: string
   contextWindow?: number // Context window size from model (e.g., 200000 for kimi-k2.5)
+  cacheReadInputTokens?: number
+  cacheCreationInputTokens?: number
+  reasoningTokens?: number
 }
 
 // Atom family keyed by "subChatId:messageId"
@@ -590,6 +593,7 @@ export interface SessionTotals {
   totalTokens: number
   contextWindow: number
   percentUsed: number
+  messageCount: number
 }
 
 const sessionTotalsCacheByChat = new Map<string, SessionTotals>()

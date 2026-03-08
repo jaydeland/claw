@@ -285,6 +285,15 @@ export function McpServerDetail() {
 
       {/* Available Tools */}
       <ToolsSection serverId={server.id} enabled={server.enabled} />
+
+      {/* Edit Server Dialog */}
+      <McpServerDialog
+        open={isEditing}
+        onOpenChange={setIsEditing}
+        mode="edit"
+        serverId={server.id}
+        serverConfig={server.config}
+      />
     </div>
   )
 }
@@ -576,15 +585,6 @@ function ToolsSection({ serverId, enabled }: { serverId: string; enabled: boolea
           )}
         </>
       )}
-
-      {/* Edit Server Dialog */}
-      <McpServerDialog
-        open={isEditing}
-        onOpenChange={setIsEditing}
-        mode="edit"
-        serverId={server?.id}
-        serverConfig={server?.config}
-      />
     </div>
   )
 }

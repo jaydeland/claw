@@ -20,9 +20,9 @@ interface UseAnalysisServiceOptions {
 interface ActiveJob {
   id: string
   type: AnalysisType
-  status: "pending" | "running" | "completed" | "failed"
-  progress?: number
-  message?: string
+  status: "running" | "completed" | "failed"
+  log?: Array<{ level: string; message: string; timestamp: string }>
+  errorMessage?: string
   startedAt: Date
 }
 
@@ -58,7 +58,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
 
       // Check if any of our active jobs are no longer in the active tasks
       for (const [jobId, type] of activeJobIdsRef.current) {
-        const stillActive = activeTasks.some((task: { jobId: string }) => task.jobId === jobId)
+        const stillActive = activeTasks.some((task: { callId: string }) => task.callId === jobId)
         if (!stillActive) {
           // Job is no longer active - it must have completed or failed
           console.log(`[useAnalysisService] Job ${jobId} no longer active, assuming complete`)
@@ -142,9 +142,9 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
           next.set(update.jobId, {
             id: update.jobId,
             type: update.type,
-            status: update.status,
-            progress: update.progress,
-            message: update.message,
+            status: update.status === "started" ? "running" : update.status,
+            log: update.message ? [{ level: "info", message: update.message, timestamp: new Date().toISOString() }] : [],
+            errorMessage: update.error,
             startedAt: existing?.startedAt || new Date(),
           })
         }
@@ -220,7 +220,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
             id: result.job!.id,
             type,
             status: "running",
-            message: "Starting analysis...",
+            log: [{ level: "info", message: "Starting analysis...", timestamp: new Date().toISOString() }],
             startedAt: new Date(),
           })
           return next
@@ -270,7 +270,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
               id: result.job!.id,
               type: result.type,
               status: "running",
-              message: "Starting analysis...",
+              log: [{ level: "info", message: "Starting analysis...", timestamp: new Date().toISOString() }],
               startedAt: new Date(),
             })
             return next
@@ -335,7 +335,7 @@ export function useAnalysisService({ projectId, projectPath }: UseAnalysisServic
    * Cancel all running analyses
    */
   const cancelAll = useCallback(async () => {
-    const jobsToCancel = Array.from(activeJobIdsRef.current)
+    const jobsToCancel = Array.from(activeJobIdsRef.current.keys())
 
     await Promise.all(jobsToCancel.map((jobId) => cancelAnalysis(jobId)))
 

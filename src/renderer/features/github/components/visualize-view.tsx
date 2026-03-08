@@ -168,9 +168,9 @@ function VisualizeViewInner({
         const strokeColor = "#64748b"
         const transformedEdges: Edge[] = flowEdges
           .map((e, index) => {
-            const rawEdge = e as Record<string, unknown>
-            let source = e.source || (rawEdge.from as string)
-            let target = e.target || (rawEdge.to as string)
+            const rawEdge = e as unknown as Record<string, unknown>
+            let source = e.source || (rawEdge.from as string | undefined)
+            let target = e.target || (rawEdge.to as string | undefined)
 
             if (source === "undefined") source = undefined
             if (target === "undefined") target = undefined
@@ -191,7 +191,7 @@ function VisualizeViewInner({
               type: e.type || "smoothstep",
               label: e.label,
               data: e.data,
-              animated: e.data?.critical || false,
+              animated: !!e.data?.critical,
               style: { stroke: strokeColor, strokeWidth: 2 },
               markerEnd: { type: MarkerType.ArrowClosed, color: strokeColor },
             }

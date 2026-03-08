@@ -39,8 +39,8 @@ export function ExecutionHistoryViewer({ claw, onBack, className }: ExecutionHis
   const { data: executionsData, isLoading } = trpc.claws.getExecutions.useQuery(
     { clawId: claw.id, limit: 50 },
     {
-      refetchInterval: (data) => {
-        const hasRunning = data?.executions?.some((e) => e.status === "running")
+      refetchInterval: (query) => {
+        const hasRunning = query.state.data?.executions?.some((e: { status: string }) => e.status === "running")
         return hasRunning ? 3000 : false // Poll every 3 seconds if there's a running execution
       },
     }

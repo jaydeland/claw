@@ -26,13 +26,17 @@ export function WorkflowDetail() {
   const sourceView = selectedNode?.type === "command" ? "commands" as const : "skills" as const
 
   // Per-node persistent chat session
-  const { chatId, subChatId, isLoading: isChatLoading, create: createChat, reset: resetChat } = useContextualChat({
+  const { chatId, subChatId, isLoading: isChatLoading, create, reset } = useContextualChat({
     sourceView: selectedNode?.type === "mcpServer" ? "skills" : sourceView,
     sourceContext: { name: selectedNode?.name ?? "", type: selectedNode?.type ?? "" },
     projectId: selectedProject?.id ?? "",
     chatName: selectedNode ? `${selectedNode.type === "command" ? "Command" : selectedNode.type === "mcpServer" ? "MCP" : "Skill"}: ${selectedNode.name}` : undefined,
     enabled: !!selectedNode && !!selectedProject && (selectedNode.type === "command" || selectedNode.type === "skill" || selectedNode.type === "mcpServer"),
   })
+
+  // Wrap create/reset to discard return values (ContextualChatPane expects () => Promise<void>)
+  const handleCreate = async () => { await create() }
+  const handleReset = async () => { await reset() }
 
   // Always reset to markdown view when a new file is selected
   useEffect(() => {
@@ -72,8 +76,8 @@ export function WorkflowDetail() {
               projectId={selectedProject?.id ?? ""}
               projectPath={selectedProject?.path ?? ""}
               isSessionLoading={isChatLoading}
-              onReset={resetChat}
-              onCreate={createChat}
+              onReset={handleReset}
+              onCreate={handleCreate}
               placeholder={`Ask about this MCP server...`}
               systemContext={`You are helping the user understand and work with an MCP server.\n\nName: ${selectedNode.name}\nPath: ${selectedNode.sourcePath}`}
             />
@@ -101,8 +105,8 @@ export function WorkflowDetail() {
             projectId={selectedProject?.id ?? ""}
             projectPath={selectedProject?.path ?? ""}
             isSessionLoading={isChatLoading}
-            onReset={resetChat}
-            onCreate={createChat}
+            onReset={handleReset}
+            onCreate={handleCreate}
             placeholder={`Ask about this ${selectedNode.type}...`}
             systemContext={`You are helping the user understand and work with a Claude ${selectedNode.type} file.\n\nName: ${selectedNode.name}\nPath: ${selectedNode.sourcePath}`}
           />

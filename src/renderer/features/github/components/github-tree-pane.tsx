@@ -241,7 +241,7 @@ export const SingleRepoSection = memo(function SingleRepoSection({
     id: projectId,
     name: githubData?.success ? `${githubData.owner}/${githubData.repo}` : projectName,
     fullName: githubData?.success ? `${githubData.owner}/${githubData.repo}` : projectName,
-    owner: githubData?.success ? githubData.owner : "",
+    owner: githubData?.success ? githubData.owner ?? "" : "",
     url: githubData?.success ? `https://github.com/${githubData.owner}/${githubData.repo}` : "",
     localPath: projectPath,
     projectId,

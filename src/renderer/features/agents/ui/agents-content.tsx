@@ -4,11 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 // import { useSearchParams, useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // Desktop: mock Next.js navigation hooks
-const useSearchParams = () => ({ get: () => null })
-const useRouter = () => ({ push: () => {}, replace: () => {} })
+const useSearchParams = () => ({ get: (_key: string) => null })
+const useRouter = () => ({ push: (_url: string) => {}, replace: (_url: string, _opts?: { scroll?: boolean }) => {} })
 // Desktop: mock Clerk hooks
 const useUser = () => ({ user: null })
-const useClerk = () => ({ signOut: () => {} })
+const useClerk = () => ({ signOut: (_opts?: { redirectUrl?: string }) => Promise.resolve() })
 import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,

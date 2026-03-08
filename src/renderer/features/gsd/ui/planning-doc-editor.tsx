@@ -228,7 +228,7 @@ export function PlanningDocEditor({
         {isPreview ? (
           <div className="h-full overflow-y-auto px-4 py-3">
             <ChatMarkdownRenderer
-              markdown={content || ""}
+              content={content || ""}
               size="md"
             />
           </div>

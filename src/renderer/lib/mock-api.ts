@@ -364,8 +364,8 @@ export const api = {
   },
   // Stubs for features not needed in desktop
   teams: {
-    getUserTeams: { useQuery: () => ({ data: [], isLoading: false }) },
-    getTeam: { useQuery: () => ({ data: null, isLoading: false }) },
+    getUserTeams: { useQuery: (_input?: unknown, _opts?: unknown) => ({ data: [], isLoading: false }) },
+    getTeam: { useQuery: (_input?: unknown, _opts?: unknown) => ({ data: null, isLoading: false }) },
     updateTeam: {
       useMutation: () => ({
         mutate: () => {},

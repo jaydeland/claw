@@ -57,6 +57,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         })),
         plugins: prev?.plugins || [],
         skills: prev?.skills || [],
+        slashCommands: prev?.slashCommands || [],
       }))
     }
   }, [mcpConfig, sessionInfo?.mcpServers?.length, setSessionInfo])

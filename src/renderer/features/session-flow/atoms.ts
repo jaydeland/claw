@@ -128,6 +128,24 @@ export interface SessionNestedTool {
   status: "pending" | "completed" | "error"
 }
 
+// Swarm worker types for coordinated multi-agent workflows
+export type SwarmWorkerType = "coordinator" | "coder" | "reviewer" | "tester"
+export const SWARM_WORKER_TYPES: SwarmWorkerType[] = ["coordinator", "coder", "reviewer", "tester"]
+
+// Check if a sub-agent type is a swarm worker
+export function isSwarmWorker(type: string): boolean {
+  return SWARM_WORKER_TYPES.includes(type as SwarmWorkerType)
+}
+
+// Swarm statistics derived from sub-agents
+export interface SwarmStats {
+  coordinatorCount: number
+  coderCount: number
+  reviewerCount: number
+  testerCount: number
+  totalWorkers: number
+}
+
 // Sub-agent from Task tool
 export interface SessionSubAgent {
   agentId: string
@@ -141,11 +159,33 @@ export interface SessionSubAgent {
   partIndex: number
   // Tools used by this sub-agent (extracted from nested tool calls)
   nestedTools?: SessionNestedTool[]
+  // Hierarchy for nested tasks
+  parentAgentId?: string
+  depth?: number
+  // Swarm worker identification
+  isSwarmWorker?: boolean
 }
 
 // Selected sub-agent for output dialog
 export const selectedSubAgentAtom = atom<SessionSubAgent | null>(null)
 export const subAgentOutputDialogOpenAtom = atom<boolean>(false)
+
+// Swarm mode atoms - derived from sub-agents
+export const isSwarmModeActiveAtom = atom<boolean>((get) => {
+  const subAgents = get(sessionFlowSubAgentsAtom)
+  return subAgents.some((agent) => isSwarmWorker(agent.type))
+})
+
+export const swarmStatsAtom = atom<SwarmStats>((get) => {
+  const subAgents = get(sessionFlowSubAgentsAtom)
+  return {
+    coordinatorCount: subAgents.filter((a) => a.type === "coordinator").length,
+    coderCount: subAgents.filter((a) => a.type === "coder").length,
+    reviewerCount: subAgents.filter((a) => a.type === "reviewer").length,
+    testerCount: subAgents.filter((a) => a.type === "tester").length,
+    totalWorkers: subAgents.filter((a) => isSwarmWorker(a.type)).length,
+  }
+})
 
 // Session mode
 export type SessionMode = "plan" | "agent"
@@ -368,6 +408,7 @@ export const sessionFlowSubAgentsAtom = atom<SessionSubAgent[]>((get) => {
           currentId = parentMap.get(currentId)!
         }
 
+        const isSwarm = isSwarmWorker(agentType)
         subAgents.push({
           agentId,
           type: agentType,
@@ -383,6 +424,8 @@ export const sessionFlowSubAgentsAtom = atom<SessionSubAgent[]>((get) => {
           // Hierarchy
           parentAgentId,
           depth,
+          // Swarm worker identification
+          isSwarmWorker: isSwarm,
         })
       }
     }

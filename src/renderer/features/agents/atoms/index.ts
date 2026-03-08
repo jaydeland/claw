@@ -551,7 +551,7 @@ export type PendingAuthRetryMessage = {
     mediaType: string
     filename?: string
   }>
-  readyToRetry: boolean  // Only retry when this is true (set by modal on OAuth success)
+  readyToRetry?: boolean  // Only retry when this is true (set by modal on OAuth success)
 }
 export const pendingAuthRetryMessageAtom = atom<PendingAuthRetryMessage | null>(null)
 
@@ -679,7 +679,7 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
  * - "github": GitHub view (PRs, Issues, Code, Visualize)
  * - "prompts": System prompts management
  */
-export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "github" | "prompts" | "settings"
+export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "github" | "prompts" | "claws" | "settings"
 
 /**
  * Currently selected sidebar tab (persisted)

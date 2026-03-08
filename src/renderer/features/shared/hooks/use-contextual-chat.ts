@@ -12,7 +12,7 @@ import { trpc } from "../../../lib/trpc"
 
 export type SourceView = "github" | "prompts" | "skills" | "commands"
 
-interface UseContextualChatOptions {
+export interface UseContextualChatOptions {
   sourceView: SourceView
   /** Plain object that uniquely identifies the chat context. Will be JSON.stringify'd. */
   sourceContext: Record<string, unknown>
@@ -24,7 +24,7 @@ interface UseContextualChatOptions {
   enabled?: boolean
 }
 
-interface UseContextualChatResult {
+export interface UseContextualChatResult {
   chatId: string | null
   subChatId: string | null
   isLoading: boolean

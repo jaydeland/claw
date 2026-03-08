@@ -80,16 +80,16 @@ export function DevSpaceTab() {
 
     const cleanupDeadTerminals = async () => {
       console.log("[DevSpaceTab] First mount - checking terminal health")
-      const aliveTerminals: TerminalInstance[] = []
+      const aliveTerminals: DevSpaceTerminalInstance[] = []
 
       for (const terminal of terminals) {
         try {
-          const isAlive = await trpc.terminal.isSessionAlive.query(terminal.id)
+          const isAlive = await trpc.terminal.isSessionAlive({ paneId: terminal.paneId })
           if (isAlive) {
             aliveTerminals.push(terminal)
-            console.log(`[DevSpaceTab] Terminal ${terminal.name} is alive`)
+            console.log(`[DevSpaceTab] Terminal ${terminal.serviceName} is alive`)
           } else {
-            console.log(`[DevSpaceTab] Removing dead terminal: ${terminal.name}`)
+            console.log(`[DevSpaceTab] Removing dead terminal: ${terminal.serviceName}`)
           }
         } catch (error) {
           console.error(`[DevSpaceTab] Failed to check terminal ${terminal.id}:`, error)
@@ -529,8 +529,8 @@ export function DevSpaceTab() {
             onSelectTerminal={selectTerminal}
             onCloseTerminal={closeTerminal}
             onRenameTerminal={renameTerminal}
-            onCloseOthers={closeOtherTerminals}
-            onCloseToRight={closeTerminalsToRight}
+            onCloseOtherTerminals={closeOtherTerminals}
+            onCloseTerminalsToRight={closeTerminalsToRight}
             onCreateTerminal={() => {
               // Show hint to select service
               if (!selectedService) {
