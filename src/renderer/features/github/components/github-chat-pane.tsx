@@ -614,8 +614,8 @@ You can also suggest modifications to the diagram if you'd like to reorganize it
     // Start with just the user's input - this is what we want to send to Claude
     let prompt = userInput
 
-    // Add diagram context for visualize mode if this is the first message to Claude
-    // (Check if no session exists yet - UI messages may exist but no actual Claude conversation)
+    // For visualize mode, inject current diagram data as context for the system prompt
+    // The system prompt (loaded from DB) contains instructions for how to interpret and modify diagrams
     if (selection?.type === "visualize" && !session) {
       // Get the current diagram data from the atom (real-time UI state) or fall back to DB data
       const currentDiagram = diagramData || (existingDiagram ? {
@@ -626,26 +626,15 @@ You can also suggest modifications to the diagram if you'd like to reorganize it
         stats: existingDiagram.stats ? JSON.parse(existingDiagram.stats) : undefined,
       } : null)
 
-      // Get the original prompt used to generate this diagram type
       const analysisType = selection.analysisType
-      const originalPrompt = ANALYSIS_PROMPTS[analysisType]
 
+      // Inject diagram data as context - this is appended to user's question
+      // The system prompt (from DB) will interpret this data and know how to respond
       const diagramContext = `
 
-=== SYSTEM INSTRUCTIONS ===
+=== CURRENT DIAGRAM DATA (React Flow) ===
 
-You are an AI assistant embedded in a split-view interface. A React Flow diagram is displayed in the left pane, and this chat is in the right pane. Your role is to help the user understand, analyze, and modify the diagram in real-time.
-
-The repository root is: ${projectPath}
-This is the working directory for all file operations.
-
-=== DIAGRAM TYPE ===
-${ANALYSIS_LABELS[analysisType]} Analysis
-
-=== ORIGINAL ANALYSIS PROMPT ===
-${originalPrompt}
-
-=== CURRENT DIAGRAM DATA ===
+**Diagram Type:** ${ANALYSIS_LABELS[analysisType]} Analysis
 
 **Nodes (${currentDiagram?.nodes?.length || 0}):**
 ${currentDiagram?.nodes?.length ? JSON.stringify(currentDiagram.nodes.map((n: { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }) => ({
@@ -674,89 +663,10 @@ ${currentDiagram?.summary || existingDiagram?.summary || "No summary available"}
 **Stats:**
 ${currentDiagram?.stats ? JSON.stringify(currentDiagram.stats, null, 2) : existingDiagram?.stats ? JSON.stringify(JSON.parse(existingDiagram.stats), null, 2) : "No stats available"}
 
-=== HOW TO MODIFY THE DIAGRAM (RIGHT PANE UI) ===
+=== END DIAGRAM DATA ===
 
-You can help the user modify the diagram by providing complete updated diagram data in your response. When the user requests changes:
-
-1. **Explain the changes** you plan to make
-2. **Provide the updated data** in this exact JSON format:
-
-\`\`\`json
-{
-  "action": "update_diagram",
-  "nodes": [
-    {
-      "id": "node-id",
-      "type": "default|input|output|process|decision|subprocess",
-      "position": { "x": 100, "y": 200 },
-      "data": {
-        "label": "Display Name",
-        "description": "Brief description",
-        "type": "component|service|module|file|function"
-      }
-    }
-  ],
-  "edges": [
-    {
-      "id": "edge-id",
-      "source": "source-node-id",
-      "target": "target-node-id",
-      "type": "smoothstep|default|straight",
-      "label": "relationship name"
-    }
-  ],
-  "summary": "Description of changes made"
-}
-\`\`\`
-
-**CRITICAL RULES FOR UPDATES:**
-- Include ALL nodes that should remain (omitted nodes will be deleted)
-- Node IDs must be unique and match exactly in edges
-- Every edge's "source" and "target" MUST reference an existing node ID
-- Position coordinates should be in range 0-1000 for x and y
-- Use "smoothstep" edge type for best visual results
-- Maintain consistent flow direction (top-to-bottom or left-to-right)
-
-=== AVAILABLE NODE TYPES ===
-
-Visual node types (affect styling):
-- "input" / "start": Entry points (green, rounded)
-- "output" / "end": Exit points (green, rounded)
-- "default": Standard node (gray)
-- "process": Processing step (blue)
-- "decision": Decision point (amber/orange)
-- "data": Data store (purple)
-- "subprocess": Sub-process (orange with double border)
-
-Semantic types (in data.type field):
-- "service", "database", "frontend", "external", "layer"
-- "table", "file", "function", "class", "module"
-
-=== HOW TO SAVE DIAGRAM CHANGES (DATABASE) ===
-
-When you provide diagram updates via the JSON format above, the application will automatically:
-1. Parse your JSON response
-2. Update the React Flow diagram in the left pane (right pane UI)
-3. Save the changes to the database via the analyzer.update API
-4. Refresh the diagram view to show the updated visualization
-
-The database stores:
-- Nodes and edges as JSON strings
-- Viewport state (zoom, pan position)
-- Summary and statistics
-- Timestamps for versioning
-
-=== END DIAGRAM CONTEXT ===
-
-The user is now asking about this diagram. You can:
-1. Explain what the diagram shows and how components relate
-2. Suggest improvements or identify missing elements
-3. Answer specific questions about nodes or edges
-4. Generate complete updated diagram data when changes are requested
-5. Help troubleshoot issues with the visualization
-
-Be specific in your explanations and always reference node IDs when discussing particular elements.`
-      prompt = prompt + diagramContext
+User's question: ${userInput}`
+      prompt = diagramContext
     }
 
     // For follow-up messages with an active session, include the conversation history

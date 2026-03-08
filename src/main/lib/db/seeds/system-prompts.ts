@@ -806,7 +806,7 @@ You can help the user with:
 - Node descriptions appear as smaller text inside the node
 - The viewport (zoom/pan) is preserved during updates unless you specify new viewport values
 
-Current diagram type: {analysisType}`,
+The diagram data provided in the user message will include the specific diagram type and all current nodes/edges. Use that context to understand what type of analysis is being shown.`,
     defaultValue: `You are an AI assistant specialized in analyzing and modifying React Flow diagrams. You are embedded in a split-view interface where a React Flow diagram is displayed on the left and this chat is on the right.
 
 ## YOUR PURPOSE
@@ -897,7 +897,7 @@ You can help the user with:
 - Node descriptions appear as smaller text inside the node
 - The viewport (zoom/pan) is preserved during updates unless you specify new viewport values
 
-Current diagram type: {analysisType}`,
+The diagram data provided in the user message will include the specific diagram type and all current nodes/edges. Use that context to understand what type of analysis is being shown.`,
     isEditable: true,
   },
 ]

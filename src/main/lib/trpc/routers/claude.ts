@@ -36,6 +36,7 @@ import {
   claudeCodeSettings,
   getDatabase,
   subChats,
+  systemPrompts,
 } from "../../db"
 import { createRollbackStash } from "../../git/stash"
 import { publicProcedure, router } from "../index"
@@ -861,17 +862,20 @@ export const claudeRouter = router({
             let agentsOption: Record<string, any> = {}
             let finalPrompt = cleanedPrompt
 
-            // Load @mentioned agents
-            agentsOption = await buildAgentsOption(agentMentions, input.cwd)
+            // Skip agents/MCP/skills when disabled (e.g. visualization chat)
+            if (!input.disableMcpAndSkills) {
+              // Load @mentioned agents
+              agentsOption = await buildAgentsOption(agentMentions, input.cwd)
 
-            // Log if agents were mentioned
-            if (agentMentions.length > 0) {
-              console.log(`[claude] Registering agents via SDK:`, Object.keys(agentsOption))
-            }
+              // Log if agents were mentioned
+              if (agentMentions.length > 0) {
+                console.log(`[claude] Registering agents via SDK:`, Object.keys(agentsOption))
+              }
 
-            // Log if skills were mentioned
-            if (skillMentions.length > 0) {
-              console.log(`[claude] Skills mentioned:`, skillMentions)
+              // Log if skills were mentioned
+              if (skillMentions.length > 0) {
+                console.log(`[claude] Skills mentioned:`, skillMentions)
+              }
             }
 
             // Build final prompt with skill instructions if needed
@@ -1097,10 +1101,26 @@ export const claudeRouter = router({
               }
             }
 
-            // System prompt config - use preset for both modes
-            const systemPromptConfig = {
+            // System prompt config - use preset for normal mode, custom for visualization chat
+            let systemPromptConfig = {
               type: "preset" as const,
               preset: "claude_code" as const,
+            }
+
+            // Load github_visualization_chat system prompt from DB when MCP/skills disabled
+            // This is used for the GitHub visualization split-view chat
+            if (input.disableMcpAndSkills) {
+              const db = getDatabase()
+              const vizPrompt = db.select().from(systemPrompts)
+                .where(eq(systemPrompts.key, "github_visualization_chat"))
+                .get()
+
+              if (vizPrompt) {
+                systemPromptConfig = {
+                  type: "custom" as const,
+                  content: vizPrompt.content,
+                }
+              }
             }
 
             const queryOptions = {
