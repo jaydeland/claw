@@ -84,7 +84,7 @@ function getCustomPluginDirectories(): Array<{ path: string; priority: number }>
   return sources.map((s) => ({ path: s.path, priority: s.priority }))
 }
 
-interface FileSkill {
+export interface FileSkill {
   name: string
   description: string
   source: "user" | "project" | "custom"

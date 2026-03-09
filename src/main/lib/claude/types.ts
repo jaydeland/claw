@@ -64,6 +64,12 @@ export type UIMessageChunk =
   | { type: "error"; errorText: string }
   | { type: "auth-error"; errorText: string }
   | {
+      type: "api-error"
+      errorText: string
+      isRetryable?: boolean
+      errorCode?: string
+    }
+  | {
       type: "ask-user-question"
       toolUseId: string
       questions: Array<{

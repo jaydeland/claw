@@ -35,13 +35,13 @@ import { getPromptByKey, PROMPT_KEYS } from "../../prompts/prompt-service"
 
 // ============ EVENT EMITTER FOR REAL-TIME UPDATES ============
 
-interface DiagramUpdate {
+export interface DiagramUpdate {
   type: "diagram_created" | "diagram_updated" | "diagram_deleted" | "status_changed"
   diagram: AnalysisDiagram
   timestamp: Date
 }
 
-interface JobUpdate {
+export interface JobUpdate {
   type: "job_created" | "job_updated" | "job_completed" | "job_failed"
   job: AnalysisJob
   timestamp: Date

@@ -119,7 +119,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
   clipboardRead: () => ipcRenderer.invoke("clipboard:read"),
 
   // Dialog
-  showOpenDialog: (options: { title?: string; properties?: Array<"openFile" | "openDirectory" | "multiSelections">; filters?: Array<{ name: string; extensions: string[] }> }) =>
+  showOpenDialog: (options: { title?: string; defaultPath?: string; properties?: Array<"openFile" | "openDirectory" | "multiSelections">; filters?: Array<{ name: string; extensions: string[] }> }) =>
     ipcRenderer.invoke("dialog:showOpenDialog", options),
 
   // File System
@@ -223,6 +223,7 @@ export interface DesktopApi {
   // Dialog
   showOpenDialog: (options: {
     title?: string
+    defaultPath?: string
     properties?: Array<"openFile" | "openDirectory" | "multiSelections">
     filters?: Array<{ name: string; extensions: string[] }>
   }) => Promise<string[] | null>

@@ -17,6 +17,7 @@ const BUFFER_FLUSH_MS = 50 // 50ms = good balance for text streaming
 const CRITICAL_CHUNK_TYPES = new Set([
   "error",
   "auth-error",
+  "api-error",
   "finish",
   "ask-user-question",
 ])

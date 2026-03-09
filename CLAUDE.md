@@ -229,6 +229,7 @@ This section provides a comprehensive map of the UI components, state management
 | **GSD Planning** | Main area (gsd tab) + right sidebar | `gsd/ui/gsd-content.tsx`, `gsd-chat-sidebar.tsx` |
 | **GitHub Integration** | Main area (github tab) | `github/components/github-view.tsx` |
 | **System Prompts** | Main area (prompts tab) | `prompts/ui/prompts-view.tsx` |
+| **Thinking Controls** | Right of model selector | `components/dialogs/agents-thinking-dialog.tsx` |
 
 ### State Management Quick Reference
 

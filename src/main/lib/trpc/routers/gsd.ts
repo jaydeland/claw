@@ -99,7 +99,7 @@ async function hasBundledGsd(): Promise<boolean> {
   }
 }
 
-interface GsdCommand {
+export interface GsdCommand {
   name: string
   description: string
   path: string

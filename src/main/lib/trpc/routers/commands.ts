@@ -56,7 +56,7 @@ function parseYamlSafe(input: string): Record<string, any> {
   }
 }
 
-interface FileCommand {
+export interface FileCommand {
   name: string
   description: string
   argumentHint?: string

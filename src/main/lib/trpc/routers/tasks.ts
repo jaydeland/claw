@@ -306,7 +306,7 @@ function getTaskDataFromMessages(
 /**
  * Enhanced task with derived status and command info
  */
-interface EnhancedTask {
+export interface EnhancedTask {
   id: string
   subChatId: string
   chatId: string

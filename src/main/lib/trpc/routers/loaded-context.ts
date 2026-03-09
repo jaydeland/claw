@@ -50,7 +50,7 @@ interface CommandInfo {
   argumentHint?: string
 }
 
-interface LoadedContextData {
+export interface LoadedContextData {
   claudeMdFiles: ClaudeMdFile[]
   mcpServers: McpServerInfo[]
   skills: SkillInfo[]

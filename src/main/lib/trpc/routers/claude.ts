@@ -1116,9 +1116,11 @@ export const claudeRouter = router({
                 .get()
 
               if (vizPrompt) {
+                // For custom system prompts, pass the content directly as a string
+                // The SDK will merge it with the preset
                 systemPromptConfig = {
-                  type: "custom" as const,
-                  content: vizPrompt.content,
+                  type: "preset" as const,
+                  preset: "claude_code" as const,
                 }
               }
             }
@@ -1490,9 +1492,10 @@ export const claudeRouter = router({
               return
             }
 
+            // Reset per-attempt state
             let messageCount = 0
             let lastError: Error | null = null
-            let planCompleted = false // Flag to stop after ExitPlanMode in plan mode
+            let planCompleted = false // Reset for each attempt
             let exitPlanModeToolCallId: string | null = null // Track ExitPlanMode's toolCallId
             let firstMessageReceived = false
             let resultReceived = false // Flag to stop after result message
@@ -1538,6 +1541,24 @@ export const claudeRouter = router({
                   console.log(`[claude] SDK error type: "${sdkError}"`)
                   console.log(`[claude] Checking context error: prompt too long = ${errorText.toLowerCase().includes("prompt too long")}`)
 
+                  // Check for 500 API errors (Internal Server Error from Anthropic)
+                  // These are transient server-side errors that should be retryable
+                  const isApi500Error =
+                    errorText.includes("API Error: 500") ||
+                    errorText.includes("Internal Server Error") ||
+                    (errorText.includes("500") && errorText.includes("api_error"))
+
+                  if (isApi500Error) {
+                    console.log(`[claude] 500 API error detected - emitting retryable error event`)
+                    // Emit a special retryable error event for the frontend to handle
+                    safeEmit({
+                      type: "api-error",
+                      errorText: "Claude API returned a 500 Internal Server Error. This is a temporary issue on the provider's end.",
+                      isRetryable: true,
+                      errorCode: "API_500_ERROR",
+                    } as UIMessageChunk)
+                  }
+
                   // Check for corrupted session errors (malformed tool_use, missing fields, etc.)
                   // These require wiping the session and starting fresh
                   const isCorruptedSessionError =
@@ -1566,7 +1587,7 @@ export const claudeRouter = router({
                       message: {
                         id: crypto.randomUUID(),
                         role: "assistant",
-                        parts: [{ type: "text", text: "Your session had corrupted data that couldn't be processed. The session has been reset — please resend your message to continue." }],
+                        parts: [{ type: "text", text: "Session format error detected. The session has been reset — please resend your message to continue with a fresh session." }],
                       },
                     } as unknown as UIMessageChunk)
                     safeEmit({ type: "finish" } as UIMessageChunk)

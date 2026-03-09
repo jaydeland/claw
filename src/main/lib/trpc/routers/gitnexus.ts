@@ -15,7 +15,7 @@ const execAsync = promisify(exec)
 const GITNEXUS_API_URL = "http://127.0.0.1:4747"
 
 // GitNexus repo type
-interface GitNexusRepo {
+export interface GitNexusRepo {
   name: string
   path: string
   indexedAt: string
