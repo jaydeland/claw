@@ -11,6 +11,7 @@ import ReactFlow, {
   ReactFlowProvider,
   useReactFlow,
   type Node,
+  BackgroundVariant,
 } from "reactflow"
 import "reactflow/dist/style.css"
 
@@ -243,7 +244,7 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
         proOptions={{ hideAttribution: true }}
       >
         <Background
-          variant="dots"
+          variant={BackgroundVariant.Dots}
           gap={20}
           size={1}
           className="[&>*]:dark:opacity-30 [&>*]:opacity-60"

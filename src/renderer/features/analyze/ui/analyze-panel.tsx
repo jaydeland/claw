@@ -15,6 +15,7 @@ import ReactFlow, {
   MiniMap,
   Panel,
   MarkerType,
+  BackgroundVariant,
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { Loader2, AlertCircle, RefreshCw, Maximize2, Minimize2, Play, X } from "lucide-react"
@@ -461,7 +462,7 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
                 fitView
                 attributionPosition="bottom-right"
               >
-                <Background variant="dots" gap={20} size={1} />
+                <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
                 <Controls />
                 <MiniMap
                   className="bg-background border border-border rounded-lg shadow-sm"

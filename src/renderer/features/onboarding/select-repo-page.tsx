@@ -124,7 +124,7 @@ export function SelectRepoPage() {
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
               <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                <Logo className="w-5 h-5" fill="white" />
+                <Logo className="w-5 h-5" />
               </div>
               <div className="w-10 h-10 rounded-full bg-foreground flex items-center justify-center">
                 <GitHubIcon className="w-5 h-5 text-background" />
@@ -185,7 +185,7 @@ export function SelectRepoPage() {
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center mx-auto w-max">
             <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
-              <Logo className="w-6 h-6" fill="white" />
+              <Logo className="w-6 h-6" />
             </div>
           </div>
           <div className="space-y-1">

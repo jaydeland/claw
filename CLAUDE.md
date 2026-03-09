@@ -372,6 +372,8 @@ All components are Radix UI wrappers with Tailwind styling:
 | UI Element | Location | File Path |
 |------------|----------|-----------|
 | Main chat input box | ChatView → ChatInputArea | `features/agents/main/chat-input-area.tsx` |
+| Model selector | Chat input toolbar | `features/agents/main/chat-input-area.tsx` (lines 1019-1073) |
+| Thinking controls | Right of model selector | `components/dialogs/agents-thinking-dialog.tsx` |
 | Message list | ChatView → MessagesListWrapper | `features/agents/main/messages-list.tsx` |
 | Sub-chat tabs | Top of ChatView | `features/sub-chats/sub-chat-tabs.tsx` |
 | Workspace list | Sidebar → WorkspacesTabContent | `features/sidebar/components/workspaces-tab-content.tsx` |

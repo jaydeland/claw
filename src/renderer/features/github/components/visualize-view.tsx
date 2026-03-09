@@ -17,6 +17,7 @@ import ReactFlow, {
   type NodeChange,
   type Viewport,
   MarkerType,
+  BackgroundVariant,
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { toPng, toSvg } from "html-to-image"
@@ -631,7 +632,7 @@ function VisualizeViewInner({
             maxZoom={2}
             attributionPosition="bottom-right"
           >
-            <Background variant="dots" gap={20} size={1} />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
             <Controls />
             <MiniMap
               className="bg-background border border-border rounded-lg shadow-sm"

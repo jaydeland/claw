@@ -9,9 +9,9 @@ import {
   DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../../ui/dropdown-menu"
-import { Switch } from "../../ui/switch"
-import { ThinkingIcon } from "../../ui/icons"
+} from "../ui/dropdown-menu"
+import { Switch } from "../ui/switch"
+import { ThinkingIcon } from "../ui/icons"
 import { cn } from "../../lib/utils"
 import {
   extendedThinkingEnabledAtom,
