@@ -187,11 +187,11 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
       title: "Select or Create MCP Config File",
       defaultPath: "~/.claude",
       filters: [{ name: "JSON Files", extensions: ["json"] }],
-      properties: ["openFile", "createDirectory"],
+      properties: ["openFile"],
     })
 
-    if (result && !result.canceled && result.filePaths.length > 0) {
-      const filePath = result.filePaths[0]
+    if (result && result.length > 0) {
+      const filePath = result[0]
       setTargetFilePath(filePath)
       setAddServerDialogOpen(true)
     }

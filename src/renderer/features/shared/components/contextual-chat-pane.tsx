@@ -238,7 +238,7 @@ export const ContextualChatPane = memo(function ContextualChatPane({
       const newSubChatId = result?.subChatId ?? activeSubChatId
       setActiveChatId(newChatId)
       setActiveSubChatId(newSubChatId)
-      await sendMessage(userInput, newChatId, newSubChatId)
+      await sendMessage(userInput, newChatId ?? undefined, newSubChatId ?? undefined)
     } else {
       await sendMessage(userInput)
     }

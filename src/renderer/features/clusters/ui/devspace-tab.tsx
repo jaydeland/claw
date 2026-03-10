@@ -84,7 +84,7 @@ export function DevSpaceTab() {
 
       for (const terminal of terminals) {
         try {
-          const isAlive = await trpc.terminal.isSessionAlive({ paneId: terminal.paneId })
+          const isAlive = await trpc.terminal.isSessionAlive.mutate({ paneId: terminal.paneId })
           if (isAlive) {
             aliveTerminals.push(terminal)
             console.log(`[DevSpaceTab] Terminal ${terminal.serviceName} is alive`)

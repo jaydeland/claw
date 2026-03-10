@@ -127,14 +127,6 @@ export function AnthropicOnboardingPage() {
         step: "error",
         message: pollStatusQuery.data.error || "Failed to get OAuth URL",
       })
-    } else if (
-      flowState.step === "has_url" &&
-      pollStatusQuery.data?.state === "success"
-    ) {
-      // OAuth redirect was handled automatically by local server - complete onboarding
-      setFlowState({ step: "submitting" })
-      setAnthropicOnboardingCompleted(true)
-      setActiveProvider("anthropic-oauth")
     }
   }, [pollStatusQuery.data, flowState, setAnthropicOnboardingCompleted, setActiveProvider])
 
