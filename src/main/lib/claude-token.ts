@@ -1,6 +1,6 @@
 import { execSync, spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 
 interface ClaudeCredentials {
@@ -238,6 +238,89 @@ export function isTokenExpired(expiresAt?: number): boolean {
   // Consider expired if less than 5 minutes remaining
   const bufferMs = 5 * 60 * 1000;
   return Date.now() + bufferMs >= expiresAt;
+}
+
+/**
+ * Write updated Claude OAuth credentials back to the platform credential store.
+ * This is used after a token refresh to persist the new access token.
+ */
+function writeToKeychain(creds: ClaudeOAuthCredential): void {
+  const payload = JSON.stringify({
+    claudeAiOauth: {
+      accessToken: creds.accessToken,
+      refreshToken: creds.refreshToken,
+      expiresAt: creds.expiresAt,
+      scopes: creds.scopes,
+    },
+  });
+
+  if (process.platform === 'darwin') {
+    try {
+      // Try updating with current username as account
+      const account = userInfo().username;
+      execSync(
+        `security add-generic-password -U -s "Claude Code-credentials" -a ${JSON.stringify(account)} -w ${JSON.stringify(payload)}`,
+        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+      );
+    } catch {
+      // Fallback: write to credentials file
+      writeToCredentialsFile(creds);
+    }
+  } else {
+    writeToCredentialsFile(creds);
+  }
+}
+
+function writeToCredentialsFile(creds: ClaudeOAuthCredential): void {
+  const credentialsPath = join(homedir(), '.claude', '.credentials.json');
+  try {
+    const payload = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: creds.accessToken,
+        refreshToken: creds.refreshToken,
+        expiresAt: creds.expiresAt,
+        scopes: creds.scopes,
+      },
+    });
+    writeFileSync(credentialsPath, payload, 'utf-8');
+  } catch {
+    // Ignore write errors
+  }
+}
+
+let isOAuthRefreshing = false;
+
+/**
+ * Ensure the OAuth token is valid, refreshing it if expired.
+ * Call this before starting a Claude SDK session in OAuth mode.
+ */
+export async function ensureValidOAuthToken(): Promise<void> {
+  if (isOAuthRefreshing) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    return;
+  }
+
+  const creds = getExistingClaudeCredentials();
+  if (!creds) return; // No OAuth creds — probably custom API or Bedrock mode
+
+  if (!isTokenExpired(creds.expiresAt)) return; // Token still valid
+
+  if (!creds.refreshToken) {
+    console.warn('[claude-token] OAuth token expired but no refresh token available');
+    return;
+  }
+
+  isOAuthRefreshing = true;
+  try {
+    console.log('[claude-token] OAuth token expired, refreshing...');
+    const refreshed = await refreshClaudeToken(creds.refreshToken);
+    writeToKeychain({ ...creds, ...refreshed });
+    console.log('[claude-token] OAuth token refreshed successfully');
+  } catch (error) {
+    console.error('[claude-token] OAuth token refresh failed:', error);
+  } finally {
+    isOAuthRefreshing = false;
+  }
 }
 
 /**

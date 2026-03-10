@@ -414,7 +414,11 @@ export function Terminal({
 
     if (wordWrap) {
       // Wrap mode: fit terminal to container width
-      fitAddonRef.current.fit()
+      try {
+        fitAddonRef.current.fit()
+      } catch {
+        // Ignore resize errors when terminal is disposed
+      }
     } else {
       // No wrap mode: set a large column count to enable horizontal scrolling
       // We still need the fit addon to calculate row height correctly

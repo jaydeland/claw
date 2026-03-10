@@ -27,6 +27,7 @@ import {
   logClaudeEnv,
   logRawClaudeMessage,
   ensureValidAwsCredentials,
+  ensureValidOAuthToken,
   type UIMessageChunk,
 } from "../../claude"
 import {
@@ -306,7 +307,8 @@ export async function warmupMcpCache(): Promise<void> {
     const sdk = await import("@anthropic-ai/claude-agent-sdk")
     const claudeQuery = sdk.query
 
-    // Ensure AWS credentials are valid before warmup queries
+    // Ensure credentials are valid before warmup queries
+    await ensureValidOAuthToken()
     const credentialResult = await ensureValidAwsCredentials()
     if (!credentialResult.success && credentialResult.connectionMethod === "sso") {
       console.warn("[claude] MCP warmup skipped - SSO credentials invalid:", credentialResult.error)
@@ -933,7 +935,8 @@ export const claudeRouter = router({
               prompt = createPromptWithImages()
             }
 
-            // Ensure AWS credentials are valid (auto-refresh if needed) before building env
+            // Ensure credentials are valid (auto-refresh if needed) before building env
+            await ensureValidOAuthToken()
             const credentialRefreshResult = await ensureValidAwsCredentials()
             if (!credentialRefreshResult.success && credentialRefreshResult.error) {
               console.warn("[claude] AWS credential refresh failed:", credentialRefreshResult.error)

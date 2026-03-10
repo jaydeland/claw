@@ -15,6 +15,7 @@ export {
 } from "./env"
 export type { CredentialRefreshResult } from "./env"
 export { TextDeltaBuffer } from "./text-delta-buffer"
+export { ensureValidOAuthToken } from "../claude-token"
 export {
   initBackgroundSession,
   closeBackgroundSession,
