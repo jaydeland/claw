@@ -1031,22 +1031,6 @@ export function NewChatForm({
     setShowingToolsList(false)
   }, [])
 
-  // Handle command selection from Commands dropdown
-  const handleCommandSelect = useCallback((command: string) => {
-    const currentValue = editorRef.current?.getValue() || ""
-    const commandWithSpace = `${command} `
-    const newValue = currentValue.trim()
-      ? `${commandWithSpace}${currentValue}`
-      : commandWithSpace
-    editorRef.current?.setValue(newValue)
-    editorRef.current?.focus()
-
-    // Position cursor right after the command and space
-    setTimeout(() => {
-      editorRef.current?.setCursorPosition(commandWithSpace.length)
-    }, 0)
-  }, [])
-
   // Handle skill selection from Skills & GSD dropdown
   const handleSkillSelect = useCallback((skillName: string) => {
     const command = `/${skillName} `
