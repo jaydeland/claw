@@ -5,7 +5,7 @@ export interface ClaudeModel {
 }
 
 export const CLAUDE_MODELS: ClaudeModel[] = [
+  { id: "haiku", name: "Haiku" },
   { id: "opus", name: "Opus" },
   { id: "sonnet", name: "Sonnet" },
-  { id: "haiku", name: "Haiku" },
 ]

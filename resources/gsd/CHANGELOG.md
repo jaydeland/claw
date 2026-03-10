@@ -6,6 +6,66 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.22.4] - 2026-03-03
+
+### Added
+- `--discuss` flag for `/gsd:quick` — lightweight pre-planning discussion to gather context before quick tasks
+
+### Fixed
+- Windows: `@file:` protocol resolution for large init payloads (>50KB) — all 32 workflow/agent files now resolve temp file paths instead of letting agents hallucinate `/tmp` paths (#841)
+- Missing `skills` frontmatter on gsd-nyquist-auditor agent
+
+## [1.22.3] - 2026-03-03
+
+### Added
+- Verify-work auto-injects a cold-start smoke test for phases that modify server, database, seed, or startup files — catches warm-state blind spots
+
+### Changed
+- Renamed `depth` setting to `granularity` with values `coarse`/`standard`/`fine` to accurately reflect what it controls (phase count, not investigation depth). Backward-compatible migration auto-renames existing config.
+
+### Fixed
+- Installer now replaces `$HOME/.claude/` paths (not just `~/.claude/`) for non-Claude runtimes — fixes broken commands on local installs and Gemini/OpenCode/Codex installs (#905, #909)
+
+## [1.22.2] - 2026-03-03
+
+### Fixed
+- Codex installer no longer creates duplicate `[features]` and `[agents]` sections on re-install (#902, #882)
+- Context monitor hook is advisory instead of blocking non-GSD workflows
+- Hooks respect `CLAUDE_CONFIG_DIR` for custom config directories
+- Hooks include stdin timeout guard to prevent hanging on pipe errors
+- Statusline context scaling matches autocompact buffer thresholds
+- Gap closure plans compute wave numbers instead of hardcoding wave 1
+- `auto_advance` config flag no longer persists across sessions
+- Phase-complete scans ROADMAP.md as fallback for next-phase detection
+- `getMilestoneInfo()` prefers in-progress milestone marker instead of always returning first
+- State parsing supports both bold and plain field formats
+- Phase counting scoped to current milestone
+- Total phases derived from ROADMAP when phase directories don't exist yet
+- OpenCode detects runtime config directory instead of hardcoding `.claude`
+- Gemini hooks use `AfterTool` event instead of `PostToolUse`
+- Multi-word commit messages preserved in CLI router
+- Regex patterns in milestone/state helpers properly escaped
+- `isGitIgnored` uses `--no-index` for tracked file detection
+- AskUserQuestion freeform answer loop properly breaks on valid input
+- Agent spawn types standardized across all workflows
+
+### Changed
+- Anti-heredoc instruction extended to all file-writing agents
+- Agent definitions include skills frontmatter and hooks examples
+
+### Chores
+- Removed leftover `new-project.md.bak` file
+- Deduplicated `extractField` and phase filter helpers into shared modules
+- Added 47 agent frontmatter and spawn consistency tests
+
+## [1.22.1] - 2026-03-02
+
+### Added
+- Discuss phase now loads prior context (PROJECT.md, REQUIREMENTS.md, STATE.md, and all prior CONTEXT.md files) before identifying gray areas — prevents re-asking questions you've already answered in earlier phases
+
+### Fixed
+- Shell snippets in workflows use `printf` instead of `echo` to prevent jq parse errors with special characters
+
 ## [1.22.0] - 2026-02-27
 
 ### Added
@@ -1391,7 +1451,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - YOLO mode for autonomous execution
 - Interactive mode with checkpoints
 
-[Unreleased]: https://github.com/glittercowboy/get-shit-done/compare/v1.22.0...HEAD
+[Unreleased]: https://github.com/glittercowboy/get-shit-done/compare/v1.22.4...HEAD
+[1.22.4]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.22.4
+[1.22.3]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.22.3
+[1.22.2]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.22.2
+[1.22.1]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.22.1
 [1.22.0]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.22.0
 [1.21.1]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.21.1
 [1.21.0]: https://github.com/glittercowboy/get-shit-done/releases/tag/v1.21.0

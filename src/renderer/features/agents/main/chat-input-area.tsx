@@ -35,6 +35,7 @@ import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentSendButton } from "../components/agent-send-button"
 import { SkillsDropdown } from "../components/skills-dropdown"
 import { GsdDropdown } from "../components/gsd-dropdown"
+import { AgentsThinkingDialog } from "../../../components/dialogs/agents-thinking-dialog"
 import {
   AgentsMentionsEditor,
   type AgentsMentionsEditorHandle,
@@ -107,18 +108,20 @@ function useAvailableModels(): AvailableModelsResult {
     }
   )
 
-  // Get models based on active provider
+  // Get models based on active provider, sorted alphabetically
   const models: ClaudeModel[] = activeProvider === "ollama"
     ? (() => {
         // Fetch models from API - the model selected in providers tab is the default
         const fetched = ollamaModelsData?.models ?? []
         if (fetched.length > 0) {
-          return fetched.map((m: OllamaModel) => ({ id: m.id, name: m.displayName || m.name }))
+          return fetched
+            .map((m: OllamaModel) => ({ id: m.id, name: m.displayName || m.name }))
+            .sort((a, b) => a.name.localeCompare(b.name))
         }
         // Final fallback
         return []
       })()
-    : CLAUDE_MODELS // For Anthropic OAuth, Bedrock, and Custom API - use standard Claude models
+    : CLAUDE_MODELS // For Anthropic OAuth, Bedrock, and Custom API - use standard Claude models (already sorted)
 
   return {
     models,
@@ -1062,50 +1065,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                             </DropdownMenuItem>
                           )
                         })}
-                        <DropdownMenuSeparator />
-                        <div
-                          className="flex items-center justify-between px-1.5 py-1.5 mx-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-sm">Thinking</span>
-                          </div>
-                          <Switch
-                            checked={thinkingEnabled}
-                            onCheckedChange={setThinkingEnabled}
-                            className="scale-75"
-                          />
-                        </div>
-                        {/* Effort level selector - only shown when thinking is enabled */}
-                        {thinkingEnabled && (
-                          <div
-                            className="px-1.5 py-1.5 mx-1 border-t border-border/50"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="flex items-center gap-1 mb-1.5">
-                              <span className="text-[11px] text-muted-foreground">Effort</span>
-                            </div>
-                            <div className="flex gap-1">
-                              {(["low", "medium", "high", "max"] as const).map((level) => (
-                                <button
-                                  key={level}
-                                  className={cn(
-                                    "px-2 py-0.5 text-[11px] rounded transition-colors",
-                                    thinkingEffort === level
-                                      ? "bg-primary text-primary-foreground"
-                                      : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
-                                  )}
-                                  onClick={() => setThinkingEffort(level)}
-                                >
-                                  {level.charAt(0).toUpperCase() + level.slice(1)}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </DropdownMenuContent>
                   </DropdownMenu>
+
+                  {/* Thinking mode dialog */}
+                  <AgentsThinkingDialog disabled={isStreaming} />
 
                   {/* Skills Dropdown - Shows skills and commands */}
                   <SkillsDropdown

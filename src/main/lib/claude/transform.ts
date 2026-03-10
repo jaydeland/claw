@@ -569,29 +569,35 @@ export function createTransformer(options?: { emitSdkMessageUuid?: boolean }) {
 
       // Check for error subtype before processing
       if (msg.subtype === "error_during_execution") {
-        console.error("[transform] ERROR_DURING_EXECUTION result - tool execution failed")
-        console.error("[transform] Error details:", msg.errors)
-        yield* endTextBlock()
-        yield* endToolInput()
-
-        // Emit SDK errors to UI, filtering known non-fatal internal binary errors
+        // Filter known non-fatal internal errors before logging
         if (msg.errors && Array.isArray(msg.errors) && msg.errors.length > 0) {
           // These patterns indicate internal binary operations failing on custom providers,
           // not actual user-facing tool failures. Filter them to reduce noise.
           const isKnownInternalError = (err: string) =>
             err.includes("/v1/messages/count_tokens") ||        // Anthropic-only endpoint
             err.includes("T.startsWith") ||                     // Cascade from count_tokens 404
-            (err.includes("not_found_error") && err.includes("model") && err.includes("claude-"))
+            (err.includes("not_found_error") && err.includes("model") && err.includes("claude-")) ||
+            err.includes("ensureToolResultPairing")             // SDK message structure repair (info, not error)
 
           const userFacingErrors = msg.errors.filter(
             (e: unknown) => typeof e !== "string" || !isKnownInternalError(e)
           )
+
+          // Only log and emit if there are actual user-facing errors
           if (userFacingErrors.length > 0) {
+            console.error("[transform] ERROR_DURING_EXECUTION result - tool execution failed")
+            console.error("[transform] Error details:", userFacingErrors)
+            yield* endTextBlock()
+            yield* endToolInput()
+
             const errorText = userFacingErrors.join("\n")
             yield {
               type: "error",
               errorText: `SDK Error: ${errorText}`,
             }
+          } else {
+            // All errors were filtered - this is a non-fatal internal issue
+            console.log("[transform] Filtered non-fatal internal SDK errors (count_tokens, message repair, etc.)")
           }
         }
       } else {
