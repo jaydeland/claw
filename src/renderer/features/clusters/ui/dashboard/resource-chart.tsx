@@ -48,7 +48,7 @@ export function ResourceChart({ title, data, centerLabel, height = 200 }: Resour
             ))}
           </Pie>
           <Tooltip
-            formatter={(value: number, name: string) => [`${value}`, name]}
+            formatter={(value: number | undefined, name: string | undefined) => [value === undefined ? "-" : `${value}`, name || ""]}
             contentStyle={{
               backgroundColor: "hsl(var(--background))",
               border: "1px solid hsl(var(--border))",

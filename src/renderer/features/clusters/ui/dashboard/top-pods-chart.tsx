@@ -76,8 +76,8 @@ export function TopPodsChart({ metrics, isLoading, sortBy }: TopPodsChartProps) 
             axisLine={false}
           />
           <Tooltip
-            formatter={(value: number) => [
-              sortBy === "cpu" ? formatCpu(value) : formatMemory(value),
+            formatter={(value: number | undefined) => [
+              value === undefined ? "-" : (sortBy === "cpu" ? formatCpu(value) : formatMemory(value)),
               sortBy === "cpu" ? "CPU" : "Memory",
             ]}
             contentStyle={{

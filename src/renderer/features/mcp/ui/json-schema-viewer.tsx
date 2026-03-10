@@ -7,7 +7,7 @@ import { cn } from "../../../lib/utils"
 /**
  * JSON Schema property definition
  */
-interface JsonSchemaProperty {
+export interface JsonSchemaProperty {
   type?: string | string[]
   description?: string
   enum?: unknown[]

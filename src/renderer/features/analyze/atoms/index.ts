@@ -110,7 +110,7 @@ export const refreshReasonAtom = atom<string | null>(null)
 // ============ UI STATE ============
 
 // Expanded nodes in the diagram
-export const expandedNodesAtom = atom<Set<string>>(new Set())
+export const expandedNodesAtom = atom<Set<string>>(new Set<string>())
 
 // Selected node for details panel
 export const selectedNodeAtom = atom<FlowNode | null>(null)

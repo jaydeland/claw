@@ -756,7 +756,7 @@ const FileDiffCard = memo(function FileDiffCard({
                   diffViewMode={diffMode}
                   diffViewHighlight={!!shikiHighlighter}
                   diffViewWrap={false}
-                  registerHighlighter={shikiHighlighter ?? undefined}
+                  registerHighlighter={(shikiHighlighter ?? undefined) as import("@git-diff-view/react").DiffHighlighter}
                 />
               </DiffErrorBoundary>
             </div>

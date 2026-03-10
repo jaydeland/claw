@@ -65,10 +65,11 @@ export function NodeMetricsChart({ metrics, isLoading }: NodeMetricsChartProps) 
             axisLine={false}
           />
           <Tooltip
-            formatter={(value: number, name: string) => {
+            formatter={(value: number | undefined, name: string | undefined) => {
+              if (value === undefined) return ["-", name || ""]
               if (name === "cpu") return [formatCpu(value), "CPU"]
               if (name === "memory") return [formatMemory(value), "Memory"]
-              return [value, name]
+              return [value, name || ""]
             }}
             contentStyle={{
               backgroundColor: "hsl(var(--background))",

@@ -96,12 +96,12 @@ function AnalysisNode({ data, id }: { data: Record<string, unknown>; id: string 
         getNodeStyle()
       )}
     >
-      <div className="font-semibold text-sm truncate">{(data.label as string) || id}</div>
-      {data.description && (
-        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{data.description as string}</div>
+      <div className="font-semibold text-sm truncate">{String(data.label ?? id)}</div>
+      {typeof data.description === "string" && (
+        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{data.description}</div>
       )}
-      {data.tech && (
-        <div className="text-xs text-muted-foreground mt-1 font-mono">{data.tech as string}</div>
+      {typeof data.tech === "string" && (
+        <div className="text-xs text-muted-foreground mt-1 font-mono">{data.tech}</div>
       )}
     </div>
   )
@@ -150,7 +150,7 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
   )
 
   // Analysis service for generating diagrams (uses background session, no chat needed)
-  const { generateAnalysis, generateAll, cancelAnalysis } = useAnalysisService({
+  const { generateAnalysis, generateAll, cancelAll } = useAnalysisService({
     projectId,
     projectPath: project?.path || "",
   })
@@ -298,8 +298,8 @@ function AnalyzePanelInner({ projectId, onClose }: AnalyzePanelProps) {
   }, [generateAll])
 
   const handleSkip = useCallback(async () => {
-    await cancelAnalysis()
-  }, [cancelAnalysis])
+    await cancelAll()
+  }, [cancelAll])
 
   // Handle refresh check
   const handleCheckRefresh = useCallback(() => {

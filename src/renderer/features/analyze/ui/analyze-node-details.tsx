@@ -77,8 +77,8 @@ export function AnalyzeNodeDetails({ node, onClose }: AnalyzeNodeDetailsProps) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <div>
-          <h3 className="font-semibold">{(data.label as string) || node.id}</h3>
-          {data.type && (
+          <h3 className="font-semibold">{String(data.label ?? node.id)}</h3>
+          {typeof data.type === "string" && (
             <span className="text-xs text-muted-foreground capitalize">{String(data.type)}</span>
           )}
         </div>
@@ -90,10 +90,10 @@ export function AnalyzeNodeDetails({ node, onClose }: AnalyzeNodeDetailsProps) {
       {/* Content */}
       <div className="flex-1 p-4 overflow-y-auto">
         {/* Description (prominent) */}
-        {data.description && (
+        {typeof data.description === "string" && (
           <div className="mb-4">
             <h4 className="text-sm font-semibold mb-1">Description</h4>
-            <p className="text-sm text-muted-foreground">{String(data.description)}</p>
+            <p className="text-sm text-muted-foreground">{data.description}</p>
           </div>
         )}
 

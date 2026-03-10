@@ -68,6 +68,7 @@ export function DevSpaceTab() {
 
   // tRPC mutation for killing terminal sessions
   const killMutation = trpc.terminal.kill.useMutation()
+  const utils = trpc.useUtils()
 
   // Smart cleanup: remove terminals with dead PTY sessions on first mount
   // This preserves terminals that have live backend sessions while cleaning up stale ones
@@ -84,7 +85,7 @@ export function DevSpaceTab() {
 
       for (const terminal of terminals) {
         try {
-          const isAlive = await trpc.terminal.isSessionAlive.mutate({ paneId: terminal.paneId })
+          const isAlive = await utils.client.terminal.isSessionAlive.query(terminal.paneId)
           if (isAlive) {
             aliveTerminals.push(terminal)
             console.log(`[DevSpaceTab] Terminal ${terminal.serviceName} is alive`)

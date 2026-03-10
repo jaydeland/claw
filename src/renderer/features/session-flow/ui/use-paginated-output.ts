@@ -42,7 +42,8 @@ export function usePaginatedOutput(
         enabled: enabled && !state.lines.length && pollingEnabled,
         refetchInterval: (data) => {
           // Poll every 2 seconds if task is running, otherwise stop polling
-          return data?.status === "running" ? 2000 : false
+          const status = (data as { status?: string } | undefined)?.status
+          return status === "running" ? 2000 : false
         },
       }
     )
@@ -90,8 +91,11 @@ export function usePaginatedOutput(
     }
   }, [initialData])
 
-  // Mutation for loading more (pagination)
-  const loadMoreMutation = trpc.tasks.getWithOutput.useMutation()
+  // Query for loading more (pagination) - disabled by default, triggered via refetch
+  const { refetch: loadMoreRefetch } = trpc.tasks.getWithOutput.useQuery(
+    { taskId, offset: 0, limit: chunkSize, includeMetadata: true },
+    { enabled: false }
+  )
 
   // Load more function
   const loadMore = useCallback(async () => {
@@ -104,12 +108,7 @@ export function usePaginatedOutput(
       const newOffset = Math.max(0, state.oldestLoadedLine - chunkSize)
       const limit = Math.min(chunkSize, state.oldestLoadedLine)
 
-      const result = await loadMoreMutation.mutateAsync({
-        taskId,
-        offset: newOffset,
-        limit,
-        includeMetadata: true,
-      })
+      const result = await loadMoreRefetch({ throwOnError: true }).then(res => res.data)
 
       if (result?.output && result.outputMetadata) {
         const newLines = result.output.split("\n")
@@ -128,7 +127,7 @@ export function usePaginatedOutput(
       console.error("Failed to load more lines:", error)
       setState((prev) => ({ ...prev, isLoadingMore: false }))
     }
-  }, [taskId, state.oldestLoadedLine, state.hasOlderLines, state.isLoadingMore, chunkSize, loadMoreMutation])
+  }, [taskId, state.oldestLoadedLine, state.hasOlderLines, state.isLoadingMore, chunkSize, loadMoreRefetch])
 
   // Refresh function (reload from current position)
   const refresh = useCallback(() => {

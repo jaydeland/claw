@@ -183,20 +183,18 @@ export function ClawForm({
   const handleSubmit = () => {
     if (!validate()) return
 
-    const triggerConfig =
-      formData.triggerType === "cron"
-        ? { expression: formData.cronExpression }
-        : formData.triggerType === "github_poll"
-          ? {
-              owner: formData.githubOwner,
-              repo: formData.githubRepo,
-              label: formData.githubLabel,
-            }
-          : formData.triggerType === "slack_mention"
-            ? { slackChannelFilter: formData.slackChannelFilter }
-            : formData.triggerType === "whatsapp_message"
-              ? { whatsappChatFilter: formData.whatsappChatFilter || undefined }
-              : {}
+    const triggerConfig: Record<string, string> = {}
+    if (formData.triggerType === "cron") {
+      triggerConfig.expression = formData.cronExpression
+    } else if (formData.triggerType === "github_poll") {
+      triggerConfig.owner = formData.githubOwner
+      triggerConfig.repo = formData.githubRepo
+      triggerConfig.label = formData.githubLabel
+    } else if (formData.triggerType === "slack_mention") {
+      triggerConfig.slackChannelFilter = formData.slackChannelFilter
+    } else if (formData.triggerType === "whatsapp_message" && formData.whatsappChatFilter) {
+      triggerConfig.whatsappChatFilter = formData.whatsappChatFilter
+    }
 
     onSubmit(formData, triggerConfig)
   }

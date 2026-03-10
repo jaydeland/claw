@@ -21,6 +21,7 @@ import {
   isDesktopAtom,
   isFullscreenAtom,
   showWorkspaceIconAtom,
+  type SettingsTab,
 } from "../../lib/atoms"
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
@@ -33,7 +34,7 @@ import { ChevronDown, MoreHorizontal } from "lucide-react"
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null, isLoaded: true })
 // import { AuthDialog } from "@/components/auth/auth-dialog"
-const AuthDialog = () => null
+const AuthDialog = (_props: { open: boolean; onOpenChange: (open: boolean) => void }) => null
 // Desktop: archive is handled inline, not via hook
 // import { DiscordIcon } from "@/components/icons"
 import { DiscordIcon } from "../../icons"
@@ -967,7 +968,7 @@ interface SidebarHeaderProps {
   setSettingsActiveTab: (tab: SettingsTab) => void
   setShowAuthDialog: (open: boolean) => void
   handleSidebarMouseEnter: () => void
-  handleSidebarMouseLeave: () => void
+  handleSidebarMouseLeave: (e: React.MouseEvent) => void
   closeButtonRef: React.RefObject<HTMLDivElement | null>
 }
 
@@ -1009,7 +1010,6 @@ const SidebarHeader = memo(function SidebarHeader({
 
       {/* Custom traffic lights - positioned to match native macOS position (x:15, y:12) */}
       <TrafficLights
-        isHovered={isSidebarHovered}
         isFullscreen={isFullscreen}
         isDesktop={isDesktop}
         className="absolute left-[15px] top-[12px] z-20"
