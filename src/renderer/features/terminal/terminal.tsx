@@ -422,9 +422,13 @@ export function Terminal({
     } else {
       // No wrap mode: set a large column count to enable horizontal scrolling
       // We still need the fit addon to calculate row height correctly
-      const currentRows = xtermRef.current.rows
-      // Use a very large column count (9999) so content doesn't wrap
-      xtermRef.current.resize(9999, currentRows)
+      try {
+        const currentRows = xtermRef.current.rows
+        // Use a very large column count (9999) so content doesn't wrap
+        xtermRef.current.resize(9999, currentRows)
+      } catch {
+        // Ignore resize errors when terminal is disposed or not ready
+      }
     }
   }, [wordWrap])
 

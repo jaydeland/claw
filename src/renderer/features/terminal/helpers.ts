@@ -160,13 +160,12 @@ export function createTerminalInstance(
 
       // Double-check that render service and dimensions exist before loading renderer
       const core = (xterm as unknown as { _core?: { _renderService?: { dimensions?: unknown } } })._core
-      if (!core?._renderService) {
-        console.warn("[Terminal:create] Render service not ready, skipping renderer addon")
+      if (!core?._renderService || !core._renderService.dimensions) {
+        console.warn("[Terminal:create] Render service or dimensions not ready, skipping renderer addon")
         return
       }
 
-      // Use optional chaining for defense in depth
-      console.log("[Terminal:create] Render service ready, dimensions:", core._renderService?.dimensions)
+      console.log("[Terminal:create] Render service ready, dimensions:", core._renderService.dimensions)
       renderer = loadRenderer(xterm)
     })
   })

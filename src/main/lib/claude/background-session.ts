@@ -15,6 +15,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { existsSync } from "fs"
 import { buildClaudeEnv, getBundledClaudeBinaryPath } from "./env"
+import { ensureValidOAuthToken } from "../claude-token"
 import { getDatabase, claudeCodeCredentials, claudeCodeSettings } from "../db"
 import { eq } from "drizzle-orm"
 import { safeStorage } from "electron"
@@ -139,6 +140,9 @@ export async function initBackgroundSession(
 
     // Get Claude SDK
     const claudeQuery = await getClaudeQuery()
+
+    // Ensure OAuth token is fresh before building env
+    await ensureValidOAuthToken()
 
     // Build environment
     const claudeCodeToken = getClaudeCodeToken()
@@ -357,6 +361,7 @@ export async function queryBackgroundSession(
 
   try {
     const claudeQuery = await getClaudeQuery()
+    await ensureValidOAuthToken()
     const claudeCodeToken = getClaudeCodeToken()
     const claudeEnv = buildClaudeEnv()
 
@@ -545,6 +550,7 @@ export async function checkBackgroundTaskStatus(
 
   try {
     const claudeQuery = await getClaudeQuery()
+    await ensureValidOAuthToken()
     const claudeCodeToken = getClaudeCodeToken()
     const claudeEnv = buildClaudeEnv()
 
@@ -772,6 +778,7 @@ export async function executeBackgroundTask(
 
   try {
     const claudeQuery = await getClaudeQuery()
+    await ensureValidOAuthToken()
     const claudeCodeToken = getClaudeCodeToken()
     const claudeEnv = buildClaudeEnv()
 
@@ -1159,6 +1166,7 @@ Start by reading the file.`
 
     // Get Claude SDK
     const claudeQuery = await getClaudeQuery()
+    await ensureValidOAuthToken()
     const claudeCodeToken = getClaudeCodeToken()
     const claudeEnv = buildClaudeEnv()
 
