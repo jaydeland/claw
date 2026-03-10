@@ -15,7 +15,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { existsSync } from "fs"
 import { buildClaudeEnv, getBundledClaudeBinaryPath } from "./env"
-import { ensureValidOAuthToken } from "../claude-token"
+import { ensureValidOAuthToken, getExistingClaudeCredentials } from "../claude-token"
 import { getDatabase, claudeCodeCredentials, claudeCodeSettings } from "../db"
 import { eq } from "drizzle-orm"
 import { safeStorage } from "electron"
@@ -83,10 +83,17 @@ function decryptToken(encrypted: string): string {
 }
 
 /**
- * Get Claude Code OAuth token from local SQLite
- * Returns null if not connected
+ * Get Claude Code OAuth token, preferring the fresh keychain token over the stale DB token.
+ * The keychain token is kept up-to-date by the Claude CLI; the DB token can be months old.
  */
 function getClaudeCodeToken(): string | null {
+  // Prefer keychain token (kept fresh by Claude CLI)
+  const keychainCreds = getExistingClaudeCredentials()
+  if (keychainCreds?.accessToken) {
+    return keychainCreds.accessToken
+  }
+
+  // Fall back to DB token if no keychain token
   try {
     const db = getDatabase()
     const cred = db
