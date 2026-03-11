@@ -893,6 +893,185 @@ class ClawDaemon {
   }
 
   /**
+   * Execute a dev server start with discovery and execution
+   * Creates a one-time headless execution that:
+   * 1. Discovers the correct dev server command from package.json
+   * 2. Executes the command
+   * 3. Saves the discovered command to project.startCommands for future auto-start
+   */
+  async executeDevServerStart(params: {
+    subChatId: string
+    worktreePath: string
+    instruction: string
+    projectId?: string
+  }): Promise<string> {
+    const db = getDatabase()
+
+    // Create minimal claw execution record
+    const executionId = createId()
+
+    db.insert(clawExecutions)
+      .values({
+        id: executionId,
+        clawId: "dev-server-start",
+        subChatId: params.subChatId,
+        status: "running",
+        logs: `Starting dev server discovery at ${new Date().toISOString()}\n`,
+        startedAt: new Date(),
+      })
+      .run()
+
+    console.log(`[ClawDaemon] Starting dev server discovery for ${params.worktreePath}`)
+
+    try {
+      // Execute Claude Code SDK (discovery + execution)
+      const sdk = await import("@anthropic-ai/claude-agent-sdk")
+      const claudeQuery = sdk.query
+
+      const { buildClaudeEnv, getBundledClaudeBinaryPath } = await import("../claude/env")
+      const claudeEnv = buildClaudeEnv()
+      const claudeBinaryPath = getBundledClaudeBinaryPath()
+
+      const env: Record<string, string> = {
+        ...claudeEnv,
+        FORCE_COLOR: "0",
+        CLAW_EXECUTION: "1",
+      }
+
+      const stream = claudeQuery({
+        prompt: params.instruction,
+        options: {
+          cwd: params.worktreePath,
+          systemPrompt: { type: "preset", preset: "claude_code" },
+          env,
+          permissionMode: "bypassPermissions",
+          allowDangerouslySkipPermissions: true,
+          allowedDirectories: [params.worktreePath],
+          pathToClaudeCodeExecutable: claudeBinaryPath,
+          persistSession: true,
+        } as any,
+      })
+
+      let logs = ""
+      let discoveredCommand: string | undefined
+      let sessionId: string | undefined
+
+      for await (const msg of stream) {
+        const msgAny = msg as any
+
+        if (msgAny.type === "assistant" && msgAny.message?.content) {
+          const text = msgAny.message.content[0]?.text || ""
+
+          logs += text
+          this.updateExecutionLogs(executionId, logs)
+
+          // Store message in subChat
+          const message = {
+            id: createId(),
+            role: "assistant",
+            content: [{ type: "text", text }],
+            timestamp: Date.now(),
+          }
+          await this.appendMessageToSubChat(params.subChatId, message)
+
+          // Extract discovered command from Claude's response
+          // Look for patterns like "Found: bun run dev" or "Command: npm start"
+          // Also match common patterns like "I'll run: bun run dev" or "script: dev"
+          const commandMatch = text.match(/(?:command|script|running|run)[:\s]+['"]?([^'"]+)['"]?/i)
+          if (commandMatch && !discoveredCommand) {
+            discoveredCommand = commandMatch[1].trim()
+          }
+        }
+
+        // Store tool calls
+        if (msgAny.type === "tool_call") {
+          const toolMessage = {
+            id: createId(),
+            role: "assistant",
+            content: [{
+              type: "tool_call",
+              toolCallId: msgAny.tool_call?.id,
+              name: msgAny.tool_call?.name,
+              input: msgAny.tool_call?.input,
+            }],
+            timestamp: Date.now(),
+          }
+          await this.appendMessageToSubChat(params.subChatId, toolMessage)
+        }
+
+        // Store tool results
+        if (msgAny.type === "tool_result") {
+          const resultMessage = {
+            id: createId(),
+            role: "user",
+            content: [{
+              type: "tool_result",
+              toolCallId: msgAny.tool_result?.toolCallId,
+              output: msgAny.tool_result?.output,
+              isError: msgAny.tool_result?.isError,
+            }],
+            timestamp: Date.now(),
+          }
+          await this.appendMessageToSubChat(params.subChatId, resultMessage)
+        }
+
+        // Extract session ID from result
+        if (msgAny.type === "result") {
+          sessionId = msgAny.sessionId || msgAny.session?.id
+          if (sessionId) {
+            db.update(subChats)
+              .set({ sessionId })
+              .where(eq(subChats.id, params.subChatId))
+              .run()
+          }
+
+          // Save discovered command to project if found
+          if (discoveredCommand && params.projectId) {
+            db.update(projects)
+              .set({
+                startCommands: JSON.stringify([discoveredCommand]),
+              })
+              .where(eq(projects.id, params.projectId))
+              .run()
+            logs += `\nSaved discovered command to project: ${discoveredCommand}`
+            this.updateExecutionLogs(executionId, logs)
+            console.log(`[ClawDaemon] Saved discovered command: ${discoveredCommand}`)
+          }
+
+          break
+        }
+      }
+
+      // Update execution status
+      db.update(clawExecutions)
+        .set({
+          status: "success",
+          logs: logs + `\nExecution completed at ${new Date().toISOString()}`,
+          completedAt: new Date(),
+        })
+        .where(eq(clawExecutions.id, executionId))
+        .run()
+
+      console.log(`[ClawDaemon] Dev server start completed: ${executionId}`)
+
+      return executionId
+    } catch (error: any) {
+      console.error(`[ClawDaemon] Dev server start failed:`, error)
+
+      db.update(clawExecutions)
+        .set({
+          status: "failed",
+          logs: logs + `\nExecution error: ${error.message || String(error)}`,
+          completedAt: new Date(),
+        })
+        .where(eq(clawExecutions.id, executionId))
+        .run()
+
+      throw error
+    }
+  }
+
+  /**
    * Update execution logs in the database
    */
   private updateExecutionLogs(executionId: string, logs: string): void {

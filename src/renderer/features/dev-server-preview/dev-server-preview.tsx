@@ -2,19 +2,19 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { Button } from "../../../components/ui/button"
+import { Button } from "../../components/ui/button"
 import { RotateCw, ExternalLink, Play, AlertCircle } from "lucide-react"
 import {
   ExternalLinkIcon,
   IconDoubleChevronRight,
-} from "../../../components/ui/icons"
-import { Kbd } from "../../../components/ui/kbd"
+} from "../../components/ui/icons"
+import { Kbd } from "../../components/ui/kbd"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "../../../components/ui/tooltip"
-import { cn } from "../../../lib/utils"
+} from "../../components/ui/tooltip"
+import { cn } from "../../lib/utils"
 import {
   devServerPreviewUrlAtomFamily,
   devServerPreviewPortAtomFamily,
@@ -22,8 +22,9 @@ import {
   devServerPreviewSidebarOpenAtom,
   devServerPreviewSidebarOpenRuntimeAtom,
 } from "./atoms"
-import { trpc } from "../../../lib/trpc"
-import type { DetectedPort } from "../../../main/lib/terminal/types"
+import { trpc } from "../../lib/trpc"
+import type { DetectedPort } from "../../main/lib/terminal/types"
+import { toast } from "sonner"
 
 interface DevServerPreviewProps {
   chatId: string
@@ -71,6 +72,47 @@ export function DevServerPreview({
       enabled: !!workspaceId,
     }
   )
+
+  // Mutation for starting dev server
+  const startDevServerMutation = trpc.claws.startDevServer.useMutation({
+    onSuccess: () => {
+      toast.success("Starting dev server...", {
+        description: "Claude is discovering and starting the dev server",
+        duration: 5000,
+      })
+      // Refetch ports after 5 seconds to detect running server
+      setTimeout(() => refetch(), 5000)
+    },
+    onError: (err) => {
+      toast.error("Failed to start dev server", {
+        description: err.message,
+      })
+    },
+  })
+
+  // Get project info from chat
+  const { data: chatData } = trpc.chats.get.useQuery(
+    { id: chatId },
+    { enabled: !!chatId }
+  )
+  const projectId = chatData?.project?.id
+  const projectPath = chatData?.worktreePath || chatData?.project?.path
+
+  // Auto-start when opening panel with no ports
+  useEffect(() => {
+    if (detectedPorts && detectedPorts.length === 0 && projectId && !startDevServerMutation.isLoading) {
+      // Only auto-start once per session
+      const hasAutoStarted = sessionStorage.getItem(`devServerAutoStarted:${chatId}`)
+      if (!hasAutoStarted) {
+        sessionStorage.setItem(`devServerAutoStarted:${chatId}`, "true")
+        startDevServerMutation.mutate({
+          workspaceId,
+          projectId,
+          projectPath: projectPath || "~",
+        })
+      }
+    }
+  }, [detectedPorts, projectId, projectPath, chatId, workspaceId])
 
   // Auto-select first port when ports change and no port is selected
   useEffect(() => {
@@ -231,22 +273,52 @@ export function DevServerPreview({
             </div>
             <div className="space-y-2">
               <h3 className="font-medium text-foreground">No dev servers running</h3>
-              <p className="text-sm text-muted-foreground">
-                Start a development server in your terminal to preview it here.
-                Common commands:
-              </p>
-            </div>
-            <div className="bg-muted rounded-md p-3 text-xs font-mono text-left space-y-1">
-              <div>• bun run dev</div>
-              <div>• npm run dev</div>
-              <div>• yarn dev</div>
-              <div>• pnpm dev</div>
+              {startDevServerMutation.isPending ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Claude is discovering and starting the dev server...
+                  </p>
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <RotateCw className="h-3 w-3 animate-spin" />
+                    <span>Analyzing project and starting server</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Start a development server to preview it here.
+                  </p>
+                  {projectId ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => startDevServerMutation.mutate({
+                        workspaceId,
+                        projectId,
+                        projectPath: projectPath || "~",
+                      })}
+                      className="w-full"
+                    >
+                      <Play className="h-3.5 w-3.5 mr-2" />
+                      Start Dev Server
+                    </Button>
+                  ) : (
+                    <div className="bg-muted rounded-md p-3 text-xs font-mono text-left space-y-1">
+                      <div>• bun run dev</div>
+                      <div>• npm run dev</div>
+                      <div>• yarn dev</div>
+                      <div>• pnpm dev</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={refetch}
               className="w-full"
+              disabled={startDevServerMutation.isPending}
             >
               <RotateCw className="h-3.5 w-3.5 mr-2" />
               Refresh

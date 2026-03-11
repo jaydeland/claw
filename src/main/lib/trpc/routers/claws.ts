@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, headlessClaws, clawExecutions, subChats, mcpToolCache, chatSessions } from "../../db"
+import { getDatabase, headlessClaws, clawExecutions, subChats, mcpToolCache, chatSessions, projects, chats } from "../../db"
 import { eq, desc, and } from "drizzle-orm"
 import { createId } from "../../db/utils"
 import { clawDaemon } from "../../claws"
@@ -243,6 +243,96 @@ export const clawsRouter = router({
       try {
         const executionId = await clawDaemon.executeClaw(input.id)
         return { success: true, executionId }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  /**
+   * Start dev server with discovery and execution
+   * Creates a one-time headless execution that:
+   * 1. Discovers the correct dev server command from package.json
+   * 2. Executes the command
+   * 3. Saves the discovered command to project.startCommands for future auto-start
+   */
+  startDevServer: publicProcedure
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        projectId: z.string(),
+        projectPath: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const db = getDatabase()
+
+        // 1. Get or create "Claw Executions" project
+        let executionsProject = db.select().from(projects).where(eq(projects.name, "Claw Executions")).get()
+
+        if (!executionsProject) {
+          const projectId = createId()
+          db.insert(projects)
+            .values({
+              id: projectId,
+              name: "Claw Executions",
+              path: input.projectPath,
+            })
+            .run()
+          executionsProject = { id: projectId, name: "Claw Executions", path: input.projectPath } as typeof projects.$inferSelect
+        }
+
+        // 2. Create parent chat for dev server starts
+        const chatId = createId()
+        db.insert(chats)
+          .values({
+            id: chatId,
+            name: `Dev Server: ${new Date().toISOString()}`,
+            projectId: executionsProject.id,
+            worktreePath: input.projectPath,
+          })
+          .run()
+
+        // 3. Create subChat with instruction to discover + start dev server
+        const subChatId = createId()
+        const instruction = `Discover and start the dev server for this project. Look at package.json scripts to find the correct command (dev, start, etc.), then run it.`
+
+        const initialMessages = [
+          {
+            id: createId(),
+            role: "user",
+            content: [{ type: "text", text: instruction }],
+            timestamp: Date.now(),
+          },
+        ]
+
+        db.insert(subChats)
+          .values({
+            id: subChatId,
+            chatId: chatId,
+            name: "Dev Server Discovery + Start",
+            messages: JSON.stringify(initialMessages),
+            mode: "agent",
+          })
+          .run()
+
+        // 4. Execute headless claw
+        const executionId = await clawDaemon.executeDevServerStart({
+          subChatId,
+          worktreePath: input.projectPath,
+          instruction,
+          projectId: input.projectId,
+        })
+
+        return {
+          executionId,
+          subChatId,
+          chatId,
+          message: "Dev server discovery and start initiated",
+        }
       } catch (error) {
         return {
           success: false,
