@@ -89,6 +89,7 @@ import {
 } from "../../../components/ui/prompt-input"
 import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
+import { AgentsThinkingDialog } from "../../../components/dialogs/agents-thinking-dialog"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
@@ -1551,6 +1552,9 @@ export function NewChatForm({
                           })}
                         </DropdownMenuContent>
                       </DropdownMenu>
+
+                      {/* Thinking mode dialog */}
+                      <AgentsThinkingDialog disabled={createChatMutation.isPending} />
 
                       {/* Skills Dropdown - Shows skills and commands */}
                       <SkillsDropdown
