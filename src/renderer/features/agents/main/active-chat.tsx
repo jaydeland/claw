@@ -1190,17 +1190,19 @@ const DiffSidebarContent = memo(function DiffSidebarContent({
         setChangesPanelWidth(newWidth)
       }
 
-      const handlePointerUp = () => {
+      const finishResize = () => {
         if (handleElement.hasPointerCapture?.(pointerId)) {
           handleElement.releasePointerCapture(pointerId)
         }
         document.removeEventListener("pointermove", handlePointerMove)
-        document.removeEventListener("pointerup", handlePointerUp)
+        document.removeEventListener("pointerup", finishResize)
+        document.removeEventListener("pointercancel", finishResize)
         setIsResizing(false)
       }
 
       document.addEventListener("pointermove", handlePointerMove)
-      document.addEventListener("pointerup", handlePointerUp, { once: true })
+      document.addEventListener("pointerup", finishResize, { once: true })
+      document.addEventListener("pointercancel", finishResize, { once: true })
     },
     [changesPanelWidth, setChangesPanelWidth]
   )
