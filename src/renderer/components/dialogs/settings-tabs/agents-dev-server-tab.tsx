@@ -211,17 +211,17 @@ export function AgentsDevServerTab({ projectId }: AgentsDevServerTabProps) {
       </section>
 
       {/* AI Result Modal */}
-      {aiResultOpen && (
-        <AiResultModal
-          isOpen={aiResultOpen}
-          onClose={() => {
-            setAiResultOpen(false)
-            setAiResult(null)
-          }}
-          result={aiResult || ""}
-          onAccept={handleAcceptAiResult}
-        />
-      )}
+      <AiResultModal
+        open={aiResultOpen}
+        onOpenChange={(open) => {
+          setAiResultOpen(open)
+          if (!open) setAiResult(null)
+        }}
+        title="AI Dev Server Command"
+        content={aiResult || ""}
+        onAccept={handleAcceptAiResult}
+        acceptLabel="Use Command"
+      />
     </div>
   )
 }

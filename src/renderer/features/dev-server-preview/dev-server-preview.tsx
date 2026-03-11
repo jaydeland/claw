@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Button } from "../../components/ui/button"
-import { RotateCw, ExternalLink, Play, AlertCircle } from "lucide-react"
+import { RotateCw, ExternalLink, Play, AlertCircle, Square } from "lucide-react"
 import {
   ExternalLinkIcon,
   IconDoubleChevronRight,
@@ -93,6 +93,28 @@ export function DevServerPreview({
     },
   })
 
+  // Mutation for killing dev server terminal
+  const killTerminalMutation = trpc.terminal.kill.useMutation({
+    onSuccess: () => {
+      toast.success("Dev server stopped", {
+        description: "Terminal process terminated",
+      })
+      // Clear selected port and URL
+      setSelectedPort(null)
+      setUrl("")
+      // Refetch ports after stopping
+      setTimeout(() => refetch(), 500)
+    },
+    onError: (err) => {
+      toast.error("Failed to stop dev server", {
+        description: err.message,
+      })
+    },
+  })
+
+  // Track the current dev server paneId
+  const [devServerPaneId, setDevServerPaneId] = useState<string | null>(null)
+
   // Settings dialog atoms
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
@@ -131,12 +153,24 @@ export function DevServerPreview({
     } else {
       // Start commands configured - run them directly in terminal
       const paneId = `dev-server-${Date.now()}`
+      setDevServerPaneId(paneId)
       createTerminalMutation.mutate({
         paneId,
         workspaceId,
         cwd: projectPath || "~",
         initialCommands: startCommands,
       })
+    }
+  }
+
+  // Handle stop button click - kill the dev server terminal
+  const handleStopClick = () => {
+    if (devServerPaneId) {
+      killTerminalMutation.mutate({ paneId: devServerPaneId })
+      setDevServerPaneId(null)
+    } else if (detectedPorts && detectedPorts.length > 0) {
+      // Fallback: kill the first detected port's pane
+      killTerminalMutation.mutate({ paneId: detectedPorts[0].paneId })
     }
   }
 
@@ -361,7 +395,7 @@ export function DevServerPreview({
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-2 h-10 bg-background border-b flex-shrink-0">
-          {/* Left: Close + Refresh */}
+          {/* Left: Close + Stop + Refresh */}
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -377,6 +411,25 @@ export function DevServerPreview({
               <TooltipContent side="bottom">
                 Close preview
                 <Kbd>⌘J</Kbd>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleStopClick}
+                  disabled={!detectedPorts || detectedPorts.length === 0}
+                  className="h-7 w-7 p-0 hover:bg-muted"
+                >
+                  <Square
+                    className="h-3.5 w-3.5"
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Stop dev server
               </TooltipContent>
             </Tooltip>
 

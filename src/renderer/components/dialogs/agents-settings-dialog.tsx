@@ -28,8 +28,7 @@ import { AgentsProvidersTab } from "./settings-tabs/agents-providers-tab"
 import { AgentsGitHubTab } from "./settings-tabs/agents-github-tab"
 import { AgentsSlackTab } from "./settings-tabs/agents-slack-tab"
 import { AgentsWhatsAppTab } from "./settings-tabs/agents-whatsapp-tab"
-import { AgentsDevServerTab } from "./settings-tabs/agents-dev-server-tab"
-import { Slack, MessageCircle, Play } from "lucide-react"
+import { Slack, MessageCircle } from "lucide-react"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -105,12 +104,6 @@ const MAIN_TABS = [
     label: "WhatsApp",
     icon: MessageCircle,
     description: "WhatsApp Web integration for agent triggers",
-  },
-  {
-    id: "devserver" as SettingsTab,
-    label: "Dev Server",
-    icon: Play,
-    description: "Dev server start command configuration",
   },
 ]
 
@@ -296,8 +289,6 @@ export function AgentsSettingsDialog({
         return <AgentsSlackTab />
       case "whatsapp":
         return <AgentsWhatsAppTab />
-      case "devserver":
-        return <AgentsDevServerTab />
       case "advanced":
         return <AgentsAdvancedSettingsTab />
       case "worktrees":

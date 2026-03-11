@@ -22,7 +22,6 @@ const Y_DETAIL_SPACING = 45 // Vertical spacing for detail nodes
 const INDIVIDUAL_TOOLS = new Set([
   "Task",              // Agent spawns (sub-agents) - always individual
   "AskUserQuestion",   // Questions to user - always individual
-  "Thinking",          // Reasoning events - always individual (high cognitive significance)
 ])
 
 // Tools to completely hide from the flow chart (internal/noise)

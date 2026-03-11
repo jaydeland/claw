@@ -5,12 +5,14 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ArrowLeft, FolderOpen, GitBranch, Settings } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../../components/ui/button"
+import { AIPenIcon } from "../../../components/ui/icons"
 import {
   selectedProjectAtom,
   selectedProjectDetailIdAtom,
   selectedAgentChatIdAtom,
 } from "../../agents/atoms"
 import { trpc } from "../../../lib/trpc"
+import { toast } from "sonner"
 
 // Settings tabs for project page
 const PROJECT_TABS = [
@@ -161,6 +163,28 @@ function ProjectWorktreeSettings({ projectId }: { projectId: string }) {
     },
   })
 
+  // AI query for discovering dev commands
+  const { mutate: runAiQuery, isPending: aiIsPending } = trpc.claude.queryPrompt.useMutation({
+    onSuccess: (result) => {
+      // result is { text: string, success: boolean, error?: string }
+      const responseText = result?.text || String(result || "")
+      const commands = responseText.split("\n").filter((c: string) => c.trim())
+      saveStartCommandsMutation.mutate({
+        id: projectId,
+        commands,
+      })
+      setSetupCommands(commands.join("\n"))
+      toast.success("Dev server command discovered", {
+        description: "AI has analyzed your project and suggested the start command",
+      })
+    },
+    onError: (err) => {
+      toast.error("AI discovery failed", {
+        description: err.message,
+      })
+    },
+  })
+
   // Local state for form fields
   const [configLocation, setConfigLocation] = useState(
     configData?.config?.["worktree-location"] ?? ".claw/worktree.json"
@@ -256,7 +280,22 @@ function ProjectWorktreeSettings({ projectId }: { projectId: string }) {
 
       {/* Setup Commands */}
       <section>
-        <h3 className="text-sm font-medium mb-3">Setup Commands</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium">Setup Commands</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const prompt = `Analyze this project's package.json (or other config files) and determine the correct command to start the development server. Look for scripts like "dev", "start", "serve", etc. Return only the command, e.g., "bun run dev" or "npm start".`
+              runAiQuery({ prompt, projectId })
+            }}
+            disabled={aiIsPending}
+            className="gap-2"
+          >
+            <AIPenIcon className="h-4 w-4" />
+            {aiIsPending ? "Analyzing..." : "Fill With AI"}
+          </Button>
+        </div>
         <div className="space-y-3">
           <div>
             <label className="text-sm text-muted-foreground">
