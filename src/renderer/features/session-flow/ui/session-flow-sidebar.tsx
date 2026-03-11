@@ -210,6 +210,47 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
           <SessionFlowPanel onScrollToMessage={onScrollToMessage} />
         </div>
 
+        {/* Legend - State color coding */}
+        <div className="flex-shrink-0 px-2 py-1.5 border-t border-border/50">
+          <div className="text-[9px] font-medium text-muted-foreground mb-1">State Legend</div>
+          <div className="grid grid-cols-2 gap-1">
+            {/* Regular tool states */}
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded bg-cyan-500" />
+              <span className="text-[8px] text-muted-foreground">Call</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded bg-green-500" />
+              <span className="text-[8px] text-muted-foreground">Result</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded bg-red-500" />
+              <span className="text-[8px] text-muted-foreground">Error</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded bg-orange-500" />
+              <span className="text-[8px] text-muted-foreground">Partial</span>
+            </div>
+            {/* Special tool types */}
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded bg-purple-500" />
+              <span className="text-[8px] text-muted-foreground">Thinking</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded bg-amber-500" />
+              <span className="text-[8px] text-muted-foreground">MCP</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded bg-yellow-400 animate-pulse" />
+              <span className="text-[8px] text-muted-foreground">Waiting</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded bg-blue-500 animate-pulse" />
+              <span className="text-[8px] text-muted-foreground">Running</span>
+            </div>
+          </div>
+        </div>
+
         {/* NOTE: Dialogs moved to active-chat.tsx to prevent mount/unmount issues */}
       </div>
     </ResizableSidebar>
