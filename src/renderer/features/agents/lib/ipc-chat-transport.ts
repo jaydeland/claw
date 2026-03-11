@@ -348,6 +348,23 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 return
               }
 
+              // Handle API errors (retryable 500 errors from backend)
+              if (chunk.type === "api-error") {
+                console.log(`[SD] R:API_ERR sub=${subId} text=${chunk.errorText?.slice(0, 100)}`)
+                // Show toast for retryable API errors
+                toast.error("Claude API Error", {
+                  description: chunk.errorText || "Claude API returned a temporary error. Please try again.",
+                  duration: 8000,
+                  action: {
+                    label: "Retry",
+                    onClick: () => {
+                      // User can manually retry by resending their message
+                      toast.info("Resend your message to retry", { duration: 3000 })
+                    },
+                  },
+                })
+              }
+
               // Handle errors - show toast to user FIRST before anything else
               if (chunk.type === "error") {
                 const category = (chunk.debugInfo?.category || "UNKNOWN") as ErrorCategory
