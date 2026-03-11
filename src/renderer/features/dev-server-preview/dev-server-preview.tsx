@@ -25,6 +25,10 @@ import {
 import { trpc } from "../../lib/trpc"
 import type { DetectedPort } from "../../main/lib/terminal/types"
 import { toast } from "sonner"
+import {
+  agentsSettingsDialogOpenAtom,
+  agentsSettingsDialogActiveTabAtom,
+} from "../../lib/atoms"
 
 interface DevServerPreviewProps {
   chatId: string
@@ -73,15 +77,14 @@ export function DevServerPreview({
     }
   )
 
-  // Mutation for starting dev server
-  const startDevServerMutation = trpc.claws.startDevServer.useMutation({
+  // Mutation for starting dev server (direct terminal execution)
+  const createTerminalMutation = trpc.terminal.createOrAttach.useMutation({
     onSuccess: () => {
-      toast.success("Starting dev server...", {
-        description: "Claude is discovering and starting the dev server",
-        duration: 5000,
+      toast.success("Dev server started", {
+        description: "Running start commands in terminal",
       })
-      // Refetch ports after 5 seconds to detect running server
-      setTimeout(() => refetch(), 5000)
+      // Refetch ports after 3 seconds to detect running server
+      setTimeout(() => refetch(), 3000)
     },
     onError: (err) => {
       toast.error("Failed to start dev server", {
@@ -90,29 +93,52 @@ export function DevServerPreview({
     },
   })
 
-  // Get project info from chat
+  // Settings dialog atoms
+  const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
+  const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
+
+  // Query chat data to get project ID
   const { data: chatData } = trpc.chats.get.useQuery(
     { id: chatId },
     { enabled: !!chatId }
   )
-  const projectId = chatData?.project?.id
-  const projectPath = chatData?.worktreePath || chatData?.project?.path
+  const projectId = chatData?.projectId
 
-  // Auto-start when opening panel with no ports
-  useEffect(() => {
-    if (detectedPorts && detectedPorts.length === 0 && projectId && !startDevServerMutation.isLoading) {
-      // Only auto-start once per session
-      const hasAutoStarted = sessionStorage.getItem(`devServerAutoStarted:${chatId}`)
-      if (!hasAutoStarted) {
-        sessionStorage.setItem(`devServerAutoStarted:${chatId}`, "true")
-        startDevServerMutation.mutate({
-          workspaceId,
-          projectId,
-          projectPath: projectPath || "~",
-        })
-      }
+  // Query project to get project path
+  const { data: projectData } = trpc.projects.get.useQuery(
+    { id: projectId || "" },
+    { enabled: !!projectId }
+  )
+  const projectPath = projectData?.path
+
+  // Get start commands for the project
+  const { data: startCommandsData } = trpc.projects.getStartCommands.useQuery(
+    { id: projectId || "" },
+    { enabled: !!projectId }
+  )
+  const startCommands = startCommandsData?.commands || []
+  const hasStartCommands = startCommands.length > 0
+
+  // Handle play button click - check startCommands and either open settings or run command
+  const handlePlayClick = () => {
+    if (!hasStartCommands) {
+      // No start commands configured - open settings dialog
+      setSettingsDialogOpen(true)
+      setSettingsActiveTab("devserver")
+      toast.info("Configure dev server", {
+        description: "Please set up start commands in settings",
+      })
+    } else {
+      // Start commands configured - run them directly in terminal
+      const paneId = `dev-server-${Date.now()}`
+      createTerminalMutation.mutate({
+        paneId,
+        workspaceId,
+        cwd: projectPath || "~",
+        initialCommands: startCommands,
+      })
     }
-  }, [detectedPorts, projectId, projectPath, chatId, workspaceId])
+  }
 
   // Auto-select first port when ports change and no port is selected
   useEffect(() => {
@@ -273,34 +299,32 @@ export function DevServerPreview({
             </div>
             <div className="space-y-2">
               <h3 className="font-medium text-foreground">No dev servers running</h3>
-              {startDevServerMutation.isPending ? (
+              {createTerminalMutation.isPending ? (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    Claude is discovering and starting the dev server...
+                    Starting development server...
                   </p>
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                     <RotateCw className="h-3 w-3 animate-spin" />
-                    <span>Analyzing project and starting server</span>
+                    <span>Running start commands in terminal</span>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    Start a development server to preview it here.
+                    {hasStartCommands
+                      ? "Start the configured development server"
+                      : "Configure a development server to preview it here"}
                   </p>
                   {projectId ? (
                     <Button
                       variant="default"
                       size="sm"
-                      onClick={() => startDevServerMutation.mutate({
-                        workspaceId,
-                        projectId,
-                        projectPath: projectPath || "~",
-                      })}
+                      onClick={handlePlayClick}
                       className="w-full"
                     >
                       <Play className="h-3.5 w-3.5 mr-2" />
-                      Start Dev Server
+                      {hasStartCommands ? "Start Dev Server" : "Configure Dev Server"}
                     </Button>
                   ) : (
                     <div className="bg-muted rounded-md p-3 text-xs font-mono text-left space-y-1">
@@ -318,7 +342,7 @@ export function DevServerPreview({
               size="sm"
               onClick={refetch}
               className="w-full"
-              disabled={startDevServerMutation.isPending}
+              disabled={createTerminalMutation.isPending}
             >
               <RotateCw className="h-3.5 w-3.5 mr-2" />
               Refresh

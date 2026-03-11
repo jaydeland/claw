@@ -164,21 +164,6 @@ export function RightIconBar({ className }: RightIconBarProps) {
   )
   const portCount = detectedPorts?.length ?? 0
 
-  // Mutation for starting dev server
-  const startDevServerMutation = trpc.claws.startDevServer.useMutation({
-    onSuccess: () => {
-      toast.success("Starting dev server...", {
-        description: "Claude is discovering and starting the dev server",
-        duration: 5000,
-      })
-    },
-    onError: (err) => {
-      toast.error("Failed to start dev server", {
-        description: err.message,
-      })
-    },
-  })
-
   // Determine which dev server preview open state to use based on display mode
   const effectiveDevServerPreviewOpen = devServerPreviewDisplayMode === "side-peek"
     ? isDevServerPreviewOpen
@@ -278,19 +263,6 @@ export function RightIconBar({ className }: RightIconBarProps) {
       setIsDevServerPreviewOpen(!isDevServerPreviewOpen)
     } else {
       setDevServerPreviewRuntimeOpen(!devServerPreviewRuntimeOpen)
-    }
-
-    // Auto-trigger dev server start when opening panel with no ports
-    if (!currentlyOpen && (!detectedPorts || detectedPorts.length === 0)) {
-      const project = chatData?.projectId
-      const projectPath = chatData?.worktreePath
-      if (project && projectPath) {
-        startDevServerMutation.mutate({
-          workspaceId: chatData?.id || "",
-          projectId: project,
-          projectPath: projectPath,
-        })
-      }
     }
   }
 

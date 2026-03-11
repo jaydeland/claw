@@ -1,4 +1,4 @@
-import { useAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { useEffect, useState, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
@@ -6,6 +6,7 @@ import { FolderOpen, Server, Download } from "lucide-react"
 import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
 import { cn } from "../../lib/utils"
 import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms/agents-settings-dialog"
+import { selectedProjectAtom } from "../../lib/atoms"
 import {
   EyeOpenFilledIcon,
   SlidersFilledIcon,
@@ -27,7 +28,8 @@ import { AgentsProvidersTab } from "./settings-tabs/agents-providers-tab"
 import { AgentsGitHubTab } from "./settings-tabs/agents-github-tab"
 import { AgentsSlackTab } from "./settings-tabs/agents-slack-tab"
 import { AgentsWhatsAppTab } from "./settings-tabs/agents-whatsapp-tab"
-import { Slack, MessageCircle } from "lucide-react"
+import { AgentsDevServerTab } from "./settings-tabs/agents-dev-server-tab"
+import { Slack, MessageCircle, Play } from "lucide-react"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -103,6 +105,12 @@ const MAIN_TABS = [
     label: "WhatsApp",
     icon: MessageCircle,
     description: "WhatsApp Web integration for agent triggers",
+  },
+  {
+    id: "devserver" as SettingsTab,
+    label: "Dev Server",
+    icon: Play,
+    description: "Dev server start command configuration",
   },
 ]
 
@@ -208,6 +216,7 @@ export function AgentsSettingsDialog({
   const [mounted, setMounted] = useState(false)
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
   const isNarrowScreen = useIsNarrowScreen()
+  const selectedProject = useAtomValue(selectedProjectAtom)
 
   // Note: Project-specific settings are now in the project detail page
   // accessed via clicking the gear icon on a workspace in the sidebar
@@ -287,6 +296,8 @@ export function AgentsSettingsDialog({
         return <AgentsSlackTab />
       case "whatsapp":
         return <AgentsWhatsAppTab />
+      case "devserver":
+        return <AgentsDevServerTab />
       case "advanced":
         return <AgentsAdvancedSettingsTab />
       case "worktrees":
