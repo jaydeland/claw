@@ -4,6 +4,7 @@ import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { observable } from "@trpc/server/observable"
 import { terminalManager } from "../../terminal/manager"
+import { portManager } from "../../terminal/port-manager"
 import type { TerminalEvent } from "../../terminal/types"
 import { TRPCError } from "@trpc/server"
 
@@ -215,5 +216,16 @@ export const terminalRouter = router({
 					terminalManager.off(`exit:${paneId}`, onExit)
 				}
 			})
+		}),
+
+	/**
+	 * Get detected ports for a workspace
+	 * Returns list of detected dev server ports with process info
+	 */
+	getPortsByWorkspace: publicProcedure
+		.input(z.object({ workspaceId: z.string() }))
+		.query(({ input }) => {
+			const ports = portManager.getPortsByWorkspace(input.workspaceId)
+			return ports
 		}),
 })

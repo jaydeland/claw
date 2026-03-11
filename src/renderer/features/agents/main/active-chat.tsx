@@ -127,6 +127,7 @@ import { GsdChatSidebar } from "../components/gsd-chat-sidebar"
 import { GsdDocumentDialog } from "../components/gsd-document-dialog"
 import { GsdRenderer } from "../components/gsd-renderer"
 import { AnalyzeRenderer } from "../../analyze/ui/analyze-renderer"
+import { DevServerPreview } from "../../dev-server-preview"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -166,6 +167,10 @@ import {
   subChatFilesAtom,
   undoStackAtom,
   viewedFilesAtomFamily,
+  devServerPreviewSidebarOpenAtom,
+  devServerPreviewSidebarOpenRuntimeAtom,
+  devServerPreviewDisplayModeAtom,
+  devServerPreviewSidebarWidthAtom,
   type SelectedCommit
 } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
@@ -3897,6 +3902,12 @@ export function ChatView({
   )
   // GSD Chat Sidebar state
   const [isGsdSidebarOpen, setIsGsdSidebarOpen] = useAtom(gsdChatSidebarOpenAtom)
+  // Dev Server Preview state
+  const [isDevServerPreviewOpen, setIsDevServerPreviewOpen] = useAtom(
+    devServerPreviewSidebarOpenAtom,
+  )
+  const [devServerPreviewRuntimeOpen, setDevServerPreviewRuntimeOpen] = useAtom(devServerPreviewSidebarOpenRuntimeAtom)
+  const devServerPreviewDisplayMode = useAtomValue(devServerPreviewDisplayModeAtom)
   // GSD Document viewer state (for viewing planning docs)
   const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocumentAtom)
   const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)
@@ -6081,6 +6092,38 @@ Make sure to preserve all functionality from both branches when resolving confli
           workspaceId={chatId}
           initialCommands={startCommands.length > 0 ? startCommands : undefined}
         />
+
+        {/* Dev Server Preview - unified renderer supporting side-peek, center-peek, and full-page modes */}
+        {(() => {
+          const effectiveDevServerPreviewOpen = devServerPreviewDisplayMode === "side-peek"
+            ? isDevServerPreviewOpen
+            : devServerPreviewRuntimeOpen
+
+          return (
+            <ResizableSidebar
+              isOpen={effectiveDevServerPreviewOpen}
+              onClose={() => {
+                if (devServerPreviewDisplayMode === "side-peek") {
+                  setIsDevServerPreviewOpen(false)
+                } else {
+                  setDevServerPreviewRuntimeOpen(false)
+                }
+              }}
+              widthAtom={devServerPreviewSidebarWidthAtom}
+              minWidth={400}
+              side="right"
+              animationDuration={0}
+              className="bg-background border-l"
+            >
+              <DevServerPreview
+                chatId={chatId}
+                workspaceId={chatId}
+                hideHeader={false}
+                isMobile={false}
+              />
+            </ResizableSidebar>
+          )
+        })()}
 
         {/* Session Flow - unified renderer supporting side-peek, center-peek, and full-page modes */}
         <SessionFlowRenderer onScrollToMessage={handleScrollToMessage} />

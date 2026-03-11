@@ -869,3 +869,18 @@ export function cleanupChatLocalStorage(chatId: string) {
   localStorage.removeItem(`agent-active-sub-chats-${chatId}`)
   localStorage.removeItem(`agent-pinned-sub-chats-${chatId}`)
 }
+
+// ============================================
+// DEV SERVER PREVIEW
+// ============================================
+
+// Re-export dev server preview atoms from feature module
+export {
+  devServerPreviewDisplayModeAtom,
+  devServerPreviewSidebarOpenAtom,
+  devServerPreviewSidebarOpenRuntimeAtom,
+  devServerPreviewSidebarWidthAtom,
+  devServerPreviewUrlAtomFamily,
+  devServerPreviewPortAtomFamily,
+  cleanupDevServerPreviewLocalStorage,
+} from "../../dev-server-preview/atoms"

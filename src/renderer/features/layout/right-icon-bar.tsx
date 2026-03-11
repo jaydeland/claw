@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useMemo, useEffect } from "react"
+import React, { useMemo, useEffect, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check, FileStack } from "lucide-react"
+import { ChevronsRight, ChevronsLeft, GitBranch, ListTree, Check, FileStack, Play } from "lucide-react"
 import { IconSidePeek, IconCenterPeek, IconFullPage } from "../../components/ui/icons"
 import {
   Tooltip,
@@ -35,6 +35,11 @@ import {
 import { workflowPanelOpenAtom } from "../workflows/atoms"
 import { rightIconBarExpandedAtom } from "./atoms"
 import { trpc } from "../../lib/trpc"
+import {
+  devServerPreviewDisplayModeAtom,
+  devServerPreviewSidebarOpenAtom,
+  devServerPreviewSidebarOpenRuntimeAtom,
+} from "../dev-server-preview/atoms"
 
 type DisplayMode = "side-peek" | "center-peek" | "full-page"
 
@@ -146,6 +151,23 @@ export function RightIconBar({ className }: RightIconBarProps) {
   // Workflow panel state - global (for mutual exclusivity with Session Flow)
   const [workflowPanelOpen, setWorkflowPanelOpen] = useAtom(workflowPanelOpenAtom)
 
+  // Dev server preview display mode and state
+  const [devServerPreviewDisplayMode, setDevServerPreviewDisplayMode] = useAtom(devServerPreviewDisplayModeAtom)
+  const [isDevServerPreviewOpen, setIsDevServerPreviewOpen] = useAtom(devServerPreviewSidebarOpenAtom)
+  const [devServerPreviewRuntimeOpen, setDevServerPreviewRuntimeOpen] = useAtom(devServerPreviewSidebarOpenRuntimeAtom)
+
+  // Query for detected ports to show badge indicator
+  const { data: detectedPorts } = trpc.terminal.getPortsByWorkspace.useQuery(
+    { workspaceId: chatData?.id || "" },
+    { enabled: !!chatData?.id }
+  )
+  const portCount = detectedPorts?.length ?? 0
+
+  // Determine which dev server preview open state to use based on display mode
+  const effectiveDevServerPreviewOpen = devServerPreviewDisplayMode === "side-peek"
+    ? isDevServerPreviewOpen
+    : devServerPreviewRuntimeOpen
+
   // Determine which session flow open state to use based on display mode
   const effectiveSessionFlowOpen = sessionFlowDisplayMode === "side-peek"
     ? isSessionFlowOpen
@@ -216,6 +238,30 @@ export function RightIconBar({ className }: RightIconBarProps) {
       setIsLoadedContextOpen(!isLoadedContextOpen)
     } else {
       setLoadedContextRuntimeOpen(!loadedContextRuntimeOpen)
+    }
+  }
+
+  const handleDevServerPreviewClick = () => {
+    // Toggle dev server preview based on display mode
+    const currentlyOpen = effectiveDevServerPreviewOpen
+
+    if (!currentlyOpen) {
+      // Close other panels when opening dev server preview
+      if (selectedChatId) {
+        setIsDiffOpen(false)
+      }
+      setIsSessionFlowOpen(false)
+      setIsLoadedContextOpen(false)
+      if (workflowPanelOpen !== null) {
+        setWorkflowPanelOpen(null)
+      }
+    }
+
+    // Toggle the appropriate state based on display mode
+    if (devServerPreviewDisplayMode === "side-peek") {
+      setIsDevServerPreviewOpen(!isDevServerPreviewOpen)
+    } else {
+      setDevServerPreviewRuntimeOpen(!devServerPreviewRuntimeOpen)
     }
   }
 
@@ -355,6 +401,48 @@ export function RightIconBar({ className }: RightIconBarProps) {
           </TooltipTrigger>
           <TooltipContent side="left">
             Session Context
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* Dev Server Preview Button - always show when chat is selected */}
+      {selectedChatId && (
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleDevServerPreviewClick}
+              className={cn(
+                "flex items-center rounded-md transition-all duration-150 ease-out h-8",
+                isExpanded ? "gap-2 px-2 w-full" : "justify-center w-8",
+                effectiveDevServerPreviewOpen
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/10",
+              )}
+              aria-label="Dev Server Preview"
+              aria-pressed={effectiveDevServerPreviewOpen}
+            >
+              <div className="relative">
+                <Play className="h-4 w-4 flex-shrink-0" />
+                {portCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 text-[8px] font-bold text-white flex items-center justify-center">
+                    {portCount}
+                  </span>
+                )}
+              </div>
+              {isExpanded && (
+                <>
+                  <span className="text-sm flex-1 text-left">Dev Server</span>
+                  <LayoutModeSelector
+                    mode={devServerPreviewDisplayMode}
+                    onModeChange={setDevServerPreviewDisplayMode}
+                  />
+                </>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            {portCount > 0 ? `${portCount} dev server${portCount > 1 ? 's' : ''} running` : "No dev servers running"}
           </TooltipContent>
         </Tooltip>
       )}
