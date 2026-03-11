@@ -9,9 +9,11 @@ CREATE TABLE whatsapp_bridges (
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
 );
-
--- Indexes for common query patterns
+--> statement-breakpoint
 CREATE INDEX whatsapp_bridges_chat_id_idx ON whatsapp_bridges(chat_id);
+--> statement-breakpoint
 CREATE INDEX whatsapp_bridges_sub_chat_id_idx ON whatsapp_bridges(sub_chat_id);
+--> statement-breakpoint
 CREATE INDEX whatsapp_bridges_jid_idx ON whatsapp_bridges(whatsapp_jid);
+--> statement-breakpoint
 CREATE INDEX whatsapp_bridges_unique_idx ON whatsapp_bridges(chat_id, whatsapp_jid);
