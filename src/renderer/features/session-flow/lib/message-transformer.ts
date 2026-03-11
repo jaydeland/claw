@@ -22,6 +22,7 @@ const Y_DETAIL_SPACING = 45 // Vertical spacing for detail nodes
 const INDIVIDUAL_TOOLS = new Set([
   "Task",              // Agent spawns (sub-agents) - always individual
   "AskUserQuestion",   // Questions to user - always individual
+  "Thinking",          // Reasoning events - always individual (high cognitive significance)
 ])
 
 // Tools to completely hide from the flow chart (internal/noise)
@@ -33,6 +34,8 @@ interface TransformOptions {
   onNodeClick: (messageId: string, partIndex?: number) => void
   expandedNodes?: Set<string>
   onToggleExpansion?: (nodeId: string) => void
+  // Optional: nested tools data for sub-agents (keyed by agentId)
+  nestedToolsMap?: Map<string, { toolName: string; status: "pending" | "completed" | "error"; input?: any; output?: any }>
 }
 
 interface TransformResult {
@@ -111,6 +114,27 @@ export function transformMessagesToFlow(
 
   let currentMainY = 0
   let lastMainNodeId: string | null = null
+
+  // Add session start marker at the beginning
+  if (messages.length > 0) {
+    const firstMessage = messages[0]
+    const sessionStartNodeId = `session-start`
+
+    nodes.push({
+      id: sessionStartNodeId,
+      type: "userMessage",
+      position: { x: X_MAIN, y: currentMainY },
+      data: {
+        id: "session-start",
+        text: "Session Start",
+        onClick: () => {},
+      } as UserMessageNodeData,
+      style: { background: "linear-gradient(to right, #10b981, #059669)", border: "2px solid #047857" },
+    })
+
+    lastMainNodeId = sessionStartNodeId
+    currentMainY += Y_SPACING
+  }
 
   for (const message of messages) {
     if (message.role === "user") {
@@ -347,16 +371,21 @@ export function transformMessagesToFlow(
         for (const { partIndex, part, toolName } of taskTools) {
           const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
           const state = getToolState(part)
+          const agentId = part.toolCallId || ""
+          // Get nested tools count for this sub-agent
+          const nestedTools = options.nestedToolsMap?.get(agentId)
+          const nestedToolsCount = nestedTools?.length ?? 0
 
           nodes.push({
             id: toolNodeId,
             type: "agentSpawn",
             position: { x: X_BRANCH, y: branchY },
             data: {
-              agentId: part.toolCallId || "",
+              agentId,
               description: truncateText(part.input?.description || part.input?.prompt, 20),
               status: state === "error" ? "error" : state === "result" ? "completed" : "running",
               onClick: () => options.onNodeClick(message.id, partIndex),
+              nestedToolsCount,
             } as AgentSpawnNodeData,
           })
 

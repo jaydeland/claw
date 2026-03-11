@@ -22,7 +22,7 @@ import {
 } from "../../agents/stores/message-store"
 import { sessionFlowNodeTypes } from "../components/session-flow-nodes"
 import { transformMessagesToFlow } from "../lib/message-transformer"
-import { sessionFlowUserScrolledAtom, sessionFlowExpandedNodesAtom, sessionFlowLiveAtom } from "../atoms"
+import { sessionFlowUserScrolledAtom, sessionFlowExpandedNodesAtom, sessionFlowLiveAtom, sessionFlowSubAgentsAtom } from "../atoms"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 interface SessionFlowPanelProps {
@@ -50,6 +50,7 @@ function useAllMessages(): Message[] {
 
 function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
   const messages = useAllMessages()
+  const subAgents = useAtomValue(sessionFlowSubAgentsAtom)
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [userScrolled, setUserScrolled] = useAtom(sessionFlowUserScrolledAtom)
@@ -60,6 +61,22 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
   const previousExpandedSizeRef = useRef(0)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
   const isProgrammaticMoveRef = useRef(false)
+
+  // Build nested tools map from sub-agents
+  const nestedToolsMap = useMemo(() => {
+    const map = new Map<string, { toolName: string; status: "pending" | "completed" | "error"; input?: any; output?: any }>()
+    for (const agent of subAgents) {
+      if (agent.nestedTools && agent.nestedTools.length > 0) {
+        map.set(agent.agentId, agent.nestedTools.map(t => ({
+          toolName: t.toolName,
+          status: t.status,
+          input: t.input,
+          output: t.output,
+        })))
+      }
+    }
+    return map
+  }, [subAgents])
 
   // Store pending nodes/edges when Live is off - these will be applied when Live turns on
   const pendingNodesRef = useRef<typeof nodes>([])
@@ -100,6 +117,7 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
       onNodeClick: handleNodeClick,
       expandedNodes,
       onToggleExpansion: handleToggleExpansion,
+      nestedToolsMap,
     })
 
     // Always store latest computed state in pending refs

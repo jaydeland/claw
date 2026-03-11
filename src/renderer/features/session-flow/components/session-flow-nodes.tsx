@@ -89,6 +89,8 @@ export interface AgentSpawnNodeData {
   description: string
   status: "running" | "completed" | "error"
   onClick: () => void
+  // Optional: nested tools data for sub-agents
+  nestedToolsCount?: number
 }
 
 export interface BackgroundTaskNodeData {
@@ -216,13 +218,16 @@ export const AssistantResponseNode = memo(function AssistantResponseNode({
   )
 })
 
-// Tool Call Node - Cyan/Green/Red based on state, branches to the right
+// Tool Call Node - Color varies by tool type and state
 export const ToolCallNode = memo(function ToolCallNode({
   data,
 }: NodeProps<ToolCallNodeData>) {
   // Use OriginalMCPIcon for MCP tools, otherwise use mapped icon or Terminal as fallback
   const Icon = data.isMcpTool ? OriginalMCPIcon : (toolIconMap[data.toolName] || Terminal)
   const isExpanded = data.isExpanded || false
+
+  // Thinking tool gets distinct purple/indigo styling
+  const isThinking = data.toolName === "Thinking"
 
   const bgColor = data.isMcpTool
     ? // MCP tools: amber/orange tones
@@ -233,17 +238,27 @@ export const ToolCallNode = memo(function ToolCallNode({
           : data.state === "partial-error"
             ? "bg-orange-500 border-orange-600 hover:bg-orange-600"
             : "bg-amber-500 border-amber-600 hover:bg-amber-600"
-    : // Regular tools: cyan/green/red/orange
-      data.state === "result"
-        ? "bg-green-500 border-green-600 hover:bg-green-600"
-        : data.state === "error"
-          ? "bg-red-500 border-red-600 hover:bg-red-600"
-          : data.state === "partial-error"
-            ? "bg-orange-500 border-orange-600 hover:bg-orange-600"
-            : "bg-cyan-500 border-cyan-600 hover:bg-cyan-600"
+    : isThinking
+      ? // Thinking: purple/indigo tones (distinct from other tools)
+        data.state === "result"
+          ? "bg-indigo-500 border-indigo-600 hover:bg-indigo-600"
+          : data.state === "error"
+            ? "bg-red-500 border-red-600 hover:bg-red-600"
+            : "bg-purple-500 border-purple-600 hover:bg-purple-600"
+      : // Regular tools: cyan/green/red/orange
+        data.state === "result"
+          ? "bg-green-500 border-green-600 hover:bg-green-600"
+          : data.state === "error"
+            ? "bg-red-500 border-red-600 hover:bg-red-600"
+            : data.state === "partial-error"
+              ? "bg-orange-500 border-orange-600 hover:bg-orange-600"
+              : "bg-cyan-500 border-cyan-600 hover:bg-cyan-600"
 
   const hasMultipleInvocations = data.count && data.count > 1
   const canExpand = hasMultipleInvocations
+
+  // AskUserQuestion shows "waiting" state when session is paused for user response
+  const isWaitingForUser = data.toolName === "AskUserQuestion" && data.state === "call"
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -302,6 +317,12 @@ export const ToolCallNode = memo(function ToolCallNode({
                   ×{data.count}
                 </span>
               )}
+              {/* Waiting indicator for AskUserQuestion */}
+              {isWaitingForUser && (
+                <span className="text-[8px] px-1 py-0.5 rounded bg-yellow-400 text-yellow-900 font-mono flex-shrink-0 animate-pulse">
+                  WAITING
+                </span>
+              )}
               {canExpand && (
                 <div
                   data-expand-icon
@@ -339,6 +360,11 @@ export const ToolCallNode = memo(function ToolCallNode({
           <div className="text-muted-foreground">
             State: <span className="capitalize">{data.state}</span>
           </div>
+          {isWaitingForUser && (
+            <div className="text-yellow-400 font-medium mt-1">
+              Session paused - waiting for user response
+            </div>
+          )}
           {hasMultipleInvocations && (
             <div className="text-muted-foreground">
               Invocations: {data.count}
@@ -425,6 +451,12 @@ export const AgentSpawnNode = memo(function AgentSpawnNode({
           <div className="text-muted-foreground mt-1">
             Status: <span className="capitalize">{data.status}</span>
           </div>
+          {/* Show nested tools count if available */}
+          {data.nestedToolsCount && data.nestedToolsCount > 0 && (
+            <div className="text-muted-foreground mt-1">
+              Tools used: {data.nestedToolsCount}
+            </div>
+          )}
           <div className="text-[10px] text-muted-foreground mt-1 italic">
             Click to navigate to agent spawn
           </div>
