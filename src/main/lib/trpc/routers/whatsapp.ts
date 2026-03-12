@@ -3,6 +3,8 @@ import { router, publicProcedure } from "../index"
 import { getDatabase, whatsappSettings, whatsappBridges } from "../../db"
 import { eq, and } from "drizzle-orm"
 import { getWhatsAppTrigger, whatsAppQREmitter, whatsAppStatusEmitter, whatsAppBridgeEmitter, type WhatsAppBridgeMessage } from "../../claws/whatsapp-trigger"
+import { getWhatsAppQueueManager } from "../../claws/queue-manager"
+import type { WhatsAppQueueItem } from "../../claws/queue-types"
 import { observable } from "@trpc/server/observable"
 
 /**
@@ -373,6 +375,92 @@ export const whatsappRouter = router({
       // Cleanup when subscription ends
       return () => {
         whatsAppBridgeEmitter.off("message", handler)
+      }
+    })
+  }),
+
+  /**
+   * Get WhatsApp queue status
+   */
+  getQueueStatus: publicProcedure.query(async () => {
+    const queueManager = getWhatsAppQueueManager()
+    return queueManager.getQueueStatus()
+  }),
+
+  /**
+   * Get all queue items
+   */
+  getQueueItems: publicProcedure.query(async (): Promise<WhatsAppQueueItem[]> => {
+    const queueManager = getWhatsAppQueueManager()
+    return queueManager.getQueueItems()
+  }),
+
+  /**
+   * Pause queue processing
+   */
+  pauseQueue: publicProcedure.mutation(async () => {
+    const queueManager = getWhatsAppQueueManager()
+    queueManager.pause()
+    return { success: true }
+  }),
+
+  /**
+   * Resume queue processing
+   */
+  resumeQueue: publicProcedure.mutation(async () => {
+    const queueManager = getWhatsAppQueueManager()
+    queueManager.resume()
+    return { success: true }
+  }),
+
+  /**
+   * Clear queue
+   */
+  clearQueue: publicProcedure.mutation(async () => {
+    const queueManager = getWhatsAppQueueManager()
+    queueManager.clearQueue()
+    return { success: true }
+  }),
+
+  /**
+   * Remove specific item from queue
+   */
+  removeQueueItem: publicProcedure
+    .input(z.object({ itemId: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+    const queueManager = getWhatsAppQueueManager()
+    const removed = queueManager.removeItem(input.itemId)
+    return { success: removed }
+  }),
+
+  /**
+   * Subscribe to queue status updates
+   * Emits when queue status changes
+   */
+  onQueueUpdate: publicProcedure.subscription(() => {
+    return observable<{ status: WhatsAppQueueItem[], queueStatus: { pending: number; processing: number; completed: number; failed: number; total: number } }>((emit) => {
+      const queueManager = getWhatsAppQueueManager()
+
+      const emitUpdate = () => {
+        emit.next({
+          status: queueManager.getQueueItems(),
+          queueStatus: queueManager.getQueueStatus(),
+        })
+      }
+
+      // Listen to all queue events
+      queueManager.on("queued", emitUpdate)
+      queueManager.on("processing", emitUpdate)
+      queueManager.on("completed", emitUpdate)
+      queueManager.on("failed", emitUpdate)
+      queueManager.on("removed", emitUpdate)
+      queueManager.on("cleared", emitUpdate)
+      queueManager.on("paused", emitUpdate)
+      queueManager.on("resumed", emitUpdate)
+
+      // Cleanup when subscription ends
+      return () => {
+        queueManager.removeAllListeners()
       }
     })
   }),

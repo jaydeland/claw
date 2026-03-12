@@ -11,6 +11,8 @@ import { app } from "electron"
 import { getDatabase, headlessClaws, whatsappSettings, clawExecutions, whatsappBridges } from "../db"
 import { eq } from "drizzle-orm"
 import { clawDaemon, getOrCreateSession, updateSessionStatus, addMessageToSession } from "./index"
+import { getWhatsAppQueueManager } from "./queue-manager"
+import type { WhatsAppQueueItem } from "./queue-types"
 import { EventEmitter } from "events"
 import * as path from "path"
 import * as fs from "fs"
@@ -480,20 +482,6 @@ export class WhatsAppTrigger {
       }
 
       for (const claw of matchingClaws) {
-
-        // Send acknowledgment
-        const ackText = `🤖 *${claw.name}* is working on it...`
-        console.log(`[WhatsAppTrigger] Sending acknowledgment to ${from}: "${ackText}"`)
-        try {
-          const ackResult = await this.sendMessage(from, ackText)
-          console.log(`[WhatsAppTrigger] Acknowledgment result: success=${ackResult}`)
-          if (!ackResult) {
-            console.error(`[WhatsAppTrigger] WARNING: Acknowledgment send returned false for ${from}`)
-          }
-        } catch (ackError) {
-          console.error(`[WhatsAppTrigger] ERROR: Failed to send acknowledgment to ${from}:`, ackError)
-        }
-
         // Get or create session for this chat
         const session = await getOrCreateSession(claw.id, from, "whatsapp", {
           metadata: { sender },
@@ -506,29 +494,36 @@ export class WhatsAppTrigger {
           continue
         }
 
-        // Execute the claw with WhatsApp context and session
-        console.log(`[WhatsAppTrigger] Executing claw "${claw.name}" (id=${claw.id})`)
-        if (!clawDaemon) {
-          console.error("[WhatsAppTrigger] ERROR: clawDaemon is undefined! Cannot execute claw.")
-          await this.sendMessage(from, "❌ Internal error: Claw daemon not available.")
-          return
-        }
-
         // Update session with user message
         await addMessageToSession(session.id, "user", messageText)
         await updateSessionStatus(session.id, "active")
 
-        const executionId = await clawDaemon.executeClaw(claw.id, {
-          whatsappFrom: from,
-          whatsappSender: sender,
-          originalMessage: messageText,
-          triggerSource: "whatsapp",
-          sessionId: session.id, // Pass session ID for persistence
-        })
-        console.log(`[WhatsAppTrigger] Claw execution started: ${executionId}`)
+        // Create queue item for sequential processing
+        const queueItem: WhatsAppQueueItem = {
+          id: `wa_queue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          clawId: claw.id,
+          clawName: claw.name,
+          externalId: from,
+          sender,
+          messageText,
+          timestamp: new Date(),
+          status: "pending",
+          sessionId: session.id,
+        }
 
-        // Monitor execution and send result
-        this.monitorExecution(executionId, claw.name, from, session.id)
+        // Send acknowledgment immediately
+        const ackText = `🤖 *${claw.name}* is queued for processing...`
+        console.log(`[WhatsAppTrigger] Sending acknowledgment to ${from}: "${ackText}"`)
+        try {
+          await this.sendMessage(from, ackText)
+        } catch (ackError) {
+          console.error(`[WhatsAppTrigger] ERROR: Failed to send acknowledgment to ${from}:`, ackError)
+        }
+
+        // Add to queue instead of executing immediately
+        console.log(`[WhatsAppTrigger] Queueing claw "${claw.name}" (id=${claw.id})`)
+        const queueManager = getWhatsAppQueueManager()
+        queueManager.enqueue(queueItem)
       }
 
       // Also check for WhatsApp bridges and forward messages to connected chats
