@@ -323,106 +323,188 @@ Position nodes in a hierarchical layout with entry points at top, dependencies f
   {
     key: "analysis_db",
     name: "Database Schema Analysis",
-    description: "Prompt for generating React Flow diagrams showing database schema and relationships",
+    description: "Prompt for generating React Flow entity relationship diagrams (ERD) showing database schema and relationships",
     category: "analysis",
-    content: `Analyze this codebase and generate a React Flow diagram showing the database schema and data flow.
+    content: `Analyze this codebase and generate a React Flow entity relationship diagram (ERD) showing the complete database schema structure.
 
-Focus on:
-1. Database tables/collections
-2. Field definitions and types
-3. Relationships (1:1, 1:N, N:M)
-4. Foreign keys and constraints
-5. Indexes and keys
-6. Migration patterns
+## FOCUS ON:
+1. Database tables/collections - identify all entities
+2. Field definitions: name, type, nullable, primary key, foreign key, default, unique constraints
+3. Relationships with cardinality: 1:1, 1:N, N:M
+4. Foreign key constraints and referential integrity
+5. Indexes (single, composite, unique)
+6. Junction/bridge tables for many-to-many relationships
+7. Inheritance patterns (if applicable)
 
-Output format - respond with ONLY a JSON object:
+## NODE STRUCTURE:
+Each table node should include:
 {
-  "nodes": [
-    {
-      "id": "table-name",
-      "type": "default",
-      "position": { "x": 0, "y": 0 },
-      "data": {
-        "label": "Table Name",
-        "type": "table",
-        "columns": [
-          { "name": "id", "type": "uuid", "primary": true },
-          { "name": "name", "type": "varchar" }
-        ]
+  "id": "table-name",
+  "type": "table",
+  "position": { "x": number, "y": number },
+  "data": {
+    "label": "Table Name",
+    "description": "Brief description of entity purpose",
+    "category": "auth|content|commerce|system|junction",
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid|varchar|int|bigint|timestamp|boolean|json|text",
+        "nullable": false,
+        "primaryKey": true,
+        "defaultValue": "uuid()" | null,
+        "unique": true
+      },
+      {
+        "name": "foreign_key_id",
+        "type": "uuid",
+        "nullable": false,
+        "foreignKey": "references other_table(id)",
+        "onDelete": "CASCADE|SET NULL|RESTRICT"
       }
-    }
-  ],
-  "edges": [
-    {
-      "id": "rel-1",
-      "source": "users",
-      "target": "posts",
-      "sourceHandle": null,
-      "targetHandle": null,
-      "label": "1:N",
-      "type": "smoothstep"
-    }
-  ],
-  "summary": "Database schema overview",
-  "stats": { "tableCount": 5, "relationshipCount": 3 }
+    ],
+    "indexes": [
+      { "name": "idx_column", "columns": ["column_name"], "unique": false }
+    ]
+  }
 }
 
-CRITICAL REQUIREMENTS FOR EDGES:
-- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
-- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
-- NEVER use "undefined", null, or empty strings for source or target
-- Double-check that every node id referenced in edges exists in the nodes array
-
-Position related tables near each other. Use smoothstep edges for relationships.`,
-    defaultValue: `Analyze this codebase and generate a React Flow diagram showing the database schema and data flow.
-
-Focus on:
-1. Database tables/collections
-2. Field definitions and types
-3. Relationships (1:1, 1:N, N:M)
-4. Foreign keys and constraints
-5. Indexes and keys
-6. Migration patterns
-
-Output format - respond with ONLY a JSON object:
+## EDGE STRUCTURE:
+Each relationship edge:
 {
-  "nodes": [
-    {
-      "id": "table-name",
-      "type": "default",
-      "position": { "x": 0, "y": 0 },
-      "data": {
-        "label": "Table Name",
-        "type": "table",
-        "columns": [
-          { "name": "id", "type": "uuid", "primary": true },
-          { "name": "name", "type": "varchar" }
-        ]
-      }
-    }
-  ],
-  "edges": [
-    {
-      "id": "rel-1",
-      "source": "users",
-      "target": "posts",
-      "sourceHandle": null,
-      "targetHandle": null,
-      "label": "1:N",
-      "type": "smoothstep"
-    }
-  ],
-  "summary": "Database schema overview",
-  "stats": { "tableCount": 5, "relationshipCount": 3 }
+  "id": "edge-id",
+  "source": "source-table-id",
+  "target": "target-table-id",
+  "sourceHandle": null,
+  "targetHandle": null,
+  "label": "cardinality (1:1 | 1:N | N:M)",
+  "type": "smoothstep",
+  "data": {
+    "relationshipName": "descriptive name",
+    "foreignKey": "column_name",
+    "constraintName": "fk_constraint_name"
+  }
 }
 
-CRITICAL REQUIREMENTS FOR EDGES:
-- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
-- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
-- NEVER use "undefined", null, or empty strings for source or target
-- Double-check that every node id referenced in edges exists in the nodes array
+## OUTPUT FORMAT:
+Respond with ONLY a valid JSON object:
+{
+  "nodes": [ ... ],
+  "edges": [ ... ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "summary": "Brief description of schema architecture",
+  "stats": {
+    "tableCount": number,
+    "relationshipCount": number,
+    "indexCount": number,
+    "junctionTableCount": number
+  }
+}
 
-Position related tables near each other. Use smoothstep edges for relationships.`,
+## CRITICAL REQUIREMENTS:
+1. Every edge source/target MUST reference an existing node id
+2. NEVER use undefined, null, or empty strings for source/target
+3. Double-check all node IDs referenced in edges exist in nodes array
+4. Use consistent naming: kebab-case for node IDs (e.g., "user-sessions")
+5. Position related tables near each other (auth tables together, content together, etc.)
+6. Use smoothstep edges for clean relationship visualization
+7. Place parent tables before child tables in the layout flow
+
+## VISUAL ORGANIZATION:
+- Group tables by domain: auth (left), content (center), commerce (right), system (bottom)
+- Place independent/parent tables at top, dependent tables below
+- Junction tables positioned between their related entities
+- Leave adequate spacing for readability (min 200px horizontal, 150px vertical)`,
+    defaultValue: `Analyze this codebase and generate a React Flow entity relationship diagram (ERD) showing the complete database schema structure.
+
+## FOCUS ON:
+1. Database tables/collections - identify all entities
+2. Field definitions: name, type, nullable, primary key, foreign key, default, unique constraints
+3. Relationships with cardinality: 1:1, 1:N, N:M
+4. Foreign key constraints and referential integrity
+5. Indexes (single, composite, unique)
+6. Junction/bridge tables for many-to-many relationships
+7. Inheritance patterns (if applicable)
+
+## NODE STRUCTURE:
+Each table node should include:
+{
+  "id": "table-name",
+  "type": "table",
+  "position": { "x": number, "y": number },
+  "data": {
+    "label": "Table Name",
+    "description": "Brief description of entity purpose",
+    "category": "auth|content|commerce|system|junction",
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid|varchar|int|bigint|timestamp|boolean|json|text",
+        "nullable": false,
+        "primaryKey": true,
+        "defaultValue": "uuid()" | null,
+        "unique": true
+      },
+      {
+        "name": "foreign_key_id",
+        "type": "uuid",
+        "nullable": false,
+        "foreignKey": "references other_table(id)",
+        "onDelete": "CASCADE|SET NULL|RESTRICT"
+      }
+    ],
+    "indexes": [
+      { "name": "idx_column", "columns": ["column_name"], "unique": false }
+    ]
+  }
+}
+
+## EDGE STRUCTURE:
+Each relationship edge:
+{
+  "id": "edge-id",
+  "source": "source-table-id",
+  "target": "target-table-id",
+  "sourceHandle": null,
+  "targetHandle": null,
+  "label": "cardinality (1:1 | 1:N | N:M)",
+  "type": "smoothstep",
+  "data": {
+    "relationshipName": "descriptive name",
+    "foreignKey": "column_name",
+    "constraintName": "fk_constraint_name"
+  }
+}
+
+## OUTPUT FORMAT:
+Respond with ONLY a valid JSON object:
+{
+  "nodes": [ ... ],
+  "edges": [ ... ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "summary": "Brief description of schema architecture",
+  "stats": {
+    "tableCount": number,
+    "relationshipCount": number,
+    "indexCount": number,
+    "junctionTableCount": number
+  }
+}
+
+## CRITICAL REQUIREMENTS:
+1. Every edge source/target MUST reference an existing node id
+2. NEVER use undefined, null, or empty strings for source/target
+3. Double-check all node IDs referenced in edges exist in nodes array
+4. Use consistent naming: kebab-case for node IDs (e.g., "user-sessions")
+5. Position related tables near each other (auth tables together, content together, etc.)
+6. Use smoothstep edges for clean relationship visualization
+7. Place parent tables before child tables in the layout flow
+
+## VISUAL ORGANIZATION:
+- Group tables by domain: auth (left), content (center), commerce (right), system (bottom)
+- Place independent/parent tables at top, dependent tables below
+- Junction tables positioned between their related entities
+- Leave adequate spacing for readability (min 200px horizontal, 150px vertical)`,
     isEditable: true,
   },
 
