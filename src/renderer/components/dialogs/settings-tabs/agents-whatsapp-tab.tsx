@@ -17,6 +17,8 @@ import {
   CardHeader,
   CardTitle,
 } from "../../ui/card"
+import { WhatsAppQueueStatus } from "./whatsapp-queue-status"
+import { WhatsAppBridgeManager } from "./whatsapp-bridge-manager"
 
 export function AgentsWhatsAppTab() {
   const [qrCode, setQrCode] = useState<string | null>(null)
@@ -288,6 +290,9 @@ export function AgentsWhatsAppTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Queue Status */}
+      {isConnected && <WhatsAppQueueStatus />}
     </div>
   )
 }
