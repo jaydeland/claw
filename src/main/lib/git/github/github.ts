@@ -2,6 +2,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { branchExistsOnRemote } from "../worktree";
 import { execWithShellEnv } from "../shell-env";
+import { getDatabase, githubSettings } from "../../db";
+import { eq } from "drizzle-orm";
 import {
 	type CheckItem,
 	type GHPRResponse,
@@ -11,6 +13,49 @@ import {
 } from "./types";
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Decrypt text using Electron's safeStorage (matches github.ts router)
+ */
+function decryptText(encrypted: string): string | null {
+	if (!encrypted) return null;
+	try {
+		const { safeStorage } = require("electron");
+		if (!safeStorage.isEncryptionAvailable()) {
+			return Buffer.from(encrypted, "base64").toString("utf-8");
+		}
+		const buffer = Buffer.from(encrypted, "base64");
+		return safeStorage.decryptString(buffer);
+	} catch (error) {
+		console.error("[github] Failed to decrypt token:", error);
+		return null;
+	}
+}
+
+/**
+ * Get GitHub token from database and inject into environment
+ */
+async function getGitHubTokenEnv(): Promise<Record<string, string>> {
+	try {
+		const db = getDatabase();
+		const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get();
+
+		if (!settings?.encryptedToken) {
+			return {};
+		}
+
+		const token = decryptText(settings.encryptedToken);
+		if (!token) {
+			return {};
+		}
+
+		// Return GH_TOKEN which is respected by gh CLI
+		return { GH_TOKEN: token };
+	} catch (error) {
+		console.error("[github] Failed to get token:", error);
+		return {};
+	}
+}
 
 // Cache for GitHub status (10 second TTL)
 const cache = new Map<string, { data: GitHubStatus; timestamp: number }>();
@@ -81,10 +126,11 @@ export async function fetchGitHubPRStatus(
 
 async function getRepoUrl(worktreePath: string): Promise<string | null> {
 	try {
+		const tokenEnv = await getGitHubTokenEnv();
 		const { stdout } = await execWithShellEnv(
 			"gh",
 			["repo", "view", "--json", "url"],
-			{ cwd: worktreePath },
+			{ cwd: worktreePath, env: tokenEnv },
 		);
 		const raw = JSON.parse(stdout);
 		const result = GHRepoResponseSchema.safeParse(raw);
@@ -104,6 +150,7 @@ async function getPRForBranch(
 	branch: string,
 ): Promise<GitHubStatus["pr"]> {
 	try {
+		const tokenEnv = await getGitHubTokenEnv();
 		// Use execWithShellEnv to handle macOS GUI app PATH issues
 		const { stdout } = await execWithShellEnv(
 			"gh",
@@ -114,7 +161,7 @@ async function getPRForBranch(
 				"--json",
 				"number,title,url,state,isDraft,mergedAt,additions,deletions,reviewDecision,statusCheckRollup,mergeable",
 			],
-			{ cwd: worktreePath },
+			{ cwd: worktreePath, env: tokenEnv },
 		);
 		const raw = JSON.parse(stdout);
 		const result = GHPRResponseSchema.safeParse(raw);
