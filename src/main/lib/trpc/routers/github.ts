@@ -595,20 +595,13 @@ export const githubRouter = router({
       const db = getDatabase()
       const encryptedToken = encryptText(input.token)
 
-      // Upsert the settings
-      const existing = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
-
-      if (existing) {
-        db.update(githubSettings)
-          .set({ encryptedToken, updatedAt: new Date() })
-          .where(eq(githubSettings.id, "default"))
-          .run()
-      } else {
-        db.insert(githubSettings).values({
-          id: "default",
-          encryptedToken,
-        }).run()
-      }
+      db.insert(githubSettings)
+        .values({ id: "default", encryptedToken, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: githubSettings.id,
+          set: { encryptedToken, updatedAt: new Date() },
+        })
+        .run()
 
       return { success: true as const }
     }),
@@ -623,26 +616,6 @@ export const githubRouter = router({
     return {
       hasToken: !!settings?.encryptedToken,
     }
-  }),
-
-  /**
-   * Get GitHub token (decrypted) - for internal use only
-   * Note: This returns the decrypted token, use with caution
-   */
-  getToken: publicProcedure.query(async () => {
-    const db = getDatabase()
-    const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
-
-    if (!settings?.encryptedToken) {
-      return { success: false as const, error: "No token configured" }
-    }
-
-    const token = decryptText(settings.encryptedToken)
-    if (!token) {
-      return { success: false as const, error: "Failed to decrypt token" }
-    }
-
-    return { success: true as const, token }
   }),
 
   /**

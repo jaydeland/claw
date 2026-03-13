@@ -84,6 +84,7 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash")
   const [mergeError, setMergeError] = useState<string | null>(null)
 
+
   const { data, isLoading, error, refetch } = trpc.github.getPRDetail.useQuery(
     { projectPath, prNumber },
     { enabled: !!projectPath }
@@ -128,6 +129,7 @@ const PRDetailView = memo(function PRDetailView({ prNumber, repoName, projectPat
     },
     onError: (err) => setMergeError(err.message),
   })
+
 
   const setStartChat = useSetAtom(githubStartChatAtom)
 

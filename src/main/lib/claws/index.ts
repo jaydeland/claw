@@ -51,7 +51,8 @@ interface WhatsAppTriggerConfig {
 interface ActiveTrigger {
   clawId: string
   type: TriggerType
-  timer?: NodeJS.Timeout | null
+  cronTask?: ScheduledTask | null
+  pollTimer?: NodeJS.Timeout | null
   childProcess?: ChildProcess | null
 }
 
@@ -111,26 +112,35 @@ class ClawDaemon {
   }
 
   /**
-   * Reload triggers - called when claws are modified
+   * Register a single claw's trigger - called after create or toggleEnabled(true).
+   * Avoids stopping other running triggers.
    */
-  async reload(): Promise<void> {
-    console.log("[ClawDaemon] Reloading triggers...")
-
-    // Stop all existing triggers
-    for (const [clawId, trigger] of this.activeTriggers) {
-      await this.stopTrigger(clawId, trigger)
-    }
-    this.activeTriggers.clear()
-
-    // Re-register all enabled claws
+  async registerClaw(clawId: string): Promise<void> {
     const db = getDatabase()
-    const claws = db.select().from(headlessClaws).where(eq(headlessClaws.isEnabled, true)).all()
+    const claw = db.select().from(headlessClaws).where(eq(headlessClaws.id, clawId)).get()
 
-    for (const claw of claws) {
-      await this.registerTrigger(claw)
+    if (!claw || !claw.isEnabled) return
+
+    // Stop any existing trigger for this claw first (idempotent)
+    const existing = this.activeTriggers.get(clawId)
+    if (existing) {
+      await this.stopTrigger(clawId, existing)
+      this.activeTriggers.delete(clawId)
     }
 
-    console.log(`[ClawDaemon] Reloaded with ${claws.length} active claws`)
+    await this.registerTrigger(claw)
+  }
+
+  /**
+   * Unregister a single claw's trigger - called after delete or toggleEnabled(false).
+   * Avoids touching other running triggers.
+   */
+  async unregisterClaw(clawId: string): Promise<void> {
+    const trigger = this.activeTriggers.get(clawId)
+    if (trigger) {
+      await this.stopTrigger(clawId, trigger)
+      this.activeTriggers.delete(clawId)
+    }
   }
 
   /**
@@ -144,7 +154,7 @@ class ClawDaemon {
         this.registerCronTrigger(claw, config as CronConfig)
         break
       case "github_poll":
-        this.registerGitHubPollTrigger(claw, config as GitHubPollConfig)
+        await this.registerGitHubPollTrigger(claw, config as GitHubPollConfig)
         break
       case "manual":
         // Manual triggers don't need registration - they're triggered on-demand
@@ -168,39 +178,37 @@ class ClawDaemon {
   }
 
   /**
-   * Register a cron trigger
+   * Register a cron trigger using node-cron for accurate schedule execution
    */
   private registerCronTrigger(claw: HeadlessClaw, config: CronConfig): void {
-    // Simple cron parser - supports basic format: "minute hour day month weekday"
-    // For production, consider using a library like node-cron
-    const interval = this.parseCronToMs(config.expression)
-
-    if (!interval) {
+    if (!cron.validate(config.expression)) {
       console.error(`[ClawDaemon] Invalid cron expression: ${config.expression}`)
       return
     }
 
-    const timer = setInterval(() => {
+    const cronTask = cron.schedule(config.expression, () => {
       this.executeClaw(claw.id)
-    }, interval)
+    })
 
     this.activeTriggers.set(claw.id, {
       clawId: claw.id,
       type: "cron",
-      timer,
+      cronTask,
     })
 
     console.log(`[ClawDaemon] Registered cron trigger for "${claw.name}": ${config.expression}`)
   }
 
   /**
-   * Register a GitHub polling trigger
+   * Register a GitHub polling trigger.
+   * Seeds known issue IDs on first poll to avoid triggering on pre-existing issues.
    */
-  private registerGitHubPollTrigger(claw: HeadlessClaw, config: GitHubPollConfig): void {
+  private async registerGitHubPollTrigger(claw: HeadlessClaw, config: GitHubPollConfig): Promise<void> {
     // Poll every 5 minutes (300000ms)
     const POLL_INTERVAL = 5 * 60 * 1000
     let lastETag: string | null = null
     let lastIssueIds = new Set<number>()
+    let isSeeded = false
 
     const poll = async () => {
       try {
@@ -210,8 +218,8 @@ class ClawDaemon {
           return
         }
 
-        // Fetch issues with the specified label
-        const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues?labels=${encodeURIComponent(config.label)}&state=open`
+        // Fetch up to 100 issues per page to reduce missed items
+        const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues?labels=${encodeURIComponent(config.label)}&state=open&per_page=100`
         const headers: HeadersInit = {
           Authorization: `Bearer ${token}`,
           Accept: "application/vnd.github.v3+json",
@@ -233,10 +241,19 @@ class ClawDaemon {
           lastETag = response.headers.get("ETag")
           const issues = await response.json()
 
-          // Check for new issues
+          if (!isSeeded) {
+            // First poll: seed all currently-open issue IDs without triggering executions
+            for (const issue of issues) {
+              lastIssueIds.add(issue.id)
+            }
+            isSeeded = true
+            console.log(`[ClawDaemon] Seeded ${lastIssueIds.size} existing issues for "${claw.name}"`)
+            return
+          }
+
+          // Subsequent polls: only trigger on issues that weren't present at registration time
           for (const issue of issues) {
             if (!lastIssueIds.has(issue.id)) {
-              // New issue detected - trigger the claw
               console.log(`[ClawDaemon] New issue detected: #${issue.number} - ${issue.title}`)
               await this.executeClaw(claw.id, { issueNumber: issue.number, issueTitle: issue.title })
               lastIssueIds.add(issue.id)
@@ -252,16 +269,16 @@ class ClawDaemon {
       }
     }
 
-    // Initial poll
+    // Seed on registration (non-blocking — sets isSeeded = true, no executions fired)
     poll()
 
-    // Set up interval
-    const timer = setInterval(poll, POLL_INTERVAL)
+    // Set up interval for subsequent polls
+    const pollTimer = setInterval(poll, POLL_INTERVAL)
 
     this.activeTriggers.set(claw.id, {
       clawId: claw.id,
       type: "github_poll",
-      timer,
+      pollTimer,
     })
 
     console.log(`[ClawDaemon] Registered GitHub poll trigger for "${claw.name}": ${config.owner}/${config.repo}#${config.label}`)
@@ -271,8 +288,11 @@ class ClawDaemon {
    * Stop a trigger
    */
   private async stopTrigger(clawId: string, trigger: ActiveTrigger): Promise<void> {
-    if (trigger.timer) {
-      clearInterval(trigger.timer)
+    if (trigger.cronTask) {
+      trigger.cronTask.stop()
+    }
+    if (trigger.pollTimer) {
+      clearInterval(trigger.pollTimer)
     }
     if (trigger.childProcess) {
       trigger.childProcess.kill("SIGTERM")
@@ -1186,45 +1206,6 @@ class ClawDaemon {
       console.error("[ClawDaemon] Failed to decrypt GitHub token:", error)
       return null
     }
-  }
-
-  /**
-   * Parse a simple cron expression to milliseconds interval
-   * Supports: "minute hour day month weekday" format
-   * Returns null if parsing fails
-   */
-  private parseCronToMs(expression: string): number | null {
-    const parts = expression.trim().split(/\s+/)
-
-    if (parts.length !== 5) {
-      return null
-    }
-
-    // For simplicity, we convert cron to an interval
-    // This is a basic implementation - for production, use a proper cron library
-    const [minute, hour, day, month, weekday] = parts
-
-    // If it's a simple interval like "*/5 * * * *" (every 5 minutes)
-    if (minute.startsWith("*/") && hour === "*" && day === "*" && month === "*" && weekday === "*") {
-      const intervalMinutes = parseInt(minute.slice(2))
-      if (!isNaN(intervalMinutes)) {
-        return intervalMinutes * 60 * 1000
-      }
-    }
-
-    // If it's "0 * * * *" (every hour)
-    if (minute === "0" && hour === "*" && day === "*" && month === "*" && weekday === "*") {
-      return 60 * 60 * 1000
-    }
-
-    // If it's "0 0 * * *" (daily)
-    if (minute === "0" && hour === "0" && day === "*" && month === "*" && weekday === "*") {
-      return 24 * 60 * 60 * 1000
-    }
-
-    // Default: 1 hour interval for unsupported patterns
-    console.warn(`[ClawDaemon] Complex cron expression "${expression}" not fully supported, using 1 hour interval`)
-    return 60 * 60 * 1000
   }
 
   /**

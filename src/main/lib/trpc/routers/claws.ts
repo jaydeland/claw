@@ -150,8 +150,10 @@ export const clawsRouter = router({
         })
         .run()
 
-      // Reload daemon to register the new trigger
-      await clawDaemon.reload()
+      // Register the trigger for this claw only
+      if (input.isEnabled) {
+        await clawDaemon.registerClaw(id)
+      }
 
       return { success: true, id }
     }),
@@ -200,10 +202,13 @@ export const clawsRouter = router({
         updateData.sandboxMode = updates.sandboxMode
       }
 
+      // Unregister before updating so the old trigger config is torn down
+      await clawDaemon.unregisterClaw(id)
+
       db.update(headlessClaws).set(updateData).where(eq(headlessClaws.id, id)).run()
 
-      // Reload daemon to update triggers
-      await clawDaemon.reload()
+      // Re-register with the updated config (reads fresh from DB)
+      await clawDaemon.registerClaw(id)
 
       return { success: true }
     }),
@@ -221,8 +226,11 @@ export const clawsRouter = router({
         .where(eq(headlessClaws.id, input.id))
         .run()
 
-      // Reload daemon to enable/disable trigger
-      await clawDaemon.reload()
+      if (input.isEnabled) {
+        await clawDaemon.registerClaw(input.id)
+      } else {
+        await clawDaemon.unregisterClaw(input.id)
+      }
 
       return { success: true }
     }),
@@ -235,11 +243,11 @@ export const clawsRouter = router({
     .mutation(async ({ input }) => {
       const db = getDatabase()
 
+      // Stop the trigger before deleting so no further executions fire
+      await clawDaemon.unregisterClaw(input.id)
+
       // Delete will cascade to executions due to foreign key constraint
       db.delete(headlessClaws).where(eq(headlessClaws.id, input.id)).run()
-
-      // Reload daemon to remove trigger
-      await clawDaemon.reload()
 
       return { success: true }
     }),

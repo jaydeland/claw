@@ -17,6 +17,7 @@ import { cn } from "../../../lib/utils"
 import {
   githubSelectionAtom,
   githubChatMessagesAtom,
+  githubChatSessionAtom,
   githubChatContextAtom,
   githubChatLoadingAtom,
   githubStartChatAtom,
@@ -155,6 +156,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   // Get current diagram data for visualize mode system instructions
   const diagramData = useAtomValue(githubDiagramDataAtom)
 
+
   // Skip clearing on first mount so restored session/messages survive a reload
   const isFirstMount = useRef(true)
 
@@ -246,6 +248,7 @@ export const GitHubChatPane = memo(function GitHubChatPane({
     (selection as any)?.path,
     (selection as any)?.analysisType,
     setMessages,
+    setSession,
   ])
 
   // Subscribe to Claude chat stream
