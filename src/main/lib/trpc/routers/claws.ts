@@ -125,6 +125,7 @@ export const clawsRouter = router({
         isEnabled: z.boolean().default(true),
         allowedDirectories: z.array(z.string()).default([]),
         allowedMcpServers: z.array(z.string()).default([]),
+        sandboxMode: z.enum(["disabled", "enabled", "strict"]).default("disabled"),
       })
     )
     .mutation(async ({ input }) => {
@@ -143,6 +144,7 @@ export const clawsRouter = router({
           isEnabled: input.isEnabled,
           allowedDirectories: JSON.stringify(input.allowedDirectories),
           allowedMcpServers: JSON.stringify(input.allowedMcpServers),
+          sandboxMode: input.sandboxMode,
         })
         .run()
 
@@ -167,6 +169,7 @@ export const clawsRouter = router({
         triggerConfig: triggerConfigSchema.optional(),
         allowedDirectories: z.array(z.string()).optional(),
         allowedMcpServers: z.array(z.string()).optional(),
+        sandboxMode: z.enum(["disabled", "enabled", "strict"]).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -188,6 +191,9 @@ export const clawsRouter = router({
       }
       if (updates.allowedMcpServers !== undefined) {
         updateData.allowedMcpServers = JSON.stringify(updates.allowedMcpServers)
+      }
+      if (updates.sandboxMode !== undefined) {
+        updateData.sandboxMode = updates.sandboxMode
       }
 
       db.update(headlessClaws).set(updateData).where(eq(headlessClaws.id, id)).run()

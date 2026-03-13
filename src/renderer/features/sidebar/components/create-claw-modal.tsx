@@ -28,6 +28,7 @@ interface CreateClawModalProps {
     isEnabled: boolean
     allowedDirectories?: string
     allowedMcpServers?: string
+    sandboxMode?: "disabled" | "enabled" | "strict"
   } | null
 }
 
@@ -63,6 +64,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
         triggerConfig,
         allowedDirectories: formData.allowedDirectories,
         allowedMcpServers: formData.allowedMcpServers,
+        sandboxMode: formData.sandboxMode,
       })
     } else {
       createMutation.mutate({
@@ -74,6 +76,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
         triggerConfig,
         allowedDirectories: formData.allowedDirectories,
         allowedMcpServers: formData.allowedMcpServers,
+        sandboxMode: formData.sandboxMode,
       })
     }
   }
@@ -95,6 +98,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       whatsappChatFilter: config.whatsappChatFilter || "",
       allowedDirectories: claw.allowedDirectories ? JSON.parse(claw.allowedDirectories) : [],
       allowedMcpServers: claw.allowedMcpServers ? JSON.parse(claw.allowedMcpServers) : [],
+      sandboxMode: claw.sandboxMode || "disabled",
     }
   }, [claw])
 

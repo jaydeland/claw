@@ -40,12 +40,14 @@ export function ClawEditView({ className }: ClawEditViewProps) {
     updateMutation.mutate({
       id: selectedClaw.id,
       name: formData.name,
+      purpose: formData.purpose,
       instruction: formData.instruction,
       targetWorktree: formData.targetWorktree,
       triggerType: formData.triggerType,
       triggerConfig,
       allowedDirectories: formData.allowedDirectories,
       allowedMcpServers: formData.allowedMcpServers,
+      sandboxMode: formData.sandboxMode,
     })
   }
 
@@ -74,6 +76,7 @@ export function ClawEditView({ className }: ClawEditViewProps) {
       whatsappChatFilter: config.whatsappChatFilter || "",
       allowedDirectories: claw.allowedDirectories ? JSON.parse(claw.allowedDirectories) : [],
       allowedMcpServers: claw.allowedMcpServers ? JSON.parse(claw.allowedMcpServers) : [],
+      sandboxMode: claw.sandboxMode || "disabled",
     }
   }, [clawData])
 

@@ -33,6 +33,7 @@ export interface FormData {
   whatsappChatFilter: string
   allowedDirectories: string[]
   allowedMcpServers: string[]
+  sandboxMode: "disabled" | "enabled" | "strict"
 }
 
 export interface ClawFormProps {
@@ -59,6 +60,7 @@ const defaultFormData: FormData = {
   whatsappChatFilter: "",
   allowedDirectories: [],
   allowedMcpServers: [],
+  sandboxMode: "disabled",
 }
 
 export function ClawForm({
@@ -946,6 +948,50 @@ export function ClawForm({
           </div>
         </div>
       )}
+
+      {/* Sandbox Mode */}
+      <div className="space-y-2">
+        <Label htmlFor="sandbox-mode">Sandbox Mode</Label>
+        <Select
+          value={formData.sandboxMode}
+          onValueChange={(v: "disabled" | "enabled" | "strict") =>
+            setFormData((prev) => ({ ...prev, sandboxMode: v }))
+          }
+        >
+          <SelectTrigger id="sandbox-mode">
+            <SelectValue placeholder="Select sandbox mode..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="disabled">
+              <span className="flex items-center gap-2">
+                <span>Disabled</span>
+                <span className="text-xs text-muted-foreground">— Full access (default)</span>
+              </span>
+            </SelectItem>
+            <SelectItem value="enabled">
+              <span className="flex items-center gap-2">
+                <span>Enabled</span>
+                <span className="text-xs text-muted-foreground">— SDK sandbox restrictions</span>
+              </span>
+            </SelectItem>
+            <SelectItem value="strict">
+              <span className="flex items-center gap-2">
+                <span>Strict</span>
+                <span className="text-xs text-muted-foreground">— Read-only (plan mode)</span>
+              </span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Controls tool permissions for this claw:
+          <br />
+          • <strong>Disabled</strong>: All tools allowed (Edit, Write, Bash, etc.)
+          <br />
+          • <strong>Enabled</strong>: Dangerous tools require explicit approval
+          <br />
+          • <strong>Strict</strong>: Read-only mode (no file modifications)
+        </p>
+      </div>
 
       {/* Error Alert */}
       {submitError && (
