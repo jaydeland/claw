@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
@@ -17,7 +18,6 @@ import ReactFlow, {
   type NodeChange,
   type Viewport,
   MarkerType,
-  BackgroundVariant,
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { toPng, toSvg } from "html-to-image"
@@ -721,12 +721,12 @@ function AnalysisNode({ data, id }: { data: Record<string, unknown>; id: string 
           getNodeStyle()
         )}
       >
-        <div className="font-semibold text-sm truncate">{String(data.label ?? id)}</div>
-        {typeof data.description === "string" && (
-          <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{data.description}</div>
+        <div className="font-semibold text-sm truncate">{(data.label as string) || id}</div>
+        {!!data.description && (
+          <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{String(data.description)}</div>
         )}
-        {typeof data.tech === "string" && (
-          <div className="text-xs text-muted-foreground mt-1 font-mono">{data.tech}</div>
+        {!!data.tech && (
+          <div className="text-xs text-muted-foreground mt-1 font-mono">{String(data.tech)}</div>
         )}
       </div>
       <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !border-slate-500" />

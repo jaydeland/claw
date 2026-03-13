@@ -351,7 +351,7 @@ function ToolSchemaPanel({
               Parameters
             </h4>
             <div className="bg-muted/30 rounded-lg p-3">
-              <JsonSchemaViewer schema={tool.inputSchema as import("./json-schema-viewer").JsonSchemaProperty} />
+              <JsonSchemaViewer schema={tool.inputSchema as any} />
             </div>
           </div>
         ) : (

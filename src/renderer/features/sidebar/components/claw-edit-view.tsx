@@ -129,7 +129,7 @@ export function ClawEditView({ className }: ClawEditViewProps) {
             onSubmit={handleSubmit}
             onCancel={handleCancel}
             isSubmitting={updateMutation.isPending}
-            submitError={updateMutation.error ? new Error(updateMutation.error.message) : null}
+            submitError={updateMutation.error as Error | null}
             mode="edit"
           />
         </div>

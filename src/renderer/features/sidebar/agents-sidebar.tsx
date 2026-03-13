@@ -34,7 +34,7 @@ import { ChevronDown, MoreHorizontal } from "lucide-react"
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null, isLoaded: true })
 // import { AuthDialog } from "@/components/auth/auth-dialog"
-const AuthDialog = (_props: { open: boolean; onOpenChange: (open: boolean) => void }) => null
+const AuthDialog = ({ open, onOpenChange }: { open?: boolean; onOpenChange?: (open: boolean) => void }) => null
 // Desktop: archive is handled inline, not via hook
 // import { DiscordIcon } from "@/components/icons"
 import { DiscordIcon } from "../../icons"
@@ -117,7 +117,7 @@ import { useNewChatDrafts, deleteNewChatDraft, type NewChatDraft } from "../agen
 import {
   TrafficLightSpacer,
   TrafficLights,
-} from "../agents/components/traffic-light-spacer"
+} from "../../components/traffic-light-spacer"
 import { useHotkeys } from "react-hotkeys-hook"
 import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"

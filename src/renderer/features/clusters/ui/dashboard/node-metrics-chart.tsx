@@ -65,11 +65,13 @@ export function NodeMetricsChart({ metrics, isLoading }: NodeMetricsChartProps) 
             axisLine={false}
           />
           <Tooltip
-            formatter={(value: number | undefined, name: string | undefined) => {
-              if (value === undefined) return ["-", name || ""]
-              if (name === "cpu") return [formatCpu(value), "CPU"]
-              if (name === "memory") return [formatMemory(value), "Memory"]
-              return [value, name || ""]
+            formatter={(value) => {
+              const numValue = typeof value === "number" ? value : 0
+              const payload = (value as unknown as { name?: string; payload?: { cpu?: number; memory?: number; cpuLabel?: string; memoryLabel?: string } })
+              const name = payload?.name
+              if (name === "cpu") return [formatCpu(numValue), "CPU"]
+              if (name === "memory") return [formatMemory(numValue), "Memory"]
+              return [numValue, name || ""]
             }}
             contentStyle={{
               backgroundColor: "hsl(var(--background))",

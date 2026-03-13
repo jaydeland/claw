@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react"
-import { trpc } from "@/lib/trpc"
+import { trpc, trpcClient } from "@/lib/trpc"
 
 interface OutputState {
   lines: string[] // All loaded lines (in order from oldest to newest)
@@ -40,10 +40,9 @@ export function usePaginatedOutput(
       { taskId, tailLines: initialLimit, includeMetadata: true },
       {
         enabled: enabled && !state.lines.length && pollingEnabled,
-        refetchInterval: (data) => {
+        refetchInterval: (query) => {
           // Poll every 2 seconds if task is running, otherwise stop polling
-          const status = (data as { status?: string } | undefined)?.status
-          return status === "running" ? 2000 : false
+          return query.state.data?.status === "running" ? 2000 : false
         },
       }
     )
@@ -91,12 +90,6 @@ export function usePaginatedOutput(
     }
   }, [initialData])
 
-  // Query for loading more (pagination) - disabled by default, triggered via refetch
-  const { refetch: loadMoreRefetch } = trpc.tasks.getWithOutput.useQuery(
-    { taskId, offset: 0, limit: chunkSize, includeMetadata: true },
-    { enabled: false }
-  )
-
   // Load more function
   const loadMore = useCallback(async () => {
     if (state.isLoadingMore || !state.hasOlderLines) return
@@ -108,7 +101,12 @@ export function usePaginatedOutput(
       const newOffset = Math.max(0, state.oldestLoadedLine - chunkSize)
       const limit = Math.min(chunkSize, state.oldestLoadedLine)
 
-      const result = await loadMoreRefetch({ throwOnError: true }).then(res => res.data)
+      const result = await trpcClient.tasks.getWithOutput.query({
+        taskId,
+        offset: newOffset,
+        limit,
+        includeMetadata: true,
+      })
 
       if (result?.output && result.outputMetadata) {
         const newLines = result.output.split("\n")
@@ -127,7 +125,7 @@ export function usePaginatedOutput(
       console.error("Failed to load more lines:", error)
       setState((prev) => ({ ...prev, isLoadingMore: false }))
     }
-  }, [taskId, state.oldestLoadedLine, state.hasOlderLines, state.isLoadingMore, chunkSize, loadMoreRefetch])
+  }, [taskId, state.oldestLoadedLine, state.hasOlderLines, state.isLoadingMore, chunkSize])
 
   // Refresh function (reload from current position)
   const refresh = useCallback(() => {

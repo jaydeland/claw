@@ -196,7 +196,7 @@ export const ContextualChatPane = memo(function ContextualChatPane({
     return `${systemContext}\n\n---\n\nUser: ${userInput}`
   }, [systemContext, messages.length])
 
-  const sendMessage = useCallback(async (userInput: string, chatIdOverride?: string, subChatIdOverride?: string) => {
+  const sendMessage = useCallback(async (userInput: string, chatIdOverride?: string | null, subChatIdOverride?: string | null) => {
     const useChat = chatIdOverride ?? activeChatId
     const useSubChat = subChatIdOverride ?? activeSubChatId
     if (!useChat || !useSubChat) return

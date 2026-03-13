@@ -32,8 +32,10 @@ export function AnalyzeSidebar() {
       onData: (update) => {
         console.log("[Analyze] Diagram update:", update)
         // Invalidate queries to refresh data
-        utils.analyzer.list.invalidate({ projectId: selectedProject?.id ?? '' })
-        utils.analyzer.get.invalidate({ projectId: selectedProject?.id ?? '', type: update.diagram.type as any })
+        if (selectedProject) {
+          utils.analyzer.list.invalidate({ projectId: selectedProject.id })
+          utils.analyzer.get.invalidate({ projectId: selectedProject.id, type: update.diagram.type as any })
+        }
       },
     }
   )

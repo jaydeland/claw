@@ -147,10 +147,7 @@ export function ClawChatView({ className }: ClawChatViewProps) {
       <div className="flex-1 min-h-0 overflow-hidden">
         <TooltipProvider>
           <ReactFlowProvider>
-            <SessionFlowPanel onScrollToMessage={() => {
-              // In claw-chat-view, scrolling to message is handled differently
-              // This is a no-op since the flow panel is standalone here
-            }} />
+            <SessionFlowPanel onScrollToMessage={() => {}} />
           </ReactFlowProvider>
         </TooltipProvider>
       </div>

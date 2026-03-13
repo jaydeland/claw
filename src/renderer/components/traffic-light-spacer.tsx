@@ -2,7 +2,7 @@ import * as React from "react"
 import { cn } from "../lib/utils"
 
 interface TrafficLightSpacerProps {
-  isFullscreen?: boolean
+  isFullscreen?: boolean | null
   isDesktop?: boolean
   className?: string
 }
@@ -26,7 +26,7 @@ export function TrafficLightSpacer({
 
 interface TrafficLightsProps {
   isHovered?: boolean
-  isFullscreen?: boolean
+  isFullscreen?: boolean | null
   isDesktop?: boolean
   className?: string
 }

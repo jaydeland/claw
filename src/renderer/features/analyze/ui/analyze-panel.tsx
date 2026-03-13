@@ -5,6 +5,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { atom } from "jotai"
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Controls,
   useNodesState,
   useEdgesState,
@@ -15,7 +16,6 @@ import ReactFlow, {
   MiniMap,
   Panel,
   MarkerType,
-  BackgroundVariant,
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { Loader2, AlertCircle, RefreshCw, Maximize2, Minimize2, Play, X } from "lucide-react"
@@ -96,12 +96,12 @@ function AnalysisNode({ data, id }: { data: Record<string, unknown>; id: string 
         getNodeStyle()
       )}
     >
-      <div className="font-semibold text-sm truncate">{String(data.label ?? id)}</div>
-      {typeof data.description === "string" && (
-        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{data.description}</div>
+      <div className="font-semibold text-sm truncate">{(data.label as string) || id}</div>
+      {!!data.description && (
+        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{String(data.description)}</div>
       )}
-      {typeof data.tech === "string" && (
-        <div className="text-xs text-muted-foreground mt-1 font-mono">{data.tech}</div>
+      {!!data.tech && (
+        <div className="text-xs text-muted-foreground mt-1 font-mono">{String(data.tech)}</div>
       )}
     </div>
   )

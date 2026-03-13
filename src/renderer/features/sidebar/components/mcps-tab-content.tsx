@@ -185,9 +185,8 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
     // Use Electron's dialog API to show file picker
     const result = await window.desktopApi?.showOpenDialog({
       title: "Select or Create MCP Config File",
-      defaultPath: "~/.claude",
       filters: [{ name: "JSON Files", extensions: ["json"] }],
-      properties: ["openFile"],
+      properties: ["openFile", "openDirectory"],
     })
 
     if (result && result.length > 0) {

@@ -1355,7 +1355,7 @@ export function NewChatForm({
                           ) : (
                             <AgentIcon className="h-3.5 w-3.5" />
                           )}
-                          <span>{agentMode === "plan" ? "Plan" : "Accept"}</span>
+                          <span>{agentMode === "plan" ? "Plan" : "Agent"}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent

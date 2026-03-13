@@ -43,7 +43,7 @@ export function Terminal({
 
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [terminalCwd, setTerminalCwd] = useState<string | null>(
-    initialCwd || cwd || null,
+    initialCwd ?? cwd ?? null,
   )
   const [initRetry, setInitRetry] = useState(0)
   const setGlobalCwds = useSetAtom(terminalCwdAtom)

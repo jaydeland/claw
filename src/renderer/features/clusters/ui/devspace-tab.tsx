@@ -9,7 +9,7 @@ import {
   Play,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
-import { trpc } from "../../../lib/trpc"
+import { trpc, trpcClient } from "../../../lib/trpc"
 import { toast } from "sonner"
 import {
   Select,
@@ -85,7 +85,7 @@ export function DevSpaceTab() {
 
       for (const terminal of terminals) {
         try {
-          const isAlive = await utils.client.terminal.isSessionAlive.query(terminal.paneId)
+          const isAlive = await trpcClient.terminal.isSessionAlive.query(terminal.paneId)
           if (isAlive) {
             aliveTerminals.push(terminal)
             console.log(`[DevSpaceTab] Terminal ${terminal.serviceName} is alive`)
