@@ -6,7 +6,7 @@ import { statSync } from "fs"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { chats, getDatabase, headlessClaws, projects, subChats, whatsappBridges } from "../../db"
+import { chats, getDatabase, headlessClaws, projects, subChats, whatsappBridges, discordBridges } from "../../db"
 import {
   createWorktreeForChat,
   fetchGitHubPRStatus,
@@ -467,7 +467,7 @@ export const chatsRouter = router({
   updateConnection: publicProcedure
     .input(z.object({
       chatId: z.string(),
-      connectionType: z.enum(["none", "whatsapp", "slack"]),
+      connectionType: z.enum(["none", "whatsapp", "slack", "discord"]),
       connectionTarget: z.string().optional(),
       connectionName: z.string().optional(),
     }))
@@ -550,6 +550,78 @@ export const chatsRouter = router({
               })
               .run()
             console.log(`[updateConnection] Auto-created WhatsApp bridge for chat ${input.chatId}`)
+          }
+        }
+      }
+
+      // Auto-create Discord claw when connection is established
+      if (input.connectionType === "discord" && input.connectionTarget) {
+        const allDiscordClaws = db
+          .select()
+          .from(headlessClaws)
+          .where(eq(headlessClaws.triggerType, "discord_message"))
+          .all()
+        const existingClaw = allDiscordClaws.find(c => {
+          try { return JSON.parse(c.triggerConfig || "{}").discordChannelFilter === input.connectionTarget } catch { return false }
+        })
+
+        if (!existingClaw) {
+          const clawId = createId()
+          const chatName = input.connectionName || chat.name || "Discord Chat"
+
+          db.insert(headlessClaws)
+            .values({
+              id: clawId,
+              name: `Discord: ${chatName}`,
+              instruction: `You are an AI assistant integrated with Discord. You receive messages from the Discord channel "${chatName}" and should respond helpfully.\n\nWhen responding:\n- Be concise but informative\n- Use markdown formatting when helpful\n- If the user asks about code or technical topics, provide clear explanations\n- Always respond in the same language as the user's message`,
+              targetWorktree,
+              triggerType: "discord_message",
+              triggerConfig: JSON.stringify({ discordChannelFilter: input.connectionTarget }),
+              isEnabled: true,
+              allowedDirectories: JSON.stringify([]),
+              allowedMcpServers: JSON.stringify([]),
+            })
+            .run()
+
+          console.log(`[updateConnection] Auto-created Discord claw ${clawId} for chat ${input.chatId} with filter ${input.connectionTarget}`)
+
+          await clawDaemon.reload()
+        }
+      }
+
+      // Auto-create Discord bridge when connection is established
+      if (input.connectionType === "discord" && input.connectionTarget) {
+        const existingBridge = db
+          .select()
+          .from(discordBridges)
+          .where(
+            and(
+              eq(discordBridges.chatId, input.chatId),
+              eq(discordBridges.discordChannelId, input.connectionTarget)
+            )
+          )
+          .get()
+
+        if (!existingBridge) {
+          const chatSubChats = db.select().from(subChats).where(eq(subChats.chatId, input.chatId)).all()
+          const targetSubChatId = chatSubChats[0]?.id
+
+          if (targetSubChatId) {
+            // Get guild info from settings
+            const { discordSettings: discordSettingsTable } = await import("../../db")
+            const settings = db.select().from(discordSettingsTable).where(eq(discordSettingsTable.id, "default")).get()
+
+            db.insert(discordBridges)
+              .values({
+                chatId: input.chatId,
+                subChatId: targetSubChatId,
+                discordGuildId: settings?.guildId || "",
+                discordChannelId: input.connectionTarget,
+                discordChannelName: input.connectionName,
+                isActive: true,
+              })
+              .run()
+            console.log(`[updateConnection] Auto-created Discord bridge for chat ${input.chatId}`)
           }
         }
       }

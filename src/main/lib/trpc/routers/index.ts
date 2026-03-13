@@ -27,6 +27,7 @@ import { analyzerRouter } from "./analyzer"
 import { transientChatRouter } from "./transient-chat"
 import { githubRouter } from "./github"
 import { clawsRouter } from "./claws"
+import { discordRouter } from "./discord"
 import { slackRouter } from "./slack"
 import { whatsappRouter } from "./whatsapp"
 import { promptsRouter } from "./prompts"
@@ -71,6 +72,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     transientChat: transientChatRouter,
     github: githubRouter,
     claws: clawsRouter,
+    discord: discordRouter,
     slack: slackRouter,
     whatsapp: whatsappRouter,
     prompts: promptsRouter,

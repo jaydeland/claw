@@ -10,10 +10,11 @@ import { spawn, ChildProcess } from "node:child_process"
 import { existsSync, statSync, unlinkSync, mkdirSync } from "fs"
 import { join } from "path"
 import { eq, desc, and } from "drizzle-orm"
-import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, chats, subChats, projects, chatSessions, type HeadlessClaw, type ClawExecution, type ChatSession } from "../db"
+import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, discordSettings, chats, subChats, projects, chatSessions, type HeadlessClaw, type ClawExecution, type ChatSession } from "../db"
 import { createId } from "../db/utils"
 import { getSlackTrigger } from "./slack-trigger"
 import { getWhatsAppTrigger } from "./whatsapp-trigger"
+import { getDiscordTrigger } from "./discord-trigger"
 import {
   getOrCreateSession,
   updateSessionStatus,
@@ -26,7 +27,7 @@ import {
 export * from "./session-manager"
 
 // Type definitions
-type TriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
+type TriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message" | "discord_message"
 type ExecutionStatus = "running" | "success" | "failed"
 
 interface CronConfig {
@@ -45,6 +46,10 @@ interface SlackTriggerConfig {
 
 interface WhatsAppTriggerConfig {
   whatsappChatFilter?: string // Optional chat filter (e.g., "group" or phone number)
+}
+
+interface DiscordTriggerConfig {
+  discordChannelFilter?: string // Optional channel filter (e.g., channel ID)
 }
 
 // Active cron jobs and polling intervals
@@ -171,6 +176,12 @@ class ClawDaemon {
         console.log(`[ClawDaemon] Claw "${claw.name}" registered for WhatsApp messages`)
         // Ensure WhatsAppTrigger is started if credentials exist
         await this.ensureWhatsAppTriggerStarted()
+        break
+      case "discord_message":
+        // Discord triggers are handled by DiscordTrigger singleton
+        console.log(`[ClawDaemon] Claw "${claw.name}" registered for Discord messages`)
+        // Ensure DiscordTrigger is started if credentials exist
+        await this.ensureDiscordTriggerStarted()
         break
       default:
         console.warn(`[ClawDaemon] Unknown trigger type: ${claw.triggerType}`)
@@ -405,6 +416,40 @@ class ClawDaemon {
   }
 
   /**
+   * Ensure Discord trigger is started if credentials are configured
+   */
+  private async ensureDiscordTriggerStarted(): Promise<void> {
+    try {
+      const discordTrigger = getDiscordTrigger()
+      if (!discordTrigger.isActive()) {
+        const db = getDatabase()
+        const settings = db.select().from(discordSettings).where(eq(discordSettings.id, "default")).get()
+        if (settings?.encryptedBotToken && settings?.isConnected) {
+          await discordTrigger.start()
+        }
+      }
+    } catch (error) {
+      console.error("[ClawDaemon] Failed to start Discord trigger:", error)
+    }
+  }
+
+  /**
+   * Start Discord trigger (called from settings when connecting)
+   */
+  async startDiscordTrigger(): Promise<void> {
+    const discordTrigger = getDiscordTrigger()
+    await discordTrigger.start()
+  }
+
+  /**
+   * Stop Discord trigger (called from settings when disconnecting)
+   */
+  async stopDiscordTrigger(): Promise<void> {
+    const discordTrigger = getDiscordTrigger()
+    await discordTrigger.stop()
+  }
+
+  /**
    * Execute a claw (trigger a run)
    */
   async executeClaw(
@@ -417,8 +462,10 @@ class ClawDaemon {
       slackThreadTs?: string
       whatsappFrom?: string
       whatsappSender?: string
+      discordChannelId?: string
+      discordUser?: string
       originalMessage?: string
-      triggerSource?: "slack" | "whatsapp" | "github" | "cron" | "manual"
+      triggerSource?: "slack" | "whatsapp" | "discord" | "github" | "cron" | "manual"
       sessionId?: string // Optional: existing session ID for persistence
     }
   ): Promise<string> {
@@ -457,6 +504,14 @@ class ClawDaemon {
       const externalId = context.slackThreadTs || context.slackChannel
       session = await getOrCreateSession(claw.id, externalId, "slack", {
         metadata: { channel: context.slackChannel, user: context.slackUser, threadTs: context.slackThreadTs },
+      })
+      sessionContextText = formatSessionContextForPrompt(session)
+      await updateSessionStatus(session.id, "active")
+      await addMessageToSession(session.id, "user", context.originalMessage || "Trigger received")
+    } else if (context?.triggerSource === "discord" && context.discordChannelId) {
+      // Create or get Discord session
+      session = await getOrCreateSession(claw.id, context.discordChannelId, "discord", {
+        metadata: { channelId: context.discordChannelId, user: context.discordUser },
       })
       sessionContextText = formatSessionContextForPrompt(session)
       await updateSessionStatus(session.id, "active")
@@ -541,6 +596,13 @@ class ClawDaemon {
         }
       }
 
+      if (context.triggerSource === "discord") {
+        contextParts.push(`Triggered via Discord by ${context.discordUser} in channel ${context.discordChannelId}`)
+        if (context.originalMessage) {
+          contextParts.push(`Original message: "${context.originalMessage}"`)
+        }
+      }
+
       if (contextParts.length > 0) {
         instruction += `\n\nContext: ${contextParts.join(". ")}`
       }
@@ -618,6 +680,10 @@ class ClawDaemon {
       return `${timestamp} - Slack from ${context.slackUser}`
     }
 
+    if (context?.triggerSource === "discord" && context?.discordUser) {
+      return `${timestamp} - Discord from ${context.discordUser}`
+    }
+
     if (context?.issueNumber) {
       return `${timestamp} - Issue #${context.issueNumber}`
     }
@@ -651,6 +717,16 @@ class ClawDaemon {
 
     if (context?.triggerSource === "slack") {
       contextParts.push(`From: ${context.slackUser} in ${context.slackChannel}`)
+      if (context.originalMessage) {
+        contextParts.push(`Message: "${context.originalMessage}"`)
+      }
+      if (sessionContextText) {
+        contextParts.push(`This conversation has session history that will be included in the prompt.`)
+      }
+    }
+
+    if (context?.triggerSource === "discord") {
+      contextParts.push(`From: ${context.discordUser} in channel ${context.discordChannelId}`)
       if (context.originalMessage) {
         contextParts.push(`Message: "${context.originalMessage}"`)
       }

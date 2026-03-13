@@ -2,7 +2,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { AlignJustify, Plus, MessageCircle, Hash, Link2 } from "lucide-react"
+import { AlignJustify, Plus, MessageCircle, Hash, Link2, Gamepad2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Button } from "../../../components/ui/button"
@@ -186,7 +186,7 @@ export function NewChatForm({
 }: NewChatFormProps = {}) {
   // UNCONTROLLED: just track if editor has content for send button
   const [hasContent, setHasContent] = useState(false)
-  const [selectedConnection, setSelectedConnection] = useState<"none" | "whatsapp" | "slack">("none")
+  const [selectedConnection, setSelectedConnection] = useState<"none" | "whatsapp" | "slack" | "discord">("none")
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
@@ -208,6 +208,7 @@ export function NewChatForm({
   // Check connection service availability
   const { data: whatsappStatus } = trpc.whatsapp.getStatus.useQuery(undefined, { refetchInterval: 10000 })
   const { data: slackCredentials } = trpc.slack.hasCredentials.useQuery()
+  const { data: discordCredentials } = trpc.discord.hasCredentials.useQuery()
 
   // Validate selected project exists in DB
   // While loading, trust the stored value to prevent flicker
@@ -769,6 +770,7 @@ export function NewChatForm({
   // Connection claw mutations
   const createClawMutation = trpc.claws.create.useMutation()
   const setupSlackClawMutation = trpc.slack.setupChannelClaw.useMutation()
+  const setupDiscordClawMutation = trpc.discord.setupChannelClaw.useMutation()
   const createWhatsAppGroupMutation = trpc.whatsapp.createGroup.useMutation()
   const updateConnectionMutation = trpc.chats.updateConnection.useMutation()
 
@@ -978,10 +980,35 @@ export function NewChatForm({
             connectionName: slackResult.channelName,
           })
           toast.success(`Connected to Slack channel #${slackResult.channelName}`)
+        } else if (selectedConnection === "discord") {
+          const channelNameClean = chatDisplayName
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 80) || "claw-chat"
+          const guildId = discordCredentials?.guildId
+          if (!guildId) {
+            toast.error("No Discord server selected. Configure one in Settings > Discord first.")
+          } else {
+            const discordResult = await setupDiscordClawMutation.mutateAsync({
+              guildId,
+              channelName: channelNameClean,
+              projectPath: selectedProject.path,
+              projectName: selectedProject.name,
+            })
+            await updateConnectionMutation.mutateAsync({
+              chatId: chatData.id,
+              connectionType: "discord",
+              connectionTarget: discordResult.channelId,
+              connectionName: discordResult.channelName,
+            })
+            toast.success(`Connected to Discord channel #${discordResult.channelName}`)
+          }
         }
       } catch (err) {
         console.error("[NewChatForm] Failed to create connection:", err)
-        toast.error(`Chat created but failed to connect to ${selectedConnection === "whatsapp" ? "WhatsApp" : "Slack"}`)
+        toast.error(`Chat created but failed to connect to ${selectedConnection === "whatsapp" ? "WhatsApp" : selectedConnection === "slack" ? "Slack" : "Discord"}`)
       }
     }
   }, [
@@ -990,8 +1017,10 @@ export function NewChatForm({
     createChatMutation,
     createClawMutation,
     setupSlackClawMutation,
+    setupDiscordClawMutation,
     createWhatsAppGroupMutation,
     updateConnectionMutation,
+    discordCredentials,
     selectedConnection,
     hasContent,
     selectedBranch,
@@ -1578,6 +1607,8 @@ export function NewChatForm({
                             <MessageCircle className="h-3.5 w-3.5 text-green-500" />
                           ) : selectedConnection === "slack" ? (
                             <Hash className="h-3.5 w-3.5 text-purple-500" />
+                          ) : selectedConnection === "discord" ? (
+                            <Gamepad2 className="h-3.5 w-3.5 text-indigo-500" />
                           ) : (
                             <Link2 className="h-3.5 w-3.5" />
                           )}
@@ -1586,7 +1617,9 @@ export function NewChatForm({
                               ? "Connect"
                               : selectedConnection === "whatsapp"
                               ? "WhatsApp"
-                              : "Slack"}
+                              : selectedConnection === "slack"
+                              ? "Slack"
+                              : "Discord"}
                           </span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
@@ -1626,6 +1659,19 @@ export function NewChatForm({
                               <span>Slack</span>
                             </div>
                             {selectedConnection === "slack" && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setSelectedConnection("discord")}
+                            disabled={!discordCredentials?.hasBotToken || !discordCredentials?.isConnected}
+                            className="justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Gamepad2 className="w-4 h-4 text-indigo-500" />
+                              <span>Discord</span>
+                            </div>
+                            {selectedConnection === "discord" && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                             )}
                           </DropdownMenuItem>

@@ -14,6 +14,7 @@ export type SettingsTab =
   | "github"
   | "slack"
   | "whatsapp"
+  | "discord"
   | "advanced"
   | "worktrees"
   | "backup"
