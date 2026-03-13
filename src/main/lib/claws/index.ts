@@ -485,7 +485,20 @@ class ClawDaemon {
     }
 
     // Build the instruction with context
-    let instruction = claw.instruction
+    let instruction = ""
+
+    // Prepend soul instruction if set (persistent behavioral identity)
+    if (claw.soulInstruction) {
+      instruction = `${claw.soulInstruction}\n\n---\n\n`
+    }
+
+    // Add the claw's task instruction
+    instruction += claw.instruction
+
+    // Add purpose as context (helps Claude understand the claw's role)
+    if (claw.purpose) {
+      instruction += `\n\nPurpose: ${claw.purpose}`
+    }
 
     if (context) {
       const contextParts: string[] = []
@@ -637,11 +650,19 @@ class ClawDaemon {
       timestamp: Date.now(),
     })
 
-    // The instruction as user message
+    // The instruction as user message (with soul prepended if set, and purpose appended)
+    let fullInstruction = claw.instruction
+    if (claw.soulInstruction) {
+      fullInstruction = `${claw.soulInstruction}\n\n---\n\n${claw.instruction}`
+    }
+    if (claw.purpose) {
+      fullInstruction += `\n\nPurpose: ${claw.purpose}`
+    }
+
     messages.push({
       id: createId(),
       role: "user",
-      content: [{ type: "text", text: claw.instruction }],
+      content: [{ type: "text", text: fullInstruction }],
       timestamp: Date.now(),
     })
 

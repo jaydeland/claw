@@ -526,6 +526,20 @@
       "when": 1741230000000,
       "tag": "0071_add_extended_thinking_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1741316400000,
+      "tag": "0072_add_headless_claws_sandbox_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1773590400000,
+      "tag": "0073_add_headless_claws_soul_instruction",
+      "breakpoints": true
     }
   ]
 }

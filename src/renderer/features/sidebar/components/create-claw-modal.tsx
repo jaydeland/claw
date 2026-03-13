@@ -22,6 +22,7 @@ interface CreateClawModalProps {
     name: string
     purpose: string
     instruction: string
+    soulInstruction?: string
     targetWorktree: string
     triggerType: TriggerType
     triggerConfig: Record<string, string>
@@ -59,6 +60,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
         name: formData.name,
         purpose: formData.purpose,
         instruction: formData.instruction,
+        soulInstruction: formData.soulInstruction,
         targetWorktree: formData.targetWorktree,
         triggerType: formData.triggerType,
         triggerConfig,
@@ -71,6 +73,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
         name: formData.name,
         purpose: formData.purpose,
         instruction: formData.instruction,
+        soulInstruction: formData.soulInstruction,
         targetWorktree: formData.targetWorktree,
         triggerType: formData.triggerType,
         triggerConfig,
@@ -88,6 +91,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
       name: claw.name,
       purpose: claw.purpose || "",
       instruction: claw.instruction,
+      soulInstruction: claw.soulInstruction || "",
       targetWorktree: claw.targetWorktree,
       triggerType: claw.triggerType as TriggerType,
       cronExpression: config.expression || "0 */6 * * *",

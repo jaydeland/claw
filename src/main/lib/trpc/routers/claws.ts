@@ -119,6 +119,7 @@ export const clawsRouter = router({
         name: z.string().min(1),
         purpose: z.string().min(1, "Purpose is required"),
         instruction: z.string().min(1),
+        soulInstruction: z.string().optional(),
         targetWorktree: z.string().min(1),
         triggerType: z.enum(["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"]),
         triggerConfig: triggerConfigSchema,
@@ -138,6 +139,7 @@ export const clawsRouter = router({
           name: input.name,
           purpose: input.purpose,
           instruction: input.instruction,
+          soulInstruction: input.soulInstruction || null,
           targetWorktree: input.targetWorktree,
           triggerType: input.triggerType,
           triggerConfig: JSON.stringify(input.triggerConfig),
@@ -164,6 +166,7 @@ export const clawsRouter = router({
         name: z.string().min(1).optional(),
         purpose: z.string().min(1).optional(),
         instruction: z.string().min(1).optional(),
+        soulInstruction: z.string().optional(),
         targetWorktree: z.string().min(1).optional(),
         triggerType: z.enum(["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"]).optional(),
         triggerConfig: triggerConfigSchema.optional(),
@@ -181,6 +184,7 @@ export const clawsRouter = router({
       if (updates.name !== undefined) updateData.name = updates.name
       if (updates.purpose !== undefined) updateData.purpose = updates.purpose
       if (updates.instruction !== undefined) updateData.instruction = updates.instruction
+      if (updates.soulInstruction !== undefined) updateData.soulInstruction = updates.soulInstruction
       if (updates.targetWorktree !== undefined) updateData.targetWorktree = updates.targetWorktree
       if (updates.triggerType !== undefined) updateData.triggerType = updates.triggerType
       if (updates.triggerConfig !== undefined) {

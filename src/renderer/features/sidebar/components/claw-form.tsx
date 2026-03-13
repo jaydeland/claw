@@ -23,6 +23,7 @@ export interface FormData {
   name: string
   purpose: string
   instruction: string
+  soulInstruction: string
   targetWorktree: string
   triggerType: TriggerType
   cronExpression: string
@@ -50,6 +51,7 @@ const defaultFormData: FormData = {
   name: "",
   purpose: "",
   instruction: "",
+  soulInstruction: "",
   targetWorktree: "",
   triggerType: "manual",
   cronExpression: "0 */6 * * *",
@@ -304,10 +306,10 @@ export function ClawForm({
 
       {/* Instruction */}
       <div className="space-y-2">
-        <Label htmlFor="instruction">System Instruction</Label>
+        <Label htmlFor="instruction">Task Instruction</Label>
         <Textarea
           id="instruction"
-          placeholder="Enter the instructions for Claude to execute..."
+          placeholder="Enter the specific task instructions for Claude to execute..."
           value={formData.instruction}
           onChange={(e) =>
             setFormData((prev) => ({ ...prev, instruction: e.target.value }))
@@ -320,6 +322,77 @@ export function ClawForm({
         {errors.instruction && (
           <p className="text-xs text-destructive">{errors.instruction}</p>
         )}
+        <p className="text-xs text-muted-foreground">
+          The specific task this claw will execute (e.g., "Review the code in src/ and fix any TypeScript errors")
+        </p>
+      </div>
+
+      {/* Soul Instruction */}
+      <div className="space-y-2">
+        <Label htmlFor="soul-instruction">Soul Instruction (Optional)</Label>
+        <Textarea
+          id="soul-instruction"
+          placeholder="Define the agent's persistent behavioral identity..."
+          value={formData.soulInstruction}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, soulInstruction: e.target.value }))
+          }
+          className={cn(
+            "min-h-[150px] resize-none font-mono text-xs",
+            errors.soulInstruction && "border-destructive"
+          )}
+        />
+        <p className="text-xs text-muted-foreground">
+          Persistent behavioral guidelines injected before every task. Defines how the agent thinks and acts.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setFormData((prev) => ({
+              ...prev,
+              soulInstruction: `You are an autonomous automation agent operating in a fire-and-forget environment.
+
+## Core Operating Principles
+
+### 1. Safety First - Reversibility & Blast Radius
+Before ANY operation, assess:
+- Reversibility: Can this be undone easily? If not, proceed with extreme caution
+- Blast Radius: How many systems/users could be affected?
+- Destructive Operations: NEVER delete, remove, or downgrade without explicit requirement
+- External Impact: When connected to WhatsApp/Slack, remember your responses affect real users
+
+### 2. Act Decisively When Safe, Ask When Uncertain
+- Safe operations: Create files, add features, read/analyze, refactor non-critical code → Act directly
+- Uncertain operations: Modifying auth, changing APIs, touching production configs → Ask first
+- Destructive operations: Deleting code, removing dependencies → Require explicit justification
+
+### 3. No Over-Engineering
+- Implement exactly what's requested - no speculative features
+- Three similar lines of code is better than premature abstraction
+- Don't add error handling for scenarios that can't happen
+- Trust internal code and framework guarantees
+
+### 4. Worktree Isolation Awareness
+You operate in an isolated Git worktree at: {{targetWorktree}}
+- Your changes are sandboxed to this directory
+- Respect the worktree boundaries
+
+### 5. Tool Usage Discipline
+- Use dedicated tools (Read, Edit, Glob, Grep) over bash for file operations
+- Reserve bash exclusively for system commands
+- Never guess or generate URLs unless confident they help with programming
+
+### 6. Completion Standards
+- Verify your work compiles/runs before considering complete
+- Run tests if available; fix failures before finishing
+- End with clear status: what was done, what remains, any warnings`,
+            }))
+          }}
+        >
+          Load Default Soul Template
+        </Button>
       </div>
 
       {/* Trigger Type */}
