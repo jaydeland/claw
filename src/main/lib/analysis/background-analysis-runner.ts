@@ -11,6 +11,7 @@ import {
   getDatabase,
   analysisDiagrams,
   analysisJobs,
+  systemPrompts,
   type AnalysisDiagram,
   type AnalysisJob,
 } from "../db"
@@ -24,6 +25,7 @@ import {
 } from "../claude/background-session"
 import type { AnalysisType, FlowNode, FlowEdge, AnalysisProgressUpdate, AnalysisResult } from "./types"
 import { parseAnalysisResult } from "./analysis-parser"
+import { getPromptByKey, PROMPT_KEYS } from "../prompts/prompt-service"
 
 // Re-export types for convenience
 export type { AnalysisType, FlowNode, FlowEdge, AnalysisProgressUpdate, AnalysisResult }
@@ -413,8 +415,17 @@ export async function startBackgroundAnalysis(
       return { success: false, error: "Failed to create analysis job" }
     }
 
-    // Build the prompt
-    const prompt = `${ANALYSIS_PROMPTS[type]}
+    // Build the prompt - use system prompt from DB for "db" analysis type
+    let analysisPrompt: string
+    if (type === "db") {
+      // Fetch the system prompt from database (falls back to hardcoded if not found)
+      const dbPrompt = getPromptByKey(PROMPT_KEYS.ANALYSIS_DB)
+      analysisPrompt = dbPrompt || ANALYSIS_PROMPTS.db
+    } else {
+      analysisPrompt = ANALYSIS_PROMPTS[type]
+    }
+
+    const prompt = `${analysisPrompt}
 
 Project path: ${projectPath}
 
