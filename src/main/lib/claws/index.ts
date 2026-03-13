@@ -7,7 +7,7 @@
 
 import { safeStorage, Notification, app } from "electron"
 import { spawn, ChildProcess } from "node:child_process"
-import { existsSync, statSync, unlinkSync } from "fs"
+import { existsSync, statSync, unlinkSync, mkdirSync } from "fs"
 import { join } from "path"
 import { eq, desc, and } from "drizzle-orm"
 import { getDatabase, headlessClaws, clawExecutions, githubSettings, slackSettings, whatsappSettings, chats, subChats, projects, chatSessions, type HeadlessClaw, type ClawExecution, type ChatSession } from "../db"
@@ -709,6 +709,25 @@ class ClawDaemon {
         ...(allowedMcps.length > 0 ? { CLAUDE_MCP_ALLOW_LIST: allowedMcps.join(",") } : { CLAUDE_MCP_DISABLE_ALL: "1" }),
       }
 
+      // Sandbox mode configuration
+      const sandboxMode = claw.sandboxMode || "disabled"
+      let permissionMode: "plan" | "bypassPermissions" | "sandbox" = "bypassPermissions"
+      let allowSkipPermissions = true
+
+      if (sandboxMode === "enabled") {
+        permissionMode = "sandbox"
+        allowSkipPermissions = false
+      } else if (sandboxMode === "strict") {
+        permissionMode = "plan"
+        allowSkipPermissions = false
+      }
+
+      // Create .claw/auto-memory directory for automatic memory storage
+      const autoMemoryDir = join(claw.targetWorktree, ".claw", "auto-memory")
+      if (!existsSync(autoMemoryDir)) {
+        mkdirSync(autoMemoryDir, { recursive: true })
+      }
+
       const stream = claudeQuery({
         prompt: instruction,
         options: {
@@ -719,11 +738,16 @@ class ClawDaemon {
             preset: "claude_code" as const,
           },
           env: finalEnv,
-          permissionMode: "bypassPermissions" as const,
-          allowDangerouslySkipPermissions: true,
+          permissionMode: permissionMode as const,
+          allowDangerouslySkipPermissions: allowSkipPermissions,
           allowedDirectories: allowedDirs,
           pathToClaudeCodeExecutable: claudeBinaryPath,
           persistSession: true,
+          // Enable automatic memory storage in .claw/auto-memory directory
+          memory: {
+            type: "auto",
+            path: autoMemoryDir,
+          },
         } as any,
       })
 

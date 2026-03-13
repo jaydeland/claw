@@ -411,6 +411,7 @@ export const headlessClaws = sqliteTable("headless_claws", {
   isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
   allowedDirectories: text("allowed_directories").notNull().default("[]"), // JSON string[]: extra dirs beyond targetWorktree
   allowedMcpServers: text("allowed_mcp_servers").notNull().default("[]"),  // JSON string[]: empty = no MCPs, null-stored-as-"[]" = inherit global
+  sandboxMode: text("sandbox_mode", { enum: ["disabled", "enabled", "strict"] }).notNull().default("disabled"), // Sandbox permission mode
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
