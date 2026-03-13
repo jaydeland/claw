@@ -13,7 +13,7 @@ import {
   SettingsIcon,
 } from "../../icons"
 import { FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
-import { Github } from "lucide-react"
+import { Github, Cloud } from "lucide-react"
 import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
 import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
 import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
@@ -25,6 +25,7 @@ import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-setti
 import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
 import { AgentsBackupTab } from "./settings-tabs/agents-backup-tab"
 import { AgentsProvidersTab } from "./settings-tabs/agents-providers-tab"
+import { AgentsAwsTab } from "./settings-tabs/agents-aws-tab"
 import { AgentsGitHubTab } from "./settings-tabs/agents-github-tab"
 import { AgentsSlackTab } from "./settings-tabs/agents-slack-tab"
 import { AgentsWhatsAppTab } from "./settings-tabs/agents-whatsapp-tab"
@@ -86,6 +87,12 @@ const MAIN_TABS = [
     label: "Kubernetes",
     icon: Server,
     description: "Kubernetes cluster configuration",
+  },
+  {
+    id: "aws" as SettingsTab,
+    label: "AWS",
+    icon: Cloud,
+    description: "AWS authentication (SSO or profile)",
   },
   {
     id: "github" as SettingsTab,
@@ -283,7 +290,9 @@ export function AgentsSettingsDialog({
         return <AgentsPreferencesTab />
       case "kubernetes":
         return <AgentsKubernetesTab />
-            case "github":
+      case "aws":
+        return <AgentsAwsTab />
+      case "github":
         return <AgentsGitHubTab />
       case "slack":
         return <AgentsSlackTab />

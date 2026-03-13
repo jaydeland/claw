@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm"
 import { router, publicProcedure } from "../index"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { AwsSsoService, decrypt } from "../../aws/sso-service"
+import { writeAwsCredentialsFiles, clearAwsCredentialsFiles } from "../../aws/credentials-file"
 import { lookup } from "dns"
 import { promisify } from "util"
 import * as https from "https"
@@ -309,6 +310,14 @@ export const awsSsoRouter = router({
         .where(eq(claudeCodeSettings.id, "default"))
         .run()
 
+      // Write credentials to app-managed files so SDK subprocesses can use them
+      writeAwsCredentialsFiles({
+        accessKeyId: decrypt(credentials.accessKeyId),
+        secretAccessKey: decrypt(credentials.secretAccessKey),
+        sessionToken: decrypt(credentials.sessionToken),
+        region: settings.bedrockRegion || settings.ssoRegion || "us-east-1",
+      })
+
       // Validate credentials immediately (decrypt first since getRoleCredentials returns encrypted values)
       try {
         const { STSClient, GetCallerIdentityCommand } = await import("@aws-sdk/client-sts")
@@ -517,6 +526,14 @@ export const awsSsoRouter = router({
       .where(eq(claudeCodeSettings.id, "default"))
       .run()
 
+    // Refresh the app-managed credentials files
+    writeAwsCredentialsFiles({
+      accessKeyId: decrypt(credentials.accessKeyId),
+      secretAccessKey: decrypt(credentials.secretAccessKey),
+      sessionToken: decrypt(credentials.sessionToken),
+      region: settings.bedrockRegion || settings.ssoRegion || "us-east-1",
+    })
+
     return {
       success: true,
       expiresAt: credentials.expiration.toISOString(),
@@ -546,6 +563,8 @@ export const awsSsoRouter = router({
       })
       .where(eq(claudeCodeSettings.id, "default"))
       .run()
+
+    clearAwsCredentialsFiles()
 
     return { success: true }
   }),

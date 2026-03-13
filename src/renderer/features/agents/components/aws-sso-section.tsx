@@ -41,6 +41,7 @@ interface AwsSsoSectionProps {
   onMaxMcpOutputTokensChange: (value: number) => void
   maxThinkingTokens?: number
   onMaxThinkingTokensChange: (value: number) => void
+  hideBedrock?: boolean
 }
 
 type ConnectionMethod = "sso" | "profile"
@@ -108,6 +109,7 @@ export function AwsSsoSection({
   onMaxMcpOutputTokensChange,
   maxThinkingTokens,
   onMaxThinkingTokensChange,
+  hideBedrock = false,
 }: AwsSsoSectionProps) {
   const [ssoStartUrl, setSsoStartUrl] = useState("")
   const [ssoRegion, setSsoRegion] = useState("us-east-1")
@@ -303,8 +305,8 @@ export function AwsSsoSection({
         roleName: selectedRoleName,
       })
 
-      // Show success with token limit info if configured
-      if (result.tokenLimitsConfigured && result.limits) {
+      // Show success — omit token limit details when in standalone AWS auth mode
+      if (!hideBedrock && result.tokenLimitsConfigured && result.limits) {
         toast.success(
           `AWS profile selected. Token limits: ${(result.limits.maxThinking / 1000).toFixed(0)}k thinking / ${(result.limits.maxMcpOutput / 1000).toFixed(0)}k MCP output`,
           { duration: 5000 }
@@ -652,24 +654,26 @@ export function AwsSsoSection({
       )}
 
       {/* Bedrock Region (both methods) */}
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">Bedrock Region</Label>
-        <Select value={bedrockRegion} onValueChange={onBedrockRegionChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {BEDROCK_REGIONS.map((region) => (
-              <SelectItem key={region.value} value={region.value}>
-                {region.value} ({region.label})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          AWS region to use for Bedrock API calls (must have Claude models enabled)
-        </p>
-      </div>
+      {!hideBedrock && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Bedrock Region</Label>
+          <Select value={bedrockRegion} onValueChange={onBedrockRegionChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {BEDROCK_REGIONS.map((region) => (
+                <SelectItem key={region.value} value={region.value}>
+                  {region.value} ({region.label})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            AWS region to use for Bedrock API calls (must have Claude models enabled)
+          </p>
+        </div>
+      )}
 
       {/* VPN Check Toggle */}
       <div className="flex items-center justify-between space-x-4 p-3 bg-muted/50 rounded-lg">
@@ -706,7 +710,7 @@ export function AwsSsoSection({
       )}
 
       {/* Token Limits */}
-      <div className="space-y-4 p-3 bg-muted/30 rounded-lg border border-border/50">
+      {!hideBedrock && <div className="space-y-4 p-3 bg-muted/30 rounded-lg border border-border/50">
         <div className="space-y-1">
           <Label className="text-sm font-medium">Model Token Limits</Label>
           <p className="text-xs text-muted-foreground">
@@ -759,7 +763,7 @@ export function AwsSsoSection({
         <div className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded">
           ⚠️ Total output tokens (thinking + response) cannot exceed 64,000 for Bedrock Sonnet 4.5
         </div>
-      </div>
+      </div>}
 
       {/* Save Button */}
       <div className="flex justify-end pt-2">

@@ -10,6 +10,7 @@ export type SettingsTab =
   | "keyboard"
   | "preferences"
   | "kubernetes"
+  | "aws"
   | "github"
   | "slack"
   | "whatsapp"
