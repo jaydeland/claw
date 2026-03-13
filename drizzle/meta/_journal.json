@@ -547,6 +547,20 @@
       "when": 1773590500000,
       "tag": "0074_apply_soul_template_to_existing_claws",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1773676800000,
+      "tag": "0075_add_discord_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1773676900000,
+      "tag": "0076_add_discord_bridges",
+      "breakpoints": true
     }
   ]
 }

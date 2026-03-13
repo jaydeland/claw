@@ -29,7 +29,8 @@ import { AgentsAwsTab } from "./settings-tabs/agents-aws-tab"
 import { AgentsGitHubTab } from "./settings-tabs/agents-github-tab"
 import { AgentsSlackTab } from "./settings-tabs/agents-slack-tab"
 import { AgentsWhatsAppTab } from "./settings-tabs/agents-whatsapp-tab"
-import { Slack, MessageCircle } from "lucide-react"
+import { AgentsDiscordTab } from "./settings-tabs/agents-discord-tab"
+import { Slack, MessageCircle, Gamepad2 } from "lucide-react"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -111,6 +112,12 @@ const MAIN_TABS = [
     label: "WhatsApp",
     icon: MessageCircle,
     description: "WhatsApp Web integration for agent triggers",
+  },
+  {
+    id: "discord" as SettingsTab,
+    label: "Discord",
+    icon: Gamepad2,
+    description: "Discord bot integration for agent triggers",
   },
 ]
 
@@ -298,6 +305,8 @@ export function AgentsSettingsDialog({
         return <AgentsSlackTab />
       case "whatsapp":
         return <AgentsWhatsAppTab />
+      case "discord":
+        return <AgentsDiscordTab />
       case "advanced":
         return <AgentsAdvancedSettingsTab />
       case "worktrees":
