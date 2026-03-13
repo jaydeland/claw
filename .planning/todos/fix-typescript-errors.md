@@ -2,8 +2,13 @@
 
 **Created:** 2026-03-07
 **Priority:** High
+<<<<<<< Updated upstream
 **Status:** In Progress (461 errors - type exports fixed, implicit `any` revealed)
 **Last Updated:** 2026-03-09
+=======
+**Status:** Nearly Complete (2 errors remaining)
+**Last Updated:** 2026-03-08
+>>>>>>> Stashed changes
 **Area:** Code Quality
 
 ## Problem
@@ -68,6 +73,14 @@ After fixing the type export issues, TypeScript can now properly type-check the 
 | `src/renderer/components/dialogs/settings-tabs/agents-slack-tab.tsx` | 12 |
 | `src/renderer/components/dialogs/settings-tabs/agents-advanced-settings-tab.tsx` | 11 |
 | `src/renderer/features/gsd/ui/gsd-content.tsx` | 10 |
+
+## Current Status (2026-03-08)
+
+**Progress:** 86/88 errors fixed (97.7% complete)
+
+**Remaining Errors:**
+1. `src/renderer/features/clusters/ui/dashboard/resource-chart.tsx:51` - Recharts formatter type mismatch (name param can be undefined)
+2. `src/renderer/features/terminal/terminal-main-view.tsx:231` - Missing `onCreateTerminal` prop on TerminalTabs component
 
 ## Error Categories
 
@@ -147,6 +160,7 @@ These files have the most errors and fixing them will clear a large portion of i
 
 **Current Progress: 461 → 409 errors (52 fixed)**
 
+<<<<<<< Updated upstream
 ### Completed (Error-Free)
 | File | Errors Fixed |
 |------|--------------|
@@ -202,6 +216,22 @@ Create and run sed scripts for common patterns, then manually fix remaining edge
 Set `"noImplicitAny": false` in `tsconfig.json` to unblock development, fix errors gradually.
 
 ## Next Steps
+=======
+### Phase 7: Remaining Single Errors
+- [x] `src/renderer/features/agents/main/new-chat-form.tsx` - agent vs swarm type
+- [x] `src/renderer/features/agents/ui/agent-diff-view.tsx` - DiffHighlighter type
+- [x] `src/renderer/features/analyze/atoms/index.ts` - Set type
+- [x] `src/renderer/features/analyze/ui/analyze-node-details.tsx` - ReactNode type
+- [x] `src/renderer/features/analyze/ui/analyze-sidebar.tsx` - null check
+- [x] `src/renderer/features/claws/components/claw-chat-view.tsx` - missing prop
+- [ ] `src/renderer/features/clusters/ui/dashboard/resource-chart.tsx` - recharts formatter types (1 error remaining)
+- [x] `src/renderer/features/onboarding/*.tsx` - LogoProps fill
+- [x] `src/renderer/features/session-flow/ui/use-paginated-output.ts` - trpc types
+
+### Phase 8: Final Errors
+- [ ] `src/renderer/features/terminal/terminal-main-view.tsx` - Missing `onCreateTerminal` prop
+- [ ] `src/renderer/features/clusters/ui/dashboard/resource-chart.tsx` - Recharts formatter `name` parameter can be undefined
+>>>>>>> Stashed changes
 
 ## Verification
 
