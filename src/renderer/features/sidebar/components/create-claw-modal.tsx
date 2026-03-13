@@ -119,7 +119,7 @@ export function CreateClawModal({ open, onOpenChange, claw }: CreateClawModalPro
           onSubmit={handleSubmit}
           onCancel={() => onOpenChange(false)}
           isSubmitting={isEditing ? updateMutation.isPending : createMutation.isPending}
-          submitError={isEditing ? (updateMutation.error ? new Error(updateMutation.error.message) : null) : (createMutation.error ? new Error(createMutation.error.message) : null)}
+          submitError={(isEditing ? updateMutation.error : createMutation.error) as Error | null}
           mode={isEditing ? "edit" : "create"}
         />
       </DialogContent>
