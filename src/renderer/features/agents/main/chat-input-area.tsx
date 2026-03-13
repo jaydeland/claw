@@ -3,7 +3,7 @@
 import { memo, useCallback, useRef, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { useAtom, useAtomValue } from "jotai"
-import { ChevronDown, Hash, MessageCircle, RotateCcw, Zap } from "lucide-react"
+import { Archive, ChevronDown, Hash, MessageCircle, Zap } from "lucide-react"
 
 import { Button } from "../../../components/ui/button"
 import { Switch } from "../../../components/ui/switch"
@@ -185,10 +185,10 @@ export interface ChatInputAreaProps {
   onInputContentChange?: (hasContent: boolean) => void
   // Callback to send message with question answer (Enter sends immediately, not to queue)
   onSubmitWithQuestionAnswer?: () => void
-  // Callback to clear conversation (clears DB, resets useChat, clears Jotai caches)
-  onClearChat?: () => void
-  // Whether clear chat mutation is pending
-  isClearingChat?: boolean
+  // Callback to archive conversation and open a fresh chat
+  onArchiveChat?: () => void
+  // Whether archive chat mutation is pending
+  isArchivingChat?: boolean
   // Current tool status for status indicator
   currentToolStatus?: CurrentToolStatus | null
   // External messaging connection (WhatsApp group or Slack channel)
@@ -244,8 +244,8 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.onRemoveTextContext !== nextProps.onRemoveTextContext ||
     prevProps.onInputContentChange !== nextProps.onInputContentChange ||
     prevProps.onSubmitWithQuestionAnswer !== nextProps.onSubmitWithQuestionAnswer ||
-    prevProps.onClearChat !== nextProps.onClearChat ||
-    prevProps.isClearingChat !== nextProps.isClearingChat
+    prevProps.onArchiveChat !== nextProps.onArchiveChat ||
+    prevProps.isArchivingChat !== nextProps.isArchivingChat
   ) {
     return false
   }
@@ -385,8 +385,8 @@ export const ChatInputArea = memo(function ChatInputArea({
   firstQueueItemId,
   onInputContentChange,
   onSubmitWithQuestionAnswer,
-  onClearChat,
-  isClearingChat = false,
+  onArchiveChat,
+  isArchivingChat = false,
   currentToolStatus,
   connectionType,
   connectionName,
@@ -489,11 +489,11 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [agentMode, setAgentMode] = useAtom(agentModeAtom)
   const isPlanMode = agentMode === "plan"
 
-  // Handle clear chat - use prop callback if provided
-  const handleClearChat = useCallback(() => {
-    if (!subChatId || isStreaming || !onClearChat) return
-    onClearChat()
-  }, [subChatId, isStreaming, onClearChat])
+  // Handle archive chat - archive conversation and open a fresh chat
+  const handleArchiveChat = useCallback(() => {
+    if (!subChatId || isStreaming || !onArchiveChat) return
+    onArchiveChat()
+  }, [subChatId, isStreaming, onArchiveChat])
 
   // Refs for draft saving
   const currentSubChatIdRef = useRef<string>(subChatId)
@@ -1093,16 +1093,16 @@ export const ChatInputArea = memo(function ChatInputArea({
                     }}
                   />
 
-                  {/* Clear conversation button */}
+                  {/* Archive conversation button */}
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                    onClick={handleClearChat}
-                    disabled={isStreaming || messageTokenData.messageCount === 0 || isClearingChat || !onClearChat}
-                    title="Clear conversation"
+                    onClick={handleArchiveChat}
+                    disabled={isStreaming || isArchivingChat || !onArchiveChat}
+                    title="Archive conversation"
                   >
-                    <RotateCcw className="h-4 w-4" />
+                    <Archive className="h-4 w-4" />
                   </Button>
 
                   {/* Context window indicator - click to compact */}

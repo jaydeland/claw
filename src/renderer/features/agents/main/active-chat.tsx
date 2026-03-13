@@ -2084,8 +2084,19 @@ const ChatViewInner = memo(function ChatViewInner({
     },
   })
 
-  // Mutation for clearing sub-chat messages
-  const clearSubChatMessagesMutation = trpc.chats.clearSubChatMessages.useMutation()
+  // Mutation for archiving the workspace
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
+  const archiveChatMutation = trpc.chats.archive.useMutation({
+    onSuccess: () => {
+      trpcUtils.chats.list.invalidate()
+      trpcUtils.chats.listArchived.invalidate()
+      setSelectedChatId(null)
+    },
+    onError: (error) => {
+      console.error("[handleArchiveChat] Failed to archive conversation:", error)
+      toast.error("Failed to archive conversation")
+    },
+  })
 
   // Handler for renaming sub-chat
   // Using ref for mutation to avoid callback recreation
@@ -2350,33 +2361,11 @@ const ChatViewInner = memo(function ChatViewInner({
     )
   }, [subChatId])
 
-  // Refs for clear chat handler
-  const setMessagesRef = useRef(setMessages)
-  setMessagesRef.current = setMessages
-  const clearSubChatMessagesMutationRef = useRef(clearSubChatMessagesMutation)
-  clearSubChatMessagesMutationRef.current = clearSubChatMessagesMutation
-
-  // Handler to clear conversation - clears DB, resets useChat, clears Jotai caches
-  const handleClearChat = useCallback(async () => {
+  // Handler to archive conversation and navigate to new chat
+  const handleArchiveChat = useCallback(() => {
     if (isStreamingRef.current) return
-
-    try {
-      // Clear messages in database
-      await clearSubChatMessagesMutationRef.current.mutateAsync({ id: subChatId })
-
-      // Reset useChat internal state
-      setMessagesRef.current([])
-
-      // Clear Jotai message store caches
-      clearSubChatCaches(subChatId)
-
-      // Invalidate query to refetch fresh data
-      trpcUtils.chats.getSubChat.invalidate({ id: subChatId })
-    } catch (error) {
-      console.error("[handleClearChat] Failed to clear conversation:", error)
-      toast.error("Failed to clear conversation")
-    }
-  }, [subChatId, trpcUtils.chats.getSubChat])
+    archiveChatMutation.mutate({ id: parentChatId })
+  }, [parentChatId, archiveChatMutation])
 
   // Wrapper for addTextContext that handles TextSelectionSource
   const addTextContext = useCallback((text: string, source: TextSelectionSource) => {
@@ -3816,8 +3805,8 @@ const ChatViewInner = memo(function ChatViewInner({
         onSendFromQueue={handleSendFromQueue}
         firstQueueItemId={queue[0]?.id}
         onInputContentChange={setInputHasContent}
-        onClearChat={handleClearChat}
-        isClearingChat={clearSubChatMessagesMutation.isPending}
+        onArchiveChat={handleArchiveChat}
+        isArchivingChat={archiveChatMutation.isPending}
         onSubmitWithQuestionAnswer={submitWithQuestionAnswerCallback}
         currentToolStatus={currentToolStatus}
         connectionType={connectionType}
