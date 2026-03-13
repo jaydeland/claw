@@ -62,6 +62,7 @@ import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-d
 import { HistoryChatView } from "../../history"
 import { ProjectDetailPage } from "./project-detail-page"
 import { PromptsView } from "../../prompts/ui/prompts-view"
+import { ErDiagramView } from "../../er-diagram/ui/er-diagram-view"
 import { ExecutionHistoryViewer } from "../../sidebar/components/execution-history-viewer"
 import { ClawEditView } from "../../sidebar/components/claw-edit-view"
 import { selectedSettingsCategoryAtom } from "../atoms"
@@ -863,6 +864,7 @@ export function AgentsContent() {
   const showProjectDetail = !!selectedProjectDetailId
   const showGitHubView = selectedSidebarTab === "github"
   const showPromptsView = selectedSidebarTab === "prompts"
+  const showErDiagramView = selectedSidebarTab === "er-diagram"
   const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw && !isEditingClaw
   const showClawsEditView = selectedSidebarTab === "claws" && !!selectedClaw && isEditingClaw
   const showClawsListView = selectedSidebarTab === "claws" && !selectedClaw
@@ -882,7 +884,7 @@ export function AgentsContent() {
        (selectedProject ? { id: selectedProject.id, path: selectedProject.path } : null))
     : null
 
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showClawsDetailView && !showClawsEditView && !showClawsListView && !showSettingsView && !showWorkspaceGitHubView
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showErDiagramView && !showClawsDetailView && !showClawsEditView && !showClawsListView && !showSettingsView && !showWorkspaceGitHubView
 
   return (
     <>
@@ -926,6 +928,11 @@ export function AgentsContent() {
       {/* Prompts view */}
       <div className={showPromptsView ? "flex-1 h-full overflow-hidden" : "hidden"}>
         <PromptsView />
+      </div>
+
+      {/* ER Diagram view */}
+      <div className={showErDiagramView ? "flex-1 h-full overflow-hidden" : "hidden"}>
+        <ErDiagramView />
       </div>
 
       {/* CC Settings view */}

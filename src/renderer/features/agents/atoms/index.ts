@@ -679,7 +679,7 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
  * - "github": GitHub view (PRs, Issues, Code, Visualize)
  * - "prompts": System prompts management
  */
-export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "github" | "prompts" | "claws" | "settings"
+export type SidebarTab = "history" | "chats" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd" | "github" | "prompts" | "claws" | "settings" | "er-diagram"
 
 /**
  * Currently selected sidebar tab (persisted)

@@ -14,6 +14,7 @@ import {
   FolderOpen,
   Rocket,
   ScrollText,
+  Database,
 } from "lucide-react"
 import { OriginalMCPIcon, SingleClawIcon } from "../../../components/ui/icons"
 import { ClaudeCodeIcon } from "../../../components/ui/canvas-icons"
@@ -44,6 +45,7 @@ const tabs: TabItem[] = [
   { id: "settings", label: "CC Settings", icon: ClaudeCodeIcon },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "prompts", label: "Prompts", icon: ScrollText },
+  { id: "er-diagram", label: "ER Diagram", icon: Database },
 ]
 
 interface SidebarTabBarProps {
@@ -80,7 +82,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
       if (tabId === "gsd") {
         setGsdCategory("gsd")
         setIsContentCollapsed(true) // Collapse sidebar since GSD has its own file tree
-      } else if (tabId === "prompts") {
+      } else if (tabId === "prompts" || tabId === "er-diagram") {
         setGsdCategory(null)
         setIsContentCollapsed(true) // Full-width view — no sidebar panel needed
       } else if (tabId === "claws") {
