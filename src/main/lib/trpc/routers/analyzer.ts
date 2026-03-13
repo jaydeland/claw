@@ -159,7 +159,7 @@ export const analyzerRouter = router({
     .input(z.object({ projectId: z.string(), type: analysisTypeSchema }))
     .query(({ input }) => {
       const db = getDatabase()
-      return db
+      const result = db
         .select()
         .from(analysisDiagrams)
         .where(
@@ -169,6 +169,8 @@ export const analyzerRouter = router({
           )
         )
         .get()
+      // Return null instead of undefined for React Query compatibility
+      return result ?? null
     }),
 
   /**

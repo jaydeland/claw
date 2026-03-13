@@ -140,7 +140,9 @@ function VisualizeViewInner({
 
   // Load diagram data when available
   useEffect(() => {
-    if (diagram && diagram.nodes && diagram.edges) {
+    if (!diagram) return
+
+    if (diagram.nodes && diagram.edges) {
       try {
         const flowNodes = JSON.parse(diagram.nodes) as FlowNode[]
         const flowEdges = JSON.parse(diagram.edges) as FlowEdge[]
