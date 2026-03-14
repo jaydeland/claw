@@ -42,6 +42,7 @@ export function ClawEditView({ className }: ClawEditViewProps) {
       name: formData.name,
       purpose: formData.purpose,
       instruction: formData.instruction,
+      soulInstruction: formData.soulInstruction,
       targetWorktree: formData.targetWorktree,
       triggerType: formData.triggerType,
       triggerConfig,
@@ -65,7 +66,9 @@ export function ClawEditView({ className }: ClawEditViewProps) {
     const config = claw.triggerConfig as Record<string, string> || {}
     return {
       name: claw.name,
+      purpose: claw.purpose,
       instruction: claw.instruction,
+      soulInstruction: claw.soulInstruction || "",
       targetWorktree: claw.targetWorktree,
       triggerType: claw.triggerType as TriggerType,
       cronExpression: config.expression || "0 */6 * * *",

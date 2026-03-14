@@ -1,10 +1,9 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, whatsappSettings, whatsappBridges } from "../../db"
+import { getDatabase, whatsappSettings, whatsappBridges, clawExecutions } from "../../db"
 import { eq, and } from "drizzle-orm"
 import { getWhatsAppTrigger, whatsAppQREmitter, whatsAppStatusEmitter, whatsAppBridgeEmitter, type WhatsAppBridgeMessage } from "../../claws/whatsapp-trigger"
-import { getWhatsAppQueueManager } from "../../claws/queue-manager"
-import type { WhatsAppQueueItem } from "../../claws/queue-types"
+import { getQueueStatus, processPendingQueue, cleanupStaleExecutions } from "../../claws/whatsapp-queue"
 import { observable } from "@trpc/server/observable"
 
 /**
@@ -17,7 +16,14 @@ export const whatsappRouter = router({
    */
   getStatus: publicProcedure.query(async () => {
     const db = getDatabase()
-    const settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
+    let settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
+
+    // Insert default row if it doesn't exist
+    if (!settings) {
+      console.log("[WhatsAppRouter] Inserting default whatsapp_settings row")
+      db.insert(whatsappSettings).values({ id: "default", isConnected: false }).run()
+      settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
+    }
 
     const trigger = getWhatsAppTrigger()
     const isActive = trigger.isActive()
@@ -380,87 +386,107 @@ export const whatsappRouter = router({
   }),
 
   /**
-   * Get WhatsApp queue status
+   * Get WhatsApp queue status (DB-backed)
    */
   getQueueStatus: publicProcedure.query(async () => {
-    const queueManager = getWhatsAppQueueManager()
-    return queueManager.getQueueStatus()
+    return getQueueStatus()
   }),
 
   /**
-   * Get all queue items
+   * Get pending executions from database
    */
-  getQueueItems: publicProcedure.query(async (): Promise<WhatsAppQueueItem[]> => {
-    const queueManager = getWhatsAppQueueManager()
-    return queueManager.getQueueItems()
+  getQueueItems: publicProcedure
+    .input(z.object({ clawId: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      const db = getDatabase()
+      const where = input?.clawId ? eq(clawExecutions.clawId, input.clawId) : undefined
+      const executions = db
+        .select()
+        .from(clawExecutions)
+        .where(where)
+        .orderBy(desc(clawExecutions.startedAt))
+        .limit(50)
+        .all()
+      return executions
+    }),
+
+  /**
+   * Get all claw IDs with pending executions
+   */
+  getClawIds: publicProcedure.query(async () => {
+    const db = getDatabase()
+    const result = db
+      .select({ clawId: clawExecutions.clawId })
+      .from(clawExecutions)
+      .where(eq(clawExecutions.status, "pending"))
+      .groupBy(clawExecutions.clawId)
+      .all()
+    return result.map(r => r.clawId).filter(Boolean) as string[]
   }),
 
   /**
    * Pause queue processing
    */
   pauseQueue: publicProcedure.mutation(async () => {
-    const queueManager = getWhatsAppQueueManager()
-    queueManager.pause()
+    // For DB-backed queue, just clear pending executions
+    const db = getDatabase()
+    db.update(clawExecutions)
+      .set({ status: "failed", logs: "Paused by user", completedAt: new Date() })
+      .where(eq(clawExecutions.status, "pending"))
+      .run()
     return { success: true }
   }),
 
   /**
-   * Resume queue processing
+   * Resume queue processing - triggers immediate processing
    */
   resumeQueue: publicProcedure.mutation(async () => {
-    const queueManager = getWhatsAppQueueManager()
-    queueManager.resume()
+    await processPendingQueue()
     return { success: true }
   }),
 
   /**
-   * Clear queue
+   * Clear all pending queue items
    */
-  clearQueue: publicProcedure.mutation(async () => {
-    const queueManager = getWhatsAppQueueManager()
-    queueManager.clearQueue()
-    return { success: true }
-  }),
-
-  /**
-   * Remove specific item from queue
-   */
-  removeQueueItem: publicProcedure
-    .input(z.object({ itemId: z.string().min(1) }))
+  clearQueue: publicProcedure
+    .input(z.object({ clawId: z.string().optional() }).optional())
     .mutation(async ({ input }) => {
-    const queueManager = getWhatsAppQueueManager()
-    const removed = queueManager.removeItem(input.itemId)
-    return { success: removed }
+      const db = getDatabase()
+      if (input?.clawId) {
+        db.delete(clawExecutions)
+          .where(and(eq(clawExecutions.clawId, input.clawId), eq(clawExecutions.status, "pending")))
+          .run()
+      } else {
+        db.delete(clawExecutions)
+          .where(eq(clawExecutions.status, "pending"))
+          .run()
+      }
+      return { success: true }
+  }),
+
+  /**
+   * Clear stuck running executions (older than 10 minutes)
+   */
+  clearStuckQueue: publicProcedure.mutation(async () => {
+    const cleaned = await cleanupStaleExecutions()
+    return { success: true, cleaned }
   }),
 
   /**
    * Subscribe to queue status updates
-   * Emits when queue status changes
    */
   onQueueUpdate: publicProcedure.subscription(() => {
-    return observable<{ status: WhatsAppQueueItem[], queueStatus: { pending: number; processing: number; completed: number; failed: number; total: number } }>((emit) => {
-      const queueManager = getWhatsAppQueueManager()
-
+    return observable<{ pending: number; running: number; recentExecutions: any[] }>((emit) => {
       const emitUpdate = () => {
-        emit.next({
-          status: queueManager.getQueueItems(),
-          queueStatus: queueManager.getQueueStatus(),
-        })
+        emit.next(getQueueStatus())
       }
 
-      // Listen to all queue events
-      queueManager.on("queued", emitUpdate)
-      queueManager.on("processing", emitUpdate)
-      queueManager.on("completed", emitUpdate)
-      queueManager.on("failed", emitUpdate)
-      queueManager.on("removed", emitUpdate)
-      queueManager.on("cleared", emitUpdate)
-      queueManager.on("paused", emitUpdate)
-      queueManager.on("resumed", emitUpdate)
+      // Emit every 3 seconds
+      const interval = setInterval(emitUpdate, 3000)
 
-      // Cleanup when subscription ends
+      // Cleanup
       return () => {
-        queueManager.removeAllListeners()
+        clearInterval(interval)
       }
     })
   }),

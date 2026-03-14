@@ -386,6 +386,10 @@ class ClawDaemon {
 
       console.log("[ClawDaemon] WhatsApp session found, auto-starting trigger")
       await whatsappTrigger.start()
+
+      // Start the DB-backed queue processor
+      const { startWhatsAppQueue } = await import("./whatsapp-queue")
+      startWhatsAppQueue()
     } catch (error) {
       console.error("[ClawDaemon] Failed to start WhatsApp trigger:", error)
     }
@@ -637,19 +641,23 @@ class ClawDaemon {
     }
 
     // Need to find or create a project for claw chats
-    let project = db.select().from(projects).where(eq(projects.name, "Claw Executions")).get()
+    // Use upsert pattern to handle race conditions (unique constraint on path)
+    const projectId = createId()
 
-    if (!project) {
-      const projectId = createId()
-      db.insert(projects)
-        .values({
-          id: projectId,
-          name: "Claw Executions",
-          path: claw.targetWorktree,
-        })
-        .run()
-      project = { id: projectId, name: "Claw Executions", path: claw.targetWorktree, createdAt: new Date(), updatedAt: new Date(), startCommands: "[]" } as typeof projects.$inferSelect
-    }
+    // Try to insert, but if path already exists (concurrent request), do nothing
+    db.insert(projects)
+      .values({
+        id: projectId,
+        name: "Claw Executions",
+        path: claw.targetWorktree,
+      })
+      .onConflictDoNothing({
+        target: projects.path,
+      })
+      .run()
+
+    // Fetch the project (will be either the one we just inserted or the existing one)
+    const project = db.select().from(projects).where(eq(projects.path, claw.targetWorktree)).get()!
 
     // Create the chat
     const chatId = createId()

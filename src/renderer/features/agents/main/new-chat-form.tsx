@@ -41,6 +41,7 @@ import {
   selectedAgentChatIdAtom,
   selectedDraftIdAtom,
   selectedProjectAtom,
+  selectedProjectDetailIdAtom,
 } from "../atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
@@ -50,8 +51,6 @@ import { GsdDropdown } from "../components/gsd-dropdown"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
 import {
-  agentsSettingsDialogOpenAtom,
-  agentsSettingsDialogActiveTabAtom,
   customClaudeConfigAtom,
   normalizeCustomClaudeConfig,
   activeProviderAtom,
@@ -258,8 +257,7 @@ export function NewChatForm({
   const [customApiConfig] = useAtom(customApiConfigAtom)
   // Only disable model dropdown for custom API, not Ollama
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig) && activeProvider !== "ollama"
-  const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
-  const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
+  const setSelectedProjectDetailId = useSetAtom(selectedProjectDetailIdAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
   const [repoSearchQuery, setRepoSearchQuery] = useState("")
   const [createBranchDialogOpen, setCreateBranchDialogOpen] = useState(false)
@@ -305,10 +303,9 @@ export function NewChatForm({
   }
 
   const handleConfigureWorktree = () => {
-    // Open the project-specific worktree settings tab
+    // Open the project settings page in main content area
     if (validatedProject?.id) {
-      setSettingsActiveTab(`project-${validatedProject.id}` as any)
-      setSettingsDialogOpen(true)
+      setSelectedProjectDetailId(validatedProject.id)
     }
   }
 
@@ -1296,7 +1293,7 @@ export function NewChatForm({
       </div>
 
       <div className="flex flex-1 items-center justify-center overflow-y-auto relative">
-        <div className="w-full max-w-2xl space-y-4 md:space-y-6 relative z-10 px-4">
+        <div className="w-full max-w-5xl space-y-4 md:space-y-6 relative z-10 px-4">
           {/* Title - only show when project is selected */}
           {validatedProject && (
             <div className="text-center">

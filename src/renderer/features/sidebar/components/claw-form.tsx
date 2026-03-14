@@ -238,6 +238,15 @@ export function ClawForm({
     return getGroupsQuery.data.groups.find((g) => g.id === formData.whatsappChatFilter)
   }, [formData.whatsappChatFilter, getGroupsQuery.data?.groups])
 
+  // Compute the select value - must match a SelectItem value exactly
+  const whatsappGroupSelectValue = useMemo(() => {
+    if (!formData.whatsappChatFilter) return "__empty__"
+    if (selectedGroup?.id) return selectedGroup.id
+    // If saved filter is a group ID but not in fetched list, use it directly (matches "Unknown Group" item)
+    if (formData.whatsappChatFilter.includes("@g.us")) return formData.whatsappChatFilter
+    return "__empty__"
+  }, [formData.whatsappChatFilter, selectedGroup, getGroupsQuery.data?.groups])
+
   return (
     <div className="space-y-4">
       {/* Name */}
@@ -780,7 +789,7 @@ You operate in an isolated Git worktree at: {{targetWorktree}}
             <div className="space-y-2 pt-2 border-t border-border/50">
               <Label htmlFor="whatsapp-group-select">Or Select a Group</Label>
               <Select
-                value={selectedGroup?.id || formData.whatsappChatFilter || "__empty__"}
+                value={whatsappGroupSelectValue}
                 onValueChange={(value) => {
                   if (value === "__empty__") {
                     setFormData((prev) => ({ ...prev, whatsappChatFilter: "" }))
