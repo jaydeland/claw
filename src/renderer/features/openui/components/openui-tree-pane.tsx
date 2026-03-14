@@ -14,6 +14,9 @@ import {
   Code2,
   Plus,
   Wand2,
+  Database,
+  FileCode,
+  BookOpen,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../../components/ui/button"
@@ -26,6 +29,8 @@ import {
   openUIExpandedProjectsAtom,
   openUIExpandedSectionsAtom,
   openUITemplatesAtom,
+  openUIClawResourcesExpandedAtom,
+  openUISelectedResourceAtom,
   type GeneratedComponent,
   type OpenUITemplate,
 } from "../atoms"
@@ -39,6 +44,8 @@ export const OpenUITreePane = memo(function OpenUITreePane() {
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedProjects, setExpandedProjects] = useAtom(openUIExpandedProjectsAtom)
   const [expandedSections, setExpandedSections] = useAtom(openUIExpandedSectionsAtom)
+  const [clawResourcesExpanded, setClawResourcesExpanded] = useAtom(openUIClawResourcesExpandedAtom)
+  const [selectedResource, setSelectedResource] = useAtom(openUISelectedResourceAtom)
   const selectedProjectId = useAtomValue(selectedOpenUIProjectIdAtom)
   const currentProject = useAtomValue(selectedProjectAtom)
   const generatedComponents = useAtomValue(openUIGeneratedComponentsAtom)
@@ -175,6 +182,14 @@ export const OpenUITreePane = memo(function OpenUITreePane() {
             onSelectTemplate={handleSelectTemplate}
           />
         )}
+
+        {/* Claw Resources Section - Always visible */}
+        <ClawResourcesSection
+          isExpanded={clawResourcesExpanded}
+          onToggle={() => setClawResourcesExpanded(!clawResourcesExpanded)}
+          selectedResource={selectedResource}
+          onSelectResource={(resource) => setSelectedResource(resource)}
+        />
       </div>
     </div>
   )
@@ -509,3 +524,79 @@ function EmptyState({ message }: { message: string }) {
     </div>
   )
 }
+
+// ============================================
+// CLAW RESOURCES SECTION
+// ============================================
+
+interface ClawResourcesSectionProps {
+  isExpanded: boolean
+  onToggle: () => void
+  selectedResource: "er-diagram" | "source-code" | null
+  onSelectResource: (resource: "er-diagram" | "source-code") => void
+}
+
+const ClawResourcesSection = memo(function ClawResourcesSection({
+  isExpanded,
+  onToggle,
+  selectedResource,
+  onSelectResource,
+}: ClawResourcesSectionProps) {
+  return (
+    <div className="space-y-0.5">
+      {/* Resources Header - Purple color for reference materials */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm",
+          "border border-border/30",
+          "hover:bg-accent hover:text-accent-foreground"
+        )}
+      >
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        )}
+        <BookOpen className="h-4 w-4 text-purple-500" />
+        <span className="font-medium">Claw Resources</span>
+      </button>
+
+      {/* Resources Content */}
+      {isExpanded && (
+        <div className="ml-2 space-y-0.5">
+          {/* ER Diagram Item */}
+          <button
+            type="button"
+            onClick={() => onSelectResource("er-diagram")}
+            className={cn(
+              "w-full flex items-center gap-2 pl-[2ch] pr-2 py-1 rounded-md text-sm",
+              "hover:bg-accent hover:text-accent-foreground",
+              "text-left",
+              selectedResource === "er-diagram" && "bg-accent text-accent-foreground"
+            )}
+          >
+            <Database className="h-3.5 w-3.5 text-purple-500" />
+            <span className="truncate">Database ER Diagram</span>
+          </button>
+
+          {/* Source Code Browser Item */}
+          <button
+            type="button"
+            onClick={() => onSelectResource("source-code")}
+            className={cn(
+              "w-full flex items-center gap-2 pl-[2ch] pr-2 py-1 rounded-md text-sm",
+              "hover:bg-accent hover:text-accent-foreground",
+              "text-left",
+              selectedResource === "source-code" && "bg-accent text-accent-foreground"
+            )}
+          >
+            <FileCode className="h-3.5 w-3.5 text-purple-500" />
+            <span className="truncate">Source Code Browser</span>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+})

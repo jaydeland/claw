@@ -464,4 +464,110 @@ export const openuiRouter = router({
 
       return component || null
     }),
+
+  /**
+   * Get database schema info for ER diagram viewer
+   */
+  getDatabaseSchema: publicProcedure.query(async () => {
+    const db = getDatabase()
+
+    // Get table info from SQLite
+    const tables = await db.all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%'")
+
+    const schema = {
+      tables: [] as Array<{
+        name: string
+        columns: Array<{
+          name: string
+          type: string
+          primaryKey: boolean
+          nullable: boolean
+          foreignKey: boolean
+        }>
+      }>,
+      relationships: [] as Array<{
+        fromTable: string
+        toTable: string
+        constraint: string
+      }>,
+    }
+
+    // Get columns for each table
+    for (const table of tables) {
+      const columns = await db.all(`PRAGMA table_info(${table.name})`)
+      const foreignKeys = await db.all(`PRAGMA foreign_key_list(${table.name})`)
+
+      const columnInfo = columns.map((col: any) => ({
+        name: col.name,
+        type: col.type,
+        primaryKey: !!col.pk,
+        nullable: !col.notnull,
+        foreignKey: foreignKeys.some((fk: any) => fk.from === col.name),
+      }))
+
+      schema.tables.push({
+        name: table.name as string,
+        columns: columnInfo,
+      })
+
+      // Add relationships
+      for (const fk of foreignKeys) {
+        schema.relationships.push({
+          fromTable: table.name as string,
+          toTable: fk.table as string,
+          constraint: `${fk.from} -> ${fk.to}`,
+        })
+      }
+    }
+
+    return schema
+  }),
+
+  /**
+   * Get file tree for source code browser
+   */
+  getFileTree: publicProcedure
+    .input(z.object({ path: z.string() }))
+    .query(async ({ input }) => {
+      const baseDir = input.path
+
+      async function readDir(dirPath: string, depth = 0): Promise<Array<{
+        name: string
+        path: string
+        type: "file" | "directory"
+        children?: Array<{ name: string; path: string; type: "file" | "directory"; children?: any[] }>
+      }>> {
+        if (depth > 3) return [] // Limit depth to avoid too many files
+
+        const entries = await fs.readdir(dirPath, { withFileTypes: true })
+        const result = []
+
+        for (const entry of entries) {
+          if (entry.name.startsWith(".")) continue // Skip hidden files
+          if (entry.name === "node_modules") continue // Skip node_modules
+
+          const fullPath = path.join(dirPath, entry.name)
+
+          if (entry.isDirectory()) {
+            const children = await readDir(fullPath, depth + 1)
+            result.push({
+              name: entry.name,
+              path: fullPath,
+              type: "directory",
+              children,
+            })
+          } else if (entry.isFile()) {
+            result.push({
+              name: entry.name,
+              path: fullPath,
+              type: "file",
+            })
+          }
+        }
+
+        return result
+      }
+
+      return await readDir(baseDir)
+    }),
 })

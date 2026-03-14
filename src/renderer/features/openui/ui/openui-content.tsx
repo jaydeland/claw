@@ -26,6 +26,7 @@ import {
   openUIRegisteredComponentsAtom,
   selectedOpenUIProjectIdAtom,
   openUIViewModeAtom,
+  openUISelectedResourceAtom,
   type GeneratedComponent,
 } from "../atoms"
 import { Button } from "../../../components/ui/button"
@@ -41,6 +42,7 @@ import { TabViewLayout } from "../../shared/components/tab-view-layout"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 import { OpenUITreePane } from "../components/openui-tree-pane"
+import { ClawResourcesPane } from "../components/claw-resources-pane"
 
 /**
  * OpenUI Builder - AI-powered UI component generation
@@ -212,7 +214,12 @@ export function OpenUIContent() {
   )
 
   // Left panel content - Tree pane for workspace-like management
-  const leftPanelContent = <OpenUITreePane />
+  const selectedResource = useAtomValue(openUISelectedResourceAtom)
+  const leftPanelContent = selectedResource ? (
+    <ClawResourcesPane />
+  ) : (
+    <OpenUITreePane />
+  )
 
   // Center panel content (prompt input + preview)
   const centerPanelContent = (

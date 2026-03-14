@@ -285,6 +285,25 @@ export const openUIExpandedSectionsAtom = atomWithStorage<Set<string>>(
 )
 
 // ============================================
+// CLAW RESOURCES
+// ============================================
+
+/**
+ * Whether the Claw Resources section is expanded in tree pane
+ */
+export const openUIClawResourcesExpandedAtom = atomWithStorage<boolean>(
+  "openui:clawResourcesExpanded",
+  false,
+  undefined,
+  { getOnInit: true }
+)
+
+/**
+ * Selected resource in the Claw Resources section
+ */
+export const openUISelectedResourceAtom = atom<"er-diagram" | "source-code" | null>(null)
+
+// ============================================
 // CLEANUP
 // ============================================
 
