@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Sparkles,
 } from "lucide-react"
+import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
@@ -173,7 +174,7 @@ export const SingleRepoSection = memo(function SingleRepoSection({
   const sectionKey = useCallback((section: string) => `${projectId}-${section}`, [projectId])
   const isCodeExpanded = expandedSections.has(sectionKey("code"))
 
-  const { data: githubData, isLoading: isLoadingGitHub, error: githubError } = trpc.github.getData.useQuery(
+  const { data: githubData, isLoading: isLoadingGitHub, error: githubError, refetch: refetchGitHubData } = trpc.github.getData.useQuery(
     { projectPath },
     {
       enabled: isRepoExpanded && !!projectPath,
@@ -313,6 +314,8 @@ export const SingleRepoSection = memo(function SingleRepoSection({
       isGitHub={githubData?.success ? githubData.isGitHub : true}
       sectionKey={sectionKey}
       hideRepoHeader={hideRepoHeader}
+      onRefreshData={refetchGitHubData}
+      isRefreshing={isLoadingGitHub}
     />
   )
 })
@@ -339,6 +342,10 @@ interface RepoTreeItemProps {
   sectionKey: (section: string) => string
   /** When true, hides the repo header button row */
   hideRepoHeader?: boolean
+  /** Handler to refresh PRs and Issues data */
+  onRefreshData?: () => void
+  /** Whether data is currently loading */
+  isRefreshing?: boolean
 }
 
 const RepoTreeItem = memo(function RepoTreeItem({
@@ -362,6 +369,8 @@ const RepoTreeItem = memo(function RepoTreeItem({
   isGitHub,
   sectionKey,
   hideRepoHeader = false,
+  onRefreshData,
+  isRefreshing,
 }: RepoTreeItemProps) {
   const openPRs = prs.filter((pr) => pr.state === "open").length
   const openIssues = issues.filter((i) => i.state === "open").length
@@ -561,6 +570,8 @@ const RepoTreeItem = memo(function RepoTreeItem({
             isExpanded={expandedSections.has(sectionKey("prs"))}
             onToggle={() => onToggleSection(sectionKey("prs"))}
             colorVariant="green"
+            onRefresh={onRefreshData}
+            isRefreshing={isRefreshing}
           >
             <PRItems
               prs={prs}
@@ -579,6 +590,8 @@ const RepoTreeItem = memo(function RepoTreeItem({
             isExpanded={expandedSections.has(sectionKey("issues"))}
             onToggle={() => onToggleSection(sectionKey("issues"))}
             colorVariant="purple"
+            onRefresh={onRefreshData}
+            isRefreshing={isRefreshing}
           >
             <IssueItems
               issues={issues}
@@ -839,6 +852,10 @@ interface SectionTreeItemProps {
   children: React.ReactNode
   /** Color variant for the section - affects icon and label colors */
   colorVariant?: SectionColorVariant
+  /** Optional refresh handler - shows refresh button when provided */
+  onRefresh?: () => void
+  /** Whether data is currently loading (for refresh spinner) */
+  isRefreshing?: boolean
 }
 
 const SectionTreeItem = memo(function SectionTreeItem({
@@ -850,6 +867,8 @@ const SectionTreeItem = memo(function SectionTreeItem({
   onToggle,
   children,
   colorVariant = "default",
+  onRefresh,
+  isRefreshing,
 }: SectionTreeItemProps) {
   const colorClasses = SECTION_COLOR_CLASSES[colorVariant]
 
@@ -858,28 +877,48 @@ const SectionTreeItem = memo(function SectionTreeItem({
       "rounded-md border border-border/30",
       isExpanded && "bg-muted/20"
     )}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className={cn(
-          "w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-sm",
-          "hover:bg-accent",
-          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={onToggle}
+          className={cn(
+            "flex-1 flex items-center gap-1.5 px-2 py-1 rounded-md text-sm",
+            "hover:bg-accent",
+            "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+          )}
+        >
+          {isExpanded ? (
+            <ChevronDown className={cn("h-4 w-4", colorClasses.icon)} />
+          ) : (
+            <ChevronRight className={cn("h-4 w-4", colorClasses.icon)} />
+          )}
+          <Icon className={cn("h-4 w-4", colorClasses.icon)} />
+          <span className={cn("font-medium", colorClasses.text)}>{label}</span>
+          {count !== undefined && count > 0 && (
+            <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+              {count}
+            </span>
+          )}
+        </button>
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRefresh()
+            }}
+            className={cn(
+              "p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent",
+              "focus:outline-none focus:ring-2 focus:ring-ring",
+              isRefreshing && "opacity-50 cursor-not-allowed"
+            )}
+            disabled={isRefreshing}
+            title="Refresh"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+          </button>
         )}
-      >
-        {isExpanded ? (
-          <ChevronDown className={cn("h-4 w-4", colorClasses.icon)} />
-        ) : (
-          <ChevronRight className={cn("h-4 w-4", colorClasses.icon)} />
-        )}
-        <Icon className={cn("h-4 w-4", colorClasses.icon)} />
-        <span className={cn("font-medium", colorClasses.text)}>{label}</span>
-        {count !== undefined && count > 0 && (
-          <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-            {count}
-          </span>
-        )}
-      </button>
+      </div>
       {isExpanded && (
         <SectionColorContext.Provider value={colorVariant}>
           <div className="px-2 pb-1 space-y-0.5">
