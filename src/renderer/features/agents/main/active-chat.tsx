@@ -4638,6 +4638,9 @@ export function ChatView({
       // Generate message and set it for ChatViewInner to send
       const message = generatePrMessage(context)
       setPendingPrMessage(message)
+      // Close the diff sidebar after starting the PR creation
+      setIsDiffSidebarOpen(false)
+      setFilteredSubChatId(null)
       // Don't reset isCreatingPr here - it will be reset after message is sent
     } catch (error) {
       toast.error(
@@ -4646,7 +4649,7 @@ export function ChatView({
       )
       setIsCreatingPr(false)
     }
-  }, [chatId, setPendingPrMessage])
+  }, [chatId, setPendingPrMessage, setIsDiffSidebarOpen, setFilteredSubChatId])
 
   // Handle Merge with AI - sends a message to Claude to perform merge
   const [isMergingWithAi, setIsMergingWithAi] = useAtom(isMergingWithAiAtom)
