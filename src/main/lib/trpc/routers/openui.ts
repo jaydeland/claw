@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
+import { TRPCError } from "@trpc/server"
 import * as fs from "fs/promises"
 import * as fsSync from "fs"
 import { app } from "electron"
@@ -44,13 +45,68 @@ type GenerateResult = {
 }
 
 /**
+ * Validate extracted code before writing to ensure it's a valid component
+ */
+function validateComponentCode(code: string): boolean {
+  // Check for basic component structure
+  const hasExport = /export\s+(function|const|class)/.test(code)
+  const hasReactImport = /import\s+.*React/.test(code) || /"use client"/.test(code)
+  const hasComponentName = /export\s+function\s+\w+/.test(code) ||
+                           /export\s+const\s+\w+\s*=/.test(code)
+
+  return hasExport && (hasReactImport || hasComponentName)
+}
+
+/**
+ * Generate a unique component name with timestamp hash to prevent collisions
+ */
+function generateComponentName(prompt: string): string {
+  // Extract meaningful words from prompt
+  const words = prompt
+    .split(/\s+/)
+    .filter(w => w.length > 2)
+    .slice(0, 3)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).replace(/[^a-zA-Z]/g, ""))
+    .join("")
+
+  // Add unique hash to prevent collisions
+  const hash = Date.now().toString(36).toUpperCase()
+  const baseName = words || "Component"
+
+  return `Generated${baseName}${hash}`
+}
+
+/**
  * Get registered Claw UI components for OpenUI to use as its component library
+ * Scans multiple directories to find all available components
  */
 async function getRegisteredClawComponents(): Promise<RegisteredComponent[]> {
-  const uiComponentsDir = path.join(app.getAppPath(), "src/renderer/components/ui")
+  const baseDir = app.getAppPath()
+  const components: RegisteredComponent[] = []
 
-  const components = []
-  const componentFiles = await fs.readdir(uiComponentsDir).catch(() => [])
+  // Scan components/ui directory
+  await scanComponentsDir(components, path.join(baseDir, "src/renderer/components/ui"), "components/ui/")
+
+  // Scan features/*/components directories
+  const featuresDir = path.join(baseDir, "src/renderer/features")
+  const featureEntries = await fs.readdir(featuresDir).catch(() => [])
+  for (const feature of featureEntries) {
+    const featureComponentsPath = path.join(featuresDir, feature, "components")
+    await scanComponentsDir(components, featureComponentsPath, `features/${feature}/components/`)
+  }
+
+  return components
+}
+
+/**
+ * Scan a directory for component files and add them to the components array
+ */
+async function scanComponentsDir(
+  components: RegisteredComponent[],
+  dirPath: string,
+  pathPrefix: string
+) {
+  const componentFiles = await fs.readdir(dirPath).catch(() => [])
 
   // Categorize components based on name patterns
   const getCategory = (name: string): string => {
@@ -73,14 +129,12 @@ async function getRegisteredClawComponents(): Promise<RegisteredComponent[]> {
 
       components.push({
         name: pascalName,
-        path: `components/ui/${file}`,
+        path: `${pathPrefix}${file}`,
         description: `Claw's built-in ${pascalName} component`,
         category: getCategory(componentName),
       })
     }
   }
-
-  return components
 }
 
 /**
@@ -107,7 +161,17 @@ async function generateOpenUIComponent(
     updatedAt: number
   }
 }> {
-  const sdk = await import("@anthropic-ai/claude-agent-sdk")
+  let sdk: typeof import("@anthropic-ai/claude-agent-sdk")
+
+  try {
+    sdk = await import("@anthropic-ai/claude-agent-sdk")
+  } catch (error) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Claude SDK unavailable. Please ensure @anthropic-ai/claude-agent-sdk is installed.",
+      cause: error
+    })
+  }
 
   // Build system prompt for component generation
   const systemPrompt = `You are an expert React UI component generator for the Claw desktop application.
@@ -200,15 +264,8 @@ Generate the component now. Output the component code first, then the atoms code
     componentCode = output
   }
 
-  // Generate a unique name based on prompt
-  const componentName =
-    "Generated" +
-    prompt
-      .split(" ")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join("")
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .slice(0, 50)
+  // Generate a unique name based on prompt with timestamp hash
+  const componentName = generateComponentName(prompt)
 
   // Save to database
   const db = getDatabase()
@@ -318,6 +375,14 @@ async function installComponent(
 
   if (!project) {
     return { success: false }
+  }
+
+  // Validate component code before writing
+  if (!validateComponentCode(component.code)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Generated code doesn't appear to be a valid React component. The code may be corrupted or incomplete."
+    })
   }
 
   // Create components directory in project

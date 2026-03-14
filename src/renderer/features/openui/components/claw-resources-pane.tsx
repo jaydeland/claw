@@ -22,6 +22,7 @@ import {
   openUIClawResourcesExpandedAtom,
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
+import { selectedProjectAtom } from "../../agents/atoms"
 
 /**
  * Claw Resources Pane - Shows ER Diagram or Source Code Browser
@@ -185,10 +186,12 @@ const ERDiagramViewer = memo(function ERDiagramViewer() {
 const SourceCodeBrowser = memo(function SourceCodeBrowser() {
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["src"]))
+  const selectedProject = useAtomValue(selectedProjectAtom)
 
-  // Get file tree from backend
+  // Get file tree from backend - use selected project path or app root
+  const projectPath = selectedProject?.path || app.getAppPath()
   const { data: fileTree } = trpc.projects.getFileTree.useQuery(
-    { path: "/Users/jasondeland/dev/wt-claw-27/mmpc410pyc7mc2bu" },
+    { path: projectPath },
     { retry: false }
   )
 
