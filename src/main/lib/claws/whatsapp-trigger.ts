@@ -641,6 +641,12 @@ export class WhatsAppTrigger {
       return false
     }
 
+    // Guard: to must be a valid string
+    if (!to || typeof to !== "string") {
+      console.error("[WhatsAppTrigger] Cannot send message - 'to' parameter is missing or invalid:", to)
+      return false
+    }
+
     // For group chats, ensure the metadata cache is populated before the first attempt.
     // relayMessage → assertSessions needs participant JIDs to fetch Signal keys from the server.
     if (to.endsWith("@g.us")) {

@@ -171,7 +171,12 @@ export async function processPendingQueue() {
 
       // Send success response
       const trigger = getWhatsAppTrigger()
-      await trigger.sendMessage(triggerContext?.from, `✅ *${pending.clawId}* completed`)
+      const chatId = triggerContext?.from
+      if (chatId) {
+        await trigger.sendMessage(chatId, `✅ *${pending.clawId}* completed`)
+      } else {
+        console.warn("[WhatsAppQueue] No chatId available in triggerContext, skipping success response")
+      }
 
     } catch (error: any) {
       // Mark as failed
@@ -190,7 +195,12 @@ export async function processPendingQueue() {
 
       // Send error response
       const trigger = getWhatsAppTrigger()
-      await trigger.sendMessage(triggerContext?.from, `❌ *${pending.clawId}* failed: ${error?.message || "Unknown error"}`)
+      const chatId = triggerContext?.from
+      if (chatId) {
+        await trigger.sendMessage(chatId, `❌ *${pending.clawId}* failed: ${error?.message || "Unknown error"}`)
+      } else {
+        console.warn("[WhatsAppQueue] No chatId available in triggerContext, skipping error response")
+      }
     }
 
   } finally {
