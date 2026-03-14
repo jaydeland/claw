@@ -21,7 +21,7 @@ import ReactFlow, {
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { toPng, toSvg } from "html-to-image"
-import { Loader2, AlertCircle, Download, GitBranch, Database, Layers, Wrench } from "lucide-react"
+import { Loader2, AlertCircle, Download, GitBranch, Database, Layers, Wrench, Key, Type } from "lucide-react"
 import { toast } from "sonner"
 import { applyDiagramLayout } from "../lib/diagram-layout"
 import { Button } from "../../../components/ui/button"
@@ -187,7 +187,13 @@ function VisualizeViewInner({
               return null
             }
 
-            const edge: Edge = {
+            // Determine edge style based on analysis type and edge data
+            const isDbAnalysis = analysisType === "db"
+            const isForeignKey = !!(e.data as any)?.foreignKey
+            const cardinality = (e.data as any)?.cardinality
+
+            // Edge styling for FK relationships in DB diagrams
+            const edgeStyle: Edge = {
               id: e.id || `edge-${index}`,
               source,
               target,
@@ -195,20 +201,39 @@ function VisualizeViewInner({
               label: e.label,
               data: e.data,
               animated: !!e.data?.critical,
-              style: { stroke: strokeColor, strokeWidth: 2 },
-              markerEnd: { type: MarkerType.ArrowClosed, color: strokeColor },
+              style: {
+                stroke: isForeignKey ? "#8b5cf6" : strokeColor, // Purple for FK relationships
+                strokeWidth: isForeignKey ? 2 : 2,
+              },
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: isForeignKey ? "#8b5cf6" : strokeColor,
+              },
+            }
+
+            // Add cardinality marker for DB diagrams
+            if (isDbAnalysis && cardinality) {
+              edgeStyle.markerStart = {
+                type: MarkerType.ArrowClosed,
+                color: isForeignKey ? "#8b5cf6" : strokeColor,
+                strokeWidth: 2,
+                markerUnits: "strokeWidth",
+                refX: 0,
+                refY: 0,
+                orient: "auto",
+              }
             }
 
             const sourceHandle = rawEdge.sourceHandle as string | undefined
             const targetHandle = rawEdge.targetHandle as string | undefined
             if (sourceHandle && sourceHandle !== "undefined") {
-              edge.sourceHandle = sourceHandle
+              edgeStyle.sourceHandle = sourceHandle
             }
             if (targetHandle && targetHandle !== "undefined") {
-              edge.targetHandle = targetHandle
+              edgeStyle.targetHandle = targetHandle
             }
 
-            return edge
+            return edgeStyle
           })
           .filter((e): e is Edge => e !== null)
 
@@ -736,6 +761,120 @@ function AnalysisNode({ data, id }: { data: Record<string, unknown>; id: string 
   )
 }
 
+// Table node for ER diagrams with PK/FK column indicators
+interface ColumnData {
+  name: string
+  type: string
+  nullable?: boolean
+  primaryKey?: boolean
+  foreignKey?: string
+  defaultValue?: string
+}
+
+function TableNode({ data, id }: { data: Record<string, unknown>; id: string }) {
+  const tableName = (data.label as string) || id
+  const description = data.description as string | undefined
+  const columns = (data.columns as ColumnData[]) || []
+
+  return (
+    <>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 !border-slate-500" style={{ top: -6 }} />
+      <div className="min-w-[220px] shadow-lg rounded-lg bg-white border-2 border-blue-300 dark:border-blue-700 overflow-hidden">
+        {/* Table Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 py-2 font-bold text-sm">
+          {tableName}
+        </div>
+
+        {/* Description */}
+        {description && (
+          <div className="px-3 py-1 text-xs text-blue-100 bg-blue-800/30 border-b border-blue-300">
+            {description}
+          </div>
+        )}
+
+        {/* Columns */}
+        <div className="divide-y divide-slate-200 dark:divide-slate-700">
+          {columns.map((col) => (
+            <div
+              key={col.name}
+              className="px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              {/* PK Indicator */}
+              {col.primaryKey && (
+                <div
+                  className="flex-shrink-0 w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center"
+                  title="Primary Key"
+                >
+                  <Key size={10} />
+                </div>
+              )}
+
+              {/* FK Indicator */}
+              {col.foreignKey && !col.primaryKey && (
+                <div
+                  className="flex-shrink-0 w-4 h-4 rounded-full bg-purple-400 text-white flex items-center justify-center"
+                  title={`Foreign Key -> ${col.foreignKey}`}
+                >
+                  <Type size={10} />
+                </div>
+              )}
+
+              {/* Nullable indicator - show dot for nullable, nothing for not null */}
+              {!col.nullable && !col.primaryKey && !col.foreignKey && (
+                <div className="flex-shrink-0 w-4" />
+              )}
+
+              {/* Column Name */}
+              <span className="font-mono text-slate-700 dark:text-slate-300 flex-1 truncate">
+                {col.name}
+              </span>
+
+              {/* Data Type */}
+              <span className="text-slate-400 dark:text-slate-500 text-xs flex-shrink-0">
+                {col.type}
+              </span>
+
+              {/* Column-level Handle for FK edges */}
+              {col.foreignKey && (
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`${col.name}-bottom`}
+                  className="!w-2 !h-2 !bg-purple-400 !border-purple-500"
+                  style={{
+                    right: 0,
+                    top: 'auto',
+                    bottom: 2,
+                    transform: 'none'
+                  }}
+                />
+              )}
+
+              {/* Target handle for PK columns */}
+              {col.primaryKey && (
+                <Handle
+                  type="target"
+                  position={Position.Top}
+                  id={`${col.name}-top`}
+                  className="!w-2 !h-2 !bg-amber-500 !border-amber-600"
+                  style={{
+                    top: -6,
+                    left: 'auto',
+                    right: '50%',
+                    transform: 'translateX(50%)'
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !border-slate-500" style={{ bottom: -6 }} />
+      </div>
+    </>
+  )
+}
+
 const nodeTypes = {
   default: AnalysisNode,
   input: AnalysisNode,
@@ -746,4 +885,5 @@ const nodeTypes = {
   decision: AnalysisNode,
   data: AnalysisNode,
   subprocess: AnalysisNode,
+  table: TableNode,
 }
