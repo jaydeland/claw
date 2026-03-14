@@ -597,4 +597,209 @@ export const clawsRouter = router({
 
       return { success: true, executionId }
     }),
+
+  /**
+   * Get claw settings (including clawsSoul)
+   */
+  getSettings: publicProcedure
+    .input(z.object({ clawId: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDatabase()
+      const claw = db.select().from(headlessClaws).where(eq(headlessClaws.id, input.clawId)).get()
+
+      if (!claw) {
+        return { success: false, error: "Claw not found" }
+      }
+
+      return {
+        success: true,
+        settings: {
+          id: claw.id,
+          name: claw.name,
+          purpose: claw.purpose,
+          instruction: claw.instruction,
+          clawsSoul: claw.clawsSoul || "",
+          soulInstruction: claw.soulInstruction || "",
+          targetWorktree: claw.targetWorktree,
+          triggerType: claw.triggerType,
+          triggerConfig: JSON.parse(claw.triggerConfig),
+          isEnabled: claw.isEnabled,
+          allowedDirectories: JSON.parse(claw.allowedDirectories),
+          allowedMcpServers: JSON.parse(claw.allowedMcpServers),
+          sandboxMode: claw.sandboxMode,
+        },
+      }
+    }),
+
+  /**
+   * Update claw settings (including clawsSoul)
+   */
+  updateSettings: publicProcedure
+    .input(
+      z.object({
+        clawId: z.string(),
+        name: z.string().min(1).optional(),
+        purpose: z.string().min(1).optional(),
+        instruction: z.string().min(1).optional(),
+        clawsSoul: z.string().optional(),
+        soulInstruction: z.string().optional(),
+        targetWorktree: z.string().min(1).optional(),
+        triggerType: z.enum(["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"]).optional(),
+        triggerConfig: triggerConfigSchema.optional(),
+        allowedDirectories: z.array(z.string()).optional(),
+        allowedMcpServers: z.array(z.string()).optional(),
+        sandboxMode: z.enum(["disabled", "enabled", "strict"]).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const { clawId, ...updates } = input
+
+      const updateData: Record<string, string | boolean | Date | undefined> = { updatedAt: new Date() }
+
+      if (updates.name !== undefined) updateData.name = updates.name
+      if (updates.purpose !== undefined) updateData.purpose = updates.purpose
+      if (updates.instruction !== undefined) updateData.instruction = updates.instruction
+      if (updates.clawsSoul !== undefined) updateData.clawsSoul = updates.clawsSoul
+      if (updates.soulInstruction !== undefined) updateData.soulInstruction = updates.soulInstruction
+      if (updates.targetWorktree !== undefined) updateData.targetWorktree = updates.targetWorktree
+      if (updates.triggerType !== undefined) updateData.triggerType = updates.triggerType
+      if (updates.triggerConfig !== undefined) {
+        updateData.triggerConfig = JSON.stringify(updates.triggerConfig)
+      }
+      if (updates.allowedDirectories !== undefined) {
+        updateData.allowedDirectories = JSON.stringify(updates.allowedDirectories)
+      }
+      if (updates.allowedMcpServers !== undefined) {
+        updateData.allowedMcpServers = JSON.stringify(updates.allowedMcpServers)
+      }
+      if (updates.sandboxMode !== undefined) {
+        updateData.sandboxMode = updates.sandboxMode
+      }
+
+      // Unregister before updating so the old trigger config is torn down
+      await clawDaemon.unregisterClaw(clawId)
+
+      db.update(headlessClaws).set(updateData).where(eq(headlessClaws.id, clawId)).run()
+
+      // Re-register with the updated config
+      await clawDaemon.registerClaw(clawId)
+
+      return { success: true }
+    }),
+
+  /**
+   * Get claw files from .claw/ directory
+   */
+  getClawFiles: publicProcedure
+    .input(z.object({ clawId: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDatabase()
+      const claw = db.select().from(headlessClaws).where(eq(headlessClaws.id, input.clawId)).get()
+
+      if (!claw) {
+        return { success: false, error: "Claw not found" }
+      }
+
+      const { getClawFiles } = await import("../../claws/file-utils")
+      const files = await getClawFiles(claw.targetWorktree)
+
+      return {
+        success: true,
+        files: files.map(f => ({
+          fileType: f.fileType,
+          fileName: f.fileName,
+          content: f.content,
+          lastModified: f.lastModified.toISOString(),
+          size: f.size,
+        })),
+      }
+    }),
+
+  /**
+   * Get a specific claw file
+   */
+  getClawFile: publicProcedure
+    .input(z.object({ clawId: z.string(), fileName: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDatabase()
+      const claw = db.select().from(headlessClaws).where(eq(headlessClaws.id, input.clawId)).get()
+
+      if (!claw) {
+        return { success: false, error: "Claw not found" }
+      }
+
+      const { getClawFile } = await import("../../claws/file-utils")
+      const result = await getClawFile(claw.targetWorktree, input.fileName)
+
+      if (!result) {
+        return { success: false, error: "File not found" }
+      }
+
+      return {
+        success: true,
+        file: {
+          fileName: result.lastModified.toISOString(),
+          content: result.content,
+          lastModified: result.lastModified.toISOString(),
+        },
+      }
+    }),
+
+  /**
+   * Save a claw file
+   */
+  saveClawFile: publicProcedure
+    .input(z.object({ clawId: z.string(), fileName: z.string(), content: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const claw = db.select().from(headlessClaws).where(eq(headlessClaws.id, input.clawId)).get()
+
+      if (!claw) {
+        return { success: false, error: "Claw not found" }
+      }
+
+      const { saveClawFile } = await import("../../claws/file-utils")
+      await saveClawFile(claw.targetWorktree, input.fileName, input.content)
+
+      return { success: true }
+    }),
+
+  /**
+   * Delete a claw file
+   */
+  deleteClawFile: publicProcedure
+    .input(z.object({ clawId: z.string(), fileName: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const claw = db.select().from(headlessClaws).where(eq(headlessClaws.id, input.clawId)).get()
+
+      if (!claw) {
+        return { success: false, error: "Claw not found" }
+      }
+
+      const { deleteClawFile } = await import("../../claws/file-utils")
+      await deleteClawFile(claw.targetWorktree, input.fileName)
+
+      return { success: true }
+    }),
+
+  /**
+   * Ensure .claw directory exists with default files
+   */
+  ensureClawDirectory: publicProcedure
+    .input(z.object({ clawId: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const claw = db.select().from(headlessClaws).where(eq(headlessClaws.id, input.clawId)).get()
+
+      if (!claw) {
+        return { success: false, error: "Claw not found" }
+      }
+
+      const { ensureClawDirectory } = await import("../../claws/file-utils")
+      const dirPath = await ensureClawDirectory(claw.targetWorktree)
+
+      return { success: true, path: dirPath }
+    }),
 })

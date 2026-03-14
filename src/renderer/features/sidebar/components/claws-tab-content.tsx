@@ -1,34 +1,56 @@
+// Copyright 2026 Claw Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 "use client"
 
-import React, { useState, useMemo } from "react"
-import { Zap, Plus, Play, Settings, History, Clock, CheckCircle, XCircle, Loader2, Power, PowerOff, Trash2, ExternalLink, Edit } from "lucide-react"
+import { useState, useMemo, useCallback, useEffect } from "react"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import {
+  Zap,
+  ChevronRight,
+  ChevronDown,
+  Plus,
+  Play,
+  Settings,
+  MoreHorizontal,
+  Trash2,
+  Power,
+  PowerOff,
+  Search,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Loader2,
+} from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { useAtom } from "jotai"
-import { selectedClawAtom, isEditingClawAtom } from "../../../lib/atoms"
-import { Input } from "../../../components/ui/input"
 import { Button } from "../../../components/ui/button"
-import { Switch } from "../../../components/ui/switch"
+import { Input } from "../../../components/ui/input"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "../../../components/ui/dialog"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../../../components/ui/alert-dialog"
-import { ScrollArea } from "../../../components/ui/scroll-area"
-import { CreateClawModal } from "./create-claw-modal"
+  selectedClawIdAtom,
+  selectedClawDetailIdAtom,
+  expandedClawIdsAtom,
+  clawSearchQueryAtom,
+} from "../../claws/atoms"
+import { selectedSidebarTabAtom } from "../../agents/atoms"
 
 interface ClawsTabContentProps {
   className?: string
@@ -41,7 +63,7 @@ type ClawWithParsedConfig = {
   purpose: string
   instruction: string
   targetWorktree: string
-  triggerType: "cron" | "github_poll" | "manual"
+  triggerType: "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
   triggerConfig: { expression?: string; owner?: string; repo?: string; label?: string }
   isEnabled: boolean
   createdAt: Date
@@ -50,266 +72,793 @@ type ClawWithParsedConfig = {
 }
 
 export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabContentProps) {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
-  const [isEditingClaw, setIsEditingClaw] = useAtom(isEditingClawAtom)
-  const [clawToDelete, setClawToDelete] = useState<string | null>(null)
-  const [clawToTrigger, setClawToTrigger] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useAtom(clawSearchQueryAtom)
+  const setSelectedClawId = useSetAtom(selectedClawIdAtom)
+  const setSelectedClawDetailId = useSetAtom(selectedClawDetailIdAtom)
+  const [expandedClawIds, setExpandedClawIds] = useAtom(expandedClawIdsAtom)
+  const setSelectedSidebarTab = useSetAtom(selectedSidebarTabAtom)
+
+  // Fetch all claws
+  const { data: clawsData, isLoading } = trpc.claws.getAll.useQuery()
+
+  // Fetch recent executions for each claw
+  const { data: executionsData } = trpc.claws.getRecentExecutions.useQuery()
 
   const utils = trpc.useUtils()
 
-  const { data: clawsData, isLoading } = trpc.claws.getAll.useQuery()
-  const { data: githubTokenData } = trpc.github.hasToken.useQuery()
-
+  // Toggle mutation
   const toggleMutation = trpc.claws.toggleEnabled.useMutation({
     onSuccess: () => utils.claws.getAll.invalidate(),
   })
 
+  // Delete mutation
   const deleteMutation = trpc.claws.delete.useMutation({
     onSuccess: () => {
       utils.claws.getAll.invalidate()
-      setClawToDelete(null)
+      utils.claws.getRecentExecutions.invalidate()
     },
   })
 
+  // Trigger mutation
   const triggerMutation = trpc.claws.trigger.useMutation({
     onSuccess: () => {
-      setClawToTrigger(null)
-      if (selectedClaw) {
-        utils.claws.getExecutions.invalidate({ clawId: selectedClaw.id })
-      }
+      utils.claws.getAll.invalidate()
+      utils.claws.getRecentExecutions.invalidate()
     },
   })
 
-  const claws = useMemo(() => {
-    if (!clawsData?.claws) return []
-    let result = clawsData.claws as ClawWithParsedConfig[]
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      result = result.filter(
-        (c) =>
-          c.name.toLowerCase().includes(query) ||
-          c.purpose?.toLowerCase().includes(query) ||
-          c.instruction.toLowerCase().includes(query) ||
-          c.targetWorktree.toLowerCase().includes(query)
-      )
+  // Toggle expansion
+  const toggleExpanded = useCallback((clawId: string) => {
+    const newExpanded = new Set(expandedClawIds)
+    if (newExpanded.has(clawId)) {
+      newExpanded.delete(clawId)
+    } else {
+      newExpanded.add(clawId)
     }
-    return result
+    setExpandedClawIds(newExpanded)
+  }, [expandedClawIds, setExpandedClawIds])
+
+  // Handle claw click - opens detail page
+  const handleClawClick = useCallback((claw: ClawWithParsedConfig, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedClawId(claw.id)
+    setSelectedClawDetailId(claw.id)
+  }, [setSelectedClawId, setSelectedClawDetailId])
+
+  // Handle settings icon click
+  const handleSettingsClick = useCallback((claw: ClawWithParsedConfig, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedClawId(claw.id)
+    setSelectedClawDetailId(claw.id)
+  }, [setSelectedClawId, setSelectedClawDetailId])
+
+  // Handle run now
+  const handleRunNow = useCallback((clawId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    triggerMutation.mutate({ id: clawId })
+  }, [triggerMutation])
+
+  // Handle toggle enabled
+  const handleToggleEnabled = useCallback((clawId: string, isEnabled: boolean, e: React.MouseEvent) => {
+    e.stopPropagation()
+    toggleMutation.mutate({ id: clawId, isEnabled: !isEnabled })
+  }, [toggleMutation])
+
+  // Handle delete
+  const handleDelete = useCallback((clawId: string, clawName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (confirm(`Delete "${clawName}"? This will also delete all execution history.`)) {
+      deleteMutation.mutate({ id: clawId })
+    }
+  }, [deleteMutation])
+
+  // Get trigger type icon
+  const getTriggerIcon = (triggerType: string) => {
+    switch (triggerType) {
+      case "cron":
+        return <Clock className="h-3 w-3 text-muted-foreground" />
+      case "github_poll":
+        return <Zap className="h-3 w-3 text-blue-500" />
+      case "manual":
+        return <Play className="h-3 w-3 text-green-500" />
+      case "slack_mention":
+        return <Zap className="h-3 w-3 text-purple-500" />
+      case "whatsapp_message":
+        return <Zap className="h-3 w-3 text-green-600" />
+      default:
+        return <Zap className="h-3 w-3 text-muted-foreground" />
+    }
+  }
+
+  // Get status icon
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "success":
+        return <CheckCircle className="h-3 w-3 text-green-500" />
+      case "failed":
+        return <XCircle className="h-3 w-3 text-red-500" />
+      case "running":
+        return <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
+      default:
+        return null
+    }
+  }
+
+  // Filter claws by search
+  const filteredClaws = useMemo(() => {
+    if (!clawsData?.claws) return []
+    const claws = clawsData.claws as ClawWithParsedConfig[]
+    if (!searchQuery.trim()) return claws
+
+    const query = searchQuery.toLowerCase()
+    return claws.filter(
+      (c) =>
+        c.name.toLowerCase().includes(query) ||
+        c.purpose?.toLowerCase().includes(query) ||
+        c.instruction.toLowerCase().includes(query) ||
+        c.targetWorktree.toLowerCase().includes(query)
+    )
   }, [clawsData, searchQuery])
 
-  const getTriggerLabel = (claw: ClawWithParsedConfig) => {
-    switch (claw.triggerType) {
-      case "cron":
-        return `Cron: ${claw.triggerConfig.expression || "N/A"}`
-      case "github_poll":
-        return `GitHub: ${claw.triggerConfig.owner}/${claw.triggerConfig.repo}#${claw.triggerConfig.label}`
-      case "manual":
-        return "Manual trigger"
-      default:
-        return "Unknown"
+  // Group claws by trigger type
+  const groupedClaws = useMemo(() => {
+    const groups: Record<string, ClawWithParsedConfig[]> = {
+      scheduled: [],
+      github: [],
+      manual: [],
+      messaging: [],
     }
-  }
 
-  const handleDelete = () => {
-    if (clawToDelete) {
-      deleteMutation.mutate({ id: clawToDelete })
-    }
-  }
+    filteredClaws.forEach((claw) => {
+      switch (claw.triggerType) {
+        case "cron":
+          groups.scheduled.push(claw)
+          break
+        case "github_poll":
+          groups.github.push(claw)
+          break
+        case "manual":
+          groups.manual.push(claw)
+          break
+        case "slack_mention":
+        case "whatsapp_message":
+          groups.messaging.push(claw)
+          break
+      }
+    })
 
-  const handleTrigger = (clawId: string) => {
-    setClawToTrigger(clawId)
-    triggerMutation.mutate({ id: clawId })
-  }
+    return groups
+  }, [filteredClaws])
+
+  // Get recent executions for a claw
+  const getRecentExecutions = useCallback((clawId: string) => {
+    if (!executionsData?.executions) return []
+    return executionsData.executions.filter((e) => e.clawId === clawId).slice(0, 3)
+  }, [executionsData])
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
-      {/* Header with search and actions */}
-      <div className="px-2 pb-2 flex-shrink-0 space-y-2">
-        <div className="flex items-center gap-2">
+      {/* Search input */}
+      <div className="px-2 pb-2 flex-shrink-0">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
           <Input
             placeholder="Search claws..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={cn(
-              "flex-1 rounded-lg text-sm bg-muted border border-input placeholder:text-muted-foreground/40",
-              isMobileFullscreen ? "h-10" : "h-7"
+              "w-full rounded-lg text-sm bg-muted border border-input placeholder:text-muted-foreground/40 pl-7",
+              isMobileFullscreen ? "h-10" : "h-7",
             )}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            onClick={() => setCreateModalOpen(true)}
-            title="Create new claw"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
         </div>
-
-        {/* GitHub Token Warning */}
-        {!githubTokenData?.hasToken && (
-          <div className="text-xs text-amber-500 bg-amber-500/10 px-2 py-1.5 rounded border border-amber-500/20">
-            GitHub token not configured. Some features may not work.
-          </div>
-        )}
       </div>
 
-      {/* Claws list */}
+      {/* New Claw button */}
+      <div className="px-2 pb-2 flex-shrink-0">
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start gap-2 h-8 text-xs"
+          onClick={() => setSelectedSidebarTab("claws")}
+          disabled={true} // TODO: Implement create dialog
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New Claw
+        </Button>
+      </div>
+
+      {/* Claws tree */}
       <div className="flex-1 overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
         {isLoading ? (
           <div className="flex items-center justify-center h-20">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Loading...</span>
           </div>
-        ) : claws.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 gap-3">
-            <Zap className="h-8 w-8 text-muted-foreground/50" />
-            <span className="text-sm text-muted-foreground">
-              {searchQuery ? "No claws found" : "No claws configured"}
+        ) : filteredClaws.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-20 gap-2">
+            <Zap className="h-6 w-6 text-muted-foreground/50" />
+            <span className="text-sm text-muted-foreground text-center">
+              {searchQuery ? "No claws found" : "No claws"}
             </span>
-            <Button variant="outline" size="sm" onClick={() => setCreateModalOpen(true)}>
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              Create Claw
-            </Button>
           </div>
         ) : (
-          <div className="space-y-1">
-            {claws.map((claw) => (
-              <div
-                key={claw.id}
-                className={cn(
-                  "group flex flex-col gap-1 p-2 rounded-md hover:bg-foreground/5 cursor-pointer border border-transparent hover:border-border/50",
-                  selectedClaw?.id === claw.id && "bg-foreground/5 border-border/50"
-                )}
-              >
-                {/* Row 1: Name and status */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Zap
+          <div className="space-y-2">
+            {/* Scheduled claws */}
+            {groupedClaws.scheduled.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-muted-foreground px-2 py-1">
+                  Scheduled ({groupedClaws.scheduled.length})
+                </div>
+                {groupedClaws.scheduled.map((claw) => {
+                  const isExpanded = expandedClawIds.has(claw.id)
+                  const recentExecutions = getRecentExecutions(claw.id)
+                  const lastExecution = recentExecutions[0]
+
+                  return (
+                    <div
+                      key={claw.id}
                       className={cn(
-                        "h-3.5 w-3.5 flex-shrink-0",
-                        claw.isEnabled ? "text-green-500" : "text-muted-foreground"
+                        "rounded-lg border p-2 space-y-1",
+                        selectedClawIdAtom === claw.id
+                          ? "bg-card border-border"
+                          : "bg-muted/30 border-transparent",
                       )}
-                    />
-                    <span className="text-sm font-medium truncate">{claw.name}</span>
-                  </div>
-                  <Switch
-                    checked={claw.isEnabled}
-                    onCheckedChange={(checked) =>
-                      toggleMutation.mutate({ id: claw.id, isEnabled: checked })
-                    }
-                    className="h-4 w-7"
-                  />
-                </div>
+                    >
+                      {/* Claw header */}
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            toggleExpanded(claw.id)
+                            handleClawClick(claw, e)
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-2 pl-2 pr-20 py-1.5 rounded-md text-left transition-colors",
+                            selectedClawIdAtom === claw.id
+                              ? "bg-foreground/10 text-foreground"
+                              : "hover:bg-foreground/10 text-foreground",
+                          )}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          )}
+                          {getTriggerIcon(claw.triggerType)}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {claw.name}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              {claw.purpose || "No purpose"}
+                            </div>
+                          </div>
+                        </button>
 
-                {/* Purpose */}
-                {claw.purpose && (
-                  <div className="text-xs text-muted-foreground/80 truncate pl-5.5">
-                    {claw.purpose}
-                  </div>
-                )}
+                        {/* Status indicator */}
+                        <div className="absolute right-20 top-1/2 -translate-y-1/2">
+                          {claw.isEnabled ? (
+                            <Power className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <PowerOff className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </div>
 
-                {/* Row 2: Trigger info */}
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground pl-5.5">
-                  {claw.triggerType === "cron" && <Clock className="h-3 w-3" />}
-                  {claw.triggerType === "github_poll" && <Settings className="h-3 w-3" />}
-                  {claw.triggerType === "manual" && <Play className="h-3 w-3" />}
-                  <span className="truncate">{getTriggerLabel(claw)}</span>
-                </div>
+                        {/* Settings icon */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleSettingsClick(claw, e)}
+                          className="absolute right-12 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-all"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                        </button>
 
-                {/* Row 3: Worktree path */}
-                <div className="text-xs text-muted-foreground/70 truncate pl-5.5">
-                  {claw.targetWorktree}
-                </div>
+                        {/* Context menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-3 w-3" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleSettingsClick(claw, e)}
+                            >
+                              <Settings className="h-3.5 w-3.5 mr-2" />
+                              Settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleRunNow(claw.id, e)}
+                            >
+                              <Play className="h-3.5 w-3.5 mr-2" />
+                              Run Now
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleToggleEnabled(claw.id, claw.isEnabled, e)}
+                            >
+                              {claw.isEnabled ? (
+                                <>
+                                  <PowerOff className="h-3.5 w-3.5 mr-2" />
+                                  Disable
+                                </>
+                              ) : (
+                                <>
+                                  <Power className="h-3.5 w-3.5 mr-2" />
+                                  Enable
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs text-destructive"
+                              onClick={(e) => handleDelete(claw.id, claw.name, e)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
 
-                {/* Row 4: Actions */}
-                <div className="flex items-center gap-1 pl-5.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleTrigger(claw.id)
-                    }}
-                    disabled={triggerMutation.isPending && clawToTrigger === claw.id}
-                    title="Run now"
-                  >
-                    {triggerMutation.isPending && clawToTrigger === claw.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Play className="h-3 w-3" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedClaw({ id: claw.id, name: claw.name, triggerType: claw.triggerType })
-                      setIsEditingClaw(true)
-                    }}
-                    title="Edit"
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedClaw(selectedClaw?.id === claw.id ? null : { id: claw.id, name: claw.name, triggerType: claw.triggerType })
-                      setIsEditingClaw(false)
-                    }}
-                    title="View history"
-                  >
-                    <History className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-destructive hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setClawToDelete(claw.id)
-                    }}
-                    title="Delete"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                      {/* Recent executions */}
+                      {isExpanded && recentExecutions.length > 0 && (
+                        <div className="ml-[10px] pl-3 pt-0.5 space-y-0.5">
+                          {recentExecutions.map((execution) => (
+                            <div
+                              key={execution.id}
+                              className="flex items-center gap-2 text-[10px] text-muted-foreground"
+                            >
+                              {getStatusIcon(execution.status)}
+                              <span className="truncate">
+                                {new Date(execution.startedAt).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            ))}
+            )}
+
+            {/* GitHub claws */}
+            {groupedClaws.github.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-muted-foreground px-2 py-1">
+                  GitHub ({groupedClaws.github.length})
+                </div>
+                {groupedClaws.github.map((claw) => {
+                  const isExpanded = expandedClawIds.has(claw.id)
+                  const recentExecutions = getRecentExecutions(claw.id)
+                  const lastExecution = recentExecutions[0]
+
+                  return (
+                    <div
+                      key={claw.id}
+                      className={cn(
+                        "rounded-lg border p-2 space-y-1",
+                        selectedClawIdAtom === claw.id
+                          ? "bg-card border-border"
+                          : "bg-muted/30 border-transparent",
+                      )}
+                    >
+                      {/* Same structure as scheduled */}
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            toggleExpanded(claw.id)
+                            handleClawClick(claw, e)
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-2 pl-2 pr-20 py-1.5 rounded-md text-left transition-colors",
+                            selectedClawIdAtom === claw.id
+                              ? "bg-foreground/10 text-foreground"
+                              : "hover:bg-foreground/10 text-foreground",
+                          )}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          )}
+                          {getTriggerIcon(claw.triggerType)}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {claw.name}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              {claw.purpose || "No purpose"}
+                            </div>
+                          </div>
+                        </button>
+
+                        {/* Status indicator */}
+                        <div className="absolute right-20 top-1/2 -translate-y-1/2">
+                          {claw.isEnabled ? (
+                            <Power className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <PowerOff className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </div>
+
+                        {/* Settings icon */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleSettingsClick(claw, e)}
+                          className="absolute right-12 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-all"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                        </button>
+
+                        {/* Context menu - same as scheduled */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-3 w-3" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleSettingsClick(claw, e)}
+                            >
+                              <Settings className="h-3.5 w-3.5 mr-2" />
+                              Settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleRunNow(claw.id, e)}
+                            >
+                              <Play className="h-3.5 w-3.5 mr-2" />
+                              Run Now
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleToggleEnabled(claw.id, claw.isEnabled, e)}
+                            >
+                              {claw.isEnabled ? (
+                                <>
+                                  <PowerOff className="h-3.5 w-3.5 mr-2" />
+                                  Disable
+                                </>
+                              ) : (
+                                <>
+                                  <Power className="h-3.5 w-3.5 mr-2" />
+                                  Enable
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs text-destructive"
+                              onClick={(e) => handleDelete(claw.id, claw.name, e)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      {/* Recent executions */}
+                      {isExpanded && recentExecutions.length > 0 && (
+                        <div className="ml-[10px] pl-3 pt-0.5 space-y-0.5">
+                          {recentExecutions.map((execution) => (
+                            <div
+                              key={execution.id}
+                              className="flex items-center gap-2 text-[10px] text-muted-foreground"
+                            >
+                              {getStatusIcon(execution.status)}
+                              <span className="truncate">
+                                {new Date(execution.startedAt).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Manual claws */}
+            {groupedClaws.manual.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-muted-foreground px-2 py-1">
+                  Manual ({groupedClaws.manual.length})
+                </div>
+                {groupedClaws.manual.map((claw) => {
+                  const isExpanded = expandedClawIds.has(claw.id)
+                  const recentExecutions = getRecentExecutions(claw.id)
+
+                  return (
+                    <div
+                      key={claw.id}
+                      className={cn(
+                        "rounded-lg border p-2 space-y-1",
+                        selectedClawIdAtom === claw.id
+                          ? "bg-card border-border"
+                          : "bg-muted/30 border-transparent",
+                      )}
+                    >
+                      {/* Same structure */}
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            toggleExpanded(claw.id)
+                            handleClawClick(claw, e)
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-2 pl-2 pr-20 py-1.5 rounded-md text-left transition-colors",
+                            selectedClawIdAtom === claw.id
+                              ? "bg-foreground/10 text-foreground"
+                              : "hover:bg-foreground/10 text-foreground",
+                          )}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          )}
+                          {getTriggerIcon(claw.triggerType)}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {claw.name}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              {claw.purpose || "No purpose"}
+                            </div>
+                          </div>
+                        </button>
+
+                        <div className="absolute right-20 top-1/2 -translate-y-1/2">
+                          {claw.isEnabled ? (
+                            <Power className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <PowerOff className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleSettingsClick(claw, e)}
+                          className="absolute right-12 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-all"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                        </button>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-3 w-3" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleSettingsClick(claw, e)}
+                            >
+                              <Settings className="h-3.5 w-3.5 mr-2" />
+                              Settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleRunNow(claw.id, e)}
+                            >
+                              <Play className="h-3.5 w-3.5 mr-2" />
+                              Run Now
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleToggleEnabled(claw.id, claw.isEnabled, e)}
+                            >
+                              {claw.isEnabled ? (
+                                <>
+                                  <PowerOff className="h-3.5 w-3.5 mr-2" />
+                                  Disable
+                                </>
+                              ) : (
+                                <>
+                                  <Power className="h-3.5 w-3.5 mr-2" />
+                                  Enable
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs text-destructive"
+                              onClick={(e) => handleDelete(claw.id, claw.name, e)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      {isExpanded && recentExecutions.length > 0 && (
+                        <div className="ml-[10px] pl-3 pt-0.5 space-y-0.5">
+                          {recentExecutions.map((execution) => (
+                            <div
+                              key={execution.id}
+                              className="flex items-center gap-2 text-[10px] text-muted-foreground"
+                            >
+                              {getStatusIcon(execution.status)}
+                              <span className="truncate">
+                                {new Date(execution.startedAt).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Messaging claws */}
+            {groupedClaws.messaging.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-muted-foreground px-2 py-1">
+                  Messaging ({groupedClaws.messaging.length})
+                </div>
+                {groupedClaws.messaging.map((claw) => {
+                  const isExpanded = expandedClawIds.has(claw.id)
+                  const recentExecutions = getRecentExecutions(claw.id)
+
+                  return (
+                    <div
+                      key={claw.id}
+                      className={cn(
+                        "rounded-lg border p-2 space-y-1",
+                        selectedClawIdAtom === claw.id
+                          ? "bg-card border-border"
+                          : "bg-muted/30 border-transparent",
+                      )}
+                    >
+                      {/* Same structure */}
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            toggleExpanded(claw.id)
+                            handleClawClick(claw, e)
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-2 pl-2 pr-20 py-1.5 rounded-md text-left transition-colors",
+                            selectedClawIdAtom === claw.id
+                              ? "bg-foreground/10 text-foreground"
+                              : "hover:bg-foreground/10 text-foreground",
+                          )}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          )}
+                          {getTriggerIcon(claw.triggerType)}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {claw.name}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              {claw.purpose || "No purpose"}
+                            </div>
+                          </div>
+                        </button>
+
+                        <div className="absolute right-20 top-1/2 -translate-y-1/2">
+                          {claw.isEnabled ? (
+                            <Power className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <PowerOff className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleSettingsClick(claw, e)}
+                          className="absolute right-12 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-all"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                        </button>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-3 w-3" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleSettingsClick(claw, e)}
+                            >
+                              <Settings className="h-3.5 w-3.5 mr-2" />
+                              Settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleRunNow(claw.id, e)}
+                            >
+                              <Play className="h-3.5 w-3.5 mr-2" />
+                              Run Now
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={(e) => handleToggleEnabled(claw.id, claw.isEnabled, e)}
+                            >
+                              {claw.isEnabled ? (
+                                <>
+                                  <PowerOff className="h-3.5 w-3.5 mr-2" />
+                                  Disable
+                                </>
+                              ) : (
+                                <>
+                                  <Power className="h-3.5 w-3.5 mr-2" />
+                                  Enable
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs text-destructive"
+                              onClick={(e) => handleDelete(claw.id, claw.name, e)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      {isExpanded && recentExecutions.length > 0 && (
+                        <div className="ml-[10px] pl-3 pt-0.5 space-y-0.5">
+                          {recentExecutions.map((execution) => (
+                            <div
+                              key={execution.id}
+                              className="flex items-center gap-2 text-[10px] text-muted-foreground"
+                            >
+                              {getStatusIcon(execution.status)}
+                              <span className="truncate">
+                                {new Date(execution.startedAt).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
-
-      {/* Create Claw Modal */}
-      <CreateClawModal open={createModalOpen} onOpenChange={setCreateModalOpen} />
-
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!clawToDelete} onOpenChange={() => setClawToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Claw</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this claw? This action cannot be undone and all
-              execution history will be lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
