@@ -548,8 +548,13 @@
       "when": 1773590500000,
       "tag": "0074_apply_soul_template_to_existing_claws",
       "breakpoints": true
-=======
->>>>>>> Stashed changes
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1773590600000,
+      "tag": "0075_add_openui_components_table",
+      "breakpoints": true
     }
   ]
 }

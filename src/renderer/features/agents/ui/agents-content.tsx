@@ -69,6 +69,7 @@ import { selectedSettingsCategoryAtom } from "../atoms"
 import { Zap } from "lucide-react"
 import { CcSettingsContent } from "../../settings/ui/cc-settings-content"
 import { PinnedTabsBar } from "../components/pinned-tabs-bar"
+import { OpenUIContent } from "../../openui/ui/openui-content"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -869,6 +870,7 @@ export function AgentsContent() {
   const showClawsEditView = selectedSidebarTab === "claws" && !!selectedClaw && isEditingClaw
   const showClawsListView = selectedSidebarTab === "claws" && !selectedClaw
   const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory && !showWorkflowsView
+  const showOpenUIView = selectedSidebarTab === "openui"
 
   // Workspace GitHub flex view: 2-pane content+chat when a Source Repo item is selected
   // from the workspace sidebar (chats tab), with no active chat
@@ -968,6 +970,9 @@ export function AgentsContent() {
           </p>
         </div>
       )}
+
+      {/* OpenUI Builder view */}
+      {showOpenUIView && <OpenUIContent />}
 
       {/* Main content - chats/terminal/other */}
       <div className={showMainContent ? "flex h-full" : "hidden"}>

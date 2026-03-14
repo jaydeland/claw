@@ -692,3 +692,44 @@ export const whatsappBridgesRelations = relations(whatsappBridges, ({ one }) => 
 // WhatsApp bridge types
 export type WhatsappBridge = typeof whatsappBridges.$inferSelect
 export type NewWhatsappBridge = typeof whatsappBridges.$inferInsert
+
+// ============ OPENUI GENERATED COMPONENTS ============
+export const openuiComponents = sqliteTable("openui_components", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  name: text("name").notNull(),
+  description: text("description"),
+  code: text("code").notNull(), // The generated React component code
+  atomsCode: text("atoms_code"), // Generated Jotai atoms code
+  prompt: text("prompt").notNull(), // The original user prompt
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  chatId: text("chat_id")
+    .references(() => chats.id, { onDelete: "set null" }), // Optional: associated chat
+  filePath: text("file_path"), // Path to saved file in generated/
+  isInstalled: integer("is_installed", { mode: "boolean" }).default(false), // Whether component is installed to project
+  metadata: text("metadata"), // JSON: { usedComponents: string[], complexity: string }
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+export const openuiComponentsRelations = relations(openuiComponents, ({ one }) => ({
+  project: one(projects, {
+    fields: [openuiComponents.projectId],
+    references: [projects.id],
+  }),
+  chat: one(chats, {
+    fields: [openuiComponents.chatId],
+    references: [chats.id],
+  }),
+}))
+
+// OpenUI component types
+export type OpenUIComponent = typeof openuiComponents.$inferSelect
+export type NewOpenUIComponent = typeof openuiComponents.$inferInsert
