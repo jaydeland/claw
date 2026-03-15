@@ -266,9 +266,12 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
       gitOwner: workspace.gitOwner,
       gitRepo: workspace.gitRepo,
     })
+    // Reset selected chat when switching workspaces - prevents stale chat from other workspace
+    setSelectedChatId(null)
+    setSelectedDraftId(null)
     // Return to chat/new-chat view when clicking workspace header
     setWorkspaceGithubSelection(null)
-  }, [toggleWorkspaceExpanded, setSelectedProject, setWorkspaceGithubSelection])
+  }, [toggleWorkspaceExpanded, setSelectedProject, setSelectedChatId, setSelectedDraftId, setWorkspaceGithubSelection])
 
   // Handle settings icon click - open project detail page
   const handleProjectSettingsClick = useCallback((workspace: any, e: React.MouseEvent) => {

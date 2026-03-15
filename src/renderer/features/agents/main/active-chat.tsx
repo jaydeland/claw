@@ -3867,9 +3867,17 @@ export function ChatView({
   const setUnseenChanges = useSetAtom(agentsUnseenChangesAtom)
   const setSubChatUnseenChanges = useSetAtom(agentsSubChatUnseenChangesAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
-  const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+  const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const setUndoStack = useSetAtom(undoStackAtom)
   const { notifyAgentComplete } = useDesktopNotifications()
+
+  // Validate selectedChatId against current workspace - reset if mismatched
+  // This prevents stale localStorage from showing wrong chat as selected
+  useEffect(() => {
+    if (selectedChatId && selectedChatId !== chatId) {
+      setSelectedChatId(null)
+    }
+  }, [chatId, selectedChatId, setSelectedChatId])
 
   // Check if any chat has unseen changes
   const hasAnyUnseenChanges = unseenChanges.size > 0

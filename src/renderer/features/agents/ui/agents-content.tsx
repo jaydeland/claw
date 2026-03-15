@@ -26,8 +26,7 @@ import {
   subChatsQuickSwitchOpenAtom,
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
-  selectedClawAtom,
-  isEditingClawAtom,
+  selectedClawDetailIdAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { ChatView } from "../main/active-chat"
@@ -65,6 +64,7 @@ import { PromptsView } from "../../prompts/ui/prompts-view"
 import { ErDiagramView } from "../../er-diagram/ui/er-diagram-view"
 import { ExecutionHistoryViewer } from "../../sidebar/components/execution-history-viewer"
 import { ClawEditView } from "../../sidebar/components/claw-edit-view"
+import { ClawDetailPage } from "../../claws/ui/claw-detail-page"
 import { selectedSettingsCategoryAtom } from "../atoms"
 import { Zap } from "lucide-react"
 import { CcSettingsContent } from "../../settings/ui/cc-settings-content"

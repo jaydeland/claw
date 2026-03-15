@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import { Zap, Plus, Play, Settings, History, Clock, CheckCircle, XCircle, Loader2, Power, PowerOff, Trash2, ExternalLink, Edit } from "lucide-react"
+import { Zap, Plus, Play, Settings, History, Clock, CheckCircle, XCircle, Loader2, Power, PowerOff, Trash2, ExternalLink, Edit, RefreshCw } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { useAtom } from "jotai"
@@ -42,8 +42,8 @@ type ClawWithParsedConfig = {
   instruction: string
   soulInstruction?: string
   targetWorktree: string
-  triggerType: "cron" | "github_poll" | "manual"
-  triggerConfig: { expression?: string; owner?: string; repo?: string; label?: string }
+  triggerType: "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
+  triggerConfig: { expression?: string; owner?: string; repo?: string; label?: string; slackChannelFilter?: string; whatsappChatFilter?: string }
   isEnabled: boolean
   createdAt: Date
   allowedDirectories?: string
@@ -60,7 +60,7 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
 
   const utils = trpc.useUtils()
 
-  const { data: clawsData, isLoading } = trpc.claws.getAll.useQuery()
+  const { data: clawsData, isLoading, error } = trpc.claws.getAll.useQuery()
   const { data: githubTokenData } = trpc.github.hasToken.useQuery()
 
   const toggleMutation = trpc.claws.toggleEnabled.useMutation({
@@ -107,6 +107,10 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
         return `GitHub: ${claw.triggerConfig.owner}/${claw.triggerConfig.repo}#${claw.triggerConfig.label}`
       case "manual":
         return "Manual trigger"
+      case "slack_mention":
+        return `Slack: ${claw.triggerConfig.slackChannelFilter || "mentions"}`
+      case "whatsapp_message":
+        return `WhatsApp: ${claw.triggerConfig.whatsappChatFilter || "messages"}`
       default:
         return "Unknown"
     }
@@ -158,7 +162,16 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
 
       {/* Claws list */}
       <div className="flex-1 overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
-        {isLoading ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center h-32 gap-3">
+            <XCircle className="h-8 w-8 text-red-500" />
+            <span className="text-sm text-red-500">Failed to load claws</span>
+            <Button variant="outline" size="sm" onClick={() => utils.claws.getAll.invalidate()}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1" />
+              Retry
+            </Button>
+          </div>
+        ) : isLoading ? (
           <div className="flex items-center justify-center h-20">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
