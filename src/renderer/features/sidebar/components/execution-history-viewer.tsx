@@ -8,12 +8,13 @@ import { Button } from "../../../components/ui/button"
 import { ScrollArea } from "../../../components/ui/scroll-area"
 import { Badge } from "../../../components/ui/badge"
 import { formatDistanceToNow } from "../../../lib/utils"
+import { WhatsAppQueueStatus } from "../../../components/dialogs/settings-tabs/whatsapp-queue-status"
 
 interface ExecutionHistoryViewerProps {
   claw: {
     id: string
     name: string
-    triggerType: "cron" | "github_poll" | "manual"
+    triggerType: "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
   }
   onBack: () => void
   className?: string
@@ -139,6 +140,13 @@ export function ExecutionHistoryViewer({ claw, onBack, className }: ExecutionHis
           Run Now
         </Button>
       </div>
+
+      {/* WhatsApp Queue Status */}
+      {claw.triggerType === "whatsapp_message" && (
+        <div className="border-b border-border/50">
+          <WhatsAppQueueStatus clawId={claw.id} />
+        </div>
+      )}
 
       {/* Executions List */}
       <div className="flex flex-1 overflow-hidden">

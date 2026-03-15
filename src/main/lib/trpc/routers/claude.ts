@@ -72,6 +72,7 @@ import {
 } from "../../session/session-registry"
 import { getWhatsAppTrigger } from "../../claws/whatsapp-trigger"
 import { getSlackTrigger } from "../../claws/slack-trigger"
+import { getDiscordTrigger } from "../../claws/discord-trigger"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -1220,6 +1221,8 @@ export const claudeRouter = router({
                           getWhatsAppTrigger().sendMessage(parentChat.connectionTarget, questionText).catch(console.error)
                         } else if (parentChat.connectionType === "slack") {
                           getSlackTrigger().sendToChannel(parentChat.connectionTarget, questionText).catch(console.error)
+                        } else if (parentChat.connectionType === "discord") {
+                          getDiscordTrigger().sendMessage(parentChat.connectionTarget, questionText).catch(console.error)
                         }
                       }
                     } catch (e) {
@@ -2260,6 +2263,8 @@ export const claudeRouter = router({
                         getWhatsAppTrigger().sendMessage(parentChat.connectionTarget, finalText).catch(console.error)
                       } else if (parentChat.connectionType === "slack") {
                         getSlackTrigger().sendToChannel(parentChat.connectionTarget, finalText).catch(console.error)
+                      } else if (parentChat.connectionType === "discord") {
+                        getDiscordTrigger().sendMessage(parentChat.connectionTarget, finalText).catch(console.error)
                       }
                     }
                   }

@@ -11,8 +11,7 @@ import { app } from "electron"
 import { getDatabase, headlessClaws, whatsappSettings, clawExecutions, whatsappBridges } from "../db"
 import { eq } from "drizzle-orm"
 import { clawDaemon, getOrCreateSession, updateSessionStatus, addMessageToSession } from "./index"
-import { getWhatsAppQueueManager } from "./queue-manager"
-import type { WhatsAppQueueItem } from "./queue-types"
+import { startWhatsAppQueue, queueWhatsAppMessage, getRunningExecution, getQueueStatus } from "./whatsapp-queue"
 import { EventEmitter } from "events"
 import * as path from "path"
 import * as fs from "fs"
@@ -484,11 +483,13 @@ export class WhatsAppTrigger {
       for (const claw of matchingClaws) {
         // Get or create session for this chat
         const session = await getOrCreateSession(claw.id, from, "whatsapp", {
-          metadata: { sender },
+          metadata: { sender, from, message: messageText },
         })
 
-        // Check if there's already an active execution for this session
-        if (session.status === "active") {
+        // Check if there's already a running execution for this session
+        const runningExecution = await getRunningExecution(session.id)
+
+        if (runningExecution) {
           console.log(`[WhatsAppTrigger] Session ${session.id} already has an active execution, skipping`)
           await this.sendMessage(from, `⏳ *${claw.name}* is still processing your previous request. Please wait for it to complete.`)
           continue
@@ -498,18 +499,9 @@ export class WhatsAppTrigger {
         await addMessageToSession(session.id, "user", messageText)
         await updateSessionStatus(session.id, "active")
 
-        // Create queue item for sequential processing
-        const queueItem: WhatsAppQueueItem = {
-          id: `wa_queue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          clawId: claw.id,
-          clawName: claw.name,
-          externalId: from,
-          sender,
-          messageText,
-          timestamp: new Date(),
-          status: "pending",
-          sessionId: session.id,
-        }
+        // Queue the message for processing (DB-backed, survives restarts)
+        console.log(`[WhatsAppTrigger] Queueing claw "${claw.name}" (id=${claw.id})`)
+        await queueWhatsAppMessage(claw.id, claw.name, from, sender, messageText, session.id)
 
         // Send acknowledgment immediately
         const ackText = `🤖 *${claw.name}* is queued for processing...`
@@ -519,11 +511,6 @@ export class WhatsAppTrigger {
         } catch (ackError) {
           console.error(`[WhatsAppTrigger] ERROR: Failed to send acknowledgment to ${from}:`, ackError)
         }
-
-        // Add to queue instead of executing immediately
-        console.log(`[WhatsAppTrigger] Queueing claw "${claw.name}" (id=${claw.id})`)
-        const queueManager = getWhatsAppQueueManager()
-        queueManager.enqueue(queueItem)
       }
 
       // Also check for WhatsApp bridges and forward messages to connected chats
@@ -831,10 +818,18 @@ export class WhatsAppTrigger {
    */
   private async updateConnectionStatus(connected: boolean): Promise<void> {
     const db = getDatabase()
-    db.update(whatsappSettings)
-      .set({ isConnected: connected, updatedAt: new Date() })
-      .where(eq(whatsappSettings.id, "default"))
-      .run()
+    let settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
+
+    // Insert default row if it doesn't exist
+    if (!settings) {
+      console.log("[WhatsAppTrigger] Inserting default whatsapp_settings row")
+      db.insert(whatsappSettings).values({ id: "default", isConnected: connected, updatedAt: new Date() }).run()
+    } else {
+      db.update(whatsappSettings)
+        .set({ isConnected: connected, updatedAt: new Date() })
+        .where(eq(whatsappSettings.id, "default"))
+        .run()
+    }
 
     // Emit status change event for real-time UI updates
     console.log(`[WhatsAppTrigger] Emitting status change: ${connected}`)

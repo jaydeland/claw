@@ -238,6 +238,15 @@ export function ClawForm({
     return getGroupsQuery.data.groups.find((g) => g.id === formData.whatsappChatFilter)
   }, [formData.whatsappChatFilter, getGroupsQuery.data?.groups])
 
+  // Compute the select value - must match a SelectItem value exactly
+  const whatsappGroupSelectValue = useMemo(() => {
+    if (!formData.whatsappChatFilter) return "__empty__"
+    if (selectedGroup?.id) return selectedGroup.id
+    // If saved filter is a group ID but not in fetched list, use it directly (matches "Unknown Group" item)
+    if (formData.whatsappChatFilter.includes("@g.us")) return formData.whatsappChatFilter
+    return "__empty__"
+  }, [formData.whatsappChatFilter, selectedGroup, getGroupsQuery.data?.groups])
+
   return (
     <div className="space-y-4">
       {/* Name */}
@@ -331,7 +340,15 @@ export function ClawForm({
 
       {/* Soul Instruction */}
       <div className="space-y-2">
-        <Label htmlFor="soul-instruction">Soul Instruction (Optional)</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="soul-instruction">Soul Instruction</Label>
+          {formData.soulInstruction && formData.soulInstruction.length > 0 && (
+            <span className="text-xs text-green-600 flex items-center gap-1">
+              <Check className="h-3 w-3" />
+              Applied from default template
+            </span>
+          )}
+        </div>
         <Textarea
           id="soul-instruction"
           placeholder="Define the agent's persistent behavioral identity..."
@@ -347,14 +364,16 @@ export function ClawForm({
         <p className="text-xs text-muted-foreground">
           Persistent behavioral guidelines injected before every task. Defines how the agent thinks and acts.
         </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setFormData((prev) => ({
-              ...prev,
-              soulInstruction: `You are an autonomous automation agent operating in a fire-and-forget environment.
+        <div className="flex gap-2">
+          {!formData.soulInstruction || formData.soulInstruction.length === 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setFormData((prev) => ({
+                  ...prev,
+                  soulInstruction: `You are an autonomous automation agent operating in a fire-and-forget environment.
 
 ## Core Operating Principles
 
@@ -390,11 +409,78 @@ You operate in an isolated Git worktree at: {{targetWorktree}}
 - Verify your work compiles/runs before considering complete
 - Run tests if available; fix failures before finishing
 - End with clear status: what was done, what remains, any warnings`,
-            }))
-          }}
-        >
-          Load Default Soul Template
-        </Button>
+                }))
+              }}
+            >
+              Load Default Soul Template
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (confirm("This will replace the current soul instruction with the default template. Continue?")) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    soulInstruction: `You are an autonomous automation agent operating in a fire-and-forget environment.
+
+## Core Operating Principles
+
+### 1. Safety First - Reversibility & Blast Radius
+Before ANY operation, assess:
+- Reversibility: Can this be undone easily? If not, proceed with extreme caution
+- Blast Radius: How many systems/users could be affected?
+- Destructive Operations: NEVER delete, remove, or downgrade without explicit requirement
+- External Impact: When connected to WhatsApp/Slack, remember your responses affect real users
+
+### 2. Act Decisively When Safe, Ask When Uncertain
+- Safe operations: Create files, add features, read/analyze, refactor non-critical code → Act directly
+- Uncertain operations: Modifying auth, changing APIs, touching production configs → Ask first
+- Destructive operations: Deleting code, removing dependencies → Require explicit justification
+
+### 3. No Over-Engineering
+- Implement exactly what's requested - no speculative features
+- Three similar lines of code is better than premature abstraction
+- Don't add error handling for scenarios that can't happen
+- Trust internal code and framework guarantees
+
+### 4. Worktree Isolation Awareness
+You operate in an isolated Git worktree at: {{targetWorktree}}
+- Your changes are sandboxed to this directory
+- Respect the worktree boundaries
+
+### 5. Tool Usage Discipline
+- Use dedicated tools (Read, Edit, Glob, Grep) over bash for file operations
+- Reserve bash exclusively for system commands
+- Never guess or generate URLs unless confident they help with programming
+
+### 6. Completion Standards
+- Verify your work compiles/runs before considering complete
+- Run tests if available; fix failures before finishing
+- End with clear status: what was done, what remains, any warnings`,
+                  }))
+                }
+              }}
+            >
+              Reset to Default Template
+            </Button>
+          )}
+          {formData.soulInstruction && formData.soulInstruction.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (confirm("Clear the soul instruction? This will remove all behavioral guidelines.")) {
+                  setFormData((prev) => ({ ...prev, soulInstruction: "" }))
+                }
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Trigger Type */}
@@ -703,7 +789,7 @@ You operate in an isolated Git worktree at: {{targetWorktree}}
             <div className="space-y-2 pt-2 border-t border-border/50">
               <Label htmlFor="whatsapp-group-select">Or Select a Group</Label>
               <Select
-                value={selectedGroup?.id || formData.whatsappChatFilter || "__empty__"}
+                value={whatsappGroupSelectValue}
                 onValueChange={(value) => {
                   if (value === "__empty__") {
                     setFormData((prev) => ({ ...prev, whatsappChatFilter: "" }))

@@ -408,7 +408,7 @@ export const headlessClaws = sqliteTable("headless_claws", {
   soulInstruction: text("soul_instruction"), // Persistent behavioral identity injected before instruction
   clawsSoul: text("claws_soul").default(""), // System prompt injected via SDK as system message
   targetWorktree: text("target_worktree").notNull(), // Absolute path to the isolated Git worktree
-  triggerType: text("trigger_type", { enum: ["cron", "github_poll", "manual", "slack_mention", "whatsapp_message"] }).notNull(),
+  triggerType: text("trigger_type", { enum: ["cron", "github_poll", "manual", "slack_mention", "whatsapp_message", "discord_message"] }).notNull(),
   triggerConfig: text("trigger_config").notNull(), // JSON: cron expression, GitHub repo, or chat filter
   isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
   allowedDirectories: text("allowed_directories").notNull().default("[]"), // JSON string[]: extra dirs beyond targetWorktree
@@ -477,6 +477,17 @@ export const slackSettings = sqliteTable("slack_settings", {
   encryptedAppToken: text("encrypted_app_token"), // xapp-... token encrypted via safeStorage
   encryptedBotToken: text("encrypted_bot_token"), // xoxb-... token encrypted via safeStorage
   isSocketModeEnabled: integer("is_socket_mode_enabled", { mode: "boolean" }).default(false),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+})
+
+// ============ DISCORD SETTINGS ============
+// Secure storage for Discord bot credentials
+export const discordSettings = sqliteTable("discord_settings", {
+  id: text("id").primaryKey().default("default"), // Single row, always "default"
+  encryptedBotToken: text("encrypted_bot_token"), // Bot token encrypted via safeStorage
+  guildId: text("guild_id"), // Selected guild/server ID
+  guildName: text("guild_name"), // Selected guild/server name
+  isConnected: integer("is_connected", { mode: "boolean" }).default(false),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
 
@@ -559,7 +570,7 @@ export const chatSessions = sqliteTable("chat_sessions", {
     .notNull()
     .references(() => headlessClaws.id, { onDelete: "cascade" }),
   externalId: text("external_id").notNull(), // WhatsApp JID or Slack channel/thread ID
-  platform: text("platform", { enum: ["whatsapp", "slack"] }).notNull(),
+  platform: text("platform", { enum: ["whatsapp", "slack", "discord"] }).notNull(),
   status: text("status", { enum: ["idle", "active", "completed", "error"] }).notNull().default("idle"),
   currentExecutionId: text("current_execution_id").references((): any => clawExecutions.id), // Currently running execution
   context: text("context").notNull().default("{}"), // JSON: conversation context, user preferences, etc.
@@ -590,10 +601,10 @@ export const chatSessionsRelations = relations(chatSessions, ({ one, many }) => 
 
 // ============ TYPE EXPORTS ============
 export type SubChatMode = "plan" | "agent"
-export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
+export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message" | "discord_message"
 export type SourceView = "github" | "prompts" | "skills" | "commands"
 export type ChatSessionStatus = "idle" | "active" | "completed" | "error"
-export type ChatPlatform = "whatsapp" | "slack"
+export type ChatPlatform = "whatsapp" | "slack" | "discord"
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -693,3 +704,44 @@ export const whatsappBridgesRelations = relations(whatsappBridges, ({ one }) => 
 // WhatsApp bridge types
 export type WhatsappBridge = typeof whatsappBridges.$inferSelect
 export type NewWhatsappBridge = typeof whatsappBridges.$inferInsert
+
+// ============ DISCORD BRIDGES ============
+// Stores bidirectional Discord-Chat bridge configurations
+export const discordBridges = sqliteTable("discord_bridges", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  chatId: text("chat_id")
+    .notNull()
+    .references(() => chats.id, { onDelete: "cascade" }),
+  subChatId: text("sub_chat_id")
+    .references(() => subChats.id, { onDelete: "cascade" }),
+  discordGuildId: text("discord_guild_id").notNull(),
+  discordChannelId: text("discord_channel_id").notNull(),
+  discordChannelName: text("discord_channel_name"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+}, (table) => ({
+  chatIdIdx: index("discord_bridges_chat_id_idx").on(table.chatId),
+  subChatIdIdx: index("discord_bridges_sub_chat_id_idx").on(table.subChatId),
+  channelIdIdx: index("discord_bridges_channel_id_idx").on(table.discordChannelId),
+  uniqueBridge: index("discord_bridges_unique_idx").on(table.chatId, table.discordChannelId),
+}))
+
+export const discordBridgesRelations = relations(discordBridges, ({ one }) => ({
+  chat: one(chats, {
+    fields: [discordBridges.chatId],
+    references: [chats.id],
+  }),
+  subChat: one(subChats, {
+    fields: [discordBridges.subChatId],
+    references: [subChats.id],
+  }),
+}))
+
+// Discord types
+export type DiscordSettings = typeof discordSettings.$inferSelect
+export type NewDiscordSettings = typeof discordSettings.$inferInsert
+export type DiscordBridge = typeof discordBridges.$inferSelect
+export type NewDiscordBridge = typeof discordBridges.$inferInsert

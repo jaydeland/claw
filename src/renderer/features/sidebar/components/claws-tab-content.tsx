@@ -62,6 +62,7 @@ type ClawWithParsedConfig = {
   name: string
   purpose: string
   instruction: string
+  soulInstruction?: string
   targetWorktree: string
   triggerType: "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
   triggerConfig: { expression?: string; owner?: string; repo?: string; label?: string }

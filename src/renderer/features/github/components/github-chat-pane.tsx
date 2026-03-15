@@ -40,6 +40,7 @@ const ANALYSIS_LABELS: Record<AnalysisType, string> = {
 
 // Original prompts used to generate each diagram type
 // These provide context to Claude about what the diagram represents
+// Note: For "db" type, the system prompt is now loaded from the database (analysis_db key)
 const ANALYSIS_PROMPTS: Record<AnalysisType, string> = {
   codeflow: `Analyze this codebase and generate a React Flow diagram showing the code flow and module dependencies.
 
@@ -52,17 +53,59 @@ Focus on:
 
 Output format: React Flow JSON with nodes (id, type, position, data) and edges (id, source, target, label).`,
 
-  db: `Analyze this codebase and generate a React Flow diagram showing the database schema and data flow.
+  db: `Analyze this codebase and generate a React Flow entity relationship diagram (ERD) showing the complete database schema structure.
 
 Focus on:
-1. Database tables/collections
-2. Field definitions and types
-3. Relationships (1:1, 1:N, N:M)
-4. Foreign keys and constraints
-5. Indexes and keys
-6. Migration patterns
+1. Database tables/collections - identify all entities
+2. Field definitions: name, type, nullable, primary key, foreign key, default, unique constraints
+3. Relationships with cardinality: 1:1, 1:N, N:M
+4. Foreign key constraints and referential integrity
+5. Indexes (single, composite, unique)
+6. Junction/bridge tables for many-to-many relationships
 
-Output format: React Flow JSON with nodes (tables) and edges (relationships).`,
+Node structure - each table should include:
+{
+  "id": "table-name",
+  "type": "table",
+  "position": { "x": number, "y": number },
+  "data": {
+    "label": "Table Name",
+    "description": "Brief description of entity purpose",
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid|varchar|int|bigint|timestamp|boolean|json|text",
+        "nullable": false,
+        "primaryKey": true,
+        "defaultValue": "uuid()" | null
+      },
+      {
+        "name": "foreign_key_id",
+        "type": "uuid",
+        "nullable": false,
+        "foreignKey": "references other_table(id)",
+        "onDelete": "CASCADE|SET NULL|RESTRICT"
+      }
+    ]
+  }
+}
+
+Edge structure - each relationship:
+{
+  "id": "edge-id",
+  "source": "source-table-id",
+  "target": "target-table-id",
+  "sourceHandle": "column-name-bottom",
+  "targetHandle": "column-name-top",
+  "label": "FK column name",
+  "type": "smoothstep",
+  "data": {
+    "foreignKey": "column_name",
+    "cardinality": "1:1 | 1:N | N:M"
+  }
+}
+
+Output format: React Flow JSON with nodes (tables with columns) and edges (FK relationships with cardinality).`,
 
   architecture: `Analyze this codebase and generate a React Flow diagram showing the high-level system architecture.
 
@@ -156,6 +199,11 @@ export const GitHubChatPane = memo(function GitHubChatPane({
   // Get current diagram data for visualize mode system instructions
   const diagramData = useAtomValue(githubDiagramDataAtom)
 
+  // Fetch the system prompt for DB analysis from the database
+  const { data: dbSystemPrompt } = trpc.prompts.getByKey.useQuery(
+    { key: "analysis_db" },
+    { enabled: selection?.type === "visualize" && selection?.analysisType === "db" }
+  )
 
   // Skip clearing on first mount so restored session/messages survive a reload
   const isFirstMount = useRef(true)

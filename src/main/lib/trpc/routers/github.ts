@@ -548,6 +548,7 @@ export const githubRouter = router({
 
   /**
    * Submit a pull request review (approve, request changes, or leave a comment)
+   * Uses stored GitHub token for authentication
    */
   submitReview: publicProcedure
     .input(
@@ -559,8 +560,14 @@ export const githubRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+      // Get stored GitHub token
+      const db = getDatabase()
+      const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
+      const token = settings?.encryptedToken ? decryptText(settings.encryptedToken) : null
+
+      if (!token) {
+        return { success: false as const, error: "GitHub token not configured. Please add a token in Settings." }
+      }
 
       const remote = await getGitHubRemote(input.projectPath)
       if (!remote) return { success: false as const, error: "No GitHub remote found" }
@@ -568,21 +575,32 @@ export const githubRouter = router({
       const payload: Record<string, string> = { event: input.event }
       if (input.body.trim()) payload.body = input.body.trim()
 
-      const tmpFile = path.join(os.tmpdir(), `gh-review-${Date.now()}.json`)
-      fs.writeFileSync(tmpFile, JSON.stringify(payload))
-
       try {
-        await execAsync(
-          `gh api repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/reviews --method POST --input ${tmpFile}`,
-          { cwd: input.projectPath }
+        // Use fetch with stored token instead of gh CLI
+        const response = await fetch(
+          `https://api.github.com/repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/reviews`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          }
         )
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          const errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`
+          return { success: false as const, error: errorMessage }
+        }
+
         return { success: true as const }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
-        const match = msg.match(/GraphQL: (.+)|HTTP \d+ .+: (.+)/s)
-        return { success: false as const, error: match ? (match[1] || match[2]).trim() : msg }
-      } finally {
-        try { fs.unlinkSync(tmpFile) } catch {}
+        return { success: false as const, error: msg }
       }
     }),
 

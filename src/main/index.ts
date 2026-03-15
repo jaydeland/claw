@@ -388,6 +388,25 @@ if (gotTheLock) {
       try {
         console.log("[App] Initializing ClawDaemon...")
         await clawDaemon.initialize()
+
+        // Auto-start Discord trigger if credentials are configured and connected
+        // This ensures the bot is online for chat connections (2-way sync)
+        try {
+          const { getDatabase, discordSettings } = await import("./lib/db")
+          const { eq } = await import("drizzle-orm")
+          const db = getDatabase()
+          const settings = db.select().from(discordSettings).where(eq(discordSettings.id, "default")).get()
+          if (settings?.encryptedBotToken && settings?.isConnected) {
+            const { getDiscordTrigger } = await import("./lib/claws/discord-trigger")
+            const discordTrigger = getDiscordTrigger()
+            if (!discordTrigger.isActive()) {
+              console.log("[App] Auto-starting Discord trigger...")
+              await discordTrigger.start()
+            }
+          }
+        } catch (discordError) {
+          console.error("[App] Discord trigger auto-start failed:", discordError)
+        }
       } catch (error) {
         console.error("[App] ClawDaemon initialization failed:", error)
       }
@@ -416,6 +435,11 @@ if (gotTheLock) {
     await cleanupGitWatchers()
     await terminalManager.cleanup()
     await closeBackgroundSession()
+    // Stop Discord trigger before ClawDaemon shutdown
+    try {
+      const { destroyDiscordTrigger } = await import("./lib/claws/discord-trigger")
+      destroyDiscordTrigger()
+    } catch {}
     await clawDaemon.shutdown()
     await closeDatabase()
   })

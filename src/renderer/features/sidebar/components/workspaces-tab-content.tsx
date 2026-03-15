@@ -139,6 +139,16 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     },
   })
 
+  // Delete project mutation
+  const deleteProjectMutation = trpc.projects.delete.useMutation({
+    onSuccess: () => {
+      utils.projects.list.invalidate()
+      // Clear selected project if it was deleted
+      setSelectedProject(null)
+      setSelectedChatId(null)
+    },
+  })
+
   // Archive all chats for a project
   const archiveAllForProject = useCallback(async (projectId: string, chatIds: string[]) => {
     if (chatIds.length === 0) return
@@ -545,6 +555,18 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                         <DropdownMenuItem className="text-xs text-muted-foreground">
                           <FolderOpen className="h-3.5 w-3.5 mr-2" />
                           Open Folder
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-xs text-destructive"
+                          onClick={() => {
+                            if (confirm(`Remove "${project.name}" from workspaces? This will delete the project and all its chats. This cannot be undone.`)) {
+                              deleteProjectMutation.mutate({ id: project.id })
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Remove Project
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
