@@ -12,7 +12,8 @@ import type { ChatStatusType } from "../components/chat-status-badge"
 
 /**
  * Hook to get aggregated status for a chat from all its sub-chats
- * Priority: error > pending-input > unseen > loading > null
+ * Priority: error > loading > pending-input > unseen > null
+ * Loading is elevated to show active streaming even with unseen changes
  */
 export function useChatStatus(chatId: string): ChatStatusType {
   // Read atoms
@@ -36,14 +37,22 @@ export function useChatStatus(chatId: string): ChatStatusType {
       }
     }
 
-    // Priority 2: Check for pending user questions
+    // Priority 2: Check for loading/streaming (elevated priority)
+    // Loading should show even if there are unseen changes
+    for (const parentChatId of loadingSubChats.values()) {
+      if (parentChatId === chatId) {
+        return "loading"
+      }
+    }
+
+    // Priority 3: Check for pending user questions
     for (const question of pendingQuestions.values()) {
       if (question.parentChatId === chatId) {
         return "pending-input"
       }
     }
 
-    // Priority 3: Check for pending plan approvals
+    // Priority 4: Check for pending plan approvals
     for (const subChatId of pendingPlanApprovals) {
       const parentChatId = subChatToChatMap.get(subChatId)
       if (parentChatId === chatId) {
@@ -51,16 +60,9 @@ export function useChatStatus(chatId: string): ChatStatusType {
       }
     }
 
-    // Priority 4: Check for unseen changes (already at chat level)
+    // Priority 5: Check for unseen changes (already at chat level)
     if (unseenChanges.has(chatId)) {
       return "unseen"
-    }
-
-    // Priority 5: Check for loading/streaming
-    for (const parentChatId of loadingSubChats.values()) {
-      if (parentChatId === chatId) {
-        return "loading"
-      }
     }
 
     return null
@@ -78,6 +80,7 @@ export function useChatStatus(chatId: string): ChatStatusType {
 /**
  * Hook to get status for multiple chats at once (more efficient for lists)
  * Returns a Map<chatId, ChatStatusType>
+ * Priority: error > loading > pending-input > unseen > null
  */
 export function useChatStatuses(chatIds: string[]): Map<string, ChatStatusType> {
   const loadingSubChats = useAtomValue(loadingSubChatsAtom)
@@ -124,16 +127,17 @@ export function useChatStatuses(chatIds: string[]): Map<string, ChatStatusType> 
       }
     }
 
-    // Assign statuses by priority
+    // Assign statuses by priority: error > loading > pending-input > unseen
     for (const chatId of chatIds) {
       if (errorChatIds.has(chatId)) {
         statuses.set(chatId, "error")
+      } else if (loadingChatIds.has(chatId)) {
+        // Loading elevated above pending-input and unseen
+        statuses.set(chatId, "loading")
       } else if (pendingInputChatIds.has(chatId)) {
         statuses.set(chatId, "pending-input")
       } else if (unseenChanges.has(chatId)) {
         statuses.set(chatId, "unseen")
-      } else if (loadingChatIds.has(chatId)) {
-        statuses.set(chatId, "loading")
       }
     }
 

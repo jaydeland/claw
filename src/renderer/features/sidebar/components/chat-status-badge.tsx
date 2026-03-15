@@ -13,7 +13,8 @@ interface ChatStatusBadgeProps {
  * Status indicator badge for chat rows in workspace list
  * Displays colored dot based on chat status
  *
- * Priority: error (red) > pending-input (amber) > unseen (blue) > loading (spinner)
+ * Priority: error (red) > loading (spinner) > pending-input (amber) > unseen (blue)
+ * Loading is elevated to ensure active streaming is always visible
  */
 export function ChatStatusBadge({ status, isActive, className }: ChatStatusBadgeProps) {
   if (!status) return null

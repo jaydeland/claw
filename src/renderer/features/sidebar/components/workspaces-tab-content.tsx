@@ -584,7 +584,13 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
                         const chatStatus = chatStatuses.get(chat.id) ?? null
 
                         return (
-                          <div key={chat.id} className="group relative">
+                          <div
+                            key={chat.id}
+                            className={cn(
+                              "group relative",
+                              chatStatus === "pending-input" ? "animate-glow" : "",
+                            )}
+                          >
                             <button
                               type="button"
                               onClick={() => handleChatClick(chat, project.id)}

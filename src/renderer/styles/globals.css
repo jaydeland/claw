@@ -419,3 +419,21 @@
   fill: hsl(var(--muted-foreground)) !important;
   visibility: visible !important;
 }
+
+/* Glow animation for chats waiting for user input */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 4px hsl(33 83% 67% / 0.5), 0 0 8px hsl(33 83% 67% / 0.3);
+    background-color: hsl(33 83% 67% / 0.08);
+  }
+  50% {
+    box-shadow: 0 0 12px hsl(33 83% 67% / 0.7), 0 0 24px hsl(33 83% 67% / 0.5);
+    background-color: hsl(33 83% 67% / 0.15);
+  }
+}
+
+.animate-glow {
+  animation: glow-pulse 2s ease-in-out infinite;
+  will-change: box-shadow, background-color;
+  border-radius: 0.5rem;
+}
