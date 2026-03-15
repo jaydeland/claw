@@ -174,7 +174,7 @@ export const SingleRepoSection = memo(function SingleRepoSection({
   const sectionKey = useCallback((section: string) => `${projectId}-${section}`, [projectId])
   const isCodeExpanded = expandedSections.has(sectionKey("code"))
 
-  const { data: githubData, isLoading: isLoadingGitHub, error: githubError, refetch: refetchGitHubData } = trpc.github.getData.useQuery(
+  const { data: githubData, isLoading: isLoadingGitHub, error: githubError, refetch: refetchGitHubData, isFetching } = trpc.github.getData.useQuery(
     { projectPath },
     {
       enabled: isRepoExpanded && !!projectPath,
@@ -314,8 +314,8 @@ export const SingleRepoSection = memo(function SingleRepoSection({
       isGitHub={githubData?.success ? githubData.isGitHub : true}
       sectionKey={sectionKey}
       hideRepoHeader={hideRepoHeader}
-      onRefreshData={refetchGitHubData}
-      isRefreshing={isLoadingGitHub}
+      onRefreshData={() => refetchGitHubData({ throwOnError: true, cancelRefetch: true })}
+      isRefreshing={isFetching}
     />
   )
 })
