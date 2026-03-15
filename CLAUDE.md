@@ -162,6 +162,7 @@ src/
     │   │   └── stores/      # Zustand store for sub-chats
     │   ├── sidebar/         # Chat list, archive, navigation
     │   ├── sub-chats/       # Tab/sidebar sub-chat management
+    │   ├── claws/           # Claw automations (settings, files, execution)
     │   └── layout/          # Main layout with resizable panels
     ├── components/ui/       # Radix UI wrappers (button, dialog, etc.)
     └── lib/
@@ -230,6 +231,7 @@ This section provides a comprehensive map of the UI components, state management
 | **GitHub Integration** | Main area (github tab) | `github/components/github-view.tsx` |
 | **System Prompts** | Main area (prompts tab) | `prompts/ui/prompts-view.tsx` |
 | **Thinking Controls** | Right of model selector | `components/dialogs/agents-thinking-dialog.tsx` |
+| **Claws (Automations)** | Sidebar + main area (claws tab) | `sidebar/components/claws-tab-content.tsx`, `ui/claw-detail-page.tsx` |
 
 ### State Management Quick Reference
 
@@ -275,6 +277,15 @@ pendingUserQuestionsAtom          // AskUserQuestion dialogs
 pendingPlanApprovalsAtom          // Sub-chats awaiting plan approval
 pendingPrMessageAtom              // PR creation message
 pendingReviewMessageAtom          // Review message
+
+// Claws (per-claw via atomFamily)
+selectedClawIdAtom                // Current selected claw ID
+selectedClawDetailIdAtom          // Claw detail page view (null = list view)
+expandedClawIdsAtom               // Set of expanded claw IDs in tree view
+clawDetailActiveTabAtom           // Active tab in claw detail ("general" | "trigger" | "history" | "files")
+clawSearchQueryAtom               // Search query for claws list
+clawFilesRefreshAtom              // Trigger for refreshing files list
+editingClawFileAtom               // Currently editing file {clawId, fileName, fileType}
 ```
 
 **Zustand Stores:**
@@ -317,7 +328,7 @@ useAgentSubChatStore
 | `"gsd"` | (no sidebar) | GsdContent | GSD planning framework |
 | `"github"` | (no sidebar) | GitHubView | GitHub integration |
 | `"prompts"` | (no sidebar) | PromptsView | System prompts |
-| `"claws"` | ClawsTabContent | ExecutionHistoryViewer | Claw executions |
+| `"claws"` | ClawsTabContent | ClawDetailPage / ExecutionHistoryViewer | Claw automation management |
 | `"settings"` | CcSettingsTabContent | CcSettingsContent | App settings |
 
 ### Right Sidebar Display Modes
@@ -391,6 +402,10 @@ All components are Radix UI wrappers with Tailwind styling:
 | Archive view | Main area (history tab) | `features/history/history-view.tsx` |
 | GitHub integration | Main area (github tab) | `features/github/components/github-view.tsx` |
 | System prompts | Main area (prompts tab) | `features/prompts/ui/prompts-view.tsx` |
+| Claws list/tree | Sidebar (claws tab) | `features/sidebar/components/claws-tab-content.tsx` |
+| Claw settings | Main area (claw detail) | `features/claws/ui/claw-detail-page.tsx` |
+| Claw execution history | Main area (claw selected) | `features/sidebar/components/execution-history-viewer.tsx` |
+| Claw file editor | Files tab (claw detail) | Coming soon |
 
 ### Component Organization Pattern
 
@@ -660,13 +675,18 @@ npm version patch --no-git-tag-version  # 0.0.27 -> 0.0.28
 ## Current Status (WIP)
 
 **Done:**
-- Drizzle ORM setup with schema (projects, chats, sub_chats)
+- Drizzle ORM setup with schema (projects, chats, sub_chats, headless_claws)
 - Auto-migration on app startup
 - tRPC routers structure
+- Claws UI restructure (tree view, detail page with tabs)
+- Claws filesystem storage (.claw/ directory with living documents)
+- clawsSoul database field for SDK system prompt injection
 
 **In Progress:**
 - Replacing `mock-api.ts` with real tRPC calls in renderer
 - ProjectSelector component (local folder picker)
+- Claws History tab implementation (execution log viewer)
+- Claws Files tab implementation (living document editor)
 
 **Planned:**
 - Git worktree per chat (isolation)

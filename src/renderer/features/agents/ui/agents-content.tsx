@@ -28,6 +28,10 @@ import {
   ctrlTabTargetAtom,
   selectedClawDetailIdAtom,
 } from "../../../lib/atoms"
+import {
+  selectedClawDetailIdAtom,
+  expandedClawIdsAtom,
+} from "../../claws/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
@@ -83,6 +87,7 @@ export function AgentsContent() {
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
   const selectedGsdCategory = useAtomValue(selectedGsdCategoryAtom)
   const selectedSettingsCategory = useAtomValue(selectedSettingsCategoryAtom)
+  const selectedClawDetailId = useAtomValue(selectedClawDetailIdAtom)
   const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
   const [isEditingClaw, setIsEditingClaw] = useAtom(isEditingClawAtom)
   const workspaceGithubSelection = useAtomValue(workspaceGithubSelectionAtom)
@@ -865,6 +870,7 @@ export function AgentsContent() {
   const showGitHubView = selectedSidebarTab === "github"
   const showPromptsView = selectedSidebarTab === "prompts"
   const showErDiagramView = selectedSidebarTab === "er-diagram"
+  const showClawDetailPage = !!selectedClawDetailId
   const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw && !isEditingClaw
   const showClawsEditView = selectedSidebarTab === "claws" && !!selectedClaw && isEditingClaw
   const showClawsListView = selectedSidebarTab === "claws" && !selectedClaw
@@ -884,7 +890,7 @@ export function AgentsContent() {
        (selectedProject ? { id: selectedProject.id, path: selectedProject.path } : null))
     : null
 
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showErDiagramView && !showClawsDetailView && !showClawsEditView && !showClawsListView && !showSettingsView && !showWorkspaceGitHubView
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showErDiagramView && !showClawDetailPage && !showClawsDetailView && !showClawsEditView && !showClawsListView && !showSettingsView && !showWorkspaceGitHubView
 
   return (
     <>
@@ -939,6 +945,13 @@ export function AgentsContent() {
       <div className={showSettingsView ? "flex-1 h-full overflow-hidden" : "hidden"}>
         <CcSettingsContent />
       </div>
+
+      {/* Claws detail page (settings) */}
+      {showClawDetailPage && (
+        <div className="flex-1 h-full overflow-hidden">
+          <ClawDetailPage />
+        </div>
+      )}
 
       {/* Claws execution detail view */}
       {showClawsDetailView && selectedClaw && (
