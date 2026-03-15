@@ -52,6 +52,7 @@ import {
   clawSearchQueryAtom,
 } from "../../claws/atoms"
 import { selectedSidebarTabAtom } from "../../agents/atoms"
+import { CreateClawModal } from "./create-claw-modal"
 
 interface ClawsTabContentProps {
   className?: string
@@ -65,8 +66,8 @@ type ClawWithParsedConfig = {
   instruction: string
   soulInstruction?: string
   targetWorktree: string
-  triggerType: "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message"
-  triggerConfig: { expression?: string; owner?: string; repo?: string; label?: string; slackChannelFilter?: string; whatsappChatFilter?: string }
+  triggerType: "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message" | "discord_message"
+  triggerConfig: { expression?: string; owner?: string; repo?: string; label?: string; slackChannelFilter?: string; whatsappChatFilter?: string; discordChannelFilter?: string }
   isEnabled: boolean
   createdAt: Date
   allowedDirectories?: string
@@ -79,6 +80,7 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
   const setSelectedClawDetailId = useSetAtom(selectedClawDetailIdAtom)
   const [expandedClawIds, setExpandedClawIds] = useAtom(expandedClawIdsAtom)
   const setSelectedSidebarTab = useSetAtom(selectedSidebarTabAtom)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   // Fetch all claws with error handling
   const { data: clawsData, isLoading, error } = trpc.claws.getAll.useQuery()
@@ -167,6 +169,8 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
         return <Zap className="h-3 w-3 text-purple-500" />
       case "whatsapp_message":
         return <Zap className="h-3 w-3 text-green-600" />
+      case "discord_message":
+        return <Zap className="h-3 w-3 text-indigo-500" />
       default:
         return <Zap className="h-3 w-3 text-muted-foreground" />
     }
@@ -199,6 +203,8 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
         return `Slack: ${claw.triggerConfig.slackChannelFilter || "mentions"}`
       case "whatsapp_message":
         return `WhatsApp: ${claw.triggerConfig.whatsappChatFilter || "messages"}`
+      case "discord_message":
+        return `Discord: ${claw.triggerConfig.discordChannelFilter || "messages"}`
       default:
         return "Unknown"
     }
@@ -242,6 +248,7 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
           break
         case "slack_mention":
         case "whatsapp_message":
+        case "discord_message":
           groups.messaging.push(claw)
           break
       }
@@ -423,13 +430,18 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
           variant="outline"
           size="sm"
           className="w-full justify-start gap-2 h-8 text-xs"
-          onClick={() => setSelectedSidebarTab("claws")}
-          disabled={true} // TODO: Implement create dialog
+          onClick={() => setIsCreateModalOpen(true)}
         >
           <Plus className="h-3.5 w-3.5" />
           New Claw
         </Button>
       </div>
+
+      {/* Create Claw Modal */}
+      <CreateClawModal
+        open={isCreateModalOpen}
+        onOpenChange={setIsCreateModalOpen}
+      />
 
       {/* Claws tree */}
       <div className="flex-1 overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent" role="tree" aria-label="Claws list">
@@ -437,6 +449,11 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
           <div className="flex flex-col items-center justify-center h-32 gap-3">
             <XCircle className="h-8 w-8 text-red-500" />
             <span className="text-sm text-red-500">Failed to load claws</span>
+            {error.message && (
+              <span className="text-xs text-muted-foreground max-w-[200px] truncate" title={error.message}>
+                {error.message}
+              </span>
+            )}
             <Button variant="outline" size="sm" onClick={() => utils.claws.getAll.invalidate()}>
               <RefreshCw className="h-3.5 w-3.5 mr-1" />
               Retry

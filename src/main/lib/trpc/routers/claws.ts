@@ -81,10 +81,26 @@ export const clawsRouter = router({
 
     return {
       success: true,
-      claws: claws.map((claw) => ({
-        ...claw,
-        triggerConfig: JSON.parse(claw.triggerConfig),
-      })),
+      claws: claws.map((claw) => {
+        try {
+          return {
+            ...claw,
+            triggerConfig: claw.triggerConfig ? JSON.parse(claw.triggerConfig) : {},
+            allowedDirectories: claw.allowedDirectories ? JSON.parse(claw.allowedDirectories) : [],
+            allowedMcpServers: claw.allowedMcpServers ? JSON.parse(claw.allowedMcpServers) : [],
+          }
+        } catch (error) {
+          console.error("[claws] Failed to parse JSON for claw", claw.id, error)
+          // Return claw with empty configs instead of crashing
+          return {
+            ...claw,
+            triggerConfig: {},
+            allowedDirectories: [],
+            allowedMcpServers: [],
+            parseError: error instanceof Error ? error.message : "Unknown JSON parse error",
+          }
+        }
+      }),
     }
   }),
 
@@ -357,6 +373,38 @@ export const clawsRouter = router({
           error: error instanceof Error ? error.message : String(error),
         }
       }
+    }),
+
+  /**
+   * Get recent executions across all claws
+   */
+  getRecentExecutions: publicProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(100).default(50),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const db = getDatabase()
+      const limit = input?.limit ?? 50
+
+      const executions = db
+        .select({
+          id: clawExecutions.id,
+          clawId: clawExecutions.clawId,
+          subChatId: clawExecutions.subChatId,
+          status: clawExecutions.status,
+          logs: clawExecutions.logs,
+          exitCode: clawExecutions.exitCode,
+          startedAt: clawExecutions.startedAt,
+          completedAt: clawExecutions.completedAt,
+        })
+        .from(clawExecutions)
+        .orderBy(desc(clawExecutions.startedAt))
+        .limit(limit)
+        .all()
+
+      return { success: true, executions }
     }),
 
   /**
