@@ -188,21 +188,15 @@ export function ClawDetailPage({ className }: ClawDetailPageProps) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex-shrink-0 border-b px-4">
+      {/* Tab Content */}
+      <div className="flex-1 overflow-y-auto p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList>
+          <TabsList className="sr-only">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="trigger">Trigger</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="files">Files</TabsTrigger>
           </TabsList>
-        </Tabs>
-      </div>
-
-      {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsContent value="general" className="mt-0">
             <div className="max-w-3xl space-y-6">
               <div className="space-y-2">

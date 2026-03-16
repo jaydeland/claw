@@ -37,12 +37,26 @@ export const selectedClawExecutionAtom = atom<{
 // SIDEBAR NAVIGATION STATE
 // ============================================
 
-/** Expanded claw groups in sidebar tree view */
-export const expandedClawIdsAtom = atomWithStorage<Set<string>>(
-  "claws:expandedIds",
-  new Set(),
-  undefined,
-  { getOnInit: true }
+/** Expanded claw groups in sidebar tree view - stored as array, converted to Set */
+export const expandedClawIdsAtom = atom(
+  (get) => {
+    const stored = localStorage.getItem("claws:expandedIds")
+    if (stored) {
+      try {
+        const arr = JSON.parse(stored)
+        if (Array.isArray(arr)) {
+          return new Set(arr)
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+    return new Set<string>()
+  },
+  (get, set, value: Set<string>) => {
+    const arr = Array.from(value)
+    localStorage.setItem("claws:expandedIds", JSON.stringify(arr))
+  }
 )
 
 /** Active tab in claw detail page */

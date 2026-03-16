@@ -33,6 +33,8 @@ import {
   XCircle,
   Loader2,
   RefreshCw,
+  History,
+  FolderOpen,
 } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
@@ -385,20 +387,74 @@ export function ClawsTabContent({ className, isMobileFullscreen }: ClawsTabConte
           </DropdownMenu>
         </div>
 
-        {/* Recent executions */}
-        {isExpanded && recentExecutions.length > 0 && (
-          <div className="ml-[10px] pl-3 pt-0.5 space-y-0.5" role="region" aria-label={`Recent executions for ${claw.name}`}>
-            {recentExecutions.map((execution) => (
-              <div
-                key={execution.id}
-                className="flex items-center gap-2 text-[10px] text-muted-foreground"
+        {/* Expanded content with tab leaves and executions */}
+        {isExpanded && (
+          <div className="ml-[10px] pl-3 pt-1 space-y-2">
+            {/* Tab leaves in tree */}
+            <div className="space-y-1" role="group" aria-label="Claw sections">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSettingsClick(claw, e)
+                }}
+                className="w-full flex items-center gap-2 pl-4 pr-2 py-1 rounded-md text-left text-xs text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
               >
-                {getStatusIcon(execution.status)}
-                <span className="truncate">
-                  {new Date(execution.startedAt).toLocaleString()}
-                </span>
+                <Settings className="h-3 w-3" />
+                General
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSettingsClick(claw, e)
+                }}
+                className="w-full flex items-center gap-2 pl-4 pr-2 py-1 rounded-md text-left text-xs text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
+              >
+                <Clock className="h-3 w-3" />
+                Trigger
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSettingsClick(claw, e)
+                }}
+                className="w-full flex items-center gap-2 pl-4 pr-2 py-1 rounded-md text-left text-xs text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
+              >
+                <History className="h-3 w-3" />
+                History
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSettingsClick(claw, e)
+                }}
+                className="w-full flex items-center gap-2 pl-4 pr-2 py-1 rounded-md text-left text-xs text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
+              >
+                <FolderOpen className="h-3 w-3" />
+                Files
+              </button>
+            </div>
+
+            {/* Recent executions */}
+            {recentExecutions.length > 0 && (
+              <div className="space-y-0.5" role="region" aria-label={`Recent executions for ${claw.name}`}>
+                <div className="text-[9px] text-muted-foreground font-medium">Recent executions:</div>
+                {recentExecutions.map((execution) => (
+                  <div
+                    key={execution.id}
+                    className="flex items-center gap-2 text-[10px] text-muted-foreground"
+                  >
+                    {getStatusIcon(execution.status)}
+                    <span className="truncate">
+                      {new Date(execution.startedAt).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
