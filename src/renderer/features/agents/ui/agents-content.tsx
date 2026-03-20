@@ -26,7 +26,8 @@ import {
   subChatsQuickSwitchOpenAtom,
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
-  selectedClawDetailIdAtom,
+  selectedClawAtom,
+  isEditingClawAtom,
 } from "../../../lib/atoms"
 import {
   selectedClawDetailIdAtom,
