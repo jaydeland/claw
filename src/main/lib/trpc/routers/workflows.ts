@@ -110,10 +110,14 @@ interface CommandWithDependencies extends CommandMetadata {
   dependencies: DependencyGraph
 }
 
+interface SkillWithDependencies extends SkillMetadata {
+  dependencies: DependencyGraph
+}
+
 interface WorkflowGraph {
   agents: AgentWithDependencies[]
   commands: CommandWithDependencies[]
-  skills: SkillMetadata[]
+  skills: SkillWithDependencies[]
 }
 
 // Built-in Claude Code tools (core tools only, NOT MCP tools)
@@ -1239,6 +1243,108 @@ async function buildCommandDependencies(
   return deps
 }
 
+/**
+ * Build dependency graph for a skill
+ * Analyzes allowed-tools array and file body for dependencies
+ */
+async function buildSkillDependencies(
+  skill: SkillMetadata,
+  allSkillIds: string[],
+  allAgentIds: string[],
+  allCommandIds: string[]
+): Promise<DependencyGraph> {
+  const deps: DependencyGraph = {
+    tools: [],
+    builtinTools: [],
+    mcpTools: [],
+    skills: [],
+    mcpServers: [],
+    agents: [],
+    commands: [],
+    skillInvocations: [],
+    cliApps: [],
+    backgroundTasks: [],
+  }
+
+  // Read full file content for body scanning
+  let fullContent = ""
+  try {
+    fullContent = await fs.readFile(skill.sourcePath, "utf-8")
+  } catch {
+    console.warn(`[workflows] Could not read skill file: ${skill.sourcePath}`)
+  }
+
+  // Parse tools from allowed-tools in frontmatter (skills use allowedTools)
+  const toolsToParse = skill.allowedTools || []
+  for (const tool of toolsToParse) {
+    const toolLower = tool.toLowerCase()
+
+    // Check if it's an MCP tool (starts with mcp__)
+    if (toolLower.startsWith("mcp__")) {
+      const parts = tool.split("__")
+      if (parts.length >= 2) {
+        const server = parts[1]
+        // Check if it's a wildcard (ends with *) - show as "ALL"
+        const isWildcard = tool.endsWith("*")
+        const toolName = isWildcard ? "ALL" : tool
+        deps.mcpTools.push({ tool: toolName, server })
+        if (!deps.mcpServers.includes(server)) {
+          deps.mcpServers.push(server)
+        }
+      }
+      deps.tools.push(tool) // Keep for backward compatibility
+      continue
+    }
+
+    // Check if it's a skill reference
+    if (allSkillIds.includes(toolLower) || allSkillIds.includes(tool)) {
+      deps.skills.push(tool)
+      continue
+    }
+
+    // Check if it's a built-in tool
+    if (BUILTIN_TOOLS.includes(tool) || BUILTIN_TOOLS.includes(toolLower)) {
+      deps.builtinTools.push(tool)
+      deps.tools.push(tool) // Keep for backward compatibility
+      continue
+    }
+
+    // Default: treat as built-in tool
+    deps.builtinTools.push(tool)
+    deps.tools.push(tool)
+  }
+
+  // Extract MCP servers from file body
+  const bodyMcpServers = extractMcpServers(fullContent)
+  for (const server of bodyMcpServers) {
+    if (!deps.mcpServers.includes(server)) {
+      deps.mcpServers.push(server)
+    }
+  }
+
+  // Extract agent invocations from file body
+  const invokedAgents = extractAgentInvocations(fullContent, allAgentIds)
+  deps.agents = invokedAgents
+
+  // Extract command invocations from file body
+  const invokedCommands = extractCommandInvocations(fullContent, allCommandIds)
+  deps.commands = invokedCommands
+
+  // Extract skill invocations from file body (runtime Skill tool calls)
+  const invokedSkills = extractSkillInvocations(fullContent, allSkillIds)
+  deps.skillInvocations = invokedSkills
+
+  // Extract CLI applications from Bash usage
+  const cliApps = extractCliApps(fullContent, toolsToParse)
+  deps.cliApps = cliApps
+
+  // Extract background task patterns
+  const backgroundTasks = extractBackgroundTasks(fullContent)
+  deps.backgroundTasks = backgroundTasks
+
+  return deps
+}
+
 // ============ ROUTER ============
 
 export const workflowsRouter = router({
@@ -1417,10 +1523,27 @@ export const workflowsRouter = router({
       })
     }
 
+    // Build dependency graph for each skill
+    const skillsWithDeps: SkillWithDependencies[] = []
+
+    for (const skill of skills) {
+      const dependencies = await buildSkillDependencies(
+        skill,
+        allSkillIds,
+        allAgentIds,
+        allCommandIds
+      )
+
+      skillsWithDeps.push({
+        ...skill,
+        dependencies,
+      })
+    }
+
     return {
       agents: agentsWithDeps,
       commands: commandsWithDeps,
-      skills,
+      skills: skillsWithDeps,
     }
   }),
 

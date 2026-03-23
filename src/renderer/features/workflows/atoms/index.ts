@@ -221,3 +221,92 @@ export const workflowsPreviewWidthAtom = atomWithStorage<number>(
  * null = no file selected
  */
 export const workflowContentPathAtom = atom<string | null>(null)
+
+// ============================================
+// REACT FLOW DIAGRAM STATE
+// ============================================
+
+/**
+ * Set of expanded node IDs in the React Flow diagram
+ * Used for expandable/collapsible nodes
+ */
+export const workflowExpandedNodesAtom = atom<Set<string>>(new Set())
+
+/**
+ * Maximum depth level to show in the transitive dependency graph
+ * 1 = direct dependencies only
+ * 2 = direct + one level of transitive (default)
+ * 3+ = full transitive graph
+ */
+export const workflowMaxDepthAtom = atomWithStorage<number>(
+  "workflows:max-depth",
+  2, // Default: show direct + one level of transitive
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Selected dependency types to show in the diagram
+ * Filters which types of dependencies are visible
+ */
+export interface WorkflowDependencyFilters {
+  builtinTools: boolean
+  mcpTools: boolean
+  skills: boolean
+  commands: boolean
+  agents: boolean
+  cliApps: boolean
+  backgroundTasks: boolean
+}
+
+export const workflowDependencyFiltersAtom = atomWithStorage<WorkflowDependencyFilters>(
+  "workflows:dep-filters",
+  {
+    builtinTools: true,
+    mcpTools: true,
+    skills: true,
+    commands: true,
+    agents: true,
+    cliApps: true,
+    backgroundTasks: true,
+  },
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Toggle a node's expanded state
+ */
+export const workflowToggleExpandedNodeAtom = atom(
+  null,
+  (get, set, nodeId: string) => {
+    const current = get(workflowExpandedNodesAtom)
+    const next = new Set(current)
+    if (next.has(nodeId)) {
+      next.delete(nodeId)
+    } else {
+      next.add(nodeId)
+    }
+    set(workflowExpandedNodesAtom, next)
+  },
+)
+
+/**
+ * Expand all nodes with transitive dependencies
+ */
+export const workflowExpandAllNodesAtom = atom(
+  null,
+  (_get, set, nodeIds: string[]) => {
+    set(workflowExpandedNodesAtom, new Set(nodeIds))
+  },
+)
+
+/**
+ * Collapse all expanded nodes
+ */
+export const workflowCollapseAllNodesAtom = atom(
+  null,
+  (_get, set) => {
+    set(workflowExpandedNodesAtom, new Set())
+  },
+)

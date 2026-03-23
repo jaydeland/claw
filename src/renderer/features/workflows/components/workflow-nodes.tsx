@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Handle, Position } from "reactflow"
-import { ChevronRight, Terminal, Zap, Lock, Unlock, FileEdit, BookOpen, Settings, GitFork, ListOrdered } from "lucide-react"
+import { ChevronRight, Terminal, Zap, Lock, Unlock, FileEdit, BookOpen, Settings, GitFork, ListOrdered, Plus, Minus } from "lucide-react"
 
 // Permission mode badge configuration
 type PermissionMode = 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'plan'
@@ -368,6 +368,204 @@ export function WorkflowStepNode({ data }: { data: { stepNumber: number; title: 
         className="w-3 h-3 bg-white border-2 border-indigo-600"
         style={{ bottom: -6 }}
       />
+    </div>
+  )
+}
+
+// ============ EXPANDABLE NODE VARIANTS ============
+
+interface ExpandableNodeData {
+  name: string
+  description?: string
+  depth?: number
+  isTransitive?: boolean
+  isRuntime?: boolean
+  hasMoreDeps?: boolean
+  expanded?: boolean
+  onExpand?: () => void
+}
+
+export function ExpandableAgentNode({ data }: { data: ExpandableNodeData }) {
+  const [isExpanded, setIsExpanded] = useState(data.expanded ?? false)
+
+  const handleExpand = () => {
+    setIsExpanded(!isExpanded)
+    data.onExpand?.()
+  }
+
+  return (
+    <div className="relative">
+      <div className={`px-4 py-2 shadow-md rounded-md border-2 min-w-[160px] ${
+        data.isTransitive ? 'bg-purple-400' : 'bg-purple-600'
+      } text-white border-purple-700`}>
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="w-3 h-3 bg-white border-2 border-purple-700"
+          style={{ top: -6 }}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-medium truncate">{data.name}</div>
+          {data.hasMoreDeps && (
+            <button
+              onClick={handleExpand}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+              title={isExpanded ? "Collapse dependencies" : "Expand dependencies"}
+            >
+              {isExpanded ? (
+                <Minus className="h-3 w-3" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
+        {data.description && (
+          <div className="text-xs opacity-80 mt-0.5 line-clamp-1">{data.description}</div>
+        )}
+        {data.isTransitive && (
+          <div className="text-xs opacity-60 mt-0.5 italic">transitive</div>
+        )}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="w-3 h-3 bg-white border-2 border-purple-700"
+          style={{ bottom: -6 }}
+        />
+      </div>
+      {/* Dependency count badge */}
+      {data.hasMoreDeps && !isExpanded && (
+        <div className="absolute -top-2 -right-2 flex items-center justify-center w-5 h-5 rounded-full bg-purple-500 text-white text-xs font-bold shadow-sm">
+          +{data.depth || 1}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ExpandableSkillNode({ data }: { data: ExpandableNodeData }) {
+  const [isExpanded, setIsExpanded] = useState(data.expanded ?? false)
+  const hasForkContext = (data as any).context === 'fork'
+
+  const handleExpand = () => {
+    setIsExpanded(!isExpanded)
+    data.onExpand?.()
+  }
+
+  return (
+    <div className="relative">
+      <div className={`px-4 py-2 shadow-md rounded-md border-2 min-w-[160px] ${
+        data.isTransitive ? 'bg-green-400' : 'bg-green-500'
+      } text-white border-green-600`}>
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="w-3 h-3 bg-white border-2 border-green-600"
+          style={{ top: -6 }}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <div className="text-sm truncate">{data.name}</div>
+            {hasForkContext && (
+              <div
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-xs bg-green-700/50 border border-green-400/50"
+                title="Runs in forked context"
+              >
+                <GitFork className="h-3 w-3" />
+              </div>
+            )}
+          </div>
+          {data.hasMoreDeps && (
+            <button
+              onClick={handleExpand}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+              title={isExpanded ? "Collapse dependencies" : "Expand dependencies"}
+            >
+              {isExpanded ? (
+                <Minus className="h-3 w-3" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
+        {(data as any).agent && (
+          <div className="text-xs opacity-75 mt-0.5">Agent: {(data as any).agent}</div>
+        )}
+        {data.isRuntime && (
+          <div className="text-xs opacity-60 mt-0.5 italic">runtime</div>
+        )}
+        {data.isTransitive && (
+          <div className="text-xs opacity-60 mt-0.5 italic">transitive</div>
+        )}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="w-3 h-3 bg-white border-2 border-green-600"
+          style={{ bottom: -6 }}
+        />
+      </div>
+      {/* Dependency count badge */}
+      {data.hasMoreDeps && !isExpanded && (
+        <div className="absolute -top-2 -right-2 flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-xs font-bold shadow-sm">
+          +{data.depth || 1}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ExpandableCommandNode({ data }: { data: ExpandableNodeData }) {
+  const [isExpanded, setIsExpanded] = useState(data.expanded ?? false)
+
+  const handleExpand = () => {
+    setIsExpanded(!isExpanded)
+    data.onExpand?.()
+  }
+
+  return (
+    <div className="relative">
+      <div className={`px-4 py-2 shadow-md rounded-md border-2 min-w-[160px] ${
+        data.isTransitive ? 'bg-orange-400' : 'bg-orange-500'
+      } text-white border-orange-600`}>
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="w-3 h-3 bg-white border-2 border-orange-600"
+          style={{ top: -6 }}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-mono truncate">/{data.name}</div>
+          {data.hasMoreDeps && (
+            <button
+              onClick={handleExpand}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+              title={isExpanded ? "Collapse dependencies" : "Expand dependencies"}
+            >
+              {isExpanded ? (
+                <Minus className="h-3 w-3" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
+        {data.isTransitive && (
+          <div className="text-xs opacity-60 mt-0.5 italic">transitive</div>
+        )}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="w-3 h-3 bg-white border-2 border-orange-600"
+          style={{ bottom: -6 }}
+        />
+      </div>
+      {/* Dependency count badge */}
+      {data.hasMoreDeps && !isExpanded && (
+        <div className="absolute -top-2 -right-2 flex items-center justify-center w-5 h-5 rounded-full bg-orange-500 text-white text-xs font-bold shadow-sm">
+          +{data.depth || 1}
+        </div>
+      )}
     </div>
   )
 }
