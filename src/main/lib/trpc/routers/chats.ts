@@ -6,7 +6,7 @@ import { statSync } from "fs"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { chats, getDatabase, headlessClaws, projects, subChats, whatsappBridges, discordBridges } from "../../db"
+import { chats, getDatabase, projects, subChats } from "../../db"
 import {
   createWorktreeForChat,
   fetchGitHubPRStatus,
@@ -20,8 +20,8 @@ import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
 import { terminalManager } from "../../terminal/manager"
 import { queryBackgroundSession, isBackgroundSessionReady } from "../../claude/background-session"
-import { clawDaemon } from "../../claws"
 import { getPromptByKey, PROMPT_KEYS } from "../../prompts/prompt-service"
+import { deleteSubChatOutputs } from "../../tool-output-storage"
 import { publicProcedure, router } from "../index"
 
 // Fallback to truncated user message if AI generation fails
@@ -441,171 +441,26 @@ export const chatsRouter = router({
     }),
 
   /**
-   * Update the external messaging connection for a chat (WhatsApp group or Slack channel)
-   * Auto-creates a WhatsApp claw when connectionType is "whatsapp" and connectionTarget is provided
+   * Update the external messaging connection for a chat (WhatsApp group or Discord channel)
+   * Simply stores the connection details in the chat record
    */
   updateConnection: publicProcedure
     .input(z.object({
       chatId: z.string(),
-      connectionType: z.enum(["none", "whatsapp", "slack", "discord"]),
+      connectionType: z.enum(["none", "whatsapp", "discord"]),
       connectionTarget: z.string().optional(),
       connectionName: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
 
-      // Get the chat to access project info
+      // Verify chat exists
       const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
       if (!chat) {
         throw new Error("Chat not found")
       }
 
-      // Get the project for worktree path
-      const project = db.select().from(projects).where(eq(projects.id, chat.projectId)).get()
-      const targetWorktree = chat.worktreePath || project?.path || "/tmp"
-
-      // Auto-create WhatsApp claw when connection is established
-      if (input.connectionType === "whatsapp" && input.connectionTarget) {
-        // Check for existing WhatsApp claw for this group (query by triggerType and filter by config)
-        const allWhatsAppClaws = db
-          .select()
-          .from(headlessClaws)
-          .where(eq(headlessClaws.triggerType, "whatsapp_message"))
-          .all()
-        const existingClaw = allWhatsAppClaws.find(c => {
-          try { return JSON.parse(c.triggerConfig || "{}").whatsappChatFilter === input.connectionTarget } catch { return false }
-        })
-
-        if (!existingClaw) {
-          const clawId = createId()
-          const chatName = input.connectionName || chat.name || "WhatsApp Chat"
-
-          db.insert(headlessClaws)
-            .values({
-              id: clawId,
-              name: `WhatsApp: ${chatName}`,
-              instruction: `You are an AI assistant integrated with WhatsApp. You receive messages from the WhatsApp group "${chatName}" and should respond helpfully.\n\nWhen responding:\n- Be concise but informative\n- Use markdown formatting when helpful\n- If the user asks about code or technical topics, provide clear explanations\n- Always respond in the same language as the user's message`,
-              targetWorktree,
-              triggerType: "whatsapp_message",
-              triggerConfig: JSON.stringify({ whatsappChatFilter: input.connectionTarget }),
-              isEnabled: true,
-              allowedDirectories: JSON.stringify([]),
-              allowedMcpServers: JSON.stringify([]),
-            })
-            .run()
-
-          console.log(`[updateConnection] Auto-created WhatsApp claw ${clawId} for chat ${input.chatId} with filter ${input.connectionTarget}`)
-
-          await clawDaemon.reload()
-        } else {
-          console.log(`[updateConnection] WhatsApp claw already exists for ${input.connectionTarget}, skipping creation`)
-        }
-      }
-
-      // Auto-create WhatsApp bridge when connection is established
-      if (input.connectionType === "whatsapp" && input.connectionTarget) {
-        const existingBridge = db
-          .select()
-          .from(whatsappBridges)
-          .where(
-            and(
-              eq(whatsappBridges.chatId, input.chatId),
-              eq(whatsappBridges.whatsappJid, input.connectionTarget)
-            )
-          )
-          .get()
-
-        if (!existingBridge) {
-          const chatSubChats = db.select().from(subChats).where(eq(subChats.chatId, input.chatId)).all()
-          const targetSubChatId = chatSubChats[0]?.id
-
-          if (targetSubChatId) {
-            db.insert(whatsappBridges)
-              .values({
-                chatId: input.chatId,
-                subChatId: targetSubChatId,
-                whatsappJid: input.connectionTarget,
-                whatsappGroupName: input.connectionName,
-                isActive: true,
-              })
-              .run()
-            console.log(`[updateConnection] Auto-created WhatsApp bridge for chat ${input.chatId}`)
-          }
-        }
-      }
-
-      // Auto-create Discord claw when connection is established
-      if (input.connectionType === "discord" && input.connectionTarget) {
-        const allDiscordClaws = db
-          .select()
-          .from(headlessClaws)
-          .where(eq(headlessClaws.triggerType, "discord_message"))
-          .all()
-        const existingClaw = allDiscordClaws.find(c => {
-          try { return JSON.parse(c.triggerConfig || "{}").discordChannelFilter === input.connectionTarget } catch { return false }
-        })
-
-        if (!existingClaw) {
-          const clawId = createId()
-          const chatName = input.connectionName || chat.name || "Discord Chat"
-
-          db.insert(headlessClaws)
-            .values({
-              id: clawId,
-              name: `Discord: ${chatName}`,
-              instruction: `You are an AI assistant integrated with Discord. You receive messages from the Discord channel "${chatName}" and should respond helpfully.\n\nWhen responding:\n- Be concise but informative\n- Use markdown formatting when helpful\n- If the user asks about code or technical topics, provide clear explanations\n- Always respond in the same language as the user's message`,
-              targetWorktree,
-              triggerType: "discord_message",
-              triggerConfig: JSON.stringify({ discordChannelFilter: input.connectionTarget }),
-              isEnabled: true,
-              allowedDirectories: JSON.stringify([]),
-              allowedMcpServers: JSON.stringify([]),
-            })
-            .run()
-
-          console.log(`[updateConnection] Auto-created Discord claw ${clawId} for chat ${input.chatId} with filter ${input.connectionTarget}`)
-
-          await clawDaemon.reload()
-        }
-      }
-
-      // Auto-create Discord bridge when connection is established
-      if (input.connectionType === "discord" && input.connectionTarget) {
-        const existingBridge = db
-          .select()
-          .from(discordBridges)
-          .where(
-            and(
-              eq(discordBridges.chatId, input.chatId),
-              eq(discordBridges.discordChannelId, input.connectionTarget)
-            )
-          )
-          .get()
-
-        if (!existingBridge) {
-          const chatSubChats = db.select().from(subChats).where(eq(subChats.chatId, input.chatId)).all()
-          const targetSubChatId = chatSubChats[0]?.id
-
-          if (targetSubChatId) {
-            // Get guild info from settings
-            const { discordSettings: discordSettingsTable } = await import("../../db")
-            const settings = db.select().from(discordSettingsTable).where(eq(discordSettingsTable.id, "default")).get()
-
-            db.insert(discordBridges)
-              .values({
-                chatId: input.chatId,
-                subChatId: targetSubChatId,
-                discordGuildId: settings?.guildId || "",
-                discordChannelId: input.connectionTarget,
-                discordChannelName: input.connectionName,
-                isActive: true,
-              })
-              .run()
-            console.log(`[updateConnection] Auto-created Discord bridge for chat ${input.chatId}`)
-          }
-        }
-      }
-
+      // Update connection fields
       return db
         .update(chats)
         .set({
@@ -1105,6 +960,10 @@ export const chatsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(({ input }) => {
       const db = getDatabase()
+
+      // Clean up tool output files for this subChat
+      deleteSubChatOutputs(input.id)
+
       return db
         .delete(subChats)
         .where(eq(subChats.id, input.id))

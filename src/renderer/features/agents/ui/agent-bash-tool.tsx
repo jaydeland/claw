@@ -7,6 +7,9 @@ import { getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { ExpandableOutputSplit, type OutputSection } from "./expandable-output"
+import { useOffloadedToolOutput, ToolOutputViewer } from "../components/tool-output-viewer"
+import { useAtomValue } from "jotai"
+import { currentSubChatIdAtom } from "../stores/message-store"
 
 interface AgentBashToolProps {
   part: any
@@ -42,9 +45,13 @@ export const AgentBashTool = memo(function AgentBashTool({
   const stderr = part.output?.stderr || ""
   const exitCode = part.output?.exitCode ?? part.output?.exit_code
 
-  // Detect background task - SDK docs confirm background tasks return a task ID
-  // and buffered output retrieved via BashOutput tool (no stdout/stderr in initial response)
-  const isBackgroundTask = part.input?.run_in_background === true
+  // Check if this is an offloaded output
+  const subChatId = useAtomValue(currentSubChatIdAtom)
+  const { isOffloaded, viewerProps } = useOffloadedToolOutput(
+    subChatId,
+    part.toolCallId,
+    part.output,
+  )
   // Handle multiple field name variants used by SDK (see claude.ts:1594-1600)
   const taskId = part.output?.task_id || part.output?.taskId || part.output?.backgroundTaskId
   const outputFile = part.output?.output_file || part.output?.outputFile
@@ -159,6 +166,14 @@ export const AgentBashTool = memo(function AgentBashTool({
         isPending={isPending}
         isError={isError}
       />
+      {isOffloaded && viewerProps && subChatId && (
+        <div className="mx-2 mt-1 px-3 py-2 border border-border rounded-b-md bg-muted/30 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            Output was truncated to prevent IPC crashes
+          </span>
+          <ToolOutputViewer subChatId={subChatId} {...viewerProps} />
+        </div>
+      )}
     </div>
   )
 }, areToolPropsEqual)

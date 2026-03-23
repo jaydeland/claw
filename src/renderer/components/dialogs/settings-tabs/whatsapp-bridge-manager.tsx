@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Link2, Link2Off, Plus, Trash2, MessageCircle, RefreshCw, Info } from "lucide-react"
+import { Link2, Link2Off, Plus, Trash2, MessageCircle, RefreshCw, Info, Plug } from "lucide-react"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../ui/button"
+import { Input } from "../../ui/input"
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,8 @@ interface WhatsAppBridgeManagerProps {
 export function WhatsAppBridgeManager({ chatId, subChatId }: WhatsAppBridgeManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [existingJid, setExistingJid] = useState("")
+  const [isConnectingExisting, setIsConnectingExisting] = useState(false)
 
   const utils = trpc.useUtils()
 
@@ -105,6 +108,24 @@ export function WhatsAppBridgeManager({ chatId, subChatId }: WhatsAppBridgeManag
     },
   })
 
+  const connectToExisting = trpc.whatsapp.connectToExistingGroup.useMutation({
+    onSuccess: (data) => {
+      setIsConnectingExisting(false)
+      if (data.success) {
+        toast.success(`Connected to ${data.name}`)
+        utils.whatsapp.getBridges.invalidate({ chatId })
+        setIsDialogOpen(false)
+        setExistingJid("")
+      } else {
+        toast.error(data.error || "Failed to connect to group")
+      }
+    },
+    onError: (error) => {
+      setIsConnectingExisting(false)
+      toast.error(error.message || "Failed to connect to group")
+    },
+  })
+
   const handleCreateBridge = () => {
     if (!chatData?.name) {
       toast.error("Chat name not available")
@@ -118,6 +139,19 @@ export function WhatsAppBridgeManager({ chatId, subChatId }: WhatsAppBridgeManag
     createGroup.mutate({
       name: groupName,
       description: `Bridge group for Claw chat: ${groupName}`,
+    })
+  }
+
+  const handleConnectToExisting = () => {
+    if (!existingJid.trim()) {
+      toast.error("Please enter a WhatsApp group JID")
+      return
+    }
+
+    setIsConnectingExisting(true)
+    connectToExisting.mutate({
+      chatId,
+      whatsappJid: existingJid.trim(),
     })
   }
 
@@ -144,41 +178,76 @@ export function WhatsAppBridgeManager({ chatId, subChatId }: WhatsAppBridgeManag
               Add Bridge
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Create WhatsApp Bridge</DialogTitle>
               <DialogDescription>
-                A new WhatsApp group will be created and linked to this chat.
+                Connect this chat to a WhatsApp group.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="bg-muted/50 p-3 rounded-md">
-                <div className="flex items-start gap-2">
-                  <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-muted-foreground">
-                    <p className="font-medium text-foreground mb-1">What will happen:</p>
-                    <ul className="space-y-1 list-disc list-inside">
-                      <li>A WhatsApp group named "{chatData?.name || 'Claw Bridge'}" will be created</li>
-                      <li>You&apos;ll receive an invite link to join the group</li>
-                      <li>Messages in the group will appear in this chat</li>
-                      <li>Messages you send here will be forwarded to the group</li>
-                    </ul>
+            <div className="space-y-6 pt-4">
+              {/* Option 1: Create New Group */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium">Option 1: Create New Group</h4>
+                <div className="bg-muted/50 p-3 rounded-md">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-muted-foreground">
+                      <p>A WhatsApp group named "{chatData?.name || 'Claw Bridge'}" will be created</p>
+                    </div>
                   </div>
+                </div>
+                <Button
+                  onClick={handleCreateBridge}
+                  disabled={isCreating || !chatData?.name}
+                  className="w-full"
+                >
+                  {isCreating ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Link2 className="h-4 w-4 mr-2" />
+                  )}
+                  {isCreating ? "Creating group..." : "Create WhatsApp Group"}
+                </Button>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Or</span>
                 </div>
               </div>
 
-              <Button
-                onClick={handleCreateBridge}
-                disabled={isCreating || !chatData?.name}
-                className="w-full"
-              >
-                {isCreating ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Link2 className="h-4 w-4 mr-2" />
-                )}
-                {isCreating ? "Creating group..." : "Create WhatsApp Group & Bridge"}
-              </Button>
+              {/* Option 2: Connect to Existing Group */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium">Option 2: Connect to Existing Group</h4>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Enter WhatsApp group JID (e.g., 120363426008488970@g.us)"
+                    value={existingJid}
+                    onChange={(e) => setExistingJid(e.target.value)}
+                    disabled={isConnectingExisting}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    You can find the JID in the logs when a message is received from the group.
+                  </p>
+                </div>
+                <Button
+                  onClick={handleConnectToExisting}
+                  disabled={isConnectingExisting || !existingJid.trim()}
+                  variant="outline"
+                  className="w-full"
+                >
+                  {isConnectingExisting ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plug className="h-4 w-4 mr-2" />
+                  )}
+                  {isConnectingExisting ? "Connecting..." : "Connect to Existing Group"}
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

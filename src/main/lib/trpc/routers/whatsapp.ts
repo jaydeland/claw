@@ -1,493 +1,367 @@
+/**
+ * WhatsApp Router - Re-exports WhatsApp-related procedures from messaging router
+ *
+ * This router exists for backward compatibility with client code that expects
+ * a separate "whatsapp" namespace rather than the consolidated "messaging" namespace.
+ */
+
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, whatsappSettings, whatsappBridges, clawExecutions } from "../../db"
-import { eq, and } from "drizzle-orm"
-import { getWhatsAppTrigger, whatsAppQREmitter, whatsAppStatusEmitter, whatsAppBridgeEmitter, type WhatsAppBridgeMessage } from "../../claws/whatsapp-trigger"
-import { getQueueStatus, processPendingQueue, cleanupStaleExecutions } from "../../claws/whatsapp-queue"
+import {
+  getWhatsAppAdapter,
+  whatsAppQREmitter,
+  whatsAppStatusEmitter,
+} from "../../messaging/whatsapp-adapter"
+import { incomingMessageEmitter } from "../../messaging"
 import { observable } from "@trpc/server/observable"
+import { getDatabase, chats, subChats } from "../../db"
+import { eq, and, desc } from "drizzle-orm"
 
-/**
- * WhatsApp router for managing WhatsApp integration
- */
+// In-memory queue management for WhatsApp (simplified)
+const messageQueue: Array<{
+  id: string
+  chatId: string
+  clawId: string
+  message: string
+  status: "pending" | "sent" | "failed"
+  createdAt: Date
+}> = []
+
 export const whatsappRouter = router({
-  /**
-   * Get WhatsApp connection status
-   * Also checks actual socket state for more accurate status
-   */
+  // Get WhatsApp connection status
   getStatus: publicProcedure.query(async () => {
-    const db = getDatabase()
-    let settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
-
-    // Insert default row if it doesn't exist
-    if (!settings) {
-      console.log("[WhatsAppRouter] Inserting default whatsapp_settings row")
-      db.insert(whatsappSettings).values({ id: "default", isConnected: false }).run()
-      settings = db.select().from(whatsappSettings).where(eq(whatsappSettings.id, "default")).get()
-    }
-
-    const trigger = getWhatsAppTrigger()
-    const isActive = trigger.isActive()
-
-    // If socket reports active but DB doesn't, update DB to match reality
-    const isConnected = isActive || (settings?.isConnected ?? false)
-
-    if (isActive && !settings?.isConnected) {
-      // Socket is connected but DB says disconnected - sync DB
-      console.log("[WhatsAppRouter] Syncing DB status to connected")
-      db.update(whatsappSettings)
-        .set({ isConnected: true, updatedAt: new Date() })
-        .where(eq(whatsappSettings.id, "default"))
-        .run()
-    }
-
-    return {
-      isConnected,
-      isActive,
-    }
+    const adapter = getWhatsAppAdapter()
+    return adapter.getStatus()
   }),
 
-  /**
-   * Connect to WhatsApp (generates QR code)
-   */
+  // Connect WhatsApp
   connect: publicProcedure.mutation(async () => {
-    try {
-      const trigger = getWhatsAppTrigger()
-      await trigger.start()
-      return { success: true }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
+    const adapter = getWhatsAppAdapter()
+    await adapter.start()
+    return { success: true }
   }),
 
-  /**
-   * Disconnect from WhatsApp (keep session)
-   */
+  // Disconnect WhatsApp
   disconnect: publicProcedure.mutation(async () => {
-    try {
-      const trigger = getWhatsAppTrigger()
-      await trigger.stop()
-      return { success: true }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
+    const adapter = getWhatsAppAdapter()
+    await adapter.stop()
+    return { success: true }
   }),
 
-  /**
-   * Logout and clear session
-   */
+  // Logout WhatsApp (clear session)
   logout: publicProcedure.mutation(async () => {
-    try {
-      const trigger = getWhatsAppTrigger()
-      await trigger.logout()
-      return { success: true }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
+    const adapter = getWhatsAppAdapter()
+    await adapter.logout()
+    return { success: true }
   }),
 
-  /**
-   * Subscribe to QR code updates
-   * This is a tRPC subscription that emits QR codes when generated
-   */
+  // Subscribe to QR code updates
   onQRCode: publicProcedure.subscription(() => {
     return observable<string | null>((emit) => {
       const handler = (qr: string | null) => {
         emit.next(qr)
       }
-
       whatsAppQREmitter.on("qr", handler)
-
-      // Cleanup when subscription ends
       return () => {
         whatsAppQREmitter.off("qr", handler)
       }
     })
   }),
 
-  /**
-   * Subscribe to connection status changes
-   * Emits when WhatsApp connection status changes
-   */
+  // Subscribe to status changes
   onStatusChange: publicProcedure.subscription(() => {
     return observable<{ isConnected: boolean }>((emit) => {
       const handler = (status: { isConnected: boolean }) => {
         emit.next(status)
       }
-
       whatsAppStatusEmitter.on("statusChange", handler)
-
-      // Cleanup when subscription ends
       return () => {
         whatsAppStatusEmitter.off("statusChange", handler)
       }
     })
   }),
 
-  /**
-   * Create a WhatsApp group for Claw notifications
-   * Returns the group ID that can be used in claw configuration
-   */
+  // Create WhatsApp group
   createGroup: publicProcedure
-    .input(
-      z.object({
-        name: z.string().min(1),
-        description: z.string().optional(),
-      })
-    )
+    .input(z.object({ name: z.string(), description: z.string().optional() }))
     .mutation(async ({ input }) => {
+      const adapter = getWhatsAppAdapter()
       try {
-        const trigger = getWhatsAppTrigger()
-        const result = await trigger.createGroup(input.name, input.description)
+        const result = await adapter.createGroup(input.name, input.description)
         return {
           success: true,
           groupId: result.groupId,
           inviteUrl: result.inviteUrl,
         }
       } catch (error) {
+        console.error("[WhatsAppRouter] Failed to create group:", error)
         return {
           success: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: error instanceof Error ? error.message : "Failed to create WhatsApp group",
         }
       }
     }),
 
-  /**
-   * Get the user's own WhatsApp JID (phone number)
-   * Useful for configuring claws to message yourself for testing
-   */
-  getOwnJid: publicProcedure.query(async () => {
-    try {
-      const trigger = getWhatsAppTrigger()
-      const jid = await trigger.getOwnJid()
-      return {
-        success: true,
-        jid,
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
-  }),
-
-  /**
-   * Send a message to a WhatsApp group JID (used for chat connection bridging)
-   */
-  sendToGroup: publicProcedure
-    .input(z.object({ jid: z.string().min(1), text: z.string().min(1) }))
-    .mutation(async ({ input }) => {
-      try {
-        const trigger = getWhatsAppTrigger()
-        const success = await trigger.sendMessage(input.jid, input.text)
-        return { success }
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : String(error) }
-      }
-    }),
-
-  /**
-   * Send a test message to a chat/group
-   */
-  sendTestMessage: publicProcedure
-    .input(
-      z.object({
-        chatId: z.string().min(1),
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        const trigger = getWhatsAppTrigger()
-        await trigger.sendTestMessage(input.chatId)
-        return {
-          success: true,
-        }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }
-      }
-    }),
-
-  /**
-   * Get list of groups the user is participating in
-   */
+  // Get WhatsApp groups
   getGroups: publicProcedure.query(async () => {
-    try {
-      const trigger = getWhatsAppTrigger()
-      const groups = await trigger.getGroups()
-      return {
-        success: true,
-        groups,
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
+    const adapter = getWhatsAppAdapter()
+    return adapter.getGroups()
   }),
 
-  /**
-   * Get WhatsApp bridges for a chat
-   */
+  // Get own JID
+  getOwnJid: publicProcedure.query(async () => {
+    const adapter = getWhatsAppAdapter()
+    return { jid: adapter.getOwnJid() }
+  }),
+
+  // Get connected chats (bridges)
   getBridges: publicProcedure
-    .input(z.object({ chatId: z.string().min(1) }))
+    .input(z.object({ chatId: z.string() }))
     .query(async ({ input }) => {
-      try {
-        const db = getDatabase()
-        const bridges = db
-          .select()
-          .from(whatsappBridges)
-          .where(eq(whatsappBridges.chatId, input.chatId))
-          .all()
-        return {
-          success: true,
-          bridges,
-        }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }
+      const db = getDatabase()
+      const connectedChats = db
+        .select()
+        .from(chats)
+        .where(eq(chats.connectionType, "whatsapp"))
+        .all()
+      return {
+        bridges: connectedChats.map((chat) => ({
+          id: chat.id,
+          chatId: chat.id,
+          whatsappJid: chat.connectionTarget,
+          whatsappGroupName: chat.connectionName,
+          isEnabled: true,
+        })),
       }
     }),
 
-  /**
-   * Create a WhatsApp bridge for a chat
-   */
+  // Create bridge (update chat connection)
   createBridge: publicProcedure
     .input(
       z.object({
-        chatId: z.string().min(1),
-        subChatId: z.string().min(1),
-        whatsappJid: z.string().min(1),
-        whatsappGroupName: z.string().optional(),
+        chatId: z.string(),
+        subChatId: z.string(),
+        whatsappJid: z.string(),
+        whatsappGroupName: z.string(),
       })
     )
     .mutation(async ({ input }) => {
+      const db = getDatabase()
+      // Normalize JID - ensure it has @g.us suffix for groups
+      let normalizedJid = input.whatsappJid
+      if (normalizedJid && !normalizedJid.includes("@")) {
+        normalizedJid = `${normalizedJid}@g.us`
+      }
+      db.update(chats)
+        .set({
+          connectionType: "whatsapp",
+          connectionTarget: normalizedJid,
+          connectionName: input.whatsappGroupName,
+          updatedAt: new Date(),
+        })
+        .where(eq(chats.id, input.chatId))
+        .run()
+      console.log(`[WhatsApp] Bridge created: chat ${input.chatId} -> ${normalizedJid}`)
+      return { success: true, jid: normalizedJid }
+    }),
+
+  // Connect to existing WhatsApp group by JID
+  connectToExistingGroup: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string(),
+        whatsappJid: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      // Normalize JID
+      let normalizedJid = input.whatsappJid.trim()
+      if (!normalizedJid.includes("@")) {
+        normalizedJid = `${normalizedJid}@g.us`
+      }
+
+      // Verify the group exists by fetching metadata
+      const adapter = getWhatsAppAdapter()
       try {
-        const db = getDatabase()
-
-        // Check if bridge already exists
-        const existing = db
-          .select()
-          .from(whatsappBridges)
-          .where(
-            and(
-              eq(whatsappBridges.chatId, input.chatId),
-              eq(whatsappBridges.whatsappJid, input.whatsappJid)
-            )
-          )
-          .get()
-
-        if (existing) {
-          return {
-            success: false,
-            error: "Bridge already exists for this chat and WhatsApp group",
-          }
+        const groups = await adapter.getGroups()
+        const group = groups.find((g) => g.id === normalizedJid)
+        if (!group) {
+          return { success: false, error: "Group not found. Make sure you're a member of this group." }
         }
 
-        const bridge = db
-          .insert(whatsappBridges)
-          .values({
-            chatId: input.chatId,
-            subChatId: input.subChatId,
-            whatsappJid: input.whatsappJid,
-            whatsappGroupName: input.whatsappGroupName,
-            isActive: true,
+        db.update(chats)
+          .set({
+            connectionType: "whatsapp",
+            connectionTarget: normalizedJid,
+            connectionName: group.name,
+            updatedAt: new Date(),
           })
-          .returning()
+          .where(eq(chats.id, input.chatId))
+          .run()
+
+        console.log(`[WhatsApp] Connected to existing group: chat ${input.chatId} -> ${normalizedJid}`)
+        return { success: true, jid: normalizedJid, name: group.name }
+      } catch (error) {
+        console.error("[WhatsApp] Failed to connect to group:", error)
+        return { success: false, error: "Failed to verify group. Make sure WhatsApp is connected." }
+      }
+    }),
+
+  // Delete bridge
+  deleteBridge: publicProcedure
+    .input(z.object({ bridgeId: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      db.update(chats)
+        .set({
+          connectionType: "none",
+          connectionTarget: null,
+          connectionName: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(chats.id, input.bridgeId))
+        .run()
+      return { success: true }
+    }),
+
+  // Toggle bridge
+  toggleBridge: publicProcedure
+    .input(z.object({ bridgeId: z.string(), isEnabled: z.boolean() }))
+    .mutation(async () => {
+      // Bridge toggling is a no-op for now
+      return { success: true }
+    }),
+
+  // Send message to group
+  sendToGroup: publicProcedure
+    .input(z.object({ groupId: z.string(), message: z.string() }))
+    .mutation(async ({ input }) => {
+      const adapter = getWhatsAppAdapter()
+      const success = await adapter.sendMessage(input.groupId, input.message)
+      return { success }
+    }),
+
+  // Subscribe to bridge messages
+  onBridgeMessage: publicProcedure.subscription(() => {
+    return observable<{
+      bridgeId: string
+      chatId: string
+      subChatId: string
+      whatsappJid: string
+      sender: string
+      text: string
+      timestamp: number
+      messageId: string
+      fromMe: boolean
+    }>((emit) => {
+      const handler = (message: any) => {
+        // Only handle WhatsApp messages
+        if (message.platform !== "whatsapp") return
+
+        // Get the chat connection info to find bridgeId
+        const db = getDatabase()
+        const chat = db
+          .select()
+          .from(chats)
+          .where(eq(chats.id, message.chatId))
           .get()
 
-        return {
-          success: true,
-          bridge,
+        if (!chat) {
+          console.log(`[WhatsAppRouter] No chat found for ${message.chatId}`)
+          return
         }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }
-      }
-    }),
 
-  /**
-   * Delete a WhatsApp bridge
-   */
-  deleteBridge: publicProcedure
-    .input(z.object({ bridgeId: z.string().min(1) }))
-    .mutation(async ({ input }) => {
-      try {
-        const db = getDatabase()
-        db.delete(whatsappBridges).where(eq(whatsappBridges.id, input.bridgeId)).run()
-        return {
-          success: true,
-        }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }
-      }
-    }),
+        // Find the most recent subChat for this chat to use as target
+        const subChat = db
+          .select()
+          .from(subChats)
+          .where(eq(subChats.chatId, message.chatId))
+          .orderBy(desc(subChats.createdAt))
+          .limit(1)
+          .get()
 
-  /**
-   * Toggle bridge active status
-   */
-  toggleBridge: publicProcedure
-    .input(z.object({ bridgeId: z.string().min(1), isActive: z.boolean() }))
-    .mutation(async ({ input }) => {
-      try {
-        const db = getDatabase()
-        db
-          .update(whatsappBridges)
-          .set({ isActive: input.isActive, updatedAt: new Date() })
-          .where(eq(whatsappBridges.id, input.bridgeId))
-          .run()
-        return {
-          success: true,
+        // If no subChat exists, we can't route the message
+        if (!subChat) {
+          console.log(`[WhatsAppRouter] No subChat found for chat ${message.chatId}`)
+          return
         }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }
-      }
-    }),
 
-  /**
-   * Subscribe to WhatsApp bridge messages
-   * Emits messages from bridged WhatsApp groups to the chat UI
-   */
-  onBridgeMessage: publicProcedure.subscription(() => {
-    return observable<WhatsAppBridgeMessage>((emit) => {
-      const handler = (message: WhatsAppBridgeMessage) => {
-        emit.next(message)
+        // Transform to the format expected by frontend
+        emit.next({
+          bridgeId: chat.id,
+          chatId: chat.id,
+          subChatId: subChat.id,
+          whatsappJid: message.metadata?.whatsappJid || "",
+          sender: message.sender,
+          text: message.text,
+          timestamp: message.timestamp,
+          messageId: message.messageId,
+          fromMe: message.metadata?.fromMe || false,
+        })
       }
 
-      whatsAppBridgeEmitter.on("message", handler)
-
-      // Cleanup when subscription ends
+      incomingMessageEmitter.on("message", handler)
       return () => {
-        whatsAppBridgeEmitter.off("message", handler)
+        incomingMessageEmitter.off("message", handler)
       }
     })
   }),
 
-  /**
-   * Get WhatsApp queue status (DB-backed)
-   */
+  // Queue status (stub)
   getQueueStatus: publicProcedure.query(async () => {
-    return getQueueStatus()
+    return {
+      total: messageQueue.length,
+      pending: messageQueue.filter((m) => m.status === "pending").length,
+      sent: messageQueue.filter((m) => m.status === "sent").length,
+      failed: messageQueue.filter((m) => m.status === "failed").length,
+    }
   }),
 
-  /**
-   * Get pending executions from database
-   */
+  // Queue items (stub)
   getQueueItems: publicProcedure
-    .input(z.object({ clawId: z.string().optional() }).optional())
+    .input(z.object({ clawId: z.string().optional() }))
     .query(async ({ input }) => {
-      const db = getDatabase()
-      const where = input?.clawId ? eq(clawExecutions.clawId, input.clawId) : undefined
-      const executions = db
-        .select()
-        .from(clawExecutions)
-        .where(where)
-        .orderBy(desc(clawExecutions.startedAt))
-        .limit(50)
-        .all()
-      return executions
+      let items = messageQueue
+      if (input.clawId) {
+        items = items.filter((m) => m.clawId === input.clawId)
+      }
+      return { items }
     }),
 
-  /**
-   * Get all claw IDs with pending executions
-   */
+  // Get claw IDs (stub)
   getClawIds: publicProcedure.query(async () => {
-    const db = getDatabase()
-    const result = db
-      .select({ clawId: clawExecutions.clawId })
-      .from(clawExecutions)
-      .where(eq(clawExecutions.status, "pending"))
-      .groupBy(clawExecutions.clawId)
-      .all()
-    return result.map(r => r.clawId).filter(Boolean) as string[]
+    return { clawIds: [] }
   }),
 
-  /**
-   * Pause queue processing
-   */
+  // Pause queue (stub)
   pauseQueue: publicProcedure.mutation(async () => {
-    // For DB-backed queue, just clear pending executions
-    const db = getDatabase()
-    db.update(clawExecutions)
-      .set({ status: "failed", logs: "Paused by user", completedAt: new Date() })
-      .where(eq(clawExecutions.status, "pending"))
-      .run()
     return { success: true }
   }),
 
-  /**
-   * Resume queue processing - triggers immediate processing
-   */
+  // Resume queue (stub)
   resumeQueue: publicProcedure.mutation(async () => {
-    await processPendingQueue()
     return { success: true }
   }),
 
-  /**
-   * Clear all pending queue items
-   */
-  clearQueue: publicProcedure
-    .input(z.object({ clawId: z.string().optional() }).optional())
-    .mutation(async ({ input }) => {
-      const db = getDatabase()
-      if (input?.clawId) {
-        db.delete(clawExecutions)
-          .where(and(eq(clawExecutions.clawId, input.clawId), eq(clawExecutions.status, "pending")))
-          .run()
-      } else {
-        db.delete(clawExecutions)
-          .where(eq(clawExecutions.status, "pending"))
-          .run()
-      }
-      return { success: true }
+  // Clear queue (stub)
+  clearQueue: publicProcedure.mutation(async () => {
+    messageQueue.length = 0
+    return { success: true }
   }),
 
-  /**
-   * Clear stuck running executions (older than 10 minutes)
-   */
+  // Clear stuck queue (stub)
   clearStuckQueue: publicProcedure.mutation(async () => {
-    const cleaned = await cleanupStaleExecutions()
-    return { success: true, cleaned }
-  }),
-
-  /**
-   * Subscribe to queue status updates
-   */
-  onQueueUpdate: publicProcedure.subscription(() => {
-    return observable<{ pending: number; running: number; recentExecutions: any[] }>((emit) => {
-      const emitUpdate = () => {
-        emit.next(getQueueStatus())
+    // Remove items older than 1 hour with pending status
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+    for (let i = messageQueue.length - 1; i >= 0; i--) {
+      if (
+        messageQueue[i].status === "pending" &&
+        messageQueue[i].createdAt < oneHourAgo
+      ) {
+        messageQueue.splice(i, 1)
       }
-
-      // Emit every 3 seconds
-      const interval = setInterval(emitUpdate, 3000)
-
-      // Cleanup
-      return () => {
-        clearInterval(interval)
-      }
-    })
+    }
+    return { success: true }
   }),
 })

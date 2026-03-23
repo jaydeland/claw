@@ -76,9 +76,9 @@ export const chats = sqliteTable("chats", {
   // Contextual chat source tracking (for GitHub/Prompts/Skills/Commands views)
   sourceView: text("source_view"),    // "github" | "prompts" | "skills" | "commands"
   sourceContext: text("source_context"), // JSON key for per-context lookup, e.g. '{"promptId":"abc"}'
-  // External messaging connection (WhatsApp group or Slack channel)
-  connectionType: text("connection_type").default("none"), // "none" | "whatsapp" | "slack"
-  connectionTarget: text("connection_target"),             // WhatsApp group JID or Slack channel ID
+  // External messaging connection (WhatsApp group or Discord channel)
+  connectionType: text("connection_type").default("none"), // "none" | "whatsapp" | "discord"
+  connectionTarget: text("connection_target"),             // WhatsApp group JID or Discord channel ID
   connectionName: text("connection_name"),                 // Display name for the channel/group
 })
 
@@ -396,72 +396,6 @@ export const analysisJobsRelations = relations(analysisJobs, ({ one }) => ({
   }),
 }))
 
-// ============ HEADLESS CLAWS ============
-// Stores headless agent definitions (autonomous background agents)
-export const headlessClaws = sqliteTable("headless_claws", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  name: text("name").notNull(),
-  purpose: text("purpose").notNull().default(""), // Short description of what this claw does (required for new claws)
-  instruction: text("instruction").notNull(), // The prompt/task passed to Claude
-  soulInstruction: text("soul_instruction"), // Persistent behavioral identity injected before instruction
-  clawsSoul: text("claws_soul").default(""), // System prompt injected via SDK as system message
-  targetWorktree: text("target_worktree").notNull(), // Absolute path to the isolated Git worktree
-  triggerType: text("trigger_type", { enum: ["cron", "github_poll", "manual", "slack_mention", "whatsapp_message", "discord_message"] }).notNull(),
-  triggerConfig: text("trigger_config").notNull(), // JSON: cron expression, GitHub repo, or chat filter
-  isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
-  allowedDirectories: text("allowed_directories").notNull().default("[]"), // JSON string[]: extra dirs beyond targetWorktree
-  allowedMcpServers: text("allowed_mcp_servers").notNull().default("[]"),  // JSON string[]: empty = no MCPs, null-stored-as-"[]" = inherit global
-  sandboxMode: text("sandbox_mode", { enum: ["disabled", "enabled", "strict"] }).notNull().default("disabled"), // Sandbox permission mode
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-})
-
-export const headlessClawsRelations = relations(headlessClaws, ({ many }) => ({
-  executions: many(clawExecutions),
-  chatSessions: many(chatSessions),
-}))
-
-// ============ CLAW EXECUTIONS ============
-// Tracks the history and logs of headless agent runs
-export const clawExecutions = sqliteTable("claw_executions", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  clawId: text("claw_id")
-    .notNull()
-    .references(() => headlessClaws.id, { onDelete: "cascade" }),
-  subChatId: text("sub_chat_id").references(() => subChats.id), // Link to subChat for chat view
-  sessionId: text("session_id").references((): any => chatSessions.id, { onDelete: "set null" }), // Link to chat session
-  status: text("status", { enum: ["running", "success", "failed"] }).notNull(),
-  logs: text("logs").notNull().default(""), // Standard output/error buffer
-  exitCode: integer("exit_code"), // Process exit code (null if still running)
-  startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  completedAt: integer("completed_at", { mode: "timestamp" }),
-}, (table) => ({
-  clawIdIdx: index("claw_executions_claw_id_idx").on(table.clawId),
-  statusIdx: index("claw_executions_status_idx").on(table.status),
-  startedAtIdx: index("claw_executions_started_at_idx").on(table.startedAt),
-  subChatIdIdx: index("claw_executions_sub_chat_id_idx").on(table.subChatId),
-  sessionIdIdx: index("claw_executions_session_id_idx").on(table.sessionId),
-}))
-
-export const clawExecutionsRelations = relations(clawExecutions, ({ one }) => ({
-  claw: one(headlessClaws, {
-    fields: [clawExecutions.clawId],
-    references: [headlessClaws.id],
-  }),
-  subChat: one(subChats, {
-    fields: [clawExecutions.subChatId],
-    references: [subChats.id],
-  }),
-  session: one(chatSessions, {
-    fields: [clawExecutions.sessionId],
-    references: [chatSessions.id],
-  }),
-}))
-
 // ============ GITHUB SETTINGS ============
 // Secure storage for GitHub credentials
 export const githubSettings = sqliteTable("github_settings", {
@@ -559,52 +493,9 @@ export const hooksRelations = relations(hooks, ({ one }) => ({
   }),
 }))
 
-// ============ CHAT SESSIONS ============
-// Stores chat sessions for WhatsApp and Slack integrations
-// Enables persistent conversation context across multiple messages
-export const chatSessions = sqliteTable("chat_sessions", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  clawId: text("claw_id")
-    .notNull()
-    .references(() => headlessClaws.id, { onDelete: "cascade" }),
-  externalId: text("external_id").notNull(), // WhatsApp JID or Slack channel/thread ID
-  platform: text("platform", { enum: ["whatsapp", "slack", "discord"] }).notNull(),
-  status: text("status", { enum: ["idle", "active", "completed", "error"] }).notNull().default("idle"),
-  currentExecutionId: text("current_execution_id").references((): any => clawExecutions.id), // Currently running execution
-  context: text("context").notNull().default("{}"), // JSON: conversation context, user preferences, etc.
-  lastActivityAt: integer("last_activity_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-}, (table) => ({
-  clawIdIdx: index("chat_sessions_claw_id_idx").on(table.clawId),
-  externalIdIdx: index("chat_sessions_external_id_idx").on(table.externalId),
-  platformIdx: index("chat_sessions_platform_idx").on(table.platform),
-  statusIdx: index("chat_sessions_status_idx").on(table.status),
-  lastActivityIdx: index("chat_sessions_last_activity_idx").on(table.lastActivityAt),
-  // Unique constraint on clawId + externalId + platform combination
-  uniqueSession: index("chat_sessions_unique_idx").on(table.clawId, table.externalId, table.platform),
-}))
-
-export const chatSessionsRelations = relations(chatSessions, ({ one, many }) => ({
-  claw: one(headlessClaws, {
-    fields: [chatSessions.clawId],
-    references: [headlessClaws.id],
-  }),
-  currentExecution: one(clawExecutions, {
-    fields: [chatSessions.currentExecutionId],
-    references: [clawExecutions.id],
-  }),
-  executions: many(clawExecutions),
-}))
-
 // ============ TYPE EXPORTS ============
-export type SubChatMode = "plan" | "agent"
-export type ClawTriggerType = "cron" | "github_poll" | "manual" | "slack_mention" | "whatsapp_message" | "discord_message"
 export type SourceView = "github" | "prompts" | "skills" | "commands"
-export type ChatSessionStatus = "idle" | "active" | "completed" | "error"
-export type ChatPlatform = "whatsapp" | "slack" | "discord"
+export type ChatPlatform = "whatsapp" | "discord"
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -637,19 +528,14 @@ export type NewAnalysisDiagram = typeof analysisDiagrams.$inferInsert
 export type AnalysisJob = typeof analysisJobs.$inferSelect
 export type NewAnalysisJob = typeof analysisJobs.$inferInsert
 
-// Headless claws types
-export type HeadlessClaw = typeof headlessClaws.$inferSelect
-export type NewHeadlessClaw = typeof headlessClaws.$inferInsert
-export type ClawExecution = typeof clawExecutions.$inferSelect
-export type NewClawExecution = typeof clawExecutions.$inferInsert
 export type GithubSettings = typeof githubSettings.$inferSelect
 export type NewGithubSettings = typeof githubSettings.$inferInsert
 
 // Chat platform integration types
-export type SlackSettings = typeof slackSettings.$inferSelect
-export type NewSlackSettings = typeof slackSettings.$inferInsert
 export type WhatsappSettings = typeof whatsappSettings.$inferSelect
 export type NewWhatsappSettings = typeof whatsappSettings.$inferInsert
+export type DiscordSettings = typeof discordSettings.$inferSelect
+export type NewDiscordSettings = typeof discordSettings.$inferInsert
 
 // System prompts types
 export type SystemPrompt = typeof systemPrompts.$inferSelect
@@ -661,87 +547,3 @@ export type NewHook = typeof hooks.$inferInsert
 export type HookType = "PreToolUse" | "PostToolUse" | "SubagentStart" | "SubagentStop" | "Stop"
 export type HookScope = "global" | "project"
 
-// Chat session types
-export type ChatSession = typeof chatSessions.$inferSelect
-export type NewChatSession = typeof chatSessions.$inferInsert
-
-// ============ WHATSAPP BRIDGES ============
-// Stores bidirectional WhatsApp-Chat bridge configurations
-// Enables messages from WhatsApp groups to appear in Claw chat UI and vice versa
-export const whatsappBridges = sqliteTable("whatsapp_bridges", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  chatId: text("chat_id")
-    .notNull()
-    .references(() => chats.id, { onDelete: "cascade" }),
-  subChatId: text("sub_chat_id")
-    .notNull()
-    .references(() => subChats.id, { onDelete: "cascade" }),
-  whatsappJid: text("whatsapp_jid").notNull(), // WhatsApp group JID (e.g., "123456@g.us")
-  whatsappGroupName: text("whatsapp_group_name"), // Display name of the WhatsApp group
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-}, (table) => ({
-  chatIdIdx: index("whatsapp_bridges_chat_id_idx").on(table.chatId),
-  subChatIdIdx: index("whatsapp_bridges_sub_chat_id_idx").on(table.subChatId),
-  jidIdx: index("whatsapp_bridges_jid_idx").on(table.whatsappJid),
-  uniqueBridge: index("whatsapp_bridges_unique_idx").on(table.chatId, table.whatsappJid),
-}))
-
-export const whatsappBridgesRelations = relations(whatsappBridges, ({ one }) => ({
-  chat: one(chats, {
-    fields: [whatsappBridges.chatId],
-    references: [chats.id],
-  }),
-  subChat: one(subChats, {
-    fields: [whatsappBridges.subChatId],
-    references: [subChats.id],
-  }),
-}))
-
-// WhatsApp bridge types
-export type WhatsappBridge = typeof whatsappBridges.$inferSelect
-export type NewWhatsappBridge = typeof whatsappBridges.$inferInsert
-
-// ============ DISCORD BRIDGES ============
-// Stores bidirectional Discord-Chat bridge configurations
-export const discordBridges = sqliteTable("discord_bridges", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  chatId: text("chat_id")
-    .notNull()
-    .references(() => chats.id, { onDelete: "cascade" }),
-  subChatId: text("sub_chat_id")
-    .references(() => subChats.id, { onDelete: "cascade" }),
-  discordGuildId: text("discord_guild_id").notNull(),
-  discordChannelId: text("discord_channel_id").notNull(),
-  discordChannelName: text("discord_channel_name"),
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-}, (table) => ({
-  chatIdIdx: index("discord_bridges_chat_id_idx").on(table.chatId),
-  subChatIdIdx: index("discord_bridges_sub_chat_id_idx").on(table.subChatId),
-  channelIdIdx: index("discord_bridges_channel_id_idx").on(table.discordChannelId),
-  uniqueBridge: index("discord_bridges_unique_idx").on(table.chatId, table.discordChannelId),
-}))
-
-export const discordBridgesRelations = relations(discordBridges, ({ one }) => ({
-  chat: one(chats, {
-    fields: [discordBridges.chatId],
-    references: [chats.id],
-  }),
-  subChat: one(subChats, {
-    fields: [discordBridges.subChatId],
-    references: [subChats.id],
-  }),
-}))
-
-// Discord types
-export type DiscordSettings = typeof discordSettings.$inferSelect
-export type NewDiscordSettings = typeof discordSettings.$inferInsert
-export type DiscordBridge = typeof discordBridges.$inferSelect
-export type NewDiscordBridge = typeof discordBridges.$inferInsert

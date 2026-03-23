@@ -22,13 +22,20 @@ interface WhatsAppBridgeMessage {
 
 interface WhatsAppBridgeHandlerProps {
   chatId: string | null
+  subChatId: string | null
+  /**
+   * Optional function to trigger a Claw response.
+   * If not provided, the message will only be displayed in the UI.
+   */
+  onTriggerResponse?: (text: string) => void
 }
 
 /**
  * Component that handles WhatsApp bridge messages
  * Adds them to the chat message store so they appear in the UI
+ * and optionally triggers a Claw response via the provided callback
  */
-export function WhatsAppBridgeHandler({ chatId }: WhatsAppBridgeHandlerProps) {
+export function WhatsAppBridgeHandler({ chatId, subChatId, onTriggerResponse }: WhatsAppBridgeHandlerProps) {
   // Use the sync atom for atomic message updates
   const syncMessages = useSetAtom(syncMessagesWithStatusAtom)
 
@@ -39,6 +46,12 @@ export function WhatsAppBridgeHandler({ chatId }: WhatsAppBridgeHandlerProps) {
 
       // Only process messages for the current chat/subChat
       if (chatId && message.chatId === chatId) {
+        // Skip messages sent by the user from Claw (to avoid loops)
+        if (message.fromMe) {
+          console.log("[WhatsAppBridgeHandler] Skipping message from self")
+          return
+        }
+
         // Create unique message ID
         const messageId = `wa_${message.messageId}_${Date.now()}`
 
@@ -72,10 +85,19 @@ export function WhatsAppBridgeHandler({ chatId }: WhatsAppBridgeHandlerProps) {
         })
 
         // Show toast notification
-        const sender = message.fromMe ? "You (WhatsApp)" : message.sender
-        toast.info(`📱 WhatsApp: ${sender}`, {
+        toast.info(`📱 WhatsApp: ${message.sender}`, {
           description: message.text.substring(0, 100) + (message.text.length > 100 ? "..." : ""),
         })
+
+        // Trigger a Claw response if handler is provided
+        if (onTriggerResponse && subChatId === message.subChatId) {
+          console.log("[WhatsAppBridgeHandler] Triggering Claw response for WhatsApp message")
+          try {
+            onTriggerResponse(message.text)
+          } catch (error) {
+            console.error("[WhatsAppBridgeHandler] Failed to trigger response:", error)
+          }
+        }
       }
     },
     onError: (error) => {

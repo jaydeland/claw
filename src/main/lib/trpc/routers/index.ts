@@ -26,9 +26,7 @@ import { loadedContextRouter } from "./loaded-context"
 import { analyzerRouter } from "./analyzer"
 import { transientChatRouter } from "./transient-chat"
 import { githubRouter } from "./github"
-import { clawsRouter } from "./claws"
-import { discordRouter } from "./discord"
-import { slackRouter } from "./slack"
+import { messagingRouter } from "./messaging"
 import { whatsappRouter } from "./whatsapp"
 import { promptsRouter } from "./prompts"
 import { claudeConfigRouter } from "./claude-config"
@@ -71,9 +69,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     analyzer: analyzerRouter,
     transientChat: transientChatRouter,
     github: githubRouter,
-    claws: clawsRouter,
-    discord: discordRouter,
-    slack: slackRouter,
+    messaging: messagingRouter,
     whatsapp: whatsappRouter,
     prompts: promptsRouter,
     claudeConfig: claudeConfigRouter,

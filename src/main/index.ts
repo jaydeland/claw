@@ -27,7 +27,8 @@ import { cleanupGitWatchers } from "./lib/git/watcher"
 import { initBackgroundSession, closeBackgroundSession } from "./lib/claude/background-session"
 import { taskWatcher, taskEvents, startCleanupScheduler, stopCleanupScheduler, notifyTaskCompleted } from "./lib/background-tasks"
 import { terminalManager } from "./lib/terminal/manager"
-import { clawDaemon } from "./lib/claws"
+import { initMessaging, shutdownMessaging } from "./lib/messaging"
+import { cleanupOrphanedOutputs } from "./lib/tool-output-storage"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -132,6 +133,9 @@ if (gotTheLock) {
     }
 
     console.log(`[App] Starting Claw${IS_DEV ? " (DEV)" : ""}...`)
+
+    // Clean up orphaned tool output files from previous sessions
+    cleanupOrphanedOutputs()
 
     // Get Claude Code version for About panel
     let claudeCodeVersion = "unknown"
@@ -383,32 +387,13 @@ if (gotTheLock) {
       }, 5000)
     }
 
-    // Initialize ClawDaemon for headless agents
+    // Initialize messaging module for 2-way chat sync
     setTimeout(async () => {
       try {
-        console.log("[App] Initializing ClawDaemon...")
-        await clawDaemon.initialize()
-
-        // Auto-start Discord trigger if credentials are configured and connected
-        // This ensures the bot is online for chat connections (2-way sync)
-        try {
-          const { getDatabase, discordSettings } = await import("./lib/db")
-          const { eq } = await import("drizzle-orm")
-          const db = getDatabase()
-          const settings = db.select().from(discordSettings).where(eq(discordSettings.id, "default")).get()
-          if (settings?.encryptedBotToken && settings?.isConnected) {
-            const { getDiscordTrigger } = await import("./lib/claws/discord-trigger")
-            const discordTrigger = getDiscordTrigger()
-            if (!discordTrigger.isActive()) {
-              console.log("[App] Auto-starting Discord trigger...")
-              await discordTrigger.start()
-            }
-          }
-        } catch (discordError) {
-          console.error("[App] Discord trigger auto-start failed:", discordError)
-        }
+        console.log("[App] Initializing messaging module...")
+        await initMessaging()
       } catch (error) {
-        console.error("[App] ClawDaemon initialization failed:", error)
+        console.error("[App] Messaging initialization failed:", error)
       }
     }, 6000)
 
@@ -435,12 +420,10 @@ if (gotTheLock) {
     await cleanupGitWatchers()
     await terminalManager.cleanup()
     await closeBackgroundSession()
-    // Stop Discord trigger before ClawDaemon shutdown
+    // Stop messaging before app quit
     try {
-      const { destroyDiscordTrigger } = await import("./lib/claws/discord-trigger")
-      destroyDiscordTrigger()
+      await shutdownMessaging()
     } catch {}
-    await clawDaemon.shutdown()
     await closeDatabase()
   })
 

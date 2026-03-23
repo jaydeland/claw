@@ -7,6 +7,12 @@ import { AgentToolCall } from "./agent-tool-call"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { ExpandableOutput } from "./expandable-output"
+import {
+  ToolOutputViewer,
+  useOffloadedToolOutput,
+} from "../components/tool-output-viewer"
+import { useAtomValue } from "jotai"
+import { currentSubChatIdAtom } from "../stores/message-store"
 
 interface AgentGenericToolProps {
   part: any
@@ -119,6 +125,14 @@ export const AgentGenericTool = memo(function AgentGenericTool({
   const output = part.output
   const imagePath = useMemo(() => detectImagePath(output), [output])
 
+  // Check if this is an offloaded output
+  const subChatId = useAtomValue(currentSubChatIdAtom)
+  const { isOffloaded, viewerProps } = useOffloadedToolOutput(
+    subChatId,
+    part.toolCallId,
+    output,
+  )
+
   // If tool was interrupted, show interrupted state
   if (isInterrupted) {
     return <AgentToolInterrupted toolName={title} />
@@ -187,6 +201,52 @@ export const AgentGenericTool = memo(function AgentGenericTool({
 
   // If there's output but it's not an image, show it as expandable text
   if (output) {
+    // Handle offloaded outputs - show preview with "View full output" button
+    if (isOffloaded && viewerProps) {
+      const previewContent = viewerProps.preview || "Output stored in file"
+      return (
+        <div
+          data-message-id={messageId}
+          data-part-index={partIndex}
+          data-part-type={part.type}
+        >
+          {/* Tool header */}
+          <AgentToolCall
+            icon={Icon}
+            title={title}
+            subtitle={subtitle}
+            tooltipContent={tooltipContent}
+            isPending={isPending}
+            isError={isError}
+          />
+
+          {/* Output display with viewer */}
+          <div className="mx-2 mt-2 border border-border rounded-md overflow-hidden">
+            <ExpandableOutput
+              content={previewContent}
+              language="text"
+              icon={isError ? AlertCircle : CheckCircle2}
+              title="Output (preview)"
+              maxCollapsedLines={5}
+              isPending={isPending}
+              isError={isError}
+              enableDialog={false}
+            />
+            <div className="px-3 py-2 border-t border-border bg-muted/50 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                Output was truncated to prevent IPC crashes
+              </span>
+              <ToolOutputViewer
+                subChatId={subChatId!}
+                {...viewerProps}
+              />
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Normal output display
     const formattedOutput = formatToolOutput(output)
 
     return (

@@ -40,6 +40,13 @@ import {
   systemPrompts,
 } from "../../db"
 import { createRollbackStash } from "../../git/stash"
+import {
+  shouldOffloadOutput,
+  storeToolOutput,
+  loadToolOutput,
+  deleteSubChatOutputs,
+  createOffloadedReference,
+} from "../../tool-output-storage"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 import { getMergedMcpConfig } from "../../config/consolidator"
@@ -70,9 +77,7 @@ import {
   updateSessionQuery,
   updateSessionId,
 } from "../../session/session-registry"
-import { getWhatsAppTrigger } from "../../claws/whatsapp-trigger"
-import { getSlackTrigger } from "../../claws/slack-trigger"
-import { getDiscordTrigger } from "../../claws/discord-trigger"
+import { sendToPlatform } from "../../messaging"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -1211,19 +1216,17 @@ export const claudeRouter = router({
 
                     // Forward question to connected channel/group (fire-and-forget)
                     try {
-                      const parentChat = getDatabase().select().from(chats).where(eq(chats.id, input.chatId)).get()
+                      // Get parent chatId from subChat first
+                      const subChat = getDatabase().select().from(subChats).where(eq(subChats.id, input.subChatId)).get()
+                      if (!subChat?.chatId) return
+
+                      const parentChat = getDatabase().select().from(chats).where(eq(chats.id, subChat.chatId)).get()
                       if (parentChat?.connectionType && parentChat.connectionType !== "none" && parentChat.connectionTarget) {
                         const questionText = (coercedQuestions as any[]).map((q: any) => {
                           const opts = q.options?.map((o: any) => o.label || String(o)).join(", ")
                           return `❓ ${q.question}${opts ? `\nOptions: ${opts}` : ""}`
                         }).join("\n")
-                        if (parentChat.connectionType === "whatsapp") {
-                          getWhatsAppTrigger().sendMessage(parentChat.connectionTarget, questionText).catch(console.error)
-                        } else if (parentChat.connectionType === "slack") {
-                          getSlackTrigger().sendToChannel(parentChat.connectionTarget, questionText).catch(console.error)
-                        } else if (parentChat.connectionType === "discord") {
-                          getDiscordTrigger().sendMessage(parentChat.connectionTarget, questionText).catch(console.error)
-                        }
+                        sendToPlatform(parentChat.connectionType, parentChat.connectionTarget, questionText).catch(console.error)
                       }
                     } catch (e) {
                       console.error("[claude] Failed to forward question to channel:", e)
@@ -1925,8 +1928,34 @@ export const claudeRouter = router({
                       )
 
                       if (toolPart) {
-                        toolPart.result = chunk.output
-                        toolPart.output = chunk.output // Backwards compatibility for the UI that relies on output field
+                        // Check if output is large and needs offloading to file
+                        let outputToStore = chunk.output
+                        if (shouldOffloadOutput(chunk.output)) {
+                          try {
+                            const storedInfo = await storeToolOutput(
+                              input.subChatId,
+                              chunk.toolCallId,
+                              chunk.output,
+                            )
+                            // Create smart reference preserving structure (exitCode, etc.)
+                            outputToStore = createOffloadedReference(
+                              chunk.output,
+                              chunk.toolCallId,
+                              storedInfo,
+                            )
+                            console.log(
+                              `[claude] Tool output offloaded to file for ${chunk.toolCallId} (${storedInfo.fullLength} chars)`,
+                            )
+                          } catch (offloadError) {
+                            console.error(
+                              `[claude] Failed to offload tool output for ${chunk.toolCallId}:`,
+                              offloadError,
+                            )
+                            // Fall back to storing in message (might still crash, but we tried)
+                          }
+                        }
+                        toolPart.result = outputToStore
+                        toolPart.output = outputToStore // Backwards compatibility for the UI that relies on output field
                         toolPart.state = "result"
 
                         // Update background task with output info from Bash tool output
@@ -2252,20 +2281,18 @@ export const claudeRouter = router({
               // Forward final assistant response to connected channel/group (fire-and-forget)
               if (resultReceived) {
                 try {
-                  const parentChat = getDatabase().select().from(chats).where(eq(chats.id, input.chatId)).get()
+                  // Get parent chatId from subChat first
+                  const subChat = getDatabase().select().from(subChats).where(eq(subChats.id, input.subChatId)).get()
+                  if (!subChat?.chatId) return
+
+                  const parentChat = getDatabase().select().from(chats).where(eq(chats.id, subChat.chatId)).get()
                   if (parentChat?.connectionType && parentChat.connectionType !== "none" && parentChat.connectionTarget) {
                     const finalText = parts
                       .filter((p: any) => p.type === "text" && p.text)
                       .map((p: any) => String(p.text))
                       .join("")
                     if (finalText.trim()) {
-                      if (parentChat.connectionType === "whatsapp") {
-                        getWhatsAppTrigger().sendMessage(parentChat.connectionTarget, finalText).catch(console.error)
-                      } else if (parentChat.connectionType === "slack") {
-                        getSlackTrigger().sendToChannel(parentChat.connectionTarget, finalText).catch(console.error)
-                      } else if (parentChat.connectionType === "discord") {
-                        getDiscordTrigger().sendMessage(parentChat.connectionTarget, finalText).catch(console.error)
-                      }
+                      sendToPlatform(parentChat.connectionType, parentChat.connectionTarget, finalText).catch(console.error)
                     }
                   }
                 } catch (e) {
@@ -2694,6 +2721,25 @@ export const claudeRouter = router({
         deletions: result.deletions || 0,
         changes: result.changes || [],
       }
+    }),
+
+  /**
+   * Load full tool output from file storage
+   * For outputs that were offloaded to prevent IPC crashes
+   */
+  loadToolOutput: publicProcedure
+    .input(
+      z.object({
+        subChatId: z.string(),
+        toolCallId: z.string(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const content = await loadToolOutput(input.subChatId, input.toolCallId)
+      if (content === null) {
+        throw new Error(`Tool output not found for ${input.toolCallId}`)
+      }
+      return { content, length: content.length }
     }),
 
 })
