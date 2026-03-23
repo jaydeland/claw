@@ -1484,20 +1484,12 @@ function WorkflowReactFlowInner() {
     )
   }
 
-  if (nodes.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-sm text-muted-foreground">No dependencies or workflow steps to display</p>
-      </div>
-    )
-  }
-
-  // Toggle filter
-  const toggleFilter = (key: keyof WorkflowDependencyFilters) => {
+  // Toggle filter - MUST be before any early returns (React Hooks Rules)
+  const toggleFilter = useCallback((key: keyof WorkflowDependencyFilters) => {
     setFilters(prev => ({ ...prev, [key]: !prev[key] }))
-  }
+  }, [setFilters])
 
-  // Get node counts by type
+  // Get node counts by type - MUST be before any early returns (React Hooks Rules)
   const nodeCounts = useMemo(() => {
     return {
       agents: nodes.filter(n => n.type === "agent").length,
@@ -1506,6 +1498,14 @@ function WorkflowReactFlowInner() {
       tools: nodes.filter(n => n.type === "toolGroup").length,
     }
   }, [nodes])
+
+  if (nodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-sm text-muted-foreground">No dependencies or workflow steps to display</p>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full w-full bg-background relative">
