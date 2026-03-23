@@ -16,7 +16,7 @@ import {
   ScrollText,
   Database,
 } from "lucide-react"
-import { OriginalMCPIcon, SingleClawIcon } from "../../../components/ui/icons"
+import { OriginalMCPIcon } from "../../../components/ui/icons"
 import { ClaudeCodeIcon } from "../../../components/ui/canvas-icons"
 import {
   Tooltip,
@@ -40,7 +40,6 @@ const tabs: TabItem[] = [
   { id: "history", label: "History", icon: History },
   { id: "chats", label: "Workspaces", icon: FolderOpen },
   { id: "clusters", label: "Clusters", icon: Server },
-  { id: "claws", label: "Claws", icon: SingleClawIcon },
   { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
   { id: "settings", label: "CC Settings", icon: ClaudeCodeIcon },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
@@ -85,9 +84,6 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
       } else if (tabId === "prompts" || tabId === "er-diagram") {
         setGsdCategory(null)
         setIsContentCollapsed(true) // Full-width view — no sidebar panel needed
-      } else if (tabId === "claws") {
-        setGsdCategory(null)
-        setIsContentCollapsed(false) // Show sidebar with claws list
       } else if (tabId === "settings") {
         setGsdCategory(null)
         setSettingsCategory("overview") // Default to overview category

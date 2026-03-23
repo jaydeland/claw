@@ -185,7 +185,7 @@ export function NewChatForm({
 }: NewChatFormProps = {}) {
   // UNCONTROLLED: just track if editor has content for send button
   const [hasContent, setHasContent] = useState(false)
-  const [selectedConnection, setSelectedConnection] = useState<"none" | "whatsapp" | "slack" | "discord">("none")
+  const [selectedConnection, setSelectedConnection] = useState<"none" | "whatsapp">("none")
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
@@ -764,10 +764,6 @@ export function NewChatForm({
       return bDate - aDate
     })
 
-  // Connection claw mutations
-  const createClawMutation = trpc.claws.create.useMutation()
-  const setupSlackClawMutation = trpc.slack.setupChannelClaw.useMutation()
-  const setupDiscordClawMutation = trpc.discord.setupChannelClaw.useMutation()
   const createWhatsAppGroupMutation = trpc.whatsapp.createGroup.useMutation()
   const updateConnectionMutation = trpc.chats.updateConnection.useMutation()
 
@@ -937,87 +933,36 @@ export function NewChatForm({
     })
     // Editor and images are cleared in onSuccess callback
 
-    // Auto-connect to the selected chat connection and create the named group/channel
-    if (selectedConnection !== "none" && selectedProject?.path) {
+    // Auto-connect to WhatsApp if selected
+    if (selectedConnection === "whatsapp" && selectedProject?.path) {
       const chatDisplayName = chatData.name || message.trim().slice(0, 30) || "Claw Chat"
       try {
-        if (selectedConnection === "whatsapp") {
-          // Create a WhatsApp group named after the chat
-          const groupResult = await createWhatsAppGroupMutation.mutateAsync({
-            name: chatDisplayName,
-          })
-          if (groupResult.success && groupResult.groupId) {
-            await updateConnectionMutation.mutateAsync({
-              chatId: chatData.id,
-              connectionType: "whatsapp",
-              connectionTarget: groupResult.groupId,
-              connectionName: chatDisplayName,
-            })
-            toast.success(`Connected to WhatsApp group "${chatDisplayName}"`)
-          } else {
-            toast.error("WhatsApp group created but could not get group ID")
-          }
-        } else if (selectedConnection === "slack") {
-          // Sanitize chat name for Slack channel naming rules
-          const channelName = chatDisplayName
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, "-")
-            .replace(/-+/g, "-")
-            .replace(/^-|-$/g, "")
-            .slice(0, 80) || "claw-chat"
-          const slackResult = await setupSlackClawMutation.mutateAsync({
-            channelName,
-            projectPath: selectedProject.path,
-            projectName: selectedProject.name,
-          })
+        // Create a WhatsApp group named after the chat
+        const groupResult = await createWhatsAppGroupMutation.mutateAsync({
+          name: chatDisplayName,
+        })
+        if (groupResult.success && groupResult.groupId) {
           await updateConnectionMutation.mutateAsync({
             chatId: chatData.id,
-            connectionType: "slack",
-            connectionTarget: slackResult.channelId,
-            connectionName: slackResult.channelName,
+            connectionType: "whatsapp",
+            connectionTarget: groupResult.groupId,
+            connectionName: chatDisplayName,
           })
-          toast.success(`Connected to Slack channel #${slackResult.channelName}`)
-        } else if (selectedConnection === "discord") {
-          const channelNameClean = chatDisplayName
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, "-")
-            .replace(/-+/g, "-")
-            .replace(/^-|-$/g, "")
-            .slice(0, 80) || "claw-chat"
-          const guildId = discordCredentials?.guildId
-          if (!guildId) {
-            toast.error("No Discord server selected. Configure one in Settings > Discord first.")
-          } else {
-            const discordResult = await setupDiscordClawMutation.mutateAsync({
-              guildId,
-              channelName: channelNameClean,
-              projectPath: selectedProject.path,
-              projectName: selectedProject.name,
-            })
-            await updateConnectionMutation.mutateAsync({
-              chatId: chatData.id,
-              connectionType: "discord",
-              connectionTarget: discordResult.channelId,
-              connectionName: discordResult.channelName,
-            })
-            toast.success(`Connected to Discord channel #${discordResult.channelName}`)
-          }
+          toast.success(`Connected to WhatsApp group "${chatDisplayName}"`)
+        } else {
+          toast.error("WhatsApp group created but could not get group ID")
         }
       } catch (err) {
-        console.error("[NewChatForm] Failed to create connection:", err)
-        toast.error(`Chat created but failed to connect to ${selectedConnection === "whatsapp" ? "WhatsApp" : selectedConnection === "slack" ? "Slack" : "Discord"}`)
+        console.error("[NewChatForm] Failed to create WhatsApp connection:", err)
+        toast.error("Chat created but failed to connect to WhatsApp")
       }
     }
   }, [
     selectedProject,
     validatedProject?.path,
     createChatMutation,
-    createClawMutation,
-    setupSlackClawMutation,
-    setupDiscordClawMutation,
     createWhatsAppGroupMutation,
     updateConnectionMutation,
-    discordCredentials,
     selectedConnection,
     hasContent,
     selectedBranch,
@@ -1602,10 +1547,6 @@ export function NewChatForm({
                         >
                           {selectedConnection === "whatsapp" ? (
                             <MessageCircle className="h-3.5 w-3.5 text-green-500" />
-                          ) : selectedConnection === "slack" ? (
-                            <Hash className="h-3.5 w-3.5 text-purple-500" />
-                          ) : selectedConnection === "discord" ? (
-                            <Gamepad2 className="h-3.5 w-3.5 text-indigo-500" />
                           ) : (
                             <Link2 className="h-3.5 w-3.5" />
                           )}
@@ -1614,9 +1555,7 @@ export function NewChatForm({
                               ? "Connect"
                               : selectedConnection === "whatsapp"
                               ? "WhatsApp"
-                              : selectedConnection === "slack"
-                              ? "Slack"
-                              : "Discord"}
+                              : "None"}
                           </span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
@@ -1643,32 +1582,6 @@ export function NewChatForm({
                               <span>WhatsApp</span>
                             </div>
                             {selectedConnection === "whatsapp" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setSelectedConnection("slack")}
-                            disabled={!slackCredentials?.hasAppToken || !slackCredentials?.hasBotToken}
-                            className="justify-between gap-2"
-                          >
-                            <div className="flex items-center gap-2">
-                              <Hash className="w-4 h-4 text-purple-500" />
-                              <span>Slack</span>
-                            </div>
-                            {selectedConnection === "slack" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setSelectedConnection("discord")}
-                            disabled={!discordCredentials?.hasBotToken || !discordCredentials?.isConnected}
-                            className="justify-between gap-2"
-                          >
-                            <div className="flex items-center gap-2">
-                              <Gamepad2 className="w-4 h-4 text-indigo-500" />
-                              <span>Discord</span>
-                            </div>
-                            {selectedConnection === "discord" && (
                               <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
                             )}
                           </DropdownMenuItem>

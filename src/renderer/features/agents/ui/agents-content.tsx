@@ -26,13 +26,7 @@ import {
   subChatsQuickSwitchOpenAtom,
   subChatsQuickSwitchSelectedIndexAtom,
   ctrlTabTargetAtom,
-  selectedClawAtom,
-  isEditingClawAtom,
 } from "../../../lib/atoms"
-import {
-  selectedClawDetailIdAtom,
-  expandedClawIdsAtom,
-} from "../../claws/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
@@ -67,11 +61,7 @@ import { HistoryChatView } from "../../history"
 import { ProjectDetailPage } from "./project-detail-page"
 import { PromptsView } from "../../prompts/ui/prompts-view"
 import { ErDiagramView } from "../../er-diagram/ui/er-diagram-view"
-import { ExecutionHistoryViewer } from "../../sidebar/components/execution-history-viewer"
-import { ClawEditView } from "../../sidebar/components/claw-edit-view"
-import { ClawDetailPage } from "../../claws/ui/claw-detail-page"
 import { selectedSettingsCategoryAtom } from "../atoms"
-import { Zap } from "lucide-react"
 import { CcSettingsContent } from "../../settings/ui/cc-settings-content"
 import { PinnedTabsBar } from "../components/pinned-tabs-bar"
 // Desktop mock
@@ -88,9 +78,6 @@ export function AgentsContent() {
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
   const selectedGsdCategory = useAtomValue(selectedGsdCategoryAtom)
   const selectedSettingsCategory = useAtomValue(selectedSettingsCategoryAtom)
-  const selectedClawDetailId = useAtomValue(selectedClawDetailIdAtom)
-  const [selectedClaw, setSelectedClaw] = useAtom(selectedClawAtom)
-  const [isEditingClaw, setIsEditingClaw] = useAtom(isEditingClawAtom)
   const workspaceGithubSelection = useAtomValue(workspaceGithubSelectionAtom)
 
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
@@ -871,10 +858,6 @@ export function AgentsContent() {
   const showGitHubView = selectedSidebarTab === "github"
   const showPromptsView = selectedSidebarTab === "prompts"
   const showErDiagramView = selectedSidebarTab === "er-diagram"
-  const showClawDetailPage = !!selectedClawDetailId
-  const showClawsDetailView = selectedSidebarTab === "claws" && !!selectedClaw && !isEditingClaw
-  const showClawsEditView = selectedSidebarTab === "claws" && !!selectedClaw && isEditingClaw
-  const showClawsListView = selectedSidebarTab === "claws" && !selectedClaw
   const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory && !showWorkflowsView
 
   // Workspace GitHub flex view: 2-pane content+chat when a Source Repo item is selected
@@ -891,7 +874,7 @@ export function AgentsContent() {
        (selectedProject ? { id: selectedProject.id, path: selectedProject.path } : null))
     : null
 
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showErDiagramView && !showClawDetailPage && !showClawsDetailView && !showClawsEditView && !showClawsListView && !showSettingsView && !showWorkspaceGitHubView
+  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showErDiagramView && !showSettingsView && !showWorkspaceGitHubView
 
   return (
     <>
@@ -947,41 +930,6 @@ export function AgentsContent() {
         <CcSettingsContent />
       </div>
 
-      {/* Claws detail page (settings) */}
-      {showClawDetailPage && (
-        <div className="flex-1 h-full overflow-hidden">
-          <ClawDetailPage />
-        </div>
-      )}
-
-      {/* Claws execution detail view */}
-      {showClawsDetailView && selectedClaw && (
-        <div className="flex-1 h-full overflow-hidden">
-          <ExecutionHistoryViewer
-            claw={selectedClaw}
-            onBack={() => setSelectedClaw(null)}
-            className="h-full"
-          />
-        </div>
-      )}
-
-      {/* Claws edit view */}
-      {showClawsEditView && selectedClaw && (
-        <div className="flex-1 h-full overflow-hidden">
-          <ClawEditView className="h-full" />
-        </div>
-      )}
-
-      {/* Claws list view - shown when no claw selected */}
-      {showClawsListView && (
-        <div className="flex-1 h-full overflow-hidden flex flex-col items-center justify-center p-8 text-center">
-          <Zap className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium text-foreground mb-2">Claws</h3>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            Select a claw from the sidebar to view its execution history, or create a new claw to automate tasks.
-          </p>
-        </div>
-      )}
 
       {/* Main content - chats/terminal/other */}
       <div className={showMainContent ? "flex h-full" : "hidden"}>

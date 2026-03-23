@@ -641,33 +641,6 @@ export const customHotkeysAtom = atomWithStorage<CustomHotkeysConfig>(
  */
 export const recordingHotkeyForActionAtom = atom<string | null>(null)
 
-// ============================================
-// CLAWS FEATURE ATOMS
-// ============================================
-
-export type SelectedClawInfo = {
-  id: string
-  name: string
-  triggerType: "cron" | "github_poll" | "manual"
-} | null
-
-// Currently selected claw for detail view in main content area
-export const selectedClawAtom = atom<SelectedClawInfo>(null)
-
-// Track whether we're in edit mode for the selected claw (shows edit form in main view instead of modal)
-export const isEditingClawAtom = atom<boolean>(false)
-
-// Claw execution viewing state for chat integration
-export const viewingClawExecutionAtom = atom<{
-  executionId: string
-  clawName: string
-  subChatId?: string
-  subChatName?: string
-} | null>(null)
-
-// Track if we're viewing a claw chat (to show chat view instead of list)
-export const isViewingClawChatAtom = atom<boolean>(false)
-
 // Login modal (shown when Claude Code auth fails)
 export const agentsLoginModalOpenAtom = atom<boolean>(false)
 
