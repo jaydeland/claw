@@ -470,6 +470,28 @@ export const ChatInputArea = memo(function ChatInputArea({
     return availableModels.models[0]
   })
 
+  // Sync selected model when Ollama models load (race condition fix)
+  // This ensures the Ollama default model is selected once models are fetched
+  useEffect(() => {
+    if (
+      activeProvider === "ollama" &&
+      ollamaConfig.model &&
+      availableModels.models.length > 0
+    ) {
+      const ollamaMatch = availableModels.models.find(
+        (m) => m.id === ollamaConfig.model
+      )
+      if (ollamaMatch && ollamaMatch.id !== selectedModel?.id) {
+        setSelectedModel(ollamaMatch)
+      }
+    }
+  }, [
+    activeProvider,
+    ollamaConfig.model,
+    availableModels.models,
+    selectedModel?.id,
+  ])
+
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
   // Only disable model dropdown for legacy custom API config — not for Ollama, OAuth, or AWS
