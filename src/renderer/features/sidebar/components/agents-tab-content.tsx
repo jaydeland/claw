@@ -18,7 +18,8 @@ interface AgentsTabContentProps {
 }
 
 type Agent = {
-  name: string
+  id: string // Filename without .md (matches workflow graph)
+  name: string // Display name (from frontmatter)
   path: string
   source: "user" | "project" | "custom"
   description?: string
@@ -41,8 +42,8 @@ export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabCon
     // Use combined action to set both category and node atomically
     selectWorkflowItem({
       node: {
-        id: agent.name,
-        name: agent.name,
+        id: agent.id, // Use id (filename) for matching with workflow graph
+        name: agent.name, // Use name (display name from frontmatter)
         type: "agent",
         sourcePath: agent.path,
       },

@@ -75,10 +75,10 @@ function AgentsSection({ isExpanded }: { isExpanded: boolean }) {
     },
   })
 
-  const handleClick = (agent: { name: string; path: string }) => {
+  const handleClick = (agent: { id: string; name: string; path: string }) => {
     setSettingsCategory(null)
     selectWorkflowItem({
-      node: { id: agent.name, name: agent.name, type: "agent", sourcePath: agent.path },
+      node: { id: agent.id, name: agent.name, type: "agent", sourcePath: agent.path },
       category: "agents",
     })
   }
@@ -194,7 +194,7 @@ function SkillsSection({ isExpanded }: { isExpanded: boolean }) {
   const handleClick = (item: { name: string; path: string; type: "skill" | "command" }) => {
     setSettingsCategory(null)
     selectWorkflowItem({
-      node: { id: item.name, name: item.name, type: item.type, sourcePath: item.path },
+      node: { id: item.id, name: item.name, type: item.type, sourcePath: item.path },
       category: "skills",
     })
   }

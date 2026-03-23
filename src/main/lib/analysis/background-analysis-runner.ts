@@ -96,69 +96,89 @@ LAYOUT RULES:
 
 IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations. Keep total nodes between 10-20.`,
 
-  db: `Analyze this codebase and generate a FLOWCHART showing the high-level database interaction flow.
+  db: `Analyze this codebase and generate an ER DIAGRAM showing the complete database schema with tables, columns, and relationships.
 
 CRITICAL CONSTRAINTS:
-- MAXIMUM 10-20 nodes (keep it simple and high-level)
-- Use standard FLOWCHART conventions
-- Focus on data flow patterns, not detailed schema
-- Group related tables/operations
+- Identify ALL database tables/collections from the codebase
+- Extract column names, types, and constraints (PK, FK, NOT NULL) from ORM models or schema files
+- Map all foreign key relationships between tables
+- Format output for TableNode component rendering
 
 Output format - respond with ONLY a JSON object:
 {
   "nodes": [
     {
-      "id": "unique-id",
-      "type": "start|end|process|decision|data|subprocess",
-      "position": { "x": 400, "y": 0 },
+      "id": "table-name",
+      "type": "table",
+      "position": { "x": 0, "y": 0 },
       "data": {
-        "label": "Short Label",
-        "description": "Brief description",
-        "flowType": "start|end|process|decision|data|subprocess"
+        "label": "table_name",
+        "description": "Brief description of table purpose",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "primaryKey": true,
+            "foreignKey": null,
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "primaryKey": false,
+            "foreignKey": "users.id",
+            "nullable": false
+          },
+          {
+            "name": "email",
+            "type": "varchar",
+            "primaryKey": false,
+            "foreignKey": null,
+            "nullable": true
+          }
+        ]
       }
     }
   ],
   "edges": [
     {
-      "id": "edge-1",
-      "source": "source-node-id",
-      "target": "target-node-id",
-      "label": "Read|Write|Join",
-      "type": "smoothstep"
+      "id": "fk-source-target",
+      "source": "source_table",
+      "target": "target_table",
+      "sourceHandle": "fk_column-right",
+      "targetHandle": "pk_column-top",
+      "type": "smoothstep",
+      "label": "fk_column"
     }
   ],
-  "summary": "Database interaction flow overview",
-  "stats": { "nodeCount": 12 }
+  "summary": "Database schema with 12 tables representing user management system",
+  "stats": { "tableCount": 12, "relationshipCount": 8 }
 }
 
-CRITICAL EDGE REQUIREMENTS:
-- Each edge's "source" MUST be the EXACT "id" of a node in the nodes array
-- Each edge's "target" MUST be the EXACT "id" of a node in the nodes array
-- NEVER use "undefined", null, or empty strings for source or target
-- Every source/target ID must match a node id exactly (case-sensitive)
+CRITICAL REQUIREMENTS:
+- Each node's "type" MUST be "table" (not process/decision/data)
+- Each node MUST have a "columns" array with column definitions
+- Column objects MUST have: name, type, primaryKey, foreignKey, nullable
+- foreignKey format: "table.column" (e.g., "users.id") or null
+- Edges MUST use sourceHandle and targetHandle for precise connections
+- sourceHandle format: "{column_name}-right" for FK columns
+- targetHandle format: "{column_name}-top" for PK columns
 
-FLOWCHART NODE TYPES:
-- "start" - User action/trigger (rounded, green)
-- "end" - Return result (rounded, green)
-- "process" - Query/update operation (rectangle, blue)
-- "decision" - Read vs Write, validation (diamond, yellow)
-- "data" - Main tables/collections (parallelogram, purple)
-- "subprocess" - Complex joins/transactions (rectangle, orange)
-
-EXAMPLE FLOW (12 nodes):
-Start (User Request) → [Decision: Read or Write?]
-  → Read Path: Query Tables → Join Relations → Return Data → End
-  → Write Path: Validate Input → [Decision: Valid?]
-    → Yes: Update Tables → Trigger Events → Return Success → End
-    → No: Return Error → End
+INSTRUCTIONS:
+1. Search for schema files: prisma/schema.prisma, drizzle/schema.ts, src/models/, src/entities/
+2. Look for SQL migration files (*.sql, migrations/, db/migrate/)
+3. Extract actual table names, column names, and types from code
+4. Identify primary keys (PK) and foreign keys (FK)
+5. Create edges for every FK relationship with proper handle references
+6. Position nodes in a grid layout (no overlapping, ~250px spacing)
+7. Include ALL tables found (no maximum limit for ER diagrams)
+8. Return ONLY valid JSON - no markdown, no code blocks, no explanations
 
 LAYOUT RULES:
-- Start node at top center (x: 400, y: 0)
-- Decision nodes for operation type (y: 180)
-- Branch paths (left: read x: 200, right: write x: 600)
-- End nodes at bottom (multiple if needed)
-
-IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations. Keep total nodes between 10-20.`,
+- Arrange tables in a grid pattern (3-4 columns)
+- Space tables ~280px apart horizontally, ~320px vertically
+- Position related tables near each other
+- Flow direction: PK tables above FK tables when possible`,
 
   architecture: `Analyze this codebase and generate a FLOWCHART showing the high-level system request flow.
 
@@ -415,12 +435,12 @@ export async function startBackgroundAnalysis(
       return { success: false, error: "Failed to create analysis job" }
     }
 
-    // Build the prompt - use system prompt from DB for "db" analysis type
+    // Build the prompt - use hardcoded prompt for "db" analysis type
+    // Note: The seeded DB prompt may be outdated, hardcoded prompt is source of truth
     let analysisPrompt: string
     if (type === "db") {
-      // Fetch the system prompt from database (falls back to hardcoded if not found)
-      const dbPrompt = getPromptByKey(PROMPT_KEYS.ANALYSIS_DB)
-      analysisPrompt = dbPrompt || ANALYSIS_PROMPTS.db
+      // Always use hardcoded prompt for database analysis (ER diagram format)
+      analysisPrompt = ANALYSIS_PROMPTS.db
     } else {
       analysisPrompt = ANALYSIS_PROMPTS[type]
     }

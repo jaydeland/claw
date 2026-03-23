@@ -68,6 +68,7 @@ export interface ParsedAgent {
 
 // Agent with source/path metadata
 export interface FileAgent extends ParsedAgent {
+  id: string // Filename without .md (matches workflow graph)
   source: "user" | "project" | "custom"
   path: string
 }
@@ -240,8 +241,10 @@ export async function scanAgentsDirectory(
           const parsed = parseAgentMd(content, entry.name)
 
           if (parsed.description && parsed.prompt) {
+            const agentId = entry.name.replace(".md", "")
             agents.push({
-              name: parsed.name || entry.name.replace(".md", ""),
+              id: agentId, // Filename without .md (matches workflow graph)
+              name: parsed.name || agentId,
               description: parsed.description,
               prompt: parsed.prompt,
               tools: parsed.tools,

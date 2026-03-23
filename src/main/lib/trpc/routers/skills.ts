@@ -85,7 +85,8 @@ function getCustomPluginDirectories(): Array<{ path: string; priority: number }>
 }
 
 export interface FileSkill {
-  name: string
+  id: string // Directory name (used for matching in workflow graph)
+  name: string // Display name (from frontmatter or directory)
   description: string
   source: "user" | "project" | "custom"
   path: string
@@ -201,6 +202,7 @@ async function scanSkillsDirectory(
         const parsed = parseSkillMd(content)
 
         skills.push({
+          id: skillName, // Use directory name (with namespace prefix if applicable)
           name: parsed.name || skillName,  // Use frontmatter name or derived name
           description: parsed.description || "",
           source,

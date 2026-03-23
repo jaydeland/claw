@@ -38,8 +38,11 @@ interface AgentSubChatStore {
 }
 
 // localStorage helpers - store open tabs, active tab, and pinned tabs
-const getStorageKey = (chatId: string, type: "open" | "active" | "pinned") =>
+const getStorageKey = (chatId: string, type: "open" | "active") =>
   `agent-${type}-sub-chats-${chatId}`
+
+// Global storage key for pins (across all workspaces)
+const GLOBAL_PINS_KEY = "agent-global-pinned-sub-chats"
 
 // Custom event for notifying other components when open sub-chats change
 export const OPEN_SUB_CHATS_CHANGE_EVENT = "open-sub-chats-change"
@@ -47,7 +50,7 @@ export const OPEN_SUB_CHATS_CHANGE_EVENT = "open-sub-chats-change"
 // Debounce timer to avoid rapid-fire events
 let openSubChatsChangeTimer: ReturnType<typeof setTimeout> | null = null
 
-const saveToLS = (chatId: string, type: "open" | "active" | "pinned", value: unknown) => {
+const saveToLS = (chatId: string, type: "open" | "active", value: unknown) => {
   if (typeof window === "undefined") return
   localStorage.setItem(getStorageKey(chatId, type), JSON.stringify(value))
   // Dispatch debounced event when open sub-chats change so sidebar can update
@@ -60,13 +63,29 @@ const saveToLS = (chatId: string, type: "open" | "active" | "pinned", value: unk
   }
 }
 
-const loadFromLS = <T>(chatId: string, type: "open" | "active" | "pinned", fallback: T): T => {
+const loadFromLS = <T>(chatId: string, type: "open" | "active", fallback: T): T => {
   if (typeof window === "undefined") return fallback
   try {
     const stored = localStorage.getItem(getStorageKey(chatId, type))
     return stored ? JSON.parse(stored) : fallback
   } catch {
     return fallback
+  }
+}
+
+// Global pins storage (works across all workspaces)
+const saveGlobalPins = (pinnedIds: string[]) => {
+  if (typeof window === "undefined") return
+  localStorage.setItem(GLOBAL_PINS_KEY, JSON.stringify(pinnedIds))
+}
+
+const loadGlobalPins = (): string[] => {
+  if (typeof window === "undefined") return []
+  try {
+    const stored = localStorage.getItem(GLOBAL_PINS_KEY)
+    return stored ? JSON.parse(stored) : []
+  } catch {
+    return []
   }
 }
 
@@ -83,17 +102,18 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
         chatId: null,
         activeSubChatId: null,
         openSubChatIds: [],
-        pinnedSubChatIds: [],
+        pinnedSubChatIds: loadGlobalPins(), // Keep global pins even when no chat selected
         allSubChats: [],
       })
       return
     }
 
-    // Load open/active/pinned IDs from localStorage
+    // Load open/active IDs from localStorage (workspace-specific)
+    // Load pinned IDs from global storage (shared across all workspaces)
     // allSubChats will be populated from DB + placeholders in init effect
     const openSubChatIds = loadFromLS<string[]>(chatId, "open", [])
     const activeSubChatId = loadFromLS<string | null>(chatId, "active", null)
-    const pinnedSubChatIds = loadFromLS<string[]>(chatId, "pinned", [])
+    const pinnedSubChatIds = loadGlobalPins() // Global across all workspaces
 
     set({ chatId, openSubChatIds, activeSubChatId, pinnedSubChatIds, allSubChats: [] })
   },
@@ -143,13 +163,14 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
   },
 
   togglePinSubChat: (subChatId) => {
-    const { pinnedSubChatIds, chatId } = get()
+    const { pinnedSubChatIds } = get()
     const newPinnedIds = pinnedSubChatIds.includes(subChatId)
       ? pinnedSubChatIds.filter((id) => id !== subChatId)
       : [...pinnedSubChatIds, subChatId]
-    
+
     set({ pinnedSubChatIds: newPinnedIds })
-    if (chatId) saveToLS(chatId, "pinned", newPinnedIds)
+    // Save to global storage (shared across all workspaces)
+    saveGlobalPins(newPinnedIds)
   },
 
   setAllSubChats: (subChats) => {

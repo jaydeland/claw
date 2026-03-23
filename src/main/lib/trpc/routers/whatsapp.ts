@@ -255,9 +255,14 @@ export const whatsappRouter = router({
       messageId: string
       fromMe: boolean
     }>((emit) => {
+      console.log("[WhatsAppRouter] onBridgeMessage subscription started - handler registered")
       const handler = (message: any) => {
+        console.log(`[WhatsAppRouter] Handler received message:`, { platform: message.platform, chatId: message.chatId, text: message.text?.substring(0, 50) })
         // Only handle WhatsApp messages
-        if (message.platform !== "whatsapp") return
+        if (message.platform !== "whatsapp") {
+          console.log(`[WhatsAppRouter] Skipping non-whatsapp message: ${message.platform}`)
+          return
+        }
 
         // Get the chat connection info to find bridgeId
         const db = getDatabase()
@@ -287,6 +292,7 @@ export const whatsappRouter = router({
           return
         }
 
+        console.log(`[WhatsAppRouter] Emitting to frontend: chatId=${chat.id}, subChatId=${subChat.id}`)
         // Transform to the format expected by frontend
         emit.next({
           bridgeId: chat.id,
@@ -303,6 +309,7 @@ export const whatsappRouter = router({
 
       incomingMessageEmitter.on("message", handler)
       return () => {
+        console.log("[WhatsAppRouter] onBridgeMessage subscription cleanup - handler removed")
         incomingMessageEmitter.off("message", handler)
       }
     })

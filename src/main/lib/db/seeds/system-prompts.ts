@@ -375,8 +375,8 @@ Each relationship edge:
   "id": "edge-id",
   "source": "source-table-id",
   "target": "target-table-id",
-  "sourceHandle": null,
-  "targetHandle": null,
+  "sourceHandle": "fk_column_name-right",
+  "targetHandle": "pk_column_name-top",
   "label": "cardinality (1:1 | 1:N | N:M)",
   "type": "smoothstep",
   "data": {
@@ -385,6 +385,10 @@ Each relationship edge:
     "constraintName": "fk_constraint_name"
   }
 }
+
+CRITICAL HANDLE FORMAT:
+- sourceHandle must be "{fk_column_name}-right" for the foreign key column (e.g., "user_id-right")
+- targetHandle must be "{pk_column_name}-top" for the primary key column (e.g., "id-top")
 
 ## OUTPUT FORMAT:
 Respond with ONLY a valid JSON object:
@@ -404,11 +408,12 @@ Respond with ONLY a valid JSON object:
 ## CRITICAL REQUIREMENTS:
 1. Every edge source/target MUST reference an existing node id
 2. NEVER use undefined, null, or empty strings for source/target
-3. Double-check all node IDs referenced in edges exist in nodes array
-4. Use consistent naming: kebab-case for node IDs (e.g., "user-sessions")
-5. Position related tables near each other (auth tables together, content together, etc.)
-6. Use smoothstep edges for clean relationship visualization
-7. Place parent tables before child tables in the layout flow
+3. sourceHandle and targetHandle MUST NOT be null - use the specific handle format above
+4. Double-check all node IDs referenced in edges exist in nodes array
+5. Use consistent naming: kebab-case for node IDs (e.g., "user-sessions")
+6. Position related tables near each other (auth tables together, content together, etc.)
+7. Use smoothstep edges for clean relationship visualization
+8. Place parent tables before child tables in the layout flow
 
 ## VISUAL ORGANIZATION:
 - Group tables by domain: auth (left), content (center), commerce (right), system (bottom)
@@ -465,8 +470,8 @@ Each relationship edge:
   "id": "edge-id",
   "source": "source-table-id",
   "target": "target-table-id",
-  "sourceHandle": null,
-  "targetHandle": null,
+  "sourceHandle": "fk_column_name-right",
+  "targetHandle": "pk_column_name-top",
   "label": "cardinality (1:1 | 1:N | N:M)",
   "type": "smoothstep",
   "data": {
@@ -475,6 +480,10 @@ Each relationship edge:
     "constraintName": "fk_constraint_name"
   }
 }
+
+CRITICAL HANDLE FORMAT:
+- sourceHandle must be "{fk_column_name}-right" for the foreign key column (e.g., "user_id-right")
+- targetHandle must be "{pk_column_name}-top" for the primary key column (e.g., "id-top")
 
 ## OUTPUT FORMAT:
 Respond with ONLY a valid JSON object:
@@ -494,11 +503,12 @@ Respond with ONLY a valid JSON object:
 ## CRITICAL REQUIREMENTS:
 1. Every edge source/target MUST reference an existing node id
 2. NEVER use undefined, null, or empty strings for source/target
-3. Double-check all node IDs referenced in edges exist in nodes array
-4. Use consistent naming: kebab-case for node IDs (e.g., "user-sessions")
-5. Position related tables near each other (auth tables together, content together, etc.)
-6. Use smoothstep edges for clean relationship visualization
-7. Place parent tables before child tables in the layout flow
+3. sourceHandle and targetHandle MUST NOT be null - use the specific handle format above
+4. Double-check all node IDs referenced in edges exist in nodes array
+5. Use consistent naming: kebab-case for node IDs (e.g., "user-sessions")
+6. Position related tables near each other (auth tables together, content together, etc.)
+7. Use smoothstep edges for clean relationship visualization
+8. Place parent tables before child tables in the layout flow
 
 ## VISUAL ORGANIZATION:
 - Group tables by domain: auth (left), content (center), commerce (right), system (bottom)

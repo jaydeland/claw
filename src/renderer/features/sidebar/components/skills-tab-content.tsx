@@ -18,7 +18,8 @@ interface SkillsTabContentProps {
 }
 
 type SkillItem = {
-  name: string
+  id: string // Directory name (matches workflow graph)
+  name: string // Display name (from frontmatter)
   path: string
   source: "user" | "project" | "custom"
   description?: string
@@ -74,8 +75,8 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
         // Use combined action to set both category and node atomically
         selectWorkflowItem({
           node: {
-            id: item.name,
-            name: item.name,
+            id: item.id, // Use id (directory name) for matching with workflow graph
+            name: item.name, // Use name (display name from frontmatter)
             type: item.type,
             sourcePath: item.path,
           },

@@ -328,6 +328,7 @@ export class WhatsAppAdapter {
           mediaInfo = await this.storeMedia(messageContent.media, chat.id, project?.path)
         }
 
+        console.log(`[WhatsAppAdapter] Emitting message to ${connectedChats.length} connected chat(s), chatId: ${chat.id}`)
         incomingMessageEmitter.emit("message", {
           platform: "whatsapp",
           chatId: chat.id,
