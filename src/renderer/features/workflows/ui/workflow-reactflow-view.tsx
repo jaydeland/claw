@@ -1468,6 +1468,21 @@ function WorkflowReactFlowInner() {
     // Future: open detail panel, highlight in code, etc.
   }, [])
 
+  // Toggle filter - MUST be before any early returns (React Hooks Rules)
+  const toggleFilter = useCallback((key: keyof WorkflowDependencyFilters) => {
+    setFilters(prev => ({ ...prev, [key]: !prev[key] }))
+  }, [setFilters])
+
+  // Get node counts by type - MUST be before any early returns (React Hooks Rules)
+  const nodeCounts = useMemo(() => {
+    return {
+      agents: nodes.filter(n => n.type === "agent").length,
+      skills: nodes.filter(n => n.type === "skill").length,
+      commands: nodes.filter(n => n.type === "command").length,
+      tools: nodes.filter(n => n.type === "toolGroup").length,
+    }
+  }, [nodes])
+
   if (!selectedNode) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -1483,21 +1498,6 @@ function WorkflowReactFlowInner() {
       </div>
     )
   }
-
-  // Toggle filter - MUST be before any early returns (React Hooks Rules)
-  const toggleFilter = useCallback((key: keyof WorkflowDependencyFilters) => {
-    setFilters(prev => ({ ...prev, [key]: !prev[key] }))
-  }, [setFilters])
-
-  // Get node counts by type - MUST be before any early returns (React Hooks Rules)
-  const nodeCounts = useMemo(() => {
-    return {
-      agents: nodes.filter(n => n.type === "agent").length,
-      skills: nodes.filter(n => n.type === "skill").length,
-      commands: nodes.filter(n => n.type === "command").length,
-      tools: nodes.filter(n => n.type === "toolGroup").length,
-    }
-  }, [nodes])
 
   if (nodes.length === 0) {
     return (
