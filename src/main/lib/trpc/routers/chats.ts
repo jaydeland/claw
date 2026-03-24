@@ -1843,4 +1843,30 @@ export const chatsRouter = router({
         return { hasWorktree: false, uncommittedCount: 0 }
       }
     }),
+
+  /**
+   * Get multiple sub-chats by their IDs
+   * Used for fetching global pinned sub-chats metadata
+   */
+  getSubChatsByIds: publicProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .query(({ input }) => {
+      if (input.ids.length === 0) return []
+
+      const db = getDatabase()
+      const results = db
+        .select({
+          id: subChats.id,
+          name: subChats.name,
+          chatId: subChats.chatId,
+          mode: subChats.mode,
+          createdAt: subChats.createdAt,
+          updatedAt: subChats.updatedAt,
+        })
+        .from(subChats)
+        .where(inArray(subChats.id, input.ids))
+        .all()
+
+      return results
+    }),
 })

@@ -259,6 +259,30 @@ export function AgentsSubChatsSidebar({
     return set
   }, [pendingPlanApprovalsData])
 
+  // Fetch metadata for global pinned sub-chats (may include pins from other workspaces)
+  const { data: globalPinnedSubChatsData } = trpc.chats.getSubChatsByIds.useQuery(
+    { ids: pinnedSubChatIds },
+    { enabled: pinnedSubChatIds.length > 0, placeholderData: keepPreviousData }
+  )
+
+  // Build a map of global pinned sub-chat metadata
+  const globalPinnedSubChatsMap = useMemo(() => {
+    const map = new Map<string, SubChatMeta & { parentChatId?: string }>()
+    if (globalPinnedSubChatsData) {
+      for (const subChat of globalPinnedSubChatsData) {
+        map.set(subChat.id, {
+          id: subChat.id,
+          name: subChat.name,
+          created_at: subChat.createdAt?.toISOString(),
+          updated_at: subChat.updatedAt?.toISOString(),
+          mode: subChat.mode as "plan" | "agent" | "swarm" | undefined,
+          parentChatId: subChat.chatId,
+        })
+      }
+    }
+    return map
+  }, [globalPinnedSubChatsData])
+
   // Unified undo stack for Cmd+Z support
   const setUndoStack = useSetAtom(undoStackAtom)
   const [searchQuery, setSearchQuery] = useState("")
@@ -312,13 +336,28 @@ export function AgentsSubChatsSidebar({
     return chats
   }, [openSubChatIds, allSubChats])
 
+  // Combine current workspace sub-chats with global pinned sub-chats from other workspaces
+  const allVisibleSubChats = useMemo(() => {
+    const localSubChatIds = new Set(allSubChats.map(sc => sc.id))
+    const result = [...openSubChats]
+
+    // Add global pinned sub-chats that aren't in the current workspace
+    for (const [id, subChat] of globalPinnedSubChatsMap) {
+      if (!localSubChatIds.has(id)) {
+        result.push(subChat)
+      }
+    }
+
+    return result
+  }, [openSubChats, allSubChats, globalPinnedSubChatsMap])
+
   // Filter and separate pinned/unpinned sub-chats
   const { pinnedChats, unpinnedChats } = useMemo(() => {
     const filtered = searchQuery.trim()
-      ? openSubChats.filter((chat) =>
+      ? allVisibleSubChats.filter((chat) =>
           chat.name.toLowerCase().includes(searchQuery.toLowerCase()),
         )
-      : openSubChats
+      : allVisibleSubChats
 
     const pinned = filtered.filter((chat) => pinnedSubChatIds.includes(chat.id))
     const unpinned = filtered.filter(
@@ -326,7 +365,7 @@ export function AgentsSubChatsSidebar({
     )
 
     return { pinnedChats: pinned, unpinnedChats: unpinned }
-  }, [searchQuery, openSubChats, pinnedSubChatIds])
+  }, [searchQuery, allVisibleSubChats, pinnedSubChatIds])
 
   const filteredSubChats = useMemo(() => {
     return [...pinnedChats, ...unpinnedChats]
