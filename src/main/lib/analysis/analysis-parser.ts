@@ -17,6 +17,16 @@ export function parseAnalysisResult(responseText: string, toolOutput?: string): 
     if (toolOutput && toolOutput.trim()) {
       try {
         const parsed = JSON.parse(toolOutput)
+        // Check for noDatabaseFound flag (valid result with no data)
+        if (parsed.noDatabaseFound === true) {
+          return {
+            nodes: [],
+            edges: [],
+            summary: parsed.summary || "No database schema found in this project",
+            stats: parsed.stats || { tableCount: 0, relationshipCount: 0 },
+            noDatabaseFound: true,
+          }
+        }
         if (parsed.nodes && parsed.edges && Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
           const validNodeIds = new Set(parsed.nodes.map((n: { id: string }) => n.id))
           const validEdges = parsed.edges.filter((edge: { source?: string; target?: string; id?: string }, index: number) => {
@@ -68,6 +78,17 @@ export function parseAnalysisResult(responseText: string, toolOutput?: string): 
     // Handle wrapped response (e.g., {success: true, result: {...}})
     if (data.result && typeof data.result === "object") {
       data = data.result
+    }
+
+    // Check for noDatabaseFound flag (valid result with no data)
+    if (data.noDatabaseFound === true) {
+      return {
+        nodes: [],
+        edges: [],
+        summary: data.summary || "No database schema found in this project",
+        stats: data.stats || { tableCount: 0, relationshipCount: 0 },
+        noDatabaseFound: true,
+      }
     }
 
     // Validate

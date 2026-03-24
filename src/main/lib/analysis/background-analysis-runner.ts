@@ -96,13 +96,34 @@ LAYOUT RULES:
 
 IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations. Keep total nodes between 10-20.`,
 
-  db: `Analyze this codebase and generate an ER DIAGRAM showing the complete database schema with tables, columns, and relationships.
+  db: `Analyze this codebase for database schema files and generate an ER DIAGRAM if database files are found.
 
-CRITICAL CONSTRAINTS:
-- Identify ALL database tables/collections from the codebase
-- Extract column names, types, and constraints (PK, FK, NOT NULL) from ORM models or schema files
-- Map all foreign key relationships between tables
-- Format output for TableNode component rendering
+STEP 1 - SEARCH FOR DATABASE FILES:
+First, search for database-related files using these patterns:
+- Prisma: prisma/schema.prisma, prisma/*.prisma
+- Drizzle: drizzle/schema.ts, src/db/schema.ts, db/schema.ts
+- TypeORM: src/entities/*.ts, src/models/*.ts
+- Sequelize: models/, src/models/
+- SQL: migrations/*.sql, db/migrations/, *.migration.sql
+- MongoDB: mongoose schemas, *.model.ts with @Schema decorators
+- Other: *.knexfile.js, database.json config files
+
+STEP 2 - CHECK IF DATABASE EXISTS:
+After searching, evaluate if ANY database-related files were found:
+- If NO database files found (no schema, no models, no migrations, no ORM config)
+- OR if the project doesn't use a database (e.g., static site, CLI tool, library)
+
+Return this specific response:
+{
+  "noDatabaseFound": true,
+  "summary": "No database schema found in this project",
+  "stats": { "tableCount": 0, "relationshipCount": 0 },
+  "nodes": [],
+  "edges": []
+}
+
+STEP 3 - GENERATE ER DIAGRAM (only if database found):
+If database files exist, generate an ER DIAGRAM showing complete database schema:
 
 Output format - respond with ONLY a JSON object:
 {
@@ -145,8 +166,8 @@ Output format - respond with ONLY a JSON object:
       "id": "fk-source-target",
       "source": "source_table",
       "target": "target_table",
-      "sourceHandle": "fk_column-right",
-      "targetHandle": "pk_column-top",
+      "sourceHandle": "user_id-right",
+      "targetHandle": "id-top",
       "type": "smoothstep",
       "label": "fk_column"
     }
@@ -156,6 +177,7 @@ Output format - respond with ONLY a JSON object:
 }
 
 CRITICAL REQUIREMENTS:
+- First determine if database exists - if not, return noDatabaseFound: true
 - Each node's "type" MUST be "table" (not process/decision/data)
 - Each node MUST have a "columns" array with column definitions
 - Column objects MUST have: name, type, primaryKey, foreignKey, nullable
@@ -167,8 +189,8 @@ CRITICAL REQUIREMENTS:
 INSTRUCTIONS:
 1. Search for schema files: prisma/schema.prisma, drizzle/schema.ts, src/models/, src/entities/
 2. Look for SQL migration files (*.sql, migrations/, db/migrate/)
-3. Extract actual table names, column names, and types from code
-4. Identify primary keys (PK) and foreign keys (FK)
+3. If no database files found, immediately return noDatabaseFound response
+4. If database found, extract table names, columns, types, PK, FK from code
 5. Create edges for every FK relationship with proper handle references
 6. Position nodes in a grid layout (no overlapping, ~250px spacing)
 7. Include ALL tables found (no maximum limit for ER diagrams)
@@ -457,10 +479,12 @@ Instructions:
 5. Ensure all node IDs are unique and all edges reference existing nodes`
 
     // Execute via background task — model is resolved from user's configured background model
+    console.log(`[BackgroundAnalysis] Starting background task for ${type} analysis...`)
     const taskResult = await executeBackgroundTask(prompt, {
       subagentType: "explore",
       timeout: 300000, // 5 minutes
     })
+    console.log(`[BackgroundAnalysis] Task result:`, { success: taskResult.success, hasCallId: !!taskResult.callId, error: taskResult.error })
 
     if (!taskResult.success || !taskResult.callId) {
       // Update job to failed
@@ -513,6 +537,8 @@ Instructions:
       message: "Analysis started in background",
     })
 
+    console.log(`[BackgroundAnalysis] Analysis started successfully:`, { jobId: job.id, diagramId: diagram.id, callId: taskResult.callId })
+
     return { success: true, job, diagram }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -533,12 +559,15 @@ async function pollForResults(
   maxPolls = 150 // 5 minutes max
 ): Promise<void> {
   let polls = 0
+  console.log(`[BackgroundAnalysis] Starting polling for job ${jobId}, callId ${callId}`)
 
   const poll = async () => {
     polls++
 
     // Check if still running
-    if (isBackgroundTaskRunning(callId)) {
+    const isRunning = isBackgroundTaskRunning(callId)
+    console.log(`[BackgroundAnalysis] Poll ${polls}: task running = ${isRunning}`)
+    if (isRunning) {
       if (polls >= maxPolls) {
         // Timeout
         await completeAnalysis(jobId, diagramId, type, null, "Analysis timed out after 5 minutes")
@@ -598,6 +627,7 @@ async function completeAnalysis(
   result: AnalysisResult | null,
   error: string | null
 ): Promise<void> {
+  console.log(`[BackgroundAnalysis] Completing analysis:`, { jobId, type, hasResult: !!result, hasError: !!error })
   const db = getDatabase()
 
   try {
@@ -628,8 +658,45 @@ async function completeAnalysis(
         status: "failed",
         error: error || "Unknown error",
       })
+    } else if (result.noDatabaseFound) {
+      // Special case: no database found in the project
+      console.log(`[BackgroundAnalysis] No database found for ${type} analysis`)
+
+      db.update(analysisJobs)
+        .set({
+          status: "completed",
+          completedAt: new Date(),
+        })
+        .where(eq(analysisJobs.id, jobId))
+        .run()
+
+      db.update(analysisDiagrams)
+        .set({
+          status: "complete",
+          nodes: "[]",
+          edges: "[]",
+          summary: result.summary || "No database schema found in this project",
+          stats: JSON.stringify({ tableCount: 0, relationshipCount: 0 }),
+          updatedAt: new Date(),
+        })
+        .where(eq(analysisDiagrams.id, diagramId))
+        .run()
+
+      emitProgress({
+        jobId,
+        diagramId,
+        type,
+        status: "completed",
+        result: {
+          nodes: [],
+          edges: [],
+          summary: result.summary || "No database schema found in this project",
+          stats: { tableCount: 0, relationshipCount: 0 },
+          noDatabaseFound: true,
+        },
+      })
     } else {
-      // Success
+      // Success with data
       db.update(analysisJobs)
         .set({
           status: "completed",

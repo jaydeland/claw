@@ -42,6 +42,7 @@ export interface AnalysisResult {
   edges: FlowEdge[]
   summary?: string
   stats?: Record<string, unknown>
+  noDatabaseFound?: boolean // Flag indicating no database was found in the project
 }
 
 // Re-export from background-analysis-runner to avoid circular dependency

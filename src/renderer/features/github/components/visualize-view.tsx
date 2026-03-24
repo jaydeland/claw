@@ -156,6 +156,21 @@ function VisualizeViewInner({
           stats: diagram.stats ? JSON.parse(diagram.stats) : undefined,
         })
 
+        // Debug: Log handle IDs for DB diagrams
+        if (analysisType === "db") {
+          console.log("[VisualizeView] Nodes with columns:", flowNodes.map(n => ({
+            id: n.id,
+            columns: (n.data?.columns as any[])?.map(c => ({ name: c.name, fk: c.foreignKey, pk: c.primaryKey }))
+          })))
+          console.log("[VisualizeView] Edges with handles:", flowEdges.map(e => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            sourceHandle: (e as any).sourceHandle,
+            targetHandle: (e as any).targetHandle
+          })))
+        }
+
         // Transform to React Flow format
         const transformedNodes: Node[] = flowNodes.map((n) => ({
           id: n.id,
@@ -231,6 +246,30 @@ function VisualizeViewInner({
             }
             if (targetHandle && targetHandle !== "undefined") {
               edgeStyle.targetHandle = targetHandle
+            }
+
+            // Validate DB diagram handles
+            if (analysisType === "db" && (sourceHandle || targetHandle)) {
+              const sourceNode = flowNodes.find(n => n.id === source)
+              const targetNode = flowNodes.find(n => n.id === target)
+
+              if (sourceHandle && sourceNode?.data?.columns) {
+                const columns = sourceNode.data.columns as Array<{ name: string; foreignKey?: string | null }>
+                const expectedColName = sourceHandle.replace(/-right$/, '')
+                const hasColumn = columns.some(c => c.name === expectedColName && c.foreignKey)
+                if (!hasColumn) {
+                  console.warn(`[VisualizeView] Edge ${e.id}: sourceHandle "${sourceHandle}" may not exist. No FK column "${expectedColName}" found in table "${source}"`)
+                }
+              }
+
+              if (targetHandle && targetNode?.data?.columns) {
+                const columns = targetNode.data.columns as Array<{ name: string; primaryKey?: boolean }>
+                const expectedColName = targetHandle.replace(/-top$/, '')
+                const hasColumn = columns.some(c => c.name === expectedColName && c.primaryKey)
+                if (!hasColumn) {
+                  console.warn(`[VisualizeView] Edge ${e.id}: targetHandle "${targetHandle}" may not exist. No PK column "${expectedColName}" found in table "${target}"`)
+                }
+              }
             }
 
             return edgeStyle
@@ -639,7 +678,7 @@ function VisualizeViewInner({
           <div className="h-full flex flex-col items-center justify-center p-8 text-center">
             <Icon className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <div className="text-muted-foreground mb-4">
-              No diagram data available. Click "Generate" in the chat pane to create one.
+              {diagramData?.summary || 'No diagram data available. Click "Generate" in the chat pane to create one.'}
             </div>
           </div>
         ) : (
@@ -839,8 +878,24 @@ function TableNode({ data, id }: { data: Record<string, unknown>; id: string }) 
                 <Handle
                   type="source"
                   position={Position.Right}
-                  id={`${col.name}-bottom`}
+                  id={`${col.name}-right`}
                   className="!w-2 !h-2 !bg-purple-400 !border-purple-500"
+                  style={{
+                    right: 0,
+                    top: 'auto',
+                    bottom: 2,
+                    transform: 'none'
+                  }}
+                />
+              )}
+
+              {/* Fallback handle for all columns on the right (for edge compatibility) */}
+              {!col.foreignKey && (
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`${col.name}-right`}
+                  className="!w-1 !h-1 !bg-slate-300 !border-slate-400 opacity-0"
                   style={{
                     right: 0,
                     top: 'auto',
@@ -857,6 +912,22 @@ function TableNode({ data, id }: { data: Record<string, unknown>; id: string }) 
                   position={Position.Top}
                   id={`${col.name}-top`}
                   className="!w-2 !h-2 !bg-amber-500 !border-amber-600"
+                  style={{
+                    top: -6,
+                    left: 'auto',
+                    right: '50%',
+                    transform: 'translateX(50%)'
+                  }}
+                />
+              )}
+
+              {/* Fallback target handle for all columns on top */}
+              {!col.primaryKey && (
+                <Handle
+                  type="target"
+                  position={Position.Top}
+                  id={`${col.name}-top`}
+                  className="!w-1 !h-1 !bg-slate-300 !border-slate-400 opacity-0"
                   style={{
                     top: -6,
                     left: 'auto',
