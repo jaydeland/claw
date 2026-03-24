@@ -3644,6 +3644,14 @@ const ChatViewInner = memo(function ChatViewInner({
           })}
         />
 
+        {/* DEBUG: Track tab lifecycle */}
+        {useEffect(() => {
+          console.log(`[ChatViewInner] TAB MOUNTED: subChatId=${subChatId}`)
+          return () => {
+            console.log(`[ChatViewInner] TAB UNMOUNTED: subChatId=${subChatId}`)
+          }
+        }, [])}
+
         {/* Text selection popover for adding text to context */}
         {/* CRITICAL: Only render for active tab - portals escape pointerEvents isolation */}
         {isActive && (
