@@ -126,6 +126,9 @@ function layoutColumnar(nodes: Node[], rootNode: Node | undefined): Node[] {
   const invocationNodes: Node[] = []
   const infraNodes: Node[] = []
   const dependentNodes: Node[] = [] // Nodes that depend on root (reverse deps)
+  const hookNodes: Node[] = [] // Lifecycle hooks (above root)
+  const supportingFileNodes: Node[] = [] // Supporting files (below root)
+  const disallowedToolsNodes: Node[] = [] // Blocked tools (separate column)
 
   nodes.forEach((node) => {
     if (node.id === rootNode?.id) return
@@ -133,6 +136,18 @@ function layoutColumnar(nodes: Node[], rootNode: Node | undefined): Node[] {
     // Reverse dependencies (agents that depend on this skill)
     if (node.id.startsWith('dependent-')) {
       dependentNodes.push(node)
+    }
+    // Hook nodes (lifecycle hooks) - positioned above root
+    else if (node.type === "hook" || node.id.startsWith('hook-')) {
+      hookNodes.push(node)
+    }
+    // Supporting file nodes - positioned below root
+    else if (node.type === "supportingFile" || node.id.startsWith('supporting-file-')) {
+      supportingFileNodes.push(node)
+    }
+    // Disallowed/blocked tools - positioned to the right
+    else if (node.type === "disallowedTools" || node.id === "disallowed-tools") {
+      disallowedToolsNodes.push(node)
     }
     // Column 1: MCP tools
     else if (node.type === "toolGroup" && node.data.category === "mcp") {
@@ -163,6 +178,24 @@ function layoutColumnar(nodes: Node[], rootNode: Node | undefined): Node[] {
       position: { x: totalWidth / 2 - (rootNode.data.width || 100) / 2, y: 0 },
     })
   }
+
+  // Position Hook nodes (above root, horizontally distributed)
+  hookNodes.forEach((node, i) => {
+    const totalHookWidth = hookNodes.length * COLUMN_WIDTH
+    const startX = (COLUMN_WIDTH * 4 - totalHookWidth) / 2
+    layoutedNodes.push({
+      ...node,
+      position: { x: startX + i * COLUMN_WIDTH, y: -START_Y },
+    })
+  })
+
+  // Position Disallowed Tools nodes (to the right of infra)
+  disallowedToolsNodes.forEach((node, i) => {
+    layoutedNodes.push({
+      ...node,
+      position: { x: COLUMN_WIDTH * 4, y: START_Y + i * ROW_HEIGHT },
+    })
+  })
 
   // Position Column 1: MCP tools
   mcpNodes.forEach((node, i) => {
@@ -201,6 +234,16 @@ function layoutColumnar(nodes: Node[], rootNode: Node | undefined): Node[] {
     layoutedNodes.push({
       ...node,
       position: { x: -COLUMN_WIDTH, y: START_Y + i * ROW_HEIGHT },
+    })
+  })
+
+  // Position Supporting File nodes (below root, horizontally distributed)
+  supportingFileNodes.forEach((node, i) => {
+    const totalFilesWidth = supportingFileNodes.length * COLUMN_WIDTH
+    const startX = (COLUMN_WIDTH * 4 - totalFilesWidth) / 2
+    layoutedNodes.push({
+      ...node,
+      position: { x: startX + i * COLUMN_WIDTH, y: START_Y + ROW_HEIGHT * 4 },
     })
   })
 

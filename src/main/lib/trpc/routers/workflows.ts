@@ -91,7 +91,7 @@ interface DependencyGraph {
   tools: string[] // All tools (kept for compatibility)
   builtinTools: string[] // Built-in Claude tools (Read, Write, Edit, etc.)
   mcpTools: Array<{ tool: string; server: string }> // MCP tools with their server
-  skills: string[]
+  skills: string[] // Skills declared in frontmatter (for agents/commands)
   mcpServers: string[]
 
   // Runtime invocations (detected in body content)
@@ -100,6 +100,18 @@ interface DependencyGraph {
   skillInvocations: string[] // Skills invoked via Skill tool at runtime
   cliApps: CliAppMetadata[] // CLI applications with command examples
   backgroundTasks: BackgroundTaskMetadata[] // Background tasks with descriptions
+
+  // Agent-specific metadata (from frontmatter)
+  disallowedTools?: string[] // Tool denylist
+  preloadedSkills?: string[] // Skills preloaded by agent
+  hooks?: HookConfig // Lifecycle hooks configuration
+  model?: string // Model override (sonnet, opus, haiku, inherit)
+
+  // Skill-specific metadata (from frontmatter and directory scan)
+  supportingFiles?: string[] // Files in skill directory (template.md, examples/, etc.)
+  argumentHint?: string // Usage hint for arguments
+  userInvocable?: boolean // Whether skill can be user-invoked
+  disableModelInvocation?: boolean // Whether automatic invocation is disabled
 }
 
 interface AgentWithDependencies extends AgentMetadata {
@@ -1139,6 +1151,12 @@ async function buildAgentDependencies(
   const backgroundTasks = extractBackgroundTasks(fullContent)
   deps.backgroundTasks = backgroundTasks
 
+  // Add agent-specific metadata from frontmatter for visualization
+  deps.disallowedTools = agent.disallowedTools
+  deps.preloadedSkills = agent.skills
+  deps.hooks = agent.hooks
+  deps.model = agent.model
+
   return deps
 }
 
@@ -1341,6 +1359,13 @@ async function buildSkillDependencies(
   // Extract background task patterns
   const backgroundTasks = extractBackgroundTasks(fullContent)
   deps.backgroundTasks = backgroundTasks
+
+  // Add skill-specific metadata from frontmatter for visualization
+  deps.supportingFiles = skill.supportingFiles
+  deps.argumentHint = skill.argumentHint
+  deps.userInvocable = skill.userInvocable
+  deps.disableModelInvocation = skill.disableModelInvocation
+  deps.model = skill.model
 
   return deps
 }
@@ -1752,6 +1777,7 @@ export type {
   DependencyGraph,
   AgentWithDependencies,
   CommandWithDependencies,
+  SkillWithDependencies,
   WorkflowGraph,
   HookConfig,
   PermissionMode,

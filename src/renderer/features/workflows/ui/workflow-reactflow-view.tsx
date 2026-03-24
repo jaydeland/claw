@@ -21,6 +21,11 @@ import {
 } from "../atoms"
 import { trpc } from "../../../lib/trpc"
 import { getLayoutedElements } from "../lib/reactflow-layout"
+import type {
+  AgentWithDependencies,
+  SkillWithDependencies,
+  CommandWithDependencies,
+} from "../../../../main/lib/trpc/routers/workflows"
 import {
   AgentNode,
   ToolNode,
@@ -34,6 +39,10 @@ import {
   ExpandableAgentNode,
   ExpandableSkillNode,
   ExpandableCommandNode,
+  // New visualization nodes
+  SupportingFileNode,
+  HookNode,
+  DisallowedToolsNode,
 } from "../components/workflow-nodes"
 import { Loader2 } from "lucide-react"
 
@@ -48,12 +57,19 @@ const nodeTypes = {
   cli: CliAppNode,
   backgroundTask: BackgroundTaskNode,
   workflowStep: WorkflowStepNode,
+  // New visualization nodes
+  supportingFile: SupportingFileNode,
+  hook: HookNode,
+  disallowedTools: DisallowedToolsNode,
   // Expandable variants
   expandableAgent: ExpandableAgentNode,
   expandableSkill: ExpandableSkillNode,
   expandableCommand: ExpandableCommandNode,
 }
 
+/**
+ * Local type extensions for visualization metadata not in backend types
+ */
 interface CliAppMetadata {
   name: string
   commands: string[]
@@ -67,78 +83,6 @@ interface BackgroundTaskMetadata {
 
 // Permission modes for subagents (Claude Code official modes)
 type PermissionMode = 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'plan'
-
-interface AgentWithDependencies {
-  id: string
-  name: string
-  description: string
-  // New official Claude Code fields
-  permissionMode?: PermissionMode
-  disallowedTools?: string[]
-  skills?: string[]
-  dependencies: {
-    tools: string[]
-    builtinTools?: string[]
-    mcpTools?: Array<{ tool: string; server: string }>
-    skills: string[]
-    mcpServers: string[]
-    agents: string[]
-    commands: string[]
-    skillInvocations: string[]
-    cliApps: CliAppMetadata[]
-    backgroundTasks: BackgroundTaskMetadata[]
-  }
-}
-
-interface SkillWithMetadata {
-  id: string
-  name: string
-  description: string
-  context?: 'fork'
-  agent?: string
-  model?: string
-  userInvocable?: boolean
-  supportingFiles?: string[]
-}
-
-interface CommandWithDependencies {
-  id: string
-  name: string
-  description: string
-  allowedTools: string[]
-  dependencies: {
-    tools: string[]
-    builtinTools?: string[]
-    mcpTools?: Array<{ tool: string; server: string }>
-    skills: string[]
-    mcpServers: string[]
-    agents: string[]
-    commands: string[]
-    skillInvocations: string[]
-    cliApps: CliAppMetadata[]
-    backgroundTasks: BackgroundTaskMetadata[]
-  }
-}
-
-interface SkillWithDependencies extends SkillWithMetadata {
-  id: string
-  name: string
-  description: string
-  sourcePath: string
-  source: "user" | "project" | "custom"
-  dependencies: {
-    tools: string[]
-    builtinTools?: string[]
-    mcpTools?: Array<{ tool: string; server: string }>
-    skills: string[]
-    mcpServers: string[]
-    agents: string[]
-    commands: string[]
-    skillInvocations: string[]
-    cliApps: CliAppMetadata[]
-    backgroundTasks: BackgroundTaskMetadata[]
-  }
-}
 
 /**
  * Normalize CLI apps to handle both old string[] and new CliAppMetadata[] formats
@@ -505,6 +449,10 @@ function convertAgentToReactFlow(agent: AgentWithDependencies): {
       name: agent.name,
       description: agent.description,
       permissionMode: agent.permissionMode, // Include permission mode for badge
+      model: agent.dependencies.model, // Model badge (sonnet, opus, haiku)
+      hasHooks: !!agent.dependencies.hooks && Object.keys(agent.dependencies.hooks).length > 0, // Hook indicator
+      hasDisallowedTools: !!agent.disallowedTools && agent.disallowedTools.length > 0, // Blocked tools indicator
+      preloadedSkillsCount: agent.dependencies.preloadedSkills?.length, // Preloaded skills count
       width: 200,
       height: 80,
     },
@@ -715,6 +663,68 @@ function convertAgentToReactFlow(agent: AgentWithDependencies): {
       label: "runs async",
       labelBgStyle: { fill: "#1e293b", fillOpacity: 0.8 },
       labelStyle: { fill: "#fbbf24", fontSize: 10 },
+    })
+  }
+
+  // Hook nodes (lifecycle hooks)
+  if (agent.dependencies.hooks) {
+    const hookTypes: Array<'PreToolUse' | 'PostToolUse' | 'SubagentStart' | 'SubagentStop' | 'Stop'> = [
+      'PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'Stop'
+    ]
+
+    hookTypes.forEach((hookType) => {
+      const hooks = agent.dependencies.hooks?.[hookType]
+      if (hooks && hooks.length > 0) {
+        hooks.forEach((hook, idx) => {
+          const nodeId = `hook-${hookType}-${idx}`
+          nodes.push({
+            id: nodeId,
+            type: "hook",
+            position: { x: 0, y: 0 },
+            data: {
+              hookType,
+              matcher: hook.matcher,
+              command: hook.command,
+              width: 140,
+              height: 50,
+            },
+          })
+          edges.push({
+            id: `agent-${nodeId}`,
+            source: "agent",
+            target: nodeId,
+            animated: true,
+            style: { stroke: "#f59e0b", strokeWidth: 1, strokeDasharray: "3,3" },
+            label: hookType,
+            labelBgStyle: { fill: "#1e293b", fillOpacity: 0.8 },
+            labelStyle: { fill: "#fbbf24", fontSize: 9 },
+          })
+        })
+      }
+    })
+  }
+
+  // Disallowed Tools node
+  if (agent.disallowedTools && agent.disallowedTools.length > 0) {
+    nodes.push({
+      id: "disallowed-tools",
+      type: "disallowedTools",
+      position: { x: 0, y: 0 },
+      data: {
+        tools: agent.disallowedTools,
+        width: 180,
+        height: Math.max(60, agent.disallowedTools.length * 20 + 40),
+      },
+    })
+    edges.push({
+      id: "agent-disallowed-tools",
+      source: "agent",
+      target: "disallowed-tools",
+      animated: false,
+      style: { stroke: "#ef4444", strokeWidth: 1, strokeDasharray: "5,5" },
+      label: "blocks",
+      labelBgStyle: { fill: "#1e293b", fillOpacity: 0.8 },
+      labelStyle: { fill: "#f87171", fontSize: 10 },
     })
   }
 
@@ -979,9 +989,45 @@ function convertSkillToReactFlow(
       context: skill.context, // Include fork context for badge
       agent: skill.agent,
       width: 200,
-      height: 60,
+      height: 80,
+      userInvocable: skill.userInvocable,
+      argumentHint: skill.argumentHint,
+      hasSupportingFiles: skill.supportingFiles && skill.supportingFiles.length > 0,
     },
   })
+
+  // Supporting Files nodes (individual nodes for each file)
+  if (skill.supportingFiles && skill.supportingFiles.length > 0) {
+    skill.supportingFiles.forEach((file, index) => {
+      const nodeId = `supporting-file-${index}`
+      // Determine file type from extension/name
+      const ext = file.split('.').pop()?.toLowerCase() || ''
+      let fileType = 'other'
+      if (file === 'template.md' || file.includes('template')) fileType = 'template'
+      else if (file.includes('example')) fileType = 'example'
+      else if (['json', 'yaml', 'yml'].includes(ext)) fileType = 'config'
+      else if (['sh', 'js', 'ts', 'py'].includes(ext)) fileType = 'script'
+      else if (ext === 'md') fileType = 'doc'
+
+      nodes.push({
+        id: nodeId,
+        type: "supportingFile",
+        position: { x: 0, y: 0 },
+        data: {
+          name: file,
+          type: fileType,
+          width: 160,
+          height: 50,
+        },
+      })
+      edges.push({
+        id: `main-${nodeId}`,
+        source: "main",
+        target: nodeId,
+        style: { stroke: "#64748b", strokeWidth: 1 },
+      })
+    })
+  }
 
   // Built-in Tools - ONE GROUP NODE
   if (deps.builtinTools && deps.builtinTools.length > 0) {
@@ -1182,7 +1228,7 @@ function convertSkillToReactFlow(
     })
   })
 
-  return { nodes: edges }
+  return { nodes, edges }
 }
 
 /**

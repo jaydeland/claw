@@ -45,7 +45,17 @@ const permissionBadges: Record<PermissionMode, PermissionBadgeConfig> = {
   },
 }
 
-export function AgentNode({ data }: { data: { name: string; description: string; permissionMode?: PermissionMode } }) {
+export function AgentNode({ data }: {
+  data: {
+    name: string
+    description: string
+    permissionMode?: PermissionMode
+    model?: string
+    hasHooks?: boolean
+    hasDisallowedTools?: boolean
+    preloadedSkillsCount?: number
+  }
+}) {
   const badge = data.permissionMode ? permissionBadges[data.permissionMode] : null
   const BadgeIcon = badge?.icon
 
@@ -59,18 +69,44 @@ export function AgentNode({ data }: { data: { name: string; description: string;
       />
       <div className="flex items-center justify-between gap-2">
         <div className="font-bold text-lg">{data.name}</div>
-        {badge && BadgeIcon && (
-          <div
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${badge.className}`}
-            title={badge.tooltip}
-          >
-            <BadgeIcon className="h-3 w-3" />
-            <span>{badge.label}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          {data.model && <ModelBadge model={data.model} />}
+          {badge && BadgeIcon && (
+            <div
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${badge.className}`}
+              title={badge.tooltip}
+            >
+              <BadgeIcon className="h-3 w-3" />
+              <span>{badge.label}</span>
+            </div>
+          )}
+        </div>
       </div>
       {data.description && (
         <div className="text-sm opacity-80 mt-1 line-clamp-2">{data.description}</div>
+      )}
+      {/* Metadata indicators */}
+      {(data.hasHooks || data.hasDisallowedTools || (data.preloadedSkillsCount && data.preloadedSkillsCount > 0)) && (
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/20">
+          {data.hasHooks && (
+            <div className="flex items-center gap-0.5 text-[10px] opacity-70" title="Has lifecycle hooks">
+              <Clock className="h-3 w-3" />
+              <span>Hooks</span>
+            </div>
+          )}
+          {data.hasDisallowedTools && (
+            <div className="flex items-center gap-0.5 text-[10px] opacity-70" title="Has blocked tools">
+              <Ban className="h-3 w-3" />
+              <span>Blocked</span>
+            </div>
+          )}
+          {data.preloadedSkillsCount && data.preloadedSkillsCount > 0 && (
+            <div className="flex items-center gap-0.5 text-[10px] opacity-70" title={`${data.preloadedSkillsCount} preloaded skills`}>
+              <Zap className="h-3 w-3" />
+              <span>{data.preloadedSkillsCount} skills</span>
+            </div>
+          )}
+        </div>
       )}
       <Handle
         type="source"
@@ -110,7 +146,16 @@ export function ToolNode({ data }: { data: { name: string; category?: string; se
   )
 }
 
-export function SkillNode({ data }: { data: { name: string; context?: 'fork'; agent?: string } }) {
+export function SkillNode({ data }: {
+  data: {
+    name: string
+    context?: 'fork'
+    agent?: string
+    userInvocable?: boolean
+    argumentHint?: string
+    hasSupportingFiles?: boolean
+  }
+}) {
   const hasForkContext = data.context === 'fork'
 
   return (
@@ -132,9 +177,29 @@ export function SkillNode({ data }: { data: { name: string; context?: 'fork'; ag
             <span>Fork</span>
           </div>
         )}
+        {data.userInvocable && (
+          <div
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded text-xs bg-green-700/50 border border-green-400/50"
+            title="Can be invoked by user"
+          >
+            <Zap className="h-3 w-3" />
+            <span>User</span>
+          </div>
+        )}
       </div>
       {data.agent && (
         <div className="text-xs opacity-75 mt-0.5">Agent: {data.agent}</div>
+      )}
+      {data.argumentHint && (
+        <div className="text-xs opacity-75 mt-0.5 italic" title={data.argumentHint}>
+          Args: {data.argumentHint.length > 30 ? data.argumentHint.slice(0, 30) + '...' : data.argumentHint}
+        </div>
+      )}
+      {data.hasSupportingFiles && (
+        <div className="flex items-center gap-0.5 text-[10px] opacity-60 mt-1" title="Has supporting files">
+          <FileText className="h-3 w-3" />
+          <span>Supporting files</span>
+        </div>
       )}
       <Handle
         type="source"
@@ -566,6 +631,243 @@ export function ExpandableCommandNode({ data }: { data: ExpandableNodeData }) {
           +{data.depth || 1}
         </div>
       )}
+    </div>
+  )
+}
+
+// ============ NEW ENHANCED NODE TYPES ============
+
+import { Cpu, FileText, Folder, FileCode, Cog, Clock, AlertTriangle, Ban } from "lucide-react"
+
+// Model badge configuration
+interface ModelConfig {
+  label: string
+  className: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+const modelConfigs: Record<string, ModelConfig> = {
+  opus: {
+    label: "Opus",
+    className: "bg-purple-500/30 text-purple-200 border-purple-400/50",
+    icon: Cpu,
+  },
+  sonnet: {
+    label: "Sonnet",
+    className: "bg-blue-500/30 text-blue-200 border-blue-400/50",
+    icon: Zap,
+  },
+  haiku: {
+    label: "Haiku",
+    className: "bg-green-500/30 text-green-200 border-green-400/50",
+    icon: Zap,
+  },
+  inherit: {
+    label: "Inherit",
+    className: "bg-gray-500/30 text-gray-200 border-gray-400/50",
+    icon: Cog,
+  },
+}
+
+/**
+ * ModelBadge - Shows the AI model used by an agent
+ * Renders as a small chip/badge that can be embedded in AgentNode
+ */
+export function ModelBadge({ model }: { model?: string }) {
+  if (!model) return null
+
+  const normalizedModel = model.toLowerCase().trim()
+  const config = modelConfigs[normalizedModel] || {
+    label: model,
+    className: "bg-gray-500/30 text-gray-200 border-gray-400/50",
+    icon: Cog,
+  }
+
+  const Icon = config.icon
+
+  return (
+    <div
+      className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${config.className}`}
+      title={`Model: ${model}`}
+    >
+      <Icon className="h-3 w-3" />
+      <span>{config.label}</span>
+    </div>
+  )
+}
+
+/**
+ * HookNode - Visualizes lifecycle hooks (PreToolUse, PostToolUse, etc.)
+ */
+interface HookNodeData {
+  hookType: 'PreToolUse' | 'PostToolUse' | 'SubagentStart' | 'SubagentStop' | 'Stop'
+  matcher?: string
+  command?: string
+}
+
+const hookConfigs: Record<HookNodeData['hookType'], { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
+  PreToolUse: {
+    label: "Pre-Tool",
+    icon: Clock,
+    color: "bg-amber-500",
+  },
+  PostToolUse: {
+    label: "Post-Tool",
+    icon: Clock,
+    color: "bg-teal-500",
+  },
+  SubagentStart: {
+    label: "Subagent Start",
+    icon: Zap,
+    color: "bg-indigo-500",
+  },
+  SubagentStop: {
+    label: "Subagent Stop",
+    icon: Ban,
+    color: "bg-rose-500",
+  },
+  Stop: {
+    label: "On Stop",
+    icon: Ban,
+    color: "bg-gray-500",
+  },
+}
+
+export function HookNode({ data }: { data: HookNodeData }) {
+  const config = hookConfigs[data.hookType]
+  const Icon = config.icon
+
+  return (
+    <div className={`px-3 py-2 shadow-md rounded-md ${config.color} text-white border border-white/20 min-w-[120px]`}>
+      <Handle
+        type="target"
+        position={Position.Top}
+        className={`w-2 h-2 bg-white border-2 border-white/50`}
+        style={{ top: -5 }}
+      />
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5" />
+        <span className="text-xs font-medium">{config.label}</span>
+      </div>
+      {data.matcher && (
+        <div className="text-[10px] opacity-75 mt-0.5 truncate max-w-[150px]" title={data.matcher}>
+          Match: {data.matcher}
+        </div>
+      )}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className={`w-2 h-2 bg-white border-2 border-white/50`}
+        style={{ bottom: -5 }}
+      />
+    </div>
+  )
+}
+
+/**
+ * SupportingFileNode - Shows supporting files in skill directories
+ * Groups by type: templates, examples, scripts, config
+ */
+interface SupportingFileData {
+  name: string
+  type: 'template' | 'example' | 'script' | 'config' | 'asset' | 'other'
+  path: string
+}
+
+const fileTypeConfigs: Record<SupportingFileData['type'], { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
+  template: {
+    label: "Template",
+    icon: FileText,
+    color: "bg-sky-500",
+  },
+  example: {
+    label: "Example",
+    icon: Folder,
+    color: "bg-emerald-500",
+  },
+  script: {
+    label: "Script",
+    icon: FileCode,
+    color: "bg-amber-500",
+  },
+  config: {
+    label: "Config",
+    icon: Cog,
+    color: "bg-slate-500",
+  },
+  asset: {
+    label: "Asset",
+    icon: FileText,
+    color: "bg-pink-500",
+  },
+  other: {
+    label: "File",
+    icon: FileText,
+    color: "bg-gray-500",
+  },
+}
+
+function getFileType(filename: string): SupportingFileData['type'] {
+  const lower = filename.toLowerCase()
+  if (lower.includes('template')) return 'template'
+  if (lower.includes('example')) return 'example'
+  if (lower.endsWith('.js') || lower.endsWith('.ts') || lower.endsWith('.py') || lower.endsWith('.sh')) return 'script'
+  if (lower.endsWith('.json') || lower.endsWith('.yaml') || lower.endsWith('.yml') || lower.includes('config')) return 'config'
+  if (lower.includes('asset') || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.svg')) return 'asset'
+  return 'other'
+}
+
+export function SupportingFileNode({ data }: { data: SupportingFileData }) {
+  const fileType = data.type || getFileType(data.name)
+  const config = fileTypeConfigs[fileType]
+  const Icon = config.icon
+
+  return (
+    <div className={`px-3 py-2 shadow-md rounded-md ${config.color} text-white border border-white/20 min-w-[140px]`}>
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-2 h-2 bg-white border-2 border-white/50"
+        style={{ left: -5 }}
+      />
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+        <div className="text-xs font-medium truncate">{data.name}</div>
+      </div>
+      <div className="text-[10px] opacity-75 mt-0.5">{config.label}</div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-2 h-2 bg-white border-2 border-white/50"
+        style={{ right: -5 }}
+      />
+    </div>
+  )
+}
+
+/**
+ * DisallowedToolsNode - Shows tools that are explicitly blocked/denied
+ */
+export function DisallowedToolsNode({ data }: { data: { tools: string[] } }) {
+  return (
+    <div className="px-3 py-2 shadow-md rounded-md bg-red-500/80 text-white border border-red-400 min-w-[160px]">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-2 h-2 bg-white border-2 border-red-300"
+        style={{ top: -5 }}
+      />
+      <div className="flex items-center gap-1.5 border-b border-white/30 pb-1.5 mb-1.5">
+        <Ban className="h-3.5 w-3.5" />
+        <span className="text-xs font-medium">Blocked Tools</span>
+      </div>
+      <div className="space-y-0.5">
+        {data.tools.map((tool, idx) => (
+          <div key={idx} className="text-xs font-mono opacity-90 line-through">
+            {tool}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
