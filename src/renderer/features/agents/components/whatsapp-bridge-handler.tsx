@@ -1,6 +1,7 @@
 "use client"
 
 import { useSetAtom } from "jotai"
+import { useEffect, useRef } from "react"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
 import {
@@ -36,16 +37,39 @@ interface WhatsAppBridgeHandlerProps {
  * and optionally triggers a Claw response via the provided callback
  */
 export function WhatsAppBridgeHandler({ chatId, subChatId, onTriggerResponse }: WhatsAppBridgeHandlerProps) {
+  const mountCountRef = useRef(0)
+  mountCountRef.current++
+  console.log("[WhatsAppBridgeHandler] Component render:", { chatId, subChatId, mountCount: mountCountRef.current, hasTriggerCallback: !!onTriggerResponse })
+
+  useEffect(() => {
+    console.log("[WhatsAppBridgeHandler] Component MOUNTED:", { chatId, subChatId })
+    return () => {
+      console.log("[WhatsAppBridgeHandler] Component UNMOUNTED:", { chatId, subChatId })
+    }
+  }, [])
+
   // Use the sync atom for atomic message updates
   const syncMessages = useSetAtom(syncMessagesWithStatusAtom)
 
   // Subscribe to bridge messages
+  console.log("[WhatsAppBridgeHandler] Setting up tRPC subscription...", { chatId })
   trpc.whatsapp.onBridgeMessage.useSubscription(undefined, {
+    onStarted: () => {
+      console.log("[WhatsAppBridgeHandler] Subscription STARTED successfully")
+    },
     onData: (message: WhatsAppBridgeMessage) => {
-      console.log("[WhatsAppBridgeHandler] Received bridge message:", message)
+      console.log("[WhatsAppBridgeHandler] Received bridge message:", {
+        messageChatId: message.chatId,
+        currentChatId: chatId,
+        messageSubChatId: message.subChatId,
+        currentSubChatId: subChatId,
+        sender: message.sender,
+        textPreview: message.text?.substring(0, 50),
+      })
 
       // Only process messages for the current chat/subChat
       if (chatId && message.chatId === chatId) {
+        console.log("[WhatsAppBridgeHandler] ChatId matches, processing message")
         // Skip messages sent by the user from Claw (to avoid loops)
         if (message.fromMe) {
           console.log("[WhatsAppBridgeHandler] Skipping message from self")
@@ -102,6 +126,12 @@ export function WhatsAppBridgeHandler({ chatId, subChatId, onTriggerResponse }: 
     },
     onError: (error) => {
       console.error("[WhatsAppBridgeHandler] Subscription error:", error)
+      console.error("[WhatsAppBridgeHandler] Error details:", {
+        message: error.message,
+        name: error.name,
+        cause: error.cause,
+        stack: error.stack,
+      })
     },
   })
 

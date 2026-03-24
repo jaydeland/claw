@@ -3631,6 +3631,10 @@ const ChatViewInner = memo(function ChatViewInner({
     <SearchHighlightProvider>
       <div className="flex flex-col flex-1 min-h-0 relative">
         {/* WhatsApp Bridge Handler - receives messages from bridged WhatsApp groups */}
+        {(() => {
+          console.log("[ActiveChat] Rendering WhatsAppBridgeHandler with:", { parentChatId, subChatId })
+          return null
+        })()}
         <WhatsAppBridgeHandler
           chatId={parentChatId}
           subChatId={subChatId}
