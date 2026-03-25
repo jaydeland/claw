@@ -4887,20 +4887,13 @@ Make sure to preserve all functionality from both branches when resolving confli
   useEffect(() => {
     if (!agentChat) return
 
+    // Get current state for calculations
     const store = useAgentSubChatStore.getState()
+    const chatIdChanged = store.chatId !== chatId
 
-    // Only initialize if chatId changed
-    if (store.chatId !== chatId) {
-      store.setChatId(chatId)
-    }
-
-    // Re-get fresh state after setChatId may have loaded from localStorage
-    const freshState = useAgentSubChatStore.getState()
-
-    // Get sub-chats from DB (like Canvas - no isPersistedInDb flag)
-    // Build a map of existing local sub-chats to preserve their created_at if DB doesn't have it
+    // Build sub-chats data (do calculations before deferring updates)
     const existingSubChatsMap = new Map(
-      freshState.allSubChats.map((sc) => [sc.id, sc]),
+      store.allSubChats.map((sc) => [sc.id, sc]),
     )
 
     const dbSubChats: SubChatMeta[] = agentSubChats.map((sc) => {
@@ -4915,9 +4908,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           : sc.updated_at?.toISOString()
       return {
         id: sc.id,
-        // Use sub-chat's own name, fall back to parent chat's name, then "New Chat"
         name: sc.name || agentChat?.name || "New Chat",
-        // Prefer DB timestamp, fall back to local timestamp, then current time
         created_at:
           createdAt ?? existingLocal?.created_at ?? new Date().toISOString(),
         updated_at: updatedAt ?? existingLocal?.updated_at,
@@ -4929,54 +4920,48 @@ Make sure to preserve all functionality from both branches when resolving confli
     })
     const dbSubChatIds = new Set(dbSubChats.map((sc) => sc.id))
 
-    // Start with DB sub-chats
     const allSubChats: SubChatMeta[] = [...dbSubChats]
-
-    // For each open tab ID that's NOT in DB, add placeholder (like Canvas)
-    // This prevents losing tabs during race conditions
-    const currentOpenIds = freshState.openSubChatIds
+    const currentOpenIds = store.openSubChatIds
     currentOpenIds.forEach((id) => {
       if (!dbSubChatIds.has(id)) {
         allSubChats.push({
           id,
-          // Use parent chat's name for placeholder, then "New Chat"
           name: agentChat?.name || "New Chat",
           created_at: new Date().toISOString(),
         })
       }
     })
 
-    // Check for pending active sub-chat from cross-workspace navigation
     const pendingSubChatId = localStorage.getItem("pendingActiveSubChatId")
 
     // Batch all state updates to avoid concurrent rendering issues
     // Use requestAnimationFrame to defer state updates to next paint
     requestAnimationFrame(() => {
       const currentState = useAgentSubChatStore.getState()
+
+      // Only update chatId if it changed
+      if (chatIdChanged) {
+        currentState.setChatId(chatId)
+      }
+
       currentState.setAllSubChats(allSubChats)
 
-      // All open tabs are now valid (we created placeholders for non-DB ones)
       const validOpenIds = currentOpenIds
 
       if (pendingSubChatId) {
-        // Clear the pending ID immediately
         localStorage.removeItem("pendingActiveSubChatId")
-        // Check if this sub-chat exists in the current workspace
         const subChatExists = allSubChats.some(sc => sc.id === pendingSubChatId)
         if (subChatExists) {
-          // Open and activate the pending sub-chat
           currentState.addToOpenSubChats(pendingSubChatId)
           currentState.setActiveSubChat(pendingSubChatId)
-          return // Skip the default initialization since we're using the pending one
+          return
         }
       }
 
       if (validOpenIds.length === 0 && allSubChats.length > 0) {
-        // No valid open tabs, open the first sub-chat
         currentState.addToOpenSubChats(allSubChats[0].id)
         currentState.setActiveSubChat(allSubChats[0].id)
       } else if (validOpenIds.length > 0) {
-        // Validate active tab is in open tabs
         const currentActive = currentState.activeSubChatId
         if (!currentActive || !validOpenIds.includes(currentActive)) {
           currentState.setActiveSubChat(validOpenIds[0])
