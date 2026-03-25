@@ -50,6 +50,7 @@ export const ContextualChatPane = memo(function ContextualChatPane({
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
   const activeSubChatIdRef = useRef<string | null>(null)
+  const isCreatingChatRef = useRef(false)
 
   // Keep refs in sync to avoid stale closures in subscription callbacks
   useEffect(() => { messagesRef.current = messages }, [messages])
@@ -64,6 +65,13 @@ export const ContextualChatPane = memo(function ContextualChatPane({
       prevChatIdRef.current = chatId
       setActiveChatId(chatId)
       setActiveSubChatId(subChatId)
+
+      // Skip clearing if we just created this chat (we're handling it in handleSend)
+      if (isCreatingChatRef.current) {
+        isCreatingChatRef.current = false
+        return
+      }
+
       // Clear local state when context changes
       setMessages([])
       setIsStreaming(false)
@@ -233,6 +241,7 @@ export const ContextualChatPane = memo(function ContextualChatPane({
 
     if (!activeChatId) {
       // No session yet — create one first
+      isCreatingChatRef.current = true  // Set flag before creating
       const result = await onCreate()
       const newChatId = result?.chatId ?? activeChatId
       const newSubChatId = result?.subChatId ?? activeSubChatId

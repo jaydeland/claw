@@ -41,6 +41,7 @@ import {
 } from "../sidebar/components"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { RightIconBar } from "./right-icon-bar"
+import { GlobalSubChatTabs } from "./global-subchat-tabs"
 import { Button } from "../../components/ui/button"
 import { SettingsIcon } from "../../components/ui/icons"
 import {
@@ -241,8 +242,11 @@ export function AgentsLayout() {
               </div>
             </div>
 
+            {/* Global Pinned Sub-Chat Tabs - visible across all workspaces */}
+            <GlobalSubChatTabs />
+
             {/* Spacer to push settings to the right */}
-            <div className="flex-1" />
+            <div className="flex-shrink-0" />
 
             {/* Settings button - always visible including fullscreen */}
             <div

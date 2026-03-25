@@ -474,6 +474,25 @@ export function AgentsSubChatsSidebar({
 
   const handleSubChatClick = (subChatId: string) => {
     const store = useAgentSubChatStore.getState()
+
+    // Check if this sub-chat belongs to the current workspace
+    const localSubChatIds = new Set(allSubChats.map(sc => sc.id))
+    const isLocalSubChat = localSubChatIds.has(subChatId)
+
+    if (!isLocalSubChat) {
+      // This is a global pinned sub-chat from another workspace
+      // Get the parent chat ID from our global map
+      const globalSubChat = globalPinnedSubChatsMap.get(subChatId)
+      if (globalSubChat?.parentChatId) {
+        // Switch to the parent workspace first
+        setSelectedChatId(globalSubChat.parentChatId)
+        // The sub-chat will be activated after workspace switch
+        // Store it temporarily so it can be activated once the workspace loads
+        localStorage.setItem("pendingActiveSubChatId", subChatId)
+        return
+      }
+    }
+
     store.setActiveSubChat(subChatId)
 
     // Clear unseen indicator for this sub-chat

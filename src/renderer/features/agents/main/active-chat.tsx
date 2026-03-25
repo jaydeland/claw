@@ -4946,22 +4946,43 @@ Make sure to preserve all functionality from both branches when resolving confli
       }
     })
 
-    freshState.setAllSubChats(allSubChats)
+    // Check for pending active sub-chat from cross-workspace navigation
+    const pendingSubChatId = localStorage.getItem("pendingActiveSubChatId")
 
-    // All open tabs are now valid (we created placeholders for non-DB ones)
-    const validOpenIds = currentOpenIds
+    // Batch all state updates to avoid concurrent rendering issues
+    // Use requestAnimationFrame to defer state updates to next paint
+    requestAnimationFrame(() => {
+      const currentState = useAgentSubChatStore.getState()
+      currentState.setAllSubChats(allSubChats)
 
-    if (validOpenIds.length === 0 && allSubChats.length > 0) {
-      // No valid open tabs, open the first sub-chat
-      freshState.addToOpenSubChats(allSubChats[0].id)
-      freshState.setActiveSubChat(allSubChats[0].id)
-    } else if (validOpenIds.length > 0) {
-      // Validate active tab is in open tabs
-      const currentActive = freshState.activeSubChatId
-      if (!currentActive || !validOpenIds.includes(currentActive)) {
-        freshState.setActiveSubChat(validOpenIds[0])
+      // All open tabs are now valid (we created placeholders for non-DB ones)
+      const validOpenIds = currentOpenIds
+
+      if (pendingSubChatId) {
+        // Clear the pending ID immediately
+        localStorage.removeItem("pendingActiveSubChatId")
+        // Check if this sub-chat exists in the current workspace
+        const subChatExists = allSubChats.some(sc => sc.id === pendingSubChatId)
+        if (subChatExists) {
+          // Open and activate the pending sub-chat
+          currentState.addToOpenSubChats(pendingSubChatId)
+          currentState.setActiveSubChat(pendingSubChatId)
+          return // Skip the default initialization since we're using the pending one
+        }
       }
-    }
+
+      if (validOpenIds.length === 0 && allSubChats.length > 0) {
+        // No valid open tabs, open the first sub-chat
+        currentState.addToOpenSubChats(allSubChats[0].id)
+        currentState.setActiveSubChat(allSubChats[0].id)
+      } else if (validOpenIds.length > 0) {
+        // Validate active tab is in open tabs
+        const currentActive = currentState.activeSubChatId
+        if (!currentActive || !validOpenIds.includes(currentActive)) {
+          currentState.setActiveSubChat(validOpenIds[0])
+        }
+      }
+    })
   }, [agentChat, chatId])
 
   // Create or get Chat instance for a sub-chat

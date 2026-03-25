@@ -41,8 +41,15 @@ export function useContextualChat({
   model = "sonnet",
   enabled = true,
 }: UseContextualChatOptions): UseContextualChatResult {
+  // Include projectId in the context for proper workspace isolation
+  // This ensures "my-agent" in Workspace A has a different key than "my-agent" in Workspace B
+  const contextWithProject = useMemo(
+    () => ({ ...sourceContext, projectId }),
+    [sourceContext, projectId]
+  )
+
   // Stable JSON string used as the DB lookup key
-  const contextKey = useMemo(() => JSON.stringify(sourceContext), [sourceContext])
+  const contextKey = useMemo(() => JSON.stringify(contextWithProject), [contextWithProject])
 
   const utils = trpc.useUtils()
 
