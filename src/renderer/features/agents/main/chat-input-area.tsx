@@ -471,7 +471,8 @@ export const ChatInputArea = memo(function ChatInputArea({
   })
 
   // Sync selected model when Ollama models load (race condition fix)
-  // This ensures the Ollama default model is selected once models are fetched
+  // This ensures the Ollama default model is selected once models are fetched.
+  // Note: intentionally NOT including selectedModel?.id to avoid overwriting user selections.
   useEffect(() => {
     if (
       activeProvider === "ollama" &&
@@ -489,7 +490,8 @@ export const ChatInputArea = memo(function ChatInputArea({
     activeProvider,
     ollamaConfig.model,
     availableModels.models,
-    selectedModel?.id,
+    // selectedModel?.id intentionally excluded — we only want to sync on initial load,
+    // not on every user-initiated model change.
   ])
 
   const normalizedCustomClaudeConfig =
