@@ -22,6 +22,8 @@ const STRIPPED_ENV_KEYS = [
   "OPENAI_API_KEY",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
+  // Prevent nested session detection when launched from a Claude Code terminal
+  "CLAUDECODE",
   // AWS credentials - must be set explicitly by the app, not inherited from system
   "AWS_ACCESS_KEY_ID",
   "AWS_SECRET_ACCESS_KEY",

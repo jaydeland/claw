@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm"
 import { getDatabase, backgroundTasks } from "../db"
 import { taskEvents, type TaskStatusUpdate } from "./events"
-import { buildClaudeEnv } from "../claude/env"
+import { buildClaudeEnv, getBundledClaudeBinaryPath } from "../claude/env"
 
 /**
  * Check interval in milliseconds (10 seconds)
@@ -114,6 +114,7 @@ export class TaskWatcher {
           apiKey: env.ANTHROPIC_API_KEY || undefined,
           // Use minimal settings for quick polling
           model: "claude-sonnet-4-5-20250107",
+          pathToClaudeCodeExecutable: getBundledClaudeBinaryPath(),
         },
       })
 

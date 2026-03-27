@@ -596,6 +596,13 @@
       "when": 1772680800005,
       "tag": "0082_remove_slack_settings_table",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "6",
+      "when": 1772680800006,
+      "tag": "0083_add_discord_settings",
+      "breakpoints": true
     }
   ]
 }

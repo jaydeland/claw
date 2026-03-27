@@ -344,6 +344,10 @@ export async function warmupMcpCache(): Promise<void> {
             env: buildClaudeEnv(),
             permissionMode: "bypassPermissions" as const,
             allowDangerouslySkipPermissions: true,
+            pathToClaudeCodeExecutable: getBundledClaudeBinaryPath(),
+            stderr: (data: string) => {
+              console.error(`[MCP Warmup stderr] ${data}`)
+            },
           }
         })
 
