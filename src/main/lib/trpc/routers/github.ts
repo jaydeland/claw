@@ -4,7 +4,6 @@ import { exec } from "node:child_process"
 import { promisify } from "node:util"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import * as os from "node:os"
 import { safeStorage, shell } from "electron"
 import { eq } from "drizzle-orm"
 import { getDatabase, chats, subChats, githubSettings } from "../../db"
@@ -41,88 +40,48 @@ function decryptText(encrypted: string): string | null {
 }
 
 /**
- * Check if gh CLI is available and authenticated
+ * Get stored GitHub token from DB, or return an error string.
  */
-async function checkGhAvailable(): Promise<{ available: boolean; error?: string }> {
-  try {
-    await execAsync("gh auth status")
-    return { available: true }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (message.includes("not logged in")) {
-      return { available: false, error: "Not logged in to GitHub CLI. Run 'gh auth login' first." }
-    }
-    if (message.includes("not found") || message.includes("command not found")) {
-      return { available: false, error: "GitHub CLI (gh) not installed. Install it from https://cli.github.com" }
-    }
-    return { available: false, error: message }
+function getStoredToken(): { token: string } | { error: string } {
+  const db = getDatabase()
+  const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
+  if (!settings?.encryptedToken) {
+    return { error: "GitHub token not configured. Add a Personal Access Token in GitHub Settings." }
   }
+  const token = decryptText(settings.encryptedToken)
+  if (!token) {
+    return { error: "Failed to decrypt GitHub token." }
+  }
+  return { token }
 }
 
 /**
- * Parse PR data from gh CLI output
+ * Authenticated fetch helper for GitHub REST API.
  */
-function parsePRs(output: string): Array<{
-  number: number
-  title: string
-  state: string
-  author: string
-  headBranch: string
-  baseBranch: string
-  draft: boolean
-}> {
-  try {
-    const prs = JSON.parse(output)
-    return prs.map((pr: any) => ({
-      number: pr.number,
-      title: pr.title,
-      state: pr.state,
-      author: pr.author?.login || "unknown",
-      headBranch: pr.headRefName,
-      baseBranch: pr.baseRefName,
-      draft: pr.isDraft || false,
-    }))
-  } catch {
-    return []
-  }
+async function ghFetch(
+  token: string,
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  return fetch(`https://api.github.com${endpoint}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "Claw-App",
+      ...(options.headers ?? {}),
+    },
+  })
 }
 
 /**
- * Parse issue data from gh CLI output
- */
-function parseIssues(output: string): Array<{
-  number: number
-  title: string
-  state: string
-  author: string
-  labels: string[]
-}> {
-  try {
-    const issues = JSON.parse(output)
-    return issues.map((issue: any) => ({
-      number: issue.number,
-      title: issue.title,
-      state: issue.state,
-      author: issue.author?.login || "unknown",
-      labels: issue.labels?.map((l: any) => l.name) || [],
-    }))
-  } catch {
-    return []
-  }
-}
-
-/**
- * Get the GitHub remote URL from a local repository
+ * Get the GitHub remote owner/repo from a local git repository.
  */
 async function getGitHubRemote(projectPath: string): Promise<{ owner: string; repo: string } | null> {
   try {
     const { stdout } = await execAsync("git remote get-url origin", { cwd: projectPath })
     const url = stdout.trim()
-
-    // Parse various GitHub URL formats
-    // git@github.com:owner/repo.git
-    // https://github.com/owner/repo.git
-    // https://github.com/owner/repo
     const match = url.match(/github\.com[/:]([^/]+)\/([^/.]+)/)
     if (match) {
       return { owner: match[1], repo: match[2] }
@@ -135,14 +94,18 @@ async function getGitHubRemote(projectPath: string): Promise<{ owner: string; re
 
 export const githubRouter = router({
   /**
-   * Check if GitHub CLI is available and authenticated
+   * Check if GitHub token is configured (replaces gh CLI auth check).
    */
   checkAuth: publicProcedure.query(async () => {
-    return checkGhAvailable()
+    const result = getStoredToken()
+    if ("error" in result) {
+      return { available: false, error: result.error }
+    }
+    return { available: true }
   }),
 
   /**
-   * Get repository info from local git remote
+   * Get repository info from local git remote.
    */
   getRepoInfo: publicProcedure
     .input(z.object({ projectPath: z.string() }))
@@ -155,7 +118,7 @@ export const githubRouter = router({
     }),
 
   /**
-   * Fetch pull requests for a repository
+   * Fetch pull requests for a repository.
    */
   getPRs: publicProcedure
     .input(
@@ -166,31 +129,36 @@ export const githubRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) {
-        return { success: false, error: ghCheck.error, prs: [] }
-      }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) return { success: false, error: tokenResult.error, prs: [] }
 
       const remote = await getGitHubRemote(input.projectPath)
-      if (!remote) {
-        return { success: false, error: "No GitHub remote found", prs: [] }
-      }
+      if (!remote) return { success: false, error: "No GitHub remote found", prs: [] }
 
       try {
-        const { stdout } = await execAsync(
-          `gh pr list --repo ${remote.owner}/${remote.repo} --state ${input.state} --limit ${input.limit} --json number,title,state,author,headRefName,baseRefName,isDraft`,
-          { cwd: input.projectPath }
+        const res = await ghFetch(
+          tokenResult.token,
+          `/repos/${remote.owner}/${remote.repo}/pulls?state=${input.state}&per_page=${input.limit}`
         )
-        const prs = parsePRs(stdout)
+        if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
+        const data = await res.json()
+        const prs = data.map((pr: any) => ({
+          number: pr.number,
+          title: pr.title,
+          state: pr.state,
+          author: pr.user?.login || "unknown",
+          headBranch: pr.head?.ref,
+          baseBranch: pr.base?.ref,
+          draft: pr.draft || false,
+        }))
         return { success: true, prs }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return { success: false, error: message, prs: [] }
+        return { success: false, error: error instanceof Error ? error.message : String(error), prs: [] }
       }
     }),
 
   /**
-   * Fetch issues for a repository
+   * Fetch issues for a repository.
    */
   getIssues: publicProcedure
     .input(
@@ -201,42 +169,44 @@ export const githubRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) {
-        return { success: false, error: ghCheck.error, issues: [] }
-      }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) return { success: false, error: tokenResult.error, issues: [] }
 
       const remote = await getGitHubRemote(input.projectPath)
-      if (!remote) {
-        return { success: false, error: "No GitHub remote found", issues: [] }
-      }
+      if (!remote) return { success: false, error: "No GitHub remote found", issues: [] }
 
       try {
-        const { stdout } = await execAsync(
-          `gh issue list --repo ${remote.owner}/${remote.repo} --state ${input.state} --limit ${input.limit} --json number,title,state,author,labels`,
-          { cwd: input.projectPath }
+        // GitHub's /issues endpoint returns both issues and PRs — filter out PRs
+        const res = await ghFetch(
+          tokenResult.token,
+          `/repos/${remote.owner}/${remote.repo}/issues?state=${input.state}&per_page=${input.limit}`
         )
-        const issues = parseIssues(stdout)
+        if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
+        const data = await res.json()
+        const issues = data
+          .filter((item: any) => !item.pull_request)
+          .map((issue: any) => ({
+            number: issue.number,
+            title: issue.title,
+            state: issue.state,
+            author: issue.user?.login || "unknown",
+            labels: (issue.labels || []).map((l: any) => l.name),
+          }))
         return { success: true, issues }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return { success: false, error: message, issues: [] }
+        return { success: false, error: error instanceof Error ? error.message : String(error), issues: [] }
       }
     }),
 
   /**
-   * Fetch both PRs and issues for a repository
+   * Fetch both PRs and issues for a repository.
    */
   getData: publicProcedure
-    .input(
-      z.object({
-        projectPath: z.string(),
-      })
-    )
+    .input(z.object({ projectPath: z.string() }))
     .query(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) {
-        return { success: false, error: ghCheck.error, prs: [], issues: [] }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) {
+        return { success: false, error: tokenResult.error, prs: [], issues: [] }
       }
 
       const remote = await getGitHubRemote(input.projectPath)
@@ -245,63 +215,85 @@ export const githubRouter = router({
       }
 
       try {
-        // Fetch both in parallel
-        const [prsResult, issuesResult] = await Promise.all([
-          execAsync(
-            `gh pr list --repo ${remote.owner}/${remote.repo} --state open --limit 30 --json number,title,state,author,headRefName,baseRefName,isDraft`,
-            { cwd: input.projectPath }
-          ).then(({ stdout }) => parsePRs(stdout)).catch(() => []),
-          execAsync(
-            `gh issue list --repo ${remote.owner}/${remote.repo} --state open --limit 30 --json number,title,state,author,labels`,
-            { cwd: input.projectPath }
-          ).then(({ stdout }) => parseIssues(stdout)).catch(() => []),
+        const [prsRes, issuesRes] = await Promise.all([
+          ghFetch(tokenResult.token, `/repos/${remote.owner}/${remote.repo}/pulls?state=open&per_page=30`),
+          ghFetch(tokenResult.token, `/repos/${remote.owner}/${remote.repo}/issues?state=open&per_page=30`),
         ])
+
+        const prsData = prsRes.ok ? await prsRes.json() : []
+        const issuesData = issuesRes.ok ? await issuesRes.json() : []
+
+        const prs = prsData.map((pr: any) => ({
+          number: pr.number,
+          title: pr.title,
+          state: pr.state,
+          author: pr.user?.login || "unknown",
+          headBranch: pr.head?.ref,
+          baseBranch: pr.base?.ref,
+          draft: pr.draft || false,
+        }))
+
+        const issues = issuesData
+          .filter((item: any) => !item.pull_request)
+          .map((issue: any) => ({
+            number: issue.number,
+            title: issue.title,
+            state: issue.state,
+            author: issue.user?.login || "unknown",
+            labels: (issue.labels || []).map((l: any) => l.name),
+          }))
 
         return {
           success: true,
-          prs: prsResult,
-          issues: issuesResult,
+          prs,
+          issues,
           owner: remote.owner,
           repo: remote.repo,
           isGitHub: true,
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return { success: false, error: message, prs: [], issues: [] }
+        return { success: false, error: error instanceof Error ? error.message : String(error), prs: [], issues: [] }
       }
     }),
 
   /**
-   * Fetch full PR detail including body, commits, files changed, comments, and diff
+   * Fetch full PR detail including body, commits, files, comments, and diff.
    */
   getPRDetail: publicProcedure
     .input(z.object({ projectPath: z.string(), prNumber: z.number() }))
     .query(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) return { success: false as const, error: tokenResult.error }
 
       const remote = await getGitHubRemote(input.projectPath)
       if (!remote) return { success: false as const, error: "No GitHub remote found" }
 
+      const base = `/repos/${remote.owner}/${remote.repo}`
+
       try {
-        const [prResult, diffResult, inlineCommentsResult] = await Promise.all([
-          execAsync(
-            `gh pr view ${input.prNumber} --repo ${remote.owner}/${remote.repo} --json number,title,body,state,author,labels,headRefName,baseRefName,isDraft,commits,files,comments,reviews,additions,deletions,changedFiles,createdAt,updatedAt`,
-            { cwd: input.projectPath }
-          ),
-          execAsync(
-            `gh pr diff ${input.prNumber} --repo ${remote.owner}/${remote.repo}`,
-            { cwd: input.projectPath }
-          ).catch(() => ({ stdout: "" })),
-          // Inline review comments (code-level) live at the REST pulls/comments endpoint
-          execAsync(
-            `gh api repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/comments --paginate`,
-            { cwd: input.projectPath }
-          ).catch(() => ({ stdout: "[]" })),
+        const [prRes, commitsRes, filesRes, discussionRes, reviewsRes, inlineRes, diffRes] = await Promise.all([
+          ghFetch(tokenResult.token, `${base}/pulls/${input.prNumber}`),
+          ghFetch(tokenResult.token, `${base}/pulls/${input.prNumber}/commits?per_page=100`),
+          ghFetch(tokenResult.token, `${base}/pulls/${input.prNumber}/files?per_page=100`),
+          ghFetch(tokenResult.token, `${base}/issues/${input.prNumber}/comments?per_page=100`),
+          ghFetch(tokenResult.token, `${base}/pulls/${input.prNumber}/reviews?per_page=100`),
+          ghFetch(tokenResult.token, `${base}/pulls/${input.prNumber}/comments?per_page=100`),
+          ghFetch(tokenResult.token, `${base}/pulls/${input.prNumber}`, {
+            headers: { Accept: "application/vnd.github.diff" },
+          }),
         ])
 
-        const pr = JSON.parse(prResult.stdout)
-        const inlineComments: any[] = JSON.parse(inlineCommentsResult.stdout || "[]")
+        if (!prRes.ok) throw new Error(`GitHub API error: ${prRes.status}`)
+
+        const [pr, commits, files, discussion, reviews, inlineComments] = await Promise.all([
+          prRes.json(),
+          commitsRes.ok ? commitsRes.json() : [],
+          filesRes.ok ? filesRes.json() : [],
+          discussionRes.ok ? discussionRes.json() : [],
+          reviewsRes.ok ? reviewsRes.json() : [],
+          inlineRes.ok ? inlineRes.json() : [],
+        ])
+        const diff = diffRes.ok ? await diffRes.text() : ""
 
         return {
           success: true as const,
@@ -310,51 +302,51 @@ export const githubRouter = router({
             title: pr.title as string,
             body: (pr.body as string) || "",
             state: pr.state as string,
-            author: (pr.author?.login as string) || "unknown",
+            author: (pr.user?.login as string) || "unknown",
             labels: ((pr.labels || []) as any[]).map((l: any) => l.name as string),
-            headBranch: pr.headRefName as string,
-            baseBranch: pr.baseRefName as string,
-            draft: (pr.isDraft as boolean) || false,
+            headBranch: pr.head?.ref as string,
+            baseBranch: pr.base?.ref as string,
+            draft: (pr.draft as boolean) || false,
             additions: (pr.additions as number) || 0,
             deletions: (pr.deletions as number) || 0,
-            changedFiles: (pr.changedFiles as number) || 0,
-            createdAt: pr.createdAt as string,
-            updatedAt: pr.updatedAt as string,
-            commits: ((pr.commits || []) as any[]).map((c: any) => ({
-              sha: ((c.oid || c.sha || "") as string).slice(0, 7),
-              message: (c.messageHeadline || c.message || "") as string,
-              author: (c.authors?.[0]?.login || c.author?.login || "unknown") as string,
-              date: (c.committedDate || c.date || "") as string,
+            changedFiles: (pr.changed_files as number) || 0,
+            createdAt: pr.created_at as string,
+            updatedAt: pr.updated_at as string,
+            commits: (commits as any[]).map((c: any) => ({
+              sha: (c.sha as string).slice(0, 7),
+              message: (c.commit?.message?.split("\n")[0] || "") as string,
+              author: (c.author?.login || c.commit?.author?.name || "unknown") as string,
+              date: (c.commit?.author?.date || "") as string,
             })),
-            files: ((pr.files || []) as any[]).map((f: any) => ({
-              path: f.path as string,
+            files: (files as any[]).map((f: any) => ({
+              path: f.filename as string,
               additions: (f.additions as number) || 0,
               deletions: (f.deletions as number) || 0,
-              changeType: ((f.changeType || "MODIFIED") as string).toLowerCase() as "added" | "modified" | "deleted" | "renamed",
+              changeType: (f.status === "added" ? "added"
+                : f.status === "removed" ? "deleted"
+                : f.status === "renamed" ? "renamed"
+                : "modified") as "added" | "modified" | "deleted" | "renamed",
             })),
             comments: [
-              // General discussion comments
-              ...((pr.comments || []) as any[]).map((c: any) => ({
+              ...(discussion as any[]).map((c: any) => ({
                 id: String(c.id),
-                author: (c.author?.login || "unknown") as string,
+                author: (c.user?.login || "unknown") as string,
                 body: (c.body || "") as string,
-                createdAt: c.createdAt as string,
+                createdAt: c.created_at as string,
                 reviewState: null as string | null,
                 filePath: null as string | null,
               })),
-              // Review submissions with a non-empty body (e.g. "LGTM, approved")
-              ...((pr.reviews || []) as any[])
+              ...(reviews as any[])
                 .filter((r: any) => r.body && r.body.trim())
                 .map((r: any) => ({
-                  id: String(r.id || r.submittedAt),
-                  author: (r.author?.login || "unknown") as string,
+                  id: String(r.id),
+                  author: (r.user?.login || "unknown") as string,
                   body: (r.body || "") as string,
-                  createdAt: (r.submittedAt || "") as string,
+                  createdAt: (r.submitted_at || "") as string,
                   reviewState: (r.state || null) as string | null,
                   filePath: null as string | null,
                 })),
-              // Inline code review comments (REST API: pulls/{number}/comments)
-              ...inlineComments
+              ...(inlineComments as any[])
                 .filter((c: any) => c.body && c.body.trim())
                 .map((c: any) => ({
                   id: String(c.id),
@@ -369,7 +361,7 @@ export const githubRouter = router({
               const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
               return ta - tb
             }),
-            diff: diffResult.stdout as string,
+            diff,
           },
         }
       } catch (error) {
@@ -378,24 +370,32 @@ export const githubRouter = router({
     }),
 
   /**
-   * Fetch full issue detail including body and comments
+   * Fetch full issue detail including body and comments.
    */
   getIssueDetail: publicProcedure
     .input(z.object({ projectPath: z.string(), issueNumber: z.number() }))
     .query(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) return { success: false as const, error: tokenResult.error }
 
       const remote = await getGitHubRemote(input.projectPath)
       if (!remote) return { success: false as const, error: "No GitHub remote found" }
 
-      try {
-        const { stdout } = await execAsync(
-          `gh issue view ${input.issueNumber} --repo ${remote.owner}/${remote.repo} --json number,title,body,state,author,labels,assignees,comments,createdAt,updatedAt,milestone`,
-          { cwd: input.projectPath }
-        )
+      const base = `/repos/${remote.owner}/${remote.repo}`
 
-        const issue = JSON.parse(stdout)
+      try {
+        const [issueRes, commentsRes] = await Promise.all([
+          ghFetch(tokenResult.token, `${base}/issues/${input.issueNumber}`),
+          ghFetch(tokenResult.token, `${base}/issues/${input.issueNumber}/comments?per_page=100`),
+        ])
+
+        if (!issueRes.ok) throw new Error(`GitHub API error: ${issueRes.status}`)
+
+        const [issue, comments] = await Promise.all([
+          issueRes.json(),
+          commentsRes.ok ? commentsRes.json() : [],
+        ])
+
         return {
           success: true as const,
           issue: {
@@ -403,17 +403,17 @@ export const githubRouter = router({
             title: issue.title as string,
             body: (issue.body as string) || "",
             state: issue.state as string,
-            author: (issue.author?.login as string) || "unknown",
+            author: (issue.user?.login as string) || "unknown",
             labels: ((issue.labels || []) as any[]).map((l: any) => l.name as string),
             assignees: ((issue.assignees || []) as any[]).map((a: any) => a.login as string),
             milestone: (issue.milestone?.title as string) || null,
-            createdAt: issue.createdAt as string,
-            updatedAt: issue.updatedAt as string,
-            comments: ((issue.comments || []) as any[]).map((c: any) => ({
-              id: c.id as string,
-              author: (c.author?.login || "unknown") as string,
+            createdAt: issue.created_at as string,
+            updatedAt: issue.updated_at as string,
+            comments: (comments as any[]).map((c: any) => ({
+              id: String(c.id),
+              author: (c.user?.login || "unknown") as string,
               body: (c.body || "") as string,
-              createdAt: c.createdAt as string,
+              createdAt: c.created_at as string,
             })),
           },
         }
@@ -423,7 +423,7 @@ export const githubRouter = router({
     }),
 
   /**
-   * Create a new chat + sub_chat in the DB for a GitHub context conversation
+   * Create a new chat + sub_chat in the DB for a GitHub context conversation.
    */
   createChatSession: publicProcedure
     .input(
@@ -460,9 +460,7 @@ export const githubRouter = router({
     }),
 
   /**
-   * Reply to a PR comment.
-   * - isInline=true  → inline review comment  (POST /pulls/{n}/comments/{id}/replies)
-   * - isInline=false → issue-level discussion (POST /issues/{n}/comments)
+   * Reply to a PR comment via GitHub REST API.
    */
   replyToComment: publicProcedure
     .input(
@@ -475,35 +473,35 @@ export const githubRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) return { success: false as const, error: tokenResult.error }
 
       const remote = await getGitHubRemote(input.projectPath)
       if (!remote) return { success: false as const, error: "No GitHub remote found" }
 
-      // Write body to a temp file to avoid shell-escaping issues with arbitrary text
-      const tmpFile = path.join(os.tmpdir(), `gh-reply-${Date.now()}.json`)
-      fs.writeFileSync(tmpFile, JSON.stringify({ body: input.body }))
+      const base = `/repos/${remote.owner}/${remote.repo}`
+      const endpoint = input.isInline
+        ? `${base}/pulls/${input.prNumber}/comments/${input.commentId}/replies`
+        : `${base}/issues/${input.prNumber}/comments`
 
       try {
-        const endpoint = input.isInline
-          ? `repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/comments/${input.commentId}/replies`
-          : `repos/${remote.owner}/${remote.repo}/issues/${input.prNumber}/comments`
-
-        await execAsync(`gh api ${endpoint} --method POST --input ${tmpFile}`, {
-          cwd: input.projectPath,
+        const res = await ghFetch(tokenResult.token, endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body: input.body }),
         })
-
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.message || `HTTP ${res.status}`)
+        }
         return { success: true as const }
       } catch (error) {
         return { success: false as const, error: error instanceof Error ? error.message : String(error) }
-      } finally {
-        fs.unlinkSync(tmpFile)
       }
     }),
 
   /**
-   * Open a pull request in the system browser
+   * Open a pull request in the system browser.
    */
   openPRInBrowser: publicProcedure
     .input(z.object({ projectPath: z.string(), prNumber: z.number() }))
@@ -516,7 +514,7 @@ export const githubRouter = router({
     }),
 
   /**
-   * Merge a pull request
+   * Merge a pull request via GitHub REST API.
    */
   mergePR: publicProcedure
     .input(
@@ -527,28 +525,34 @@ export const githubRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) return { success: false as const, error: ghCheck.error }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) return { success: false as const, error: tokenResult.error }
 
       const remote = await getGitHubRemote(input.projectPath)
       if (!remote) return { success: false as const, error: "No GitHub remote found" }
 
       try {
-        await execAsync(
-          `gh pr merge ${input.prNumber} --repo ${remote.owner}/${remote.repo} --${input.method}`,
-          { cwd: input.projectPath }
+        const res = await ghFetch(
+          tokenResult.token,
+          `/repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/merge`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ merge_method: input.method }),
+          }
         )
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.message || `HTTP ${res.status}`)
+        }
         return { success: true as const }
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        const match = msg.match(/GraphQL: (.+)|error: (.+)/s)
-        return { success: false as const, error: match ? (match[1] || match[2]).trim() : msg }
+        return { success: false as const, error: error instanceof Error ? error.message : String(error) }
       }
     }),
 
   /**
-   * Submit a pull request review (approve, request changes, or leave a comment)
-   * Uses stored GitHub token for authentication
+   * Submit a pull request review via GitHub REST API.
    */
   submitReview: publicProcedure
     .input(
@@ -560,14 +564,8 @@ export const githubRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      // Get stored GitHub token
-      const db = getDatabase()
-      const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
-      const token = settings?.encryptedToken ? decryptText(settings.encryptedToken) : null
-
-      if (!token) {
-        return { success: false as const, error: "GitHub token not configured. Please add a token in Settings." }
-      }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) return { success: false as const, error: tokenResult.error }
 
       const remote = await getGitHubRemote(input.projectPath)
       if (!remote) return { success: false as const, error: "No GitHub remote found" }
@@ -576,36 +574,27 @@ export const githubRouter = router({
       if (input.body.trim()) payload.body = input.body.trim()
 
       try {
-        // Use fetch with stored token instead of gh CLI
-        const response = await fetch(
-          `https://api.github.com/repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/reviews`,
+        const res = await ghFetch(
+          tokenResult.token,
+          `/repos/${remote.owner}/${remote.repo}/pulls/${input.prNumber}/reviews`,
           {
             method: "POST",
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Accept": "application/vnd.github+json",
-              "X-GitHub-Api-Version": "2022-11-28",
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           }
         )
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          const errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`
-          return { success: false as const, error: errorMessage }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.message || `HTTP ${res.status}`)
         }
-
         return { success: true as const }
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        return { success: false as const, error: msg }
+        return { success: false as const, error: error instanceof Error ? error.message : String(error) }
       }
     }),
 
   /**
-   * Save GitHub PAT token (encrypted)
+   * Save GitHub PAT token (encrypted).
    */
   saveToken: publicProcedure
     .input(z.object({ token: z.string().min(1) }))
@@ -625,33 +614,28 @@ export const githubRouter = router({
     }),
 
   /**
-   * Check if GitHub token is configured
+   * Check if GitHub token is configured.
    */
   hasToken: publicProcedure.query(async () => {
     const db = getDatabase()
     const settings = db.select().from(githubSettings).where(eq(githubSettings.id, "default")).get()
-
-    return {
-      hasToken: !!settings?.encryptedToken,
-    }
+    return { hasToken: !!settings?.encryptedToken }
   }),
 
   /**
-   * Clear GitHub token
+   * Clear GitHub token.
    */
   clearToken: publicProcedure.mutation(async () => {
     const db = getDatabase()
-
     db.update(githubSettings)
       .set({ encryptedToken: null, updatedAt: new Date() })
       .where(eq(githubSettings.id, "default"))
       .run()
-
     return { success: true as const }
   }),
 
   /**
-   * Test GitHub token by making an API call
+   * Test GitHub token by making an API call.
    */
   testToken: publicProcedure.query(async () => {
     const db = getDatabase()
@@ -667,86 +651,63 @@ export const githubRouter = router({
     }
 
     try {
-      const response = await fetch("https://api.github.com/user", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "Claw-App",
-        },
-      })
-
-      if (!response.ok) {
-        const error = await response.text()
+      const res = await ghFetch(token, "/user")
+      if (!res.ok) {
+        const error = await res.text()
         return { success: false as const, error: `GitHub API error: ${error}` }
       }
-
-      const user = await response.json()
+      const user = await res.json()
       return {
         success: true as const,
-        user: {
-          login: user.login,
-          name: user.name,
-          email: user.email,
-        },
+        user: { login: user.login, name: user.name, email: user.email },
       }
     } catch (error) {
-      return {
-        success: false as const,
-        error: error instanceof Error ? error.message : String(error),
-      }
+      return { success: false as const, error: error instanceof Error ? error.message : String(error) }
     }
   }),
 
   /**
-   * Fetch README content for a repository
+   * Fetch README content for a repository via GitHub REST API.
    */
   getReadme: publicProcedure
     .input(z.object({ projectPath: z.string() }))
     .query(async ({ input }) => {
-      const ghCheck = await checkGhAvailable()
-      if (!ghCheck.available) {
-        return { success: false as const, error: ghCheck.error, content: "" }
-      }
+      const tokenResult = getStoredToken()
+      if ("error" in tokenResult) return { success: false as const, error: tokenResult.error, content: "" }
 
       const remote = await getGitHubRemote(input.projectPath)
-      if (!remote) {
-        return { success: false as const, error: "No GitHub remote found", content: "" }
-      }
+      if (!remote) return { success: false as const, error: "No GitHub remote found", content: "" }
 
-      // Try to fetch README using gh CLI
-      const readmePaths = ["README.md", "readme.md", "README.rst", "readme.rst", "README.txt", "readme.txt", "README", "readme"]
+      const candidates = ["README.md", "readme.md", "README.rst", "readme.rst", "README.txt", "readme.txt", "README", "readme"]
 
-      for (const readmePath of readmePaths) {
+      for (const readmePath of candidates) {
         try {
-          const { stdout } = await execAsync(
-            `gh api repos/${remote.owner}/${remote.repo}/contents/${readmePath}`,
-            { cwd: input.projectPath }
+          const res = await ghFetch(
+            tokenResult.token,
+            `/repos/${remote.owner}/${remote.repo}/contents/${readmePath}`
           )
-
-          const fileData = JSON.parse(stdout)
-          if (fileData.content) {
-            // Content is base64 encoded
-            const content = Buffer.from(fileData.content, "base64").toString("utf-8")
+          if (!res.ok) continue
+          const data = await res.json()
+          if (data.content) {
+            const content = Buffer.from(data.content, "base64").toString("utf-8")
             return { success: true as const, content }
           }
         } catch {
-          // Try next path
           continue
         }
       }
 
-      // If no README found, return empty content (not an error)
       return { success: true as const, content: "" }
     }),
 
   /**
-   * Add an image to the repository and insert it into the README
+   * Add an image to the repository and insert it into the README.
    */
   addImageToReadme: publicProcedure
     .input(
       z.object({
         projectPath: z.string(),
-        imageData: z.string(), // base64 data URL
+        imageData: z.string(),
         imageName: z.string(),
         caption: z.string().optional(),
         section: z.enum(["top", "bottom"]).default("bottom"),
@@ -754,63 +715,41 @@ export const githubRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        // Get remote info
         const remote = await getGitHubRemote(input.projectPath)
-        if (!remote) {
-          throw new Error("No GitHub remote found for this project")
-        }
-
-        // Ensure .github/assets directory exists
-        const assetsDir = path.join(input.projectPath, ".github", "assets")
-        if (!fs.existsSync(assetsDir)) {
-          fs.mkdirSync(assetsDir, { recursive: true })
-        }
-
-        // Extract base64 data from data URL
-        const base64Data = input.imageData.replace(/^data:image\/\w+;base64,/, "")
-        const buffer = Buffer.from(base64Data, "base64")
+        if (!remote) throw new Error("No GitHub remote found for this project")
 
         // Save image to .github/assets
+        const assetsDir = path.join(input.projectPath, ".github", "assets")
+        if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true })
+        const base64Data = input.imageData.replace(/^data:image\/\w+;base64,/, "")
         const imagePath = path.join(assetsDir, input.imageName)
-        fs.writeFileSync(imagePath, buffer)
+        fs.writeFileSync(imagePath, Buffer.from(base64Data, "base64"))
 
-        // Get current README content
-        const readmePaths = ["README.md", "readme.md", "Readme.md"]
+        // Read current README from disk (local file, no API call needed)
+        const readmeCandidates = ["README.md", "readme.md", "Readme.md"]
         let readmePath = "README.md"
         let currentContent = ""
 
-        for (const testPath of readmePaths) {
-          try {
-            const { stdout } = await execAsync(
-              `gh api repos/${remote.owner}/${remote.repo}/contents/${testPath}`,
-              { cwd: input.projectPath }
-            )
-            const fileData = JSON.parse(stdout)
-            if (fileData.content) {
-              currentContent = Buffer.from(fileData.content, "base64").toString("utf-8")
-              readmePath = testPath
-              break
-            }
-          } catch {
-            continue
+        for (const candidate of readmeCandidates) {
+          const fullPath = path.join(input.projectPath, candidate)
+          if (fs.existsSync(fullPath)) {
+            currentContent = fs.readFileSync(fullPath, "utf-8")
+            readmePath = candidate
+            break
           }
         }
 
-        // If no README exists, create one
         if (!currentContent) {
           currentContent = `# ${path.basename(input.projectPath)}\n\n`
         }
 
-        // Create markdown image reference
         const imageRef = `.github/assets/${input.imageName}`
         const imageMarkdown = input.caption
           ? `![${input.caption}](${imageRef})\n\n*${input.caption}*\n\n`
           : `![Diagram](${imageRef})\n\n`
 
-        // Insert image into README
         let newContent: string
         if (input.section === "top") {
-          // Insert after the first heading
           const lines = currentContent.split("\n")
           const firstHeadingIndex = lines.findIndex((line) => line.startsWith("#"))
           if (firstHeadingIndex !== -1) {
@@ -820,32 +759,19 @@ export const githubRouter = router({
             newContent = imageMarkdown + currentContent
           }
         } else {
-          // Append to bottom
           newContent = currentContent + "\n\n" + imageMarkdown
         }
 
-        // Write updated README
         const readmeFullPath = path.join(input.projectPath, readmePath)
         fs.writeFileSync(readmeFullPath, newContent)
 
-        // Stage and commit changes
         await execAsync(`git add "${imagePath}" "${readmeFullPath}"`, { cwd: input.projectPath })
-        await execAsync(
-          `git commit -m "docs: add ${input.imageName} to README"`,
-          { cwd: input.projectPath }
-        )
+        await execAsync(`git commit -m "docs: add ${input.imageName} to README"`, { cwd: input.projectPath })
 
-        return {
-          success: true as const,
-          imagePath: imageRef,
-          message: "Image added to README successfully",
-        }
+        return { success: true as const, imagePath: imageRef, message: "Image added to README successfully" }
       } catch (error) {
         console.error("[github] Failed to add image to README:", error)
-        return {
-          success: false as const,
-          error: error instanceof Error ? error.message : "Failed to add image to README",
-        }
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to add image to README" }
       }
     }),
 })
