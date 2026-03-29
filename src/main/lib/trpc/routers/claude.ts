@@ -776,15 +776,12 @@ export const claudeRouter = router({
           safeEmit({
             type: "error",
             errorText: `${context}: ${errorMessage}`,
-            // Include extra debug info
-            ...(process.env.NODE_ENV !== "production" && {
-              debugInfo: {
-                context,
-                cwd: input.cwd,
-                mode: input.mode,
-                PATH: process.env.PATH?.slice(0, 200),
-              },
-            }),
+            debugInfo: {
+              context,
+              cwd: input.cwd,
+              mode: input.mode,
+              PATH: process.env.PATH?.slice(0, 200),
+            },
           } as UIMessageChunk)
         }
 
@@ -1514,8 +1511,45 @@ export const claudeRouter = router({
             let resultReceived = false // Flag to stop after result message
             const streamIterationStart = Date.now()
 
+            // Streaming inactivity timeout — if binary hangs (e.g., stuck session resume),
+            // abort after 90s of no messages and surface an error to the UI
+            const STREAM_TIMEOUT_MS = 90_000
+            let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null
+            const resetStreamTimeout = () => {
+              if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle)
+              streamTimeoutHandle = setTimeout(() => {
+                console.error(`[claude] Stream timeout: no messages received for ${STREAM_TIMEOUT_MS / 1000}s — aborting`)
+                // Clear the session to prevent the same hang on retry
+                try {
+                  if (existsSync(isolatedConfigDir)) {
+                    rmSync(isolatedConfigDir, { recursive: true, force: true })
+                    console.log(`[claude] Removed timed-out session dir: ${isolatedConfigDir}`)
+                  }
+                } catch (rmErr) {
+                  console.error(`[claude] Failed to remove session dir:`, rmErr)
+                }
+                db.update(subChats)
+                  .set({ sessionId: null })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+                console.log(`[claude] Cleared session ID for subChat ${input.subChatId} after timeout`)
+
+                safeEmit({
+                  type: "error",
+                  errorText: "Claude stopped responding. The session has been reset — please resend your message.",
+                  debugInfo: { category: "STREAM_TIMEOUT", timeoutMs: STREAM_TIMEOUT_MS },
+                } as UIMessageChunk)
+                safeEmit({ type: "finish" } as UIMessageChunk)
+                safeComplete()
+                abortController.abort()
+              }, STREAM_TIMEOUT_MS)
+            }
+            resetStreamTimeout() // Start the initial timeout
+
             try {
               for await (const msg of stream) {
+                resetStreamTimeout() // Reset timeout on every message
+
                 if (abortController.signal.aborted || resultReceived) {
                   if (resultReceived) {
                     console.log(`[SD] M:RESULT_EXIT sub=${subId} messageCount=${messageCount}`)
@@ -1774,6 +1808,25 @@ export const claudeRouter = router({
                     // Fallback category if compaction wasn't triggered or failed
                     errorCategory = "CONTEXT_LENGTH"
                     errorContext = "Conversation exceeds context limit"
+                  }
+
+                  // Clear session on auth errors to prevent resume hang on next attempt
+                  // When a session ends with an auth error, the binary hangs on resume
+                  if (errorCategory === "AUTH_FAILED_SDK" || errorCategory === "INVALID_API_KEY_SDK") {
+                    console.log(`[claude] Auth error detected (${errorCategory}) - clearing session to prevent resume hang`)
+                    try {
+                      if (existsSync(isolatedConfigDir)) {
+                        rmSync(isolatedConfigDir, { recursive: true, force: true })
+                        console.log(`[claude] Removed auth-failed session dir: ${isolatedConfigDir}`)
+                      }
+                    } catch (rmErr) {
+                      console.error(`[claude] Failed to remove session dir:`, rmErr)
+                    }
+                    db.update(subChats)
+                      .set({ sessionId: null })
+                      .where(eq(subChats.id, input.subChatId))
+                      .run()
+                    console.log(`[claude] Cleared session ID for subChat ${input.subChatId}`)
                   }
 
                   // Emit auth-error for authentication failures, regular error otherwise
@@ -2277,6 +2330,9 @@ export const claudeRouter = router({
                 }
               }
 
+              // Clear the inactivity timeout now that the stream has ended
+              if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle)
+
               // Warn if stream yielded no messages
               if (messageCount === 0) {
                 console.error(`[claude] Stream yielded no messages - model not responding`)
@@ -2304,6 +2360,9 @@ export const claudeRouter = router({
                 }
               }
             } catch (streamError) {
+              // Clear the inactivity timeout on stream error
+              if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle)
+
               // This catches errors during streaming (like process exit)
               const err = streamError as Error
               const stderrOutput = stderrLines.join("\n")

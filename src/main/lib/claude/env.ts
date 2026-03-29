@@ -559,8 +559,13 @@ export function buildClaudeEnv(options?: {
         const isOllamaMode = customEnv.ANTHROPIC_AUTH_TOKEN === "ollama" ||
                              (customEnv.ANTHROPIC_BASE_URL && customEnv.ANTHROPIC_BASE_URL.includes("ollama.com"))
         if (isOllamaMode) {
-          // For Ollama Cloud, the ANTHROPIC_AUTH_TOKEN is the actual API key (not "ollama" marker)
+          // For Ollama Cloud, the ANTHROPIC_AUTH_TOKEN must be the real API key, not the "ollama" marker.
+          // The binary sends ANTHROPIC_AUTH_TOKEN as Bearer token — "ollama" causes 401 on cloud endpoints.
           const isCloudMode = customEnv.ANTHROPIC_BASE_URL && !customEnv.ANTHROPIC_BASE_URL.includes("localhost")
+          if (isCloudMode && customEnv.OLLAMA_API_KEY && env.ANTHROPIC_AUTH_TOKEN === "ollama") {
+            env.ANTHROPIC_AUTH_TOKEN = customEnv.OLLAMA_API_KEY
+            console.log("[claude-env] Ollama Cloud: swapped marker token for OLLAMA_API_KEY")
+          }
 
           // CRITICAL: Set context window limits for Ollama
           // Ollama defaults to only 2048 tokens - must be increased for large system prompts
