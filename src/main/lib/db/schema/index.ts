@@ -547,3 +547,87 @@ export type NewHook = typeof hooks.$inferInsert
 export type HookType = "PreToolUse" | "PostToolUse" | "SubagentStart" | "SubagentStop" | "Stop"
 export type HookScope = "global" | "project"
 
+// Chat session types
+export type ChatSession = typeof chatSessions.$inferSelect
+export type NewChatSession = typeof chatSessions.$inferInsert
+
+// ============ WHATSAPP BRIDGES ============
+// Stores bidirectional WhatsApp-Chat bridge configurations
+// Enables messages from WhatsApp groups to appear in Claw chat UI and vice versa
+export const whatsappBridges = sqliteTable("whatsapp_bridges", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  chatId: text("chat_id")
+    .notNull()
+    .references(() => chats.id, { onDelete: "cascade" }),
+  subChatId: text("sub_chat_id")
+    .notNull()
+    .references(() => subChats.id, { onDelete: "cascade" }),
+  whatsappJid: text("whatsapp_jid").notNull(), // WhatsApp group JID (e.g., "123456@g.us")
+  whatsappGroupName: text("whatsapp_group_name"), // Display name of the WhatsApp group
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+}, (table) => ({
+  chatIdIdx: index("whatsapp_bridges_chat_id_idx").on(table.chatId),
+  subChatIdIdx: index("whatsapp_bridges_sub_chat_id_idx").on(table.subChatId),
+  jidIdx: index("whatsapp_bridges_jid_idx").on(table.whatsappJid),
+  uniqueBridge: index("whatsapp_bridges_unique_idx").on(table.chatId, table.whatsappJid),
+}))
+
+export const whatsappBridgesRelations = relations(whatsappBridges, ({ one }) => ({
+  chat: one(chats, {
+    fields: [whatsappBridges.chatId],
+    references: [chats.id],
+  }),
+  subChat: one(subChats, {
+    fields: [whatsappBridges.subChatId],
+    references: [subChats.id],
+  }),
+}))
+
+// WhatsApp bridge types
+export type WhatsappBridge = typeof whatsappBridges.$inferSelect
+export type NewWhatsappBridge = typeof whatsappBridges.$inferInsert
+
+// ============ OPENUI GENERATED COMPONENTS ============
+export const openuiComponents = sqliteTable("openui_components", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  name: text("name").notNull(),
+  description: text("description"),
+  code: text("code").notNull(), // The generated React component code
+  atomsCode: text("atoms_code"), // Generated Jotai atoms code
+  prompt: text("prompt").notNull(), // The original user prompt
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  chatId: text("chat_id")
+    .references(() => chats.id, { onDelete: "set null" }), // Optional: associated chat
+  filePath: text("file_path"), // Path to saved file in generated/
+  isInstalled: integer("is_installed", { mode: "boolean" }).default(false), // Whether component is installed to project
+  metadata: text("metadata"), // JSON: { usedComponents: string[], complexity: string }
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+export const openuiComponentsRelations = relations(openuiComponents, ({ one }) => ({
+  project: one(projects, {
+    fields: [openuiComponents.projectId],
+    references: [projects.id],
+  }),
+  chat: one(chats, {
+    fields: [openuiComponents.chatId],
+    references: [chats.id],
+  }),
+}))
+
+// OpenUI component types
+export type OpenUIComponent = typeof openuiComponents.$inferSelect
+export type NewOpenUIComponent = typeof openuiComponents.$inferInsert

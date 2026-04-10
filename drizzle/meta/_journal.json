@@ -552,56 +552,7 @@
       "idx": 78,
       "version": "6",
       "when": 1773590600000,
-      "tag": "0075_add_headless_claws_claws_soul",
-      "breakpoints": true
-    },
-    {
-      "idx": 79,
-      "version": "6",
-      "when": 1772680800000,
-      "tag": "0077_remove_headless_claws_table",
-      "breakpoints": true
-    },
-    {
-      "idx": 80,
-      "version": "6",
-      "when": 1772680800001,
-      "tag": "0078_remove_claw_executions_table",
-      "breakpoints": true
-    },
-    {
-      "idx": 81,
-      "version": "6",
-      "when": 1772680800002,
-      "tag": "0079_remove_chat_sessions_table",
-      "breakpoints": true
-    },
-    {
-      "idx": 82,
-      "version": "6",
-      "when": 1772680800003,
-      "tag": "0080_remove_whatsapp_bridges_table",
-      "breakpoints": true
-    },
-    {
-      "idx": 83,
-      "version": "6",
-      "when": 1772680800004,
-      "tag": "0081_remove_discord_bridges_table",
-      "breakpoints": true
-    },
-    {
-      "idx": 84,
-      "version": "6",
-      "when": 1772680800005,
-      "tag": "0082_remove_slack_settings_table",
-      "breakpoints": true
-    },
-    {
-      "idx": 85,
-      "version": "6",
-      "when": 1772680800006,
-      "tag": "0083_add_discord_settings",
+      "tag": "0075_add_openui_components_table",
       "breakpoints": true
     }
   ]

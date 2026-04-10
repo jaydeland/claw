@@ -64,6 +64,7 @@ import { ErDiagramView } from "../../er-diagram/ui/er-diagram-view"
 import { selectedSettingsCategoryAtom } from "../atoms"
 import { CcSettingsContent } from "../../settings/ui/cc-settings-content"
 import { PinnedTabsBar } from "../components/pinned-tabs-bar"
+import { OpenUIContent } from "../../openui/ui/openui-content"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -859,6 +860,7 @@ export function AgentsContent() {
   const showPromptsView = selectedSidebarTab === "prompts"
   const showErDiagramView = selectedSidebarTab === "er-diagram"
   const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory && !showWorkflowsView
+  const showOpenUIView = selectedSidebarTab === "openui"
 
   // Workspace GitHub flex view: 2-pane content+chat when a Source Repo item is selected
   // from the workspace sidebar (chats tab), with no active chat
@@ -930,6 +932,9 @@ export function AgentsContent() {
         <CcSettingsContent />
       </div>
 
+
+      {/* OpenUI Builder view */}
+      {showOpenUIView && <OpenUIContent />}
 
       {/* Main content - chats/terminal/other */}
       <div className={showMainContent ? "flex h-full" : "hidden"}>

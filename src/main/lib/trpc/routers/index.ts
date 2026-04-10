@@ -33,6 +33,7 @@ import { claudeConfigRouter } from "./claude-config"
 import { hooksRouter } from "./hooks"
 import { projectSettingsRouter } from "./project-settings"
 import { gitnexusRouter } from "./gitnexus"
+import { openuiRouter } from "./openui"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -76,6 +77,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     hooks: hooksRouter,
     projectSettings: projectSettingsRouter,
     gitnexus: gitnexusRouter,
+    openui: openuiRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

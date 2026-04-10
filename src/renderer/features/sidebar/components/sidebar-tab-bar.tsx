@@ -15,6 +15,7 @@ import {
   Rocket,
   ScrollText,
   Database,
+  Sparkles,
 } from "lucide-react"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
 import { ClaudeCodeIcon } from "../../../components/ui/canvas-icons"
@@ -45,6 +46,7 @@ const tabs: TabItem[] = [
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "er-diagram", label: "ER Diagram", icon: Database },
+  { id: "openui", label: "Extend Claw with AI", icon: Sparkles },
 ]
 
 interface SidebarTabBarProps {
@@ -88,6 +90,9 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
         setGsdCategory(null)
         setSettingsCategory("overview") // Default to overview category
         setIsContentCollapsed(false) // Settings has tree pane
+      } else if (tabId === "openui") {
+        setGsdCategory(null)
+        setIsContentCollapsed(false) // OpenUI has left panel with component library
       } else {
         setGsdCategory(null)
         setIsContentCollapsed(false)
