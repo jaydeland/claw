@@ -74,6 +74,7 @@ export class WhatsAppAdapter {
   private sessionPath: string
   private groupMetadataCache = new Map<string, any>()
   private lidToPhoneMap: Record<string, string> = {}
+  private lastQRCode: string | null = null
 
   constructor() {
     this.sessionPath = path.join(app.getPath("userData"), "baileys_auth")
@@ -81,6 +82,10 @@ export class WhatsAppAdapter {
 
   isActive(): boolean {
     return this.isRunning
+  }
+
+  getLastQRCode(): string | null {
+    return this.lastQRCode
   }
 
   /**
@@ -167,6 +172,7 @@ export class WhatsAppAdapter {
 
       if (qr) {
         console.log("[WhatsAppAdapter] QR code generated")
+        this.lastQRCode = qr
         whatsAppQREmitter.emit("qr", qr)
       }
 
@@ -217,6 +223,7 @@ export class WhatsAppAdapter {
 
           await this.updateConnectionStatus(false)
           whatsAppQREmitter.emit("qr", null)
+          this.lastQRCode = null
         }
       } else if (connection === "open") {
         console.log("[WhatsAppAdapter] Connected successfully")
@@ -234,6 +241,7 @@ export class WhatsAppAdapter {
         }
 
         whatsAppQREmitter.emit("qr", null)
+        this.lastQRCode = null
       }
     })
 
@@ -339,6 +347,7 @@ export class WhatsAppAdapter {
           metadata: {
             whatsappJid: from,
             isGroup,
+            fromMe: !!msg.key.fromMe,
             media: mediaInfo,
           },
         })
@@ -546,6 +555,7 @@ export class WhatsAppAdapter {
       this.sock = null
       this.isRunning = false
       this.isStarting = false
+      this.lastQRCode = null
       await this.updateConnectionStatus(false)
     } catch (error) {
       console.error("[WhatsAppAdapter] Error stopping:", error)

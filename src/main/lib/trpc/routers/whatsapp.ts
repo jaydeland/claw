@@ -13,6 +13,7 @@ import {
   whatsAppStatusEmitter,
 } from "../../messaging/whatsapp-adapter"
 import { incomingMessageEmitter } from "../../messaging"
+import { processIncomingWhatsAppMessage } from "../../messaging/whatsapp-bridge"
 import { observable } from "@trpc/server/observable"
 import { getDatabase, chats, subChats } from "../../db"
 import { eq, and, desc } from "drizzle-orm"
@@ -58,6 +59,13 @@ export const whatsappRouter = router({
   // Subscribe to QR code updates
   onQRCode: publicProcedure.subscription(() => {
     return observable<string | null>((emit) => {
+      // Immediately replay last QR code if one exists (fixes late-subscriber race condition)
+      const adapter = getWhatsAppAdapter()
+      const lastQR = adapter.getLastQRCode()
+      if (lastQR) {
+        emit.next(lastQR)
+      }
+
       const handler = (qr: string | null) => {
         emit.next(qr)
       }
@@ -258,53 +266,22 @@ export const whatsappRouter = router({
       console.log("[WhatsAppRouter] onBridgeMessage subscription started - handler registered")
       const handler = (message: any) => {
         console.log(`[WhatsAppRouter] Handler received message:`, { platform: message.platform, chatId: message.chatId, text: message.text?.substring(0, 50) })
-        // Only handle WhatsApp messages
-        if (message.platform !== "whatsapp") {
-          console.log(`[WhatsAppRouter] Skipping non-whatsapp message: ${message.platform}`)
-          return
-        }
 
-        // Get the chat connection info to find bridgeId
         const db = getDatabase()
-        const chat = db
-          .select()
-          .from(chats)
-          .where(eq(chats.id, message.chatId))
-          .get()
+        const result = processIncomingWhatsAppMessage(message, db, chats, subChats)
 
-        if (!chat) {
-          console.log(`[WhatsAppRouter] No chat found for ${message.chatId}`)
+        if (result.action === "skip") {
+          console.log(`[WhatsAppRouter] Skipping: ${result.reason}`)
           return
         }
 
-        // Find the most recent subChat for this chat to use as target
-        const subChat = db
-          .select()
-          .from(subChats)
-          .where(eq(subChats.chatId, message.chatId))
-          .orderBy(desc(subChats.createdAt))
-          .limit(1)
-          .get()
-
-        // If no subChat exists, we can't route the message
-        if (!subChat) {
-          console.log(`[WhatsAppRouter] No subChat found for chat ${message.chatId}`)
-          return
+        console.log(`[WhatsAppRouter] Emitting to frontend: chatId=${result.payload.chatId}, subChatId=${result.payload.subChatId}`)
+        try {
+          emit.next(result.payload)
+          console.log(`[WhatsAppRouter] emit.next() succeeded for chatId=${result.payload.chatId}`)
+        } catch (emitErr) {
+          console.error(`[WhatsAppRouter] emit.next() THREW:`, emitErr)
         }
-
-        console.log(`[WhatsAppRouter] Emitting to frontend: chatId=${chat.id}, subChatId=${subChat.id}`)
-        // Transform to the format expected by frontend
-        emit.next({
-          bridgeId: chat.id,
-          chatId: chat.id,
-          subChatId: subChat.id,
-          whatsappJid: message.metadata?.whatsappJid || "",
-          sender: message.sender,
-          text: message.text,
-          timestamp: message.timestamp,
-          messageId: message.messageId,
-          fromMe: message.metadata?.fromMe || false,
-        })
       }
 
       incomingMessageEmitter.on("message", handler)
