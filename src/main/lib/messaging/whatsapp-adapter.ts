@@ -74,6 +74,10 @@ export class WhatsAppAdapter {
   private sessionPath: string
   private groupMetadataCache = new Map<string, any>()
   private lidToPhoneMap: Record<string, string> = {}
+  // Track messages sent programmatically by the bot (not from the user's phone).
+  // Used to distinguish bot echoes from user messages on the same WhatsApp account.
+  // Maps "groupJid:textHash" → timestamp. Entries expire after 60s.
+  private recentBotMessages = new Map<string, number>()
   private lastQRCode: string | null = null
 
   constructor() {
@@ -298,10 +302,19 @@ export class WhatsAppAdapter {
     const from = msg.key.remoteJid
     const isGroup = from?.endsWith("@g.us")
 
+    // Skip non-group DMs from self (we only bridge group messages)
     if (msg.key.fromMe && !isGroup) return
 
     const messageContent = await this.extractMessageContent(msg)
     if (!messageContent) return
+
+    // For group messages: check if this is a bot echo (message we sent programmatically).
+    // We can't use msg.key.fromMe because the user's phone and the Baileys bot share
+    // the same WhatsApp account — both show fromMe=true for the same number.
+    if (isGroup && messageContent.text && this.isBotEcho(from, messageContent.text)) {
+      console.log(`[WhatsAppAdapter] Skipping bot echo in ${from}`)
+      return
+    }
 
     const sender = msg.pushName || "Unknown"
     console.log(`[WhatsAppAdapter] Message from ${sender} (${from}): ${messageContent.text?.substring(0, 100) || "[Media]"}`)
@@ -347,7 +360,8 @@ export class WhatsAppAdapter {
           metadata: {
             whatsappJid: from,
             isGroup,
-            fromMe: !!msg.key.fromMe,
+            fromMe: false, // If we reach here, it's not a bot echo
+            messageKey: msg.key, // For reactions (react to this message)
             media: mediaInfo,
           },
         })
@@ -527,6 +541,8 @@ export class WhatsAppAdapter {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         await this.sock.sendMessage(to, { text })
+        // Track this as a bot-sent message so we can filter the echo
+        this.trackBotMessage(to, text)
         return true
       } catch (error: any) {
         console.error(`[WhatsAppAdapter] Failed to send message (attempt ${attempt}/${retries}):`, error)
@@ -543,6 +559,93 @@ export class WhatsAppAdapter {
       }
     }
 
+    return false
+  }
+
+  /**
+   * React to a WhatsApp message with an emoji.
+   * @param jid - The chat/group JID
+   * @param messageKey - The key of the message to react to (from msg.key)
+   * @param emoji - The emoji to react with (empty string to remove reaction)
+   */
+  async reactToMessage(jid: string, messageKey: any, emoji: string): Promise<void> {
+    if (!this.sock) return
+    try {
+      await this.sock.sendMessage(jid, {
+        react: { text: emoji, key: messageKey }
+      })
+    } catch (err) {
+      console.error(`[WhatsAppAdapter] Failed to react with ${emoji}:`, err)
+    }
+  }
+
+  // Track JIDs we've already subscribed to for presence updates
+  private presenceSubscribed = new Set<string>()
+
+  /**
+   * Ensure we're subscribed to a JID's presence channel.
+   * Required before sendPresenceUpdate will work.
+   */
+  private async ensurePresenceSubscribed(jid: string): Promise<void> {
+    if (!this.sock || this.presenceSubscribed.has(jid)) return
+    try {
+      await this.sock.presenceSubscribe(jid)
+      this.presenceSubscribed.add(jid)
+    } catch {
+      // Non-critical
+    }
+  }
+
+  /**
+   * Send a typing indicator ("composing") to a WhatsApp chat/group.
+   * Shows "Claw is typing..." on all members' phones.
+   */
+  async sendTypingIndicator(to: string): Promise<void> {
+    if (!this.sock) return
+    try {
+      await this.ensurePresenceSubscribed(to)
+      await this.sock.sendPresenceUpdate("composing", to)
+    } catch (err) {
+      // Non-critical — don't log noisily
+    }
+  }
+
+  /**
+   * Clear the typing indicator for a WhatsApp chat/group.
+   */
+  async clearTypingIndicator(to: string): Promise<void> {
+    if (!this.sock) return
+    try {
+      await this.sock.sendPresenceUpdate("paused", to)
+    } catch (err) {
+      // Non-critical
+    }
+  }
+
+  /**
+   * Record a message sent by the bot so we can identify its echo later.
+   * Uses a hash of groupJid + first 100 chars of text as the key.
+   */
+  private trackBotMessage(to: string, text: string): void {
+    const key = `${to}:${text.substring(0, 100)}`
+    this.recentBotMessages.set(key, Date.now())
+    // Prune entries older than 60 seconds to prevent memory leak
+    const cutoff = Date.now() - 60_000
+    for (const [k, ts] of this.recentBotMessages) {
+      if (ts < cutoff) this.recentBotMessages.delete(k)
+    }
+  }
+
+  /**
+   * Check if a message was recently sent by the bot (is an echo).
+   * Consumes the entry to prevent double-matching.
+   */
+  isBotEcho(from: string, text: string): boolean {
+    const key = `${from}:${text.substring(0, 100)}`
+    if (this.recentBotMessages.has(key)) {
+      this.recentBotMessages.delete(key)
+      return true
+    }
     return false
   }
 

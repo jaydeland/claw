@@ -3,19 +3,11 @@
 import React from "react"
 import { useAtom, useSetAtom } from "jotai"
 import {
-  Terminal,
-  TerminalSquare,
-  Bot,
-  LibraryBig,
-  Server,
   History,
   ChevronsLeft,
   ChevronsRight,
   FolderOpen,
-  Rocket,
-  ScrollText,
-  Database,
-  Sparkles,
+  Bot,
 } from "lucide-react"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
 import { ClaudeCodeIcon } from "../../../components/ui/canvas-icons"
@@ -27,9 +19,9 @@ import {
 import { cn } from "../../../lib/utils"
 import { selectedSidebarTabAtom, sidebarContentCollapsedAtom, selectedSettingsCategoryAtom, type SidebarTab } from "../../agents/atoms"
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
-import { selectedClustersCategoryAtom } from "../../clusters/atoms"
+
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
-import { selectedGsdCategoryAtom } from "../../gsd/atoms"
+
 
 interface TabItem {
   id: SidebarTab
@@ -40,13 +32,9 @@ interface TabItem {
 const tabs: TabItem[] = [
   { id: "history", label: "History", icon: History },
   { id: "chats", label: "Workspaces", icon: FolderOpen },
-  { id: "clusters", label: "Clusters", icon: Server },
-  { id: "gsd", label: "Get-Sh!t-Done", icon: Rocket },
+
   { id: "settings", label: "CC Settings", icon: ClaudeCodeIcon },
-  { id: "terminal", label: "Terminal", icon: TerminalSquare },
-  { id: "prompts", label: "Prompts", icon: ScrollText },
-  { id: "er-diagram", label: "ER Diagram", icon: Database },
-  { id: "openui", label: "Extend Claw with AI", icon: Sparkles },
+  { id: "orchestrators", label: "Orchestrators", icon: Bot },
 ]
 
 interface SidebarTabBarProps {
@@ -61,9 +49,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
 
   // Category atoms that control main content view - need to clear when switching tabs
   const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
-  const setClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const setMcpCategory = useSetAtom(selectedMcpCategoryAtom)
-  const setGsdCategory = useSetAtom(selectedGsdCategoryAtom)
   const setSettingsCategory = useSetAtom(selectedSettingsCategoryAtom)
 
   const handleTabClick = (tabId: SidebarTab) => {
@@ -76,25 +62,12 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
       // Clear all category atoms to ensure correct main content view renders
       // These atoms control which view is shown in AgentsContent
       setWorkflowCategory(null)
-      setClustersCategory(null)
       setMcpCategory(null)
 
-      // GSD tab directly opens the doc view (no intermediate panel)
-      if (tabId === "gsd") {
-        setGsdCategory("gsd")
-        setIsContentCollapsed(true) // Collapse sidebar since GSD has its own file tree
-      } else if (tabId === "prompts" || tabId === "er-diagram") {
-        setGsdCategory(null)
-        setIsContentCollapsed(true) // Full-width view — no sidebar panel needed
-      } else if (tabId === "settings") {
-        setGsdCategory(null)
+      if (tabId === "settings") {
         setSettingsCategory("overview") // Default to overview category
         setIsContentCollapsed(false) // Settings has tree pane
-      } else if (tabId === "openui") {
-        setGsdCategory(null)
-        setIsContentCollapsed(false) // OpenUI has left panel with component library
       } else {
-        setGsdCategory(null)
         setIsContentCollapsed(false)
       }
     }

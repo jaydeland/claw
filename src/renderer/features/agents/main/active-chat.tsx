@@ -122,10 +122,6 @@ import { SessionFlowRenderer } from "../../session-flow/ui/session-flow-renderer
 import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
 import { LoadedContextRenderer } from "../../loaded-context/ui/loaded-context-renderer"
 import { FileContentDialog } from "../ui/file-content-dialog"
-import { gsdChatSidebarOpenAtom, selectedGsdDocumentAtom } from "../atoms"
-import { GsdChatSidebar } from "../components/gsd-chat-sidebar"
-import { GsdDocumentDialog } from "../components/gsd-document-dialog"
-import { GsdRenderer } from "../components/gsd-renderer"
 import { AnalyzeRenderer } from "../../analyze/ui/analyze-renderer"
 import { DevServerPreview } from "../../dev-server-preview"
 import {
@@ -1895,8 +1891,6 @@ const ChatViewInner = memo(function ChatViewInner({
   onRestoreWorkspace,
   existingPrUrl,
   isActive = true,
-  pendingGsdCommand,
-  onGsdCommandExecuted,
   connectionType,
   connectionName,
 }: {
@@ -1921,8 +1915,6 @@ const ChatViewInner = memo(function ChatViewInner({
   onRestoreWorkspace?: () => void
   existingPrUrl?: string | null
   isActive?: boolean
-  pendingGsdCommand?: string | null
-  onGsdCommandExecuted?: () => void
   connectionType?: "none" | "whatsapp" | "slack"
   connectionName?: string
 }) {
@@ -2137,9 +2129,6 @@ const ChatViewInner = memo(function ChatViewInner({
   const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)
   const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
   const [, setSessionFlowBottomTab] = useAtom(sessionFlowBottomTabAtom)
-
-  // GSD Document viewer state (for viewing planning docs)
-  const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocumentAtom)
 
   // Tasks panel visibility (deprecated - now uses session flow Tasks tab)
   const [showTasksPanel, setShowTasksPanel] = useAtom(showTasksPanelAtom)
@@ -3241,18 +3230,6 @@ const ChatViewInner = memo(function ChatViewInner({
     addToQueue,
   ])
 
-  // Effect to handle GSD commands from outer scope
-  useEffect(() => {
-    if (pendingGsdCommand && onGsdCommandExecuted) {
-      // Set the command in editor
-      editorRef.current?.setValue(pendingGsdCommand)
-      // Trigger send immediately (no user input needed)
-      setTimeout(() => handleSend(), 0)
-      // Clear the pending command
-      onGsdCommandExecuted()
-    }
-  }, [pendingGsdCommand, onGsdCommandExecuted, handleSend])
-
   // Queue handlers for sending queued messages
   const handleSendFromQueue = useCallback(async (itemId: string) => {
     const item = popItemFromQueue(subChatId, itemId)
@@ -3638,6 +3615,7 @@ const ChatViewInner = memo(function ChatViewInner({
         <WhatsAppBridgeHandler
           chatId={parentChatId}
           subChatId={subChatId}
+          isActive={isActive}
           onTriggerResponse={(text) => sendMessageRef.current({
             role: "user",
             parts: [{ type: "text", text }],
@@ -3916,16 +3894,12 @@ export function ChatView({
   const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
     sessionFlowSidebarOpenAtom,
   )
-  // GSD Chat Sidebar state
-  const [isGsdSidebarOpen, setIsGsdSidebarOpen] = useAtom(gsdChatSidebarOpenAtom)
   // Dev Server Preview state
   const [isDevServerPreviewOpen, setIsDevServerPreviewOpen] = useAtom(
     devServerPreviewSidebarOpenAtom,
   )
   const [devServerPreviewRuntimeOpen, setDevServerPreviewRuntimeOpen] = useAtom(devServerPreviewSidebarOpenRuntimeAtom)
   const devServerPreviewDisplayMode = useAtomValue(devServerPreviewDisplayModeAtom)
-  // GSD Document viewer state (for viewing planning docs)
-  const [selectedGsdDoc, setSelectedGsdDoc] = useAtom(selectedGsdDocumentAtom)
   const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)
   const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
   const [diffStats, setDiffStatsRaw] = useState<{
@@ -3960,16 +3934,6 @@ export function ChatView({
     })
   }, [diffStats, setDiffStatsRaw])
 
-  // Atom for GSD command queue (allows outer scope to send commands to inner ChatViewInner)
-  const [pendingGsdCommand, setPendingGsdCommand] = useState<string | null>(null)
-
-  // Handler for GSD sidebar commands - queues the command for ChatViewInner to execute
-  const handleRunGsdCommand = useCallback(
-    (command: string) => {
-      setPendingGsdCommand(command)
-    },
-    [],
-  )
 
   // Store raw diff content to pass to AgentDiffView (avoids double fetch)
   const [diffContent, setDiffContent] = useState<string | null>(null)
@@ -5900,8 +5864,6 @@ Make sure to preserve all functionality from both branches when resolving confli
                       onRestoreWorkspace={handleRestoreWorkspace}
                       existingPrUrl={agentChat?.prUrl}
                       isActive={isActive}
-                      pendingGsdCommand={pendingGsdCommand}
-                      onGsdCommandExecuted={() => setPendingGsdCommand(null)}
                       connectionType={(agentChat as any)?.connectionType as "none" | "whatsapp" | "slack" | undefined}
                       connectionName={(agentChat as any)?.connectionName as string | undefined}
                     />
@@ -6155,12 +6117,6 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Loaded Context - unified renderer supporting side-peek, center-peek, and full-page modes */}
         <LoadedContextRenderer projectPath={worktreePath || originalProjectPath} />
-
-        {/* GSD Planning - unified renderer supporting side-peek, center-peek, and full-page modes */}
-        <GsdRenderer
-          onRunCommand={handleRunGsdCommand}
-          onViewDocument={(path) => setSelectedGsdDoc(path)}
-        />
 
         {/* Analyze - unified renderer supporting side-peek, center-peek, and full-page modes */}
         <AnalyzeRenderer projectId={projectId ?? ""} />

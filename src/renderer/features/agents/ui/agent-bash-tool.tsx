@@ -53,6 +53,7 @@ export const AgentBashTool = memo(function AgentBashTool({
     part.output,
   )
   // Handle multiple field name variants used by SDK (see claude.ts:1594-1600)
+  const isBackgroundTask = !!part.input?.run_in_background
   const taskId = part.output?.task_id || part.output?.taskId || part.output?.backgroundTaskId
   const outputFile = part.output?.output_file || part.output?.outputFile
 

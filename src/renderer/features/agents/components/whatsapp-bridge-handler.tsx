@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
 import {
-  syncMessagesWithStatusAtom,
+  appendMessageAtom,
   type Message,
 } from "../stores/message-store"
 
@@ -25,6 +25,12 @@ interface WhatsAppBridgeHandlerProps {
   chatId: string | null
   subChatId: string | null
   /**
+   * Whether this tab is the active (visible) sub-chat tab.
+   * Only the active tab should process incoming bridge messages
+   * to prevent duplicate injection when multiple tabs are open.
+   */
+  isActive?: boolean
+  /**
    * Optional function to trigger a Claw response.
    * If not provided, the message will only be displayed in the UI.
    */
@@ -36,23 +42,13 @@ interface WhatsAppBridgeHandlerProps {
  * Adds them to the chat message store so they appear in the UI
  * and optionally triggers a Claw response via the provided callback
  */
-export function WhatsAppBridgeHandler({ chatId, subChatId, onTriggerResponse }: WhatsAppBridgeHandlerProps) {
-  const mountCountRef = useRef(0)
-  mountCountRef.current++
-  console.log("[WhatsAppBridgeHandler] Component render:", { chatId, subChatId, mountCount: mountCountRef.current, hasTriggerCallback: !!onTriggerResponse })
+export function WhatsAppBridgeHandler({ chatId, subChatId, isActive = true, onTriggerResponse }: WhatsAppBridgeHandlerProps) {
+  // Keep isActive in a ref so the subscription callback always sees the latest value
+  const isActiveRef = useRef(isActive)
+  isActiveRef.current = isActive
 
-  useEffect(() => {
-    console.log("[WhatsAppBridgeHandler] Component MOUNTED:", { chatId, subChatId })
-    return () => {
-      console.log("[WhatsAppBridgeHandler] Component UNMOUNTED:", { chatId, subChatId })
-    }
-  }, [])
-
-  // Use the sync atom for atomic message updates
-  const syncMessages = useSetAtom(syncMessagesWithStatusAtom)
-
-  // Subscribe to bridge messages
-  console.log("[WhatsAppBridgeHandler] Setting up tRPC subscription...", { chatId })
+  // Use append atom to add a single message without replacing existing messages
+  const appendMessage = useSetAtom(appendMessageAtom)
   trpc.whatsapp.onBridgeMessage.useSubscription(undefined, {
     onStarted: () => {
       console.log("[WhatsAppBridgeHandler] Subscription STARTED successfully")
@@ -69,6 +65,11 @@ export function WhatsAppBridgeHandler({ chatId, subChatId, onTriggerResponse }: 
 
       // Only process messages for the current chat/subChat
       if (chatId && message.chatId === chatId) {
+        // Only the active tab should inject messages to prevent duplicates
+        if (!isActiveRef.current) {
+          console.log("[WhatsAppBridgeHandler] Skipping - not the active tab")
+          return
+        }
         console.log("[WhatsAppBridgeHandler] ChatId matches, processing message")
         // Skip messages sent by the user from Claw (to avoid loops)
         if (message.fromMe) {
@@ -99,28 +100,31 @@ export function WhatsAppBridgeHandler({ chatId, subChatId, onTriggerResponse }: 
           createdAt: new Date(message.timestamp),
         }
 
-        // Sync the message using the proper store method
-        // This handles all atom updates atomically (message, IDs, roles)
-        // Use the subChatId from the bridge message for proper isolation
-        syncMessages({
-          messages: [msg],
-          status: "ready", // WhatsApp messages are complete (not streaming)
-          subChatId: message.subChatId,
-        })
-
         // Show toast notification
-        toast.info(`📱 WhatsApp: ${message.sender}`, {
+        toast.info(`📱 WhatsApp message received`, {
           description: message.text.substring(0, 100) + (message.text.length > 100 ? "..." : ""),
         })
 
-        // Trigger a Claw response if handler is provided
-        if (onTriggerResponse && subChatId === message.subChatId) {
+        if (onTriggerResponse) {
+          // The message is already saved to the DB with proper attribution by the backend.
+          // Pass message.text directly — it comes from the queue and is already the
+          // attributed prompt (or raw text that matches what's in the DB).
+          // Claude's duplicate check will match against the DB message.
           console.log("[WhatsAppBridgeHandler] Triggering Claw response for WhatsApp message")
           try {
             onTriggerResponse(message.text)
           } catch (error) {
             console.error("[WhatsAppBridgeHandler] Failed to trigger response:", error)
           }
+        } else {
+          // No auto-response — append the message to the UI directly.
+          // Uses appendMessageAtom instead of syncMessagesWithStatusAtom because
+          // syncMessages is a REPLACE operation that would overwrite all existing messages.
+          const targetSubChatId = subChatId || message.subChatId
+          appendMessage({
+            message: msg,
+            subChatId: targetSubChatId,
+          })
         }
       }
     },

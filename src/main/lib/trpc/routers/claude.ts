@@ -53,7 +53,7 @@ import { getMergedMcpConfig } from "../../config/consolidator"
 import { taskEvents, taskWatcher } from "../../background-tasks"
 import { injectAllStoredCredentials } from "../../mcp/credential-injection"
 import { toSdkMcpConfigs, type SdkMcpServerConfig } from "../../config/types"
-import { getBundledGsdPath } from "./gsd"
+
 import { ensureSymlinks } from "../../session/symlink-manager"
 import {
   getCachedMcpTools,
@@ -77,7 +77,8 @@ import {
   updateSessionQuery,
   updateSessionId,
 } from "../../session/session-registry"
-import { sendToPlatform } from "../../messaging"
+import { sendToPlatform, sendTypingToPlatform, reactOnPlatform } from "../../messaging"
+import { getWhatsAppQueue } from "../../messaging/whatsapp-queue"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -737,6 +738,10 @@ export const claudeRouter = router({
         let currentSessionId: string | null = null
         // Flag to prevent cleanup from re-writing an invalid session ID back to DB
         let sessionInvalid = false
+        // Connection info for typing indicators and reactions (populated after DB lookup)
+        let connectionPlatform: string | null = null
+        let connectionTarget: string | null = null
+        let lastWhatsAppMessageKey: any = null // For emoji reactions
         console.log(`[SD] M:START sub=${subId} stream=${streamId.slice(-8)} mode=${input.mode}`)
 
         // Track if observable is still active (not unsubscribed)
@@ -797,6 +802,33 @@ export const claudeRouter = router({
               .get()
             const existingMessages = JSON.parse(existing?.messages || "[]")
             const existingSessionId = existing?.sessionId || null
+
+            // Look up parent chat's messaging connection for typing indicators
+            if (existing?.chatId) {
+              const parentChat = db.select().from(chats).where(eq(chats.id, existing.chatId)).get()
+              console.log(`[claude] Connection lookup: chatId=${existing.chatId}, type=${parentChat?.connectionType}, target=${parentChat?.connectionTarget?.slice(0, 20)}`)
+              if (parentChat?.connectionType && parentChat.connectionType !== "none" && parentChat.connectionTarget) {
+                connectionPlatform = parentChat.connectionType
+                connectionTarget = parentChat.connectionTarget
+
+                // Find the last WhatsApp message's key for reactions
+                const lastWaMsg = [...existingMessages].reverse().find(
+                  (m: any) => m.metadata?.source === "whatsapp" && m.metadata?.messageKey
+                )
+                lastWhatsAppMessageKey = lastWaMsg?.metadata?.messageKey || null
+
+                // React with ⏳ to indicate we're processing
+                if (lastWhatsAppMessageKey) {
+                  console.log(`[claude] Reacting ⏳ to WhatsApp message`)
+                  reactOnPlatform(connectionPlatform as any, connectionTarget, lastWhatsAppMessageKey, "⏳").catch(() => {})
+                }
+
+                // Also send typing indicator
+                sendTypingToPlatform(connectionPlatform as any, connectionTarget, true).catch(() => {})
+              }
+            } else {
+              console.log(`[claude] No chatId on subChat — skipping typing indicator`)
+            }
 
             // Get resumeSessionAt UUID from the last assistant message (for rollback)
             const lastAssistantMsg = [...existingMessages].reverse().find(
@@ -1545,6 +1577,14 @@ export const claudeRouter = router({
               }, STREAM_TIMEOUT_MS)
             }
             resetStreamTimeout() // Start the initial timeout
+
+            // Refresh typing indicator every 20s (WhatsApp auto-expires after ~25s)
+            let typingIntervalHandle: ReturnType<typeof setInterval> | null = null
+            if (connectionPlatform && connectionTarget) {
+              typingIntervalHandle = setInterval(() => {
+                sendTypingToPlatform(connectionPlatform as any, connectionTarget!, true).catch(() => {})
+              }, 20_000)
+            }
 
             try {
               for await (const msg of stream) {
@@ -2330,8 +2370,22 @@ export const claudeRouter = router({
                 }
               }
 
-              // Clear the inactivity timeout now that the stream has ended
+              // Clear the inactivity timeout and typing indicator refresh
               if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle)
+              if (typingIntervalHandle) clearInterval(typingIntervalHandle)
+
+              // Clear typing indicator and react ✅ on completion
+              if (connectionPlatform && connectionTarget) {
+                sendTypingToPlatform(connectionPlatform as any, connectionTarget, false).catch(() => {})
+                if (lastWhatsAppMessageKey && resultReceived) {
+                  reactOnPlatform(connectionPlatform as any, connectionTarget, lastWhatsAppMessageKey, "✅").catch(() => {})
+                }
+                // Notify queue that streaming finished — triggers next batch if queued
+                try {
+                  const parentChatId = db.select().from(subChats).where(eq(subChats.id, input.subChatId)).get()?.chatId
+                  if (parentChatId) getWhatsAppQueue().streamComplete(parentChatId)
+                } catch {}
+              }
 
               // Warn if stream yielded no messages
               if (messageCount === 0) {
@@ -2360,8 +2414,9 @@ export const claudeRouter = router({
                 }
               }
             } catch (streamError) {
-              // Clear the inactivity timeout on stream error
+              // Clear the inactivity timeout and typing indicator on stream error
               if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle)
+              if (typingIntervalHandle) clearInterval(typingIntervalHandle)
 
               // This catches errors during streaming (like process exit)
               const err = streamError as Error
@@ -2568,6 +2623,11 @@ export const claudeRouter = router({
           abortController.abort()
           removeSession(input.subChatId)
           clearPendingApprovals("Session ended.", input.subChatId)
+
+          // Clear typing indicator on connected platform
+          if (connectionPlatform && connectionTarget) {
+            sendTypingToPlatform(connectionPlatform as any, connectionTarget, false).catch(() => {})
+          }
 
           // Save sessionId on abort so conversation can be resumed
           // Clear streamId since we're no longer streaming

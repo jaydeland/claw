@@ -844,6 +844,39 @@ export const syncMessagesWithStatusAtom = atom(
   }
 )
 
+// Append a single message to the current message list without replacing existing messages.
+// Used by WhatsApp bridge and other external message sources that inject messages
+// into an active chat without having the full message history.
+export const appendMessageAtom = atom(
+  null,
+  (get, set, payload: { message: Message; subChatId?: string }) => {
+    const { message, subChatId } = payload
+
+    // Ensure subChatId is current
+    const prevSubChatId = get(currentSubChatIdAtom)
+    if (subChatId && subChatId !== prevSubChatId) {
+      set(currentSubChatIdAtom, subChatId)
+    }
+
+    // Set the message atom
+    set(messageAtomFamily(message.id), { ...message, parts: message.parts?.map((p: any) => ({ ...p })) })
+
+    // Append to IDs list (avoid duplicates)
+    const currentIds = get(messageIdsAtom)
+    if (!currentIds.includes(message.id)) {
+      set(messageIdsAtom, [...currentIds, message.id])
+    }
+
+    // Update roles map
+    const currentRoles = get(messageRolesAtom)
+    if (!currentRoles.has(message.id) || currentRoles.get(message.id) !== message.role) {
+      const newRoles = new Map(currentRoles)
+      newRoles.set(message.id, message.role)
+      set(messageRolesAtom, newRoles)
+    }
+  }
+)
+
 // Legacy sync atom (not used, but kept for compatibility)
 export const syncMessagesAtom = atom(
   null,

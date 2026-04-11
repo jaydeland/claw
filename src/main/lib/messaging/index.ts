@@ -74,6 +74,50 @@ export async function sendToPlatform(
 }
 
 /**
+ * React to a message on a connected platform
+ */
+export async function reactOnPlatform(
+  platform: "whatsapp" | "discord",
+  target: string,
+  messageKey: any,
+  emoji: string
+): Promise<void> {
+  try {
+    if (platform === "whatsapp") {
+      const adapter = getWhatsAppAdapter()
+      if (!adapter.isActive()) return
+      await adapter.reactToMessage(target, messageKey, emoji)
+    }
+  } catch {
+    // Non-critical
+  }
+}
+
+/**
+ * Send a typing indicator to a connected platform chat
+ */
+export async function sendTypingToPlatform(
+  platform: "whatsapp" | "discord",
+  target: string,
+  isTyping: boolean
+): Promise<void> {
+  try {
+    if (platform === "whatsapp") {
+      const adapter = getWhatsAppAdapter()
+      if (!adapter.isActive()) return
+      if (isTyping) {
+        await adapter.sendTypingIndicator(target)
+      } else {
+        await adapter.clearTypingIndicator(target)
+      }
+    }
+    // Discord typing indicators could be added here
+  } catch {
+    // Non-critical — don't propagate
+  }
+}
+
+/**
  * Initialize the messaging module
  * - Starts platform adapters if they have saved credentials
  */

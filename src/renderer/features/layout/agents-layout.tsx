@@ -36,8 +36,9 @@ import {
   AgentsTabContent,
   SkillsTabContent,
   McpsTabContent,
-  TerminalTabContent,
+
   CcSettingsTabContent,
+  OrchestratorsTabContent,
 } from "../sidebar/components"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { RightIconBar } from "./right-icon-bar"
@@ -286,8 +287,7 @@ export function AgentsLayout() {
           )}
 
           {/* Sidebar Content Panel - shows list/navigation for selected tab */}
-          {/* Note: clusters/gsd/prompts tabs don't show sidebar content - they have their own navigation */}
-          {!isMobile && !isContentCollapsed && selectedSidebarTab !== "clusters" && selectedSidebarTab !== "gsd" && selectedSidebarTab !== "prompts" && (
+          {!isMobile && !isContentCollapsed && (
             <ResizableSidebar
               isOpen={true}
               onClose={() => {}}
@@ -303,8 +303,6 @@ export function AgentsLayout() {
                 <HistoryTabContent className="h-full" />
               ) : selectedSidebarTab === "chats" ? (
                 <WorkspacesTabContent className="h-full" />
-              ) : selectedSidebarTab === "terminal" ? (
-                <TerminalTabContent className="h-full" />
               ) : selectedSidebarTab === "agents" ? (
                 <AgentsTabContent className="h-full" />
               ) : selectedSidebarTab === "skills" ? (
@@ -313,6 +311,8 @@ export function AgentsLayout() {
                 <McpsTabContent className="h-full" />
               ) : selectedSidebarTab === "settings" ? (
                 <CcSettingsTabContent className="h-full" />
+              ) : selectedSidebarTab === "orchestrators" ? (
+                <OrchestratorsTabContent className="h-full" />
               ) : null}
             </ResizableSidebar>
           )}

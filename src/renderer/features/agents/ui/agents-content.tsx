@@ -35,7 +35,7 @@ import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
 import { AgentPreview } from "./agent-preview"
 import { AgentDiffView } from "./agent-diff-view"
-import { TerminalSidebar, TerminalMainView, terminalSidebarOpenAtom } from "../../terminal"
+import { TerminalSidebar, terminalSidebarOpenAtom } from "../../terminal"
 import {
   useAgentSubChatStore,
   type SubChatMeta,
@@ -48,10 +48,6 @@ import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { WorkflowsContent } from "../../workflows/ui/workflows-content"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { McpContent } from "../../mcp/ui/mcp-content"
-import { selectedClustersCategoryAtom } from "../../clusters/atoms"
-import { ClustersContent } from "../../clusters/ui/clusters-content"
-import { selectedGsdCategoryAtom } from "../../gsd/atoms"
-import { GsdContent } from "../../gsd/ui/gsd-content"
 import { GitHubView } from "../../github/components/github-view"
 import { WorkspaceGitHubView } from "../../github/components/workspace-github-view"
 import { workspaceGithubSelectionAtom } from "../../github/atoms"
@@ -59,12 +55,12 @@ import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialo
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 import { HistoryChatView } from "../../history"
 import { ProjectDetailPage } from "./project-detail-page"
-import { PromptsView } from "../../prompts/ui/prompts-view"
-import { ErDiagramView } from "../../er-diagram/ui/er-diagram-view"
 import { selectedSettingsCategoryAtom } from "../atoms"
 import { CcSettingsContent } from "../../settings/ui/cc-settings-content"
+import { OrchestratorContent } from "../../orchestrators/ui/orchestrator-content"
+import { InstanceActivityView } from "../../orchestrators/ui/instance-activity-view"
+import { selectedInstanceIdAtom } from "../../orchestrators/atoms"
 import { PinnedTabsBar } from "../components/pinned-tabs-bar"
-import { OpenUIContent } from "../../openui/ui/openui-content"
 // Desktop mock
 const useIsAdmin = () => false
 
@@ -76,8 +72,6 @@ export function AgentsContent() {
   const selectedProject = useAtomValue(selectedProjectAtom)
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
-  const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
-  const selectedGsdCategory = useAtomValue(selectedGsdCategoryAtom)
   const selectedSettingsCategory = useAtomValue(selectedSettingsCategoryAtom)
   const workspaceGithubSelection = useAtomValue(workspaceGithubSelectionAtom)
 
@@ -851,16 +845,16 @@ export function AgentsContent() {
 
   // Desktop layout
   // Determine which view should be shown (for keep-alive pattern)
-  const showClustersView = selectedClustersCategory === "clusters" || selectedSidebarTab === "clusters"
-  const showGsdView = selectedGsdCategory === "gsd" || selectedSidebarTab === "gsd"
   const showMcpView = selectedMcpCategory === "mcp"
   const showWorkflowsView = !!selectedWorkflowCategory
   const showProjectDetail = !!selectedProjectDetailId
   const showGitHubView = selectedSidebarTab === "github"
-  const showPromptsView = selectedSidebarTab === "prompts"
-  const showErDiagramView = selectedSidebarTab === "er-diagram"
+  const showOrchestratorsView = selectedSidebarTab === "orchestrators"
   const showSettingsView = selectedSidebarTab === "settings" && !!selectedSettingsCategory && !showWorkflowsView
-  const showOpenUIView = selectedSidebarTab === "openui"
+
+  // Instance activity view: shown when an orchestrator instance is selected in workspace tree
+  const selectedInstanceId = useAtomValue(selectedInstanceIdAtom)
+  const showInstanceView = selectedSidebarTab === "chats" && !!selectedInstanceId && !selectedChatId
 
   // Workspace GitHub flex view: 2-pane content+chat when a Source Repo item is selected
   // from the workspace sidebar (chats tab), with no active chat
@@ -876,18 +870,10 @@ export function AgentsContent() {
        (selectedProject ? { id: selectedProject.id, path: selectedProject.path } : null))
     : null
 
-  const showMainContent = !showClustersView && !showGsdView && !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showPromptsView && !showErDiagramView && !showSettingsView && !showWorkspaceGitHubView
+  const showMainContent = !showMcpView && !showWorkflowsView && !showProjectDetail && !showGitHubView && !showOrchestratorsView && !showSettingsView && !showWorkspaceGitHubView && !showInstanceView
 
   return (
     <>
-      {/* ClustersContent - kept mounted to preserve terminal state */}
-      <div className={showClustersView ? "h-full w-full" : "hidden"}>
-        <ClustersContent />
-      </div>
-
-      {/* GSD view */}
-      {showGsdView && <GsdContent />}
-
       {/* MCP servers view */}
       {showMcpView && <McpContent />}
 
@@ -917,14 +903,14 @@ export function AgentsContent() {
         />
       )}
 
-      {/* Prompts view */}
-      <div className={showPromptsView ? "flex-1 h-full overflow-hidden" : "hidden"}>
-        <PromptsView />
+      {/* Orchestrators view */}
+      <div className={showOrchestratorsView ? "flex-1 h-full overflow-hidden" : "hidden"}>
+        <OrchestratorContent />
       </div>
 
-      {/* ER Diagram view */}
-      <div className={showErDiagramView ? "flex-1 h-full overflow-hidden" : "hidden"}>
-        <ErDiagramView />
+      {/* Instance activity view (when orchestrator instance selected in workspace tree) */}
+      <div className={showInstanceView ? "flex-1 h-full overflow-hidden" : "hidden"}>
+        <InstanceActivityView />
       </div>
 
       {/* CC Settings view */}
@@ -932,9 +918,6 @@ export function AgentsContent() {
         <CcSettingsContent />
       </div>
 
-
-      {/* OpenUI Builder view */}
-      {showOpenUIView && <OpenUIContent />}
 
       {/* Main content - chats/terminal/other */}
       <div className={showMainContent ? "flex h-full" : "hidden"}>
@@ -966,11 +949,6 @@ export function AgentsContent() {
                   <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
                 </div>
               )}
-            </div>
-          ) : selectedSidebarTab === "terminal" ? (
-            // Terminal tab - show terminal main view
-            <div className="h-full flex flex-col relative overflow-hidden">
-              <TerminalMainView />
             </div>
           ) : selectedSidebarTab === "history" ? (
             // History tab - show read-only session flow view

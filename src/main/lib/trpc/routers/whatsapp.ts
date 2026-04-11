@@ -13,7 +13,8 @@ import {
   whatsAppStatusEmitter,
 } from "../../messaging/whatsapp-adapter"
 import { incomingMessageEmitter } from "../../messaging"
-import { processIncomingWhatsAppMessage } from "../../messaging/whatsapp-bridge"
+import { processIncomingWhatsAppMessage, createDrizzleBridgeAccess, buildAttributedText } from "../../messaging/whatsapp-bridge"
+import { getWhatsAppQueue } from "../../messaging/whatsapp-queue"
 import { observable } from "@trpc/server/observable"
 import { getDatabase, chats, subChats } from "../../db"
 import { eq, and, desc } from "drizzle-orm"
@@ -264,30 +265,62 @@ export const whatsappRouter = router({
       fromMe: boolean
     }>((emit) => {
       console.log("[WhatsAppRouter] onBridgeMessage subscription started - handler registered")
+
+      const queue = getWhatsAppQueue()
+
+      // When the queue triggers (after debounce), emit to frontend to trigger Claude
+      const triggerHandler = (event: any) => {
+        console.log(`[WhatsAppRouter] Queue triggered for ${event.chatId} (${event.batchSize} messages)`)
+        try {
+          // The prompt is the already-attributed text saved in the DB.
+          // Pass it directly — Claude's duplicate check will match it.
+          emit.next({
+            bridgeId: event.chatId,
+            chatId: event.chatId,
+            subChatId: event.subChatId,
+            whatsappJid: "",
+            sender: event.sender || "WhatsApp",
+            text: event.prompt,
+            timestamp: Date.now(),
+            messageId: `queue_${Date.now()}`,
+            fromMe: false,
+          })
+          console.log(`[WhatsAppRouter] emit.next() succeeded for queued batch`)
+        } catch (emitErr) {
+          console.error(`[WhatsAppRouter] emit.next() THREW:`, emitErr)
+        }
+      }
+      queue.on("trigger", triggerHandler)
+
       const handler = (message: any) => {
         console.log(`[WhatsAppRouter] Handler received message:`, { platform: message.platform, chatId: message.chatId, text: message.text?.substring(0, 50) })
 
         const db = getDatabase()
-        const result = processIncomingWhatsAppMessage(message, db, chats, subChats)
+        const dataAccess = createDrizzleBridgeAccess(db, chats, subChats)
+        const result = processIncomingWhatsAppMessage(message, dataAccess)
 
         if (result.action === "skip") {
           console.log(`[WhatsAppRouter] Skipping: ${result.reason}`)
           return
         }
 
-        console.log(`[WhatsAppRouter] Emitting to frontend: chatId=${result.payload.chatId}, subChatId=${result.payload.subChatId}`)
-        try {
-          emit.next(result.payload)
-          console.log(`[WhatsAppRouter] emit.next() succeeded for chatId=${result.payload.chatId}`)
-        } catch (emitErr) {
-          console.error(`[WhatsAppRouter] emit.next() THREW:`, emitErr)
-        }
+        // Enqueue the message — the queue debounces and batches before triggering Claude
+        queue.enqueue({
+          chatId: result.payload.chatId,
+          subChatId: result.payload.subChatId,
+          sender: result.payload.sender,
+          text: result.payload.text,
+          attributedText: buildAttributedText(message.sender, message.text),
+          messageKey: message.metadata?.messageKey,
+          timestamp: result.payload.timestamp,
+        })
       }
 
       incomingMessageEmitter.on("message", handler)
       return () => {
         console.log("[WhatsAppRouter] onBridgeMessage subscription cleanup - handler removed")
         incomingMessageEmitter.off("message", handler)
+        queue.off("trigger", triggerHandler)
       }
     })
   }),
