@@ -1,0 +1,622 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1767732183550,
+      "tag": "0000_mixed_blur",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1767853413342,
+      "tag": "0001_married_reptil",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1767911269523,
+      "tag": "0002_fancy_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1767986484084,
+      "tag": "0003_crazy_thunderbolts",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1768199613729,
+      "tag": "0004_melted_prism",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1768682497018,
+      "tag": "0005_bouncy_sister_grimm",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1768683649534,
+      "tag": "0006_rainy_the_watchers",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1768685165152,
+      "tag": "0007_fixed_speed",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1768686511944,
+      "tag": "0008_elite_thor_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1769011377535,
+      "tag": "0009_chilly_daredevil",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1769013697511,
+      "tag": "0010_misty_marrow",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1769017073534,
+      "tag": "0011_classy_random",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1769021510582,
+      "tag": "0012_marvelous_kid_colt",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1737590400000,
+      "tag": "0013_add_aws_sso_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1769200207431,
+      "tag": "0014_modern_sunspot",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1737675600000,
+      "tag": "0015_remove_devyard_refs",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1769271709488,
+      "tag": "0016_small_pepper_potts",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1737762000000,
+      "tag": "0017_vpn_check_toggle",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1769273625903,
+      "tag": "0018_lazy_quasar",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1769367175096,
+      "tag": "0019_broad_zuras",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1769376305632,
+      "tag": "0020_last_wonder_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1769561327164,
+      "tag": "0021_crazy_meteorite",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1769627678949,
+      "tag": "0022_simplify_background_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1769627678950,
+      "tag": "0023_add_project_start_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1769646735542,
+      "tag": "0024_plain_catseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1769795264054,
+      "tag": "0025_furry_thunderbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1769889708938,
+      "tag": "0026_dapper_jack_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1769956845582,
+      "tag": "0027_romantic_zaladane",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1738272000000,
+      "tag": "0028_add_default_start_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1769990411732,
+      "tag": "0029_many_gamma_corps",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1738367000000,
+      "tag": "0030_add_mcp_tool_cache",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1770396776677,
+      "tag": "0031_worried_slyde",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1770396852124,
+      "tag": "0032_new_madame_web",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1770400000000,
+      "tag": "0033_fix_bedrock_thinking_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1770400100000,
+      "tag": "0034_add_analysis_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1770400200000,
+      "tag": "0035_add_is_transient",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1770400300000,
+      "tag": "0036_add_background_model_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1770400400000,
+      "tag": "0037_add_claws_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1770400500000,
+      "tag": "0019_remove_swarm_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1770486000000,
+      "tag": "0038_add_slack_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1770486060000,
+      "tag": "0038_add_system_prompts",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1770486120000,
+      "tag": "0041_add_whatsapp_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1770486130000,
+      "tag": "0042_add_system_prompts_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1770486140000,
+      "tag": "0043_add_system_prompts_key_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1770600000000,
+      "tag": "0044_add_source_view",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1770600001000,
+      "tag": "0045_add_source_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "6",
+      "when": 1770600002000,
+      "tag": "0046_add_source_view_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1770600003000,
+      "tag": "0047_add_source_context_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1770600004000,
+      "tag": "0048_headless_claws_allowed_dirs",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1770600005000,
+      "tag": "0049_headless_claws_allowed_mcps",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1770600006000,
+      "tag": "0050_add_sub_chat_id_to_claw_executions",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "6",
+      "when": 1770600007000,
+      "tag": "0051_add_hooks_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "6",
+      "when": 1770600008000,
+      "tag": "0052_add_claw_executions_sub_chat_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1770600009000,
+      "tag": "0053_add_hooks_project_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1770600010000,
+      "tag": "0054_add_hooks_scope_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "6",
+      "when": 1770600011000,
+      "tag": "0055_add_hooks_hook_type_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1770600012000,
+      "tag": "0056_add_projects_mcp_overrides",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1770600013000,
+      "tag": "0057_add_projects_env_vars",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1770600014000,
+      "tag": "0058_add_projects_skills_path",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1770600015000,
+      "tag": "0059_add_projects_agents_path",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "6",
+      "when": 1770600016000,
+      "tag": "0060_add_chat_connection_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "6",
+      "when": 1770600016001,
+      "tag": "0060_add_chat_sessions_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1770600016002,
+      "tag": "0061_add_chat_connection_target",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "6",
+      "when": 1770600016003,
+      "tag": "0061_add_chat_sessions_claw_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1770600016004,
+      "tag": "0062_add_chat_connection_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "6",
+      "when": 1770600016005,
+      "tag": "0062_add_chat_sessions_external_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "6",
+      "when": 1770600016006,
+      "tag": "0063_add_chat_sessions_platform_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1770600016007,
+      "tag": "0064_add_chat_sessions_status_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1770600016008,
+      "tag": "0065_add_chat_sessions_last_activity_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1770600016009,
+      "tag": "0066_add_chat_sessions_unique_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "6",
+      "when": 1770600016010,
+      "tag": "0067_add_claw_executions_session_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1770600016011,
+      "tag": "0068_add_claw_executions_session_id_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1770600016012,
+      "tag": "0069_add_whatsapp_bridges_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1741142400000,
+      "tag": "0070_add_headless_claws_purpose",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "6",
+      "when": 1741230000000,
+      "tag": "0071_add_extended_thinking_enabled",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1741316400000,
+      "tag": "0072_add_headless_claws_sandbox_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1773590400000,
+      "tag": "0073_add_headless_claws_soul_instruction",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1773590500000,
+      "tag": "0074_apply_soul_template_to_existing_claws",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1773590600000,
+      "tag": "0075_add_openui_components_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1773590700000,
+      "tag": "0075_add_headless_claws_claws_soul",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1773590800000,
+      "tag": "0076_add_discord_bridges",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "6",
+      "when": 1773590900000,
+      "tag": "0077_remove_headless_claws_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "6",
+      "when": 1773591000000,
+      "tag": "0078_remove_claw_executions_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "6",
+      "when": 1773591100000,
+      "tag": "0079_remove_chat_sessions_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "6",
+      "when": 1773591200000,
+      "tag": "0080_remove_whatsapp_bridges_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "6",
+      "when": 1773591300000,
+      "tag": "0081_remove_discord_bridges_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "6",
+      "when": 1773591400000,
+      "tag": "0082_remove_slack_settings_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1773591500000,
+      "tag": "0083_add_discord_settings",
+      "breakpoints": true
+    }
+  ]
+}

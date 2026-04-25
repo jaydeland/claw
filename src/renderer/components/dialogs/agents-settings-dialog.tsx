@@ -1,0 +1,516 @@
+import { useAtom, useAtomValue } from "jotai"
+import { useEffect, useState, useMemo } from "react"
+import { createPortal } from "react-dom"
+import { AnimatePresence, motion } from "motion/react"
+import { FolderOpen, Download } from "lucide-react"
+import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
+import { cn } from "../../lib/utils"
+import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms/agents-settings-dialog"
+import { selectedProjectAtom } from "../../lib/atoms"
+import {
+  EyeOpenFilledIcon,
+  SlidersFilledIcon,
+  SettingsIcon,
+} from "../../icons"
+import { FlaskFilledIcon, BugFilledIcon, KeyboardFilledIcon } from "../ui/icons"
+import { Github, Cloud } from "lucide-react"
+import { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"
+import { AgentsPreferencesTab } from "./settings-tabs/agents-preferences-tab"
+import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
+import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
+import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
+import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
+import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
+import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
+import { AgentsBackupTab } from "./settings-tabs/agents-backup-tab"
+import { AgentsProvidersTab } from "./settings-tabs/agents-providers-tab"
+import { AgentsAwsTab } from "./settings-tabs/agents-aws-tab"
+import { AgentsGitHubTab } from "./settings-tabs/agents-github-tab"
+import { AgentsSlackTab } from "./settings-tabs/agents-slack-tab"
+import { AgentsWhatsAppTab } from "./settings-tabs/agents-whatsapp-tab"
+import { AgentsDiscordTab } from "./settings-tabs/agents-discord-tab"
+import { Slack, MessageCircle, Gamepad2 } from "lucide-react"
+
+// Hook to detect narrow screen
+function useIsNarrowScreen(): boolean {
+  const [isNarrow, setIsNarrow] = useState(false)
+
+  useEffect(() => {
+    const checkWidth = () => {
+      setIsNarrow(window.innerWidth <= 768)
+    }
+
+    checkWidth()
+    window.addEventListener("resize", checkWidth)
+    return () => window.removeEventListener("resize", checkWidth)
+  }, [])
+
+  return isNarrow
+}
+
+// Check if we're in development mode
+const isDevelopment = process.env.NODE_ENV === "development"
+
+interface AgentsSettingsDialogProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+// Main settings tabs
+const MAIN_TABS = [
+  {
+    id: "providers" as SettingsTab,
+    label: "AI Providers",
+    icon: SettingsIcon,
+    description: "Configure AI service providers (Claude, AWS, Ollama, Custom)",
+  },
+  {
+    id: "appearance" as SettingsTab,
+    label: "Appearance",
+    icon: EyeOpenFilledIcon,
+    description: "Theme settings",
+  },
+  {
+    id: "keyboard" as SettingsTab,
+    label: "Keyboard",
+    icon: KeyboardFilledIcon,
+    description: "Customize keyboard shortcuts",
+  },
+  {
+    id: "preferences" as SettingsTab,
+    label: "Preferences",
+    icon: SlidersFilledIcon,
+    description: "Claude behavior settings",
+  },
+  {
+    id: "aws" as SettingsTab,
+    label: "AWS",
+    icon: Cloud,
+    description: "AWS authentication (SSO or profile)",
+  },
+  {
+    id: "github" as SettingsTab,
+    label: "GitHub",
+    icon: Github,
+    description: "GitHub token configuration for Claws",
+  },
+  {
+    id: "slack" as SettingsTab,
+    label: "Slack",
+    icon: Slack,
+    description: "Slack Socket Mode integration for agent triggers",
+  },
+  {
+    id: "whatsapp" as SettingsTab,
+    label: "WhatsApp",
+    icon: MessageCircle,
+    description: "WhatsApp Web integration for agent triggers",
+  },
+  {
+    id: "discord" as SettingsTab,
+    label: "Discord",
+    icon: Gamepad2,
+    description: "Discord bot integration for agent triggers",
+  },
+]
+
+// Advanced/experimental tabs
+const ADVANCED_TABS = [
+  {
+    id: "advanced" as SettingsTab,
+    label: "Advanced",
+    icon: SettingsIcon,
+    description: "Advanced configuration and worktree settings",
+  },
+  {
+    id: "worktrees" as SettingsTab,
+    label: "Worktrees",
+    icon: FolderOpen,
+    description: "Manage git worktrees",
+  },
+  {
+    id: "backup" as SettingsTab,
+    label: "Backup",
+    icon: Download,
+    description: "Export and import settings",
+  },
+  // Beta tab removed from UI but code kept in agents-beta-tab.tsx for future use
+  // Debug tab - always shown in desktop for development
+  ...(isDevelopment
+    ? [
+        {
+          id: "debug" as SettingsTab,
+          label: "Debug",
+          icon: BugFilledIcon,
+          description: "Test first-time user experience",
+        },
+      ]
+    : []),
+]
+
+interface TabButtonProps {
+  tab: {
+    id: SettingsTab
+    label: string
+    icon: React.ComponentType<{ className?: string }> | any
+    description?: string
+    beta?: boolean
+  }
+  isActive: boolean
+  onClick: () => void
+  isNarrow?: boolean
+}
+
+function TabButton({ tab, isActive, onClick, isNarrow }: TabButtonProps) {
+  const Icon = tab.icon
+  const isBeta = "beta" in tab && tab.beta
+  // Check if this is a project tab (has projectId property)
+  const isProjectTab = "projectId" in tab
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center whitespace-nowrap ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 cursor-pointer shadow-none w-full justify-start gap-2 text-left px-3 py-1.5 text-sm",
+        isNarrow
+          ? "h-12 rounded-lg bg-foreground/5 hover:bg-foreground/10"
+          : "h-7 rounded-md",
+        !isNarrow && isActive
+          ? "bg-foreground/10 text-foreground font-medium hover:bg-foreground/15 hover:text-foreground"
+          : !isNarrow
+            ? "text-muted-foreground hover:bg-foreground/10 hover:text-foreground font-medium"
+            : "text-foreground font-medium",
+      )}
+    >
+      <Icon
+        className={cn(
+          "h-4 w-4",
+          // For project tabs, always keep full opacity (especially for GitHub avatars)
+          isProjectTab
+            ? "opacity-100"
+            : isNarrow
+              ? "opacity-70"
+              : isActive
+                ? "opacity-100"
+                : "opacity-50",
+        )}
+      />
+      <span className="flex-1">{tab.label}</span>
+      {isBeta && (
+        <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-muted text-muted-foreground">
+          Beta
+        </span>
+      )}
+      {isNarrow && (
+        <DialogIcons.Forward className={`${DialogIconSizes.default} text-muted-foreground`} />
+      )}
+    </button>
+  )
+}
+
+export function AgentsSettingsDialog({
+  isOpen,
+  onClose,
+}: AgentsSettingsDialogProps) {
+  const [activeTab, setActiveTab] = useAtom(agentsSettingsDialogActiveTabAtom)
+  const [mounted, setMounted] = useState(false)
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
+  const isNarrowScreen = useIsNarrowScreen()
+  const selectedProject = useAtomValue(selectedProjectAtom)
+
+  // Note: Project-specific settings are now in the project detail page
+  // accessed via clicking the gear icon on a workspace in the sidebar
+
+  // All tabs combined for lookups
+  // Note: Project-specific tabs are now in the project detail page (not in settings dialog)
+  const ALL_TABS = useMemo(
+    () => [...MAIN_TABS, ...ADVANCED_TABS],
+    []
+  )
+
+  // Helper to get tab label from tab id
+  const getTabLabel = (tabId: SettingsTab): string => {
+    return ALL_TABS.find((t) => t.id === tabId)?.label ?? "Settings"
+  }
+
+  // Narrow screen: track whether we're showing tab list or content
+  const [showContent, setShowContent] = useState(false)
+
+  // Reset content view when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setShowContent(false)
+    }
+  }, [isOpen])
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        if (isNarrowScreen && showContent) {
+          setShowContent(false)
+        } else {
+          onClose()
+        }
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [isOpen, onClose, isNarrowScreen, showContent])
+
+  // Ensure portal target only accessed on client
+  useEffect(() => {
+    setMounted(true)
+    if (typeof document !== "undefined") {
+      setPortalTarget(document.body)
+    }
+  }, [])
+
+  const handleTabClick = (tabId: SettingsTab) => {
+    setActiveTab(tabId)
+    if (isNarrowScreen) {
+      setShowContent(true)
+    }
+  }
+
+  const renderTabContent = () => {
+    // Handle static tabs
+    switch (activeTab) {
+      case "providers":
+        return <AgentsProvidersTab />
+      case "appearance":
+        return <AgentsAppearanceTab />
+      case "keyboard":
+        return <AgentsKeyboardTab />
+      case "preferences":
+        return <AgentsPreferencesTab />
+      case "aws":
+        return <AgentsAwsTab />
+      case "github":
+        return <AgentsGitHubTab />
+      case "slack":
+        return <AgentsSlackTab />
+      case "whatsapp":
+        return <AgentsWhatsAppTab />
+      case "discord":
+        return <AgentsDiscordTab />
+      case "advanced":
+        return <AgentsAdvancedSettingsTab />
+      case "worktrees":
+        return <AgentsWorktreesTab />
+      case "backup":
+        return <AgentsBackupTab />
+      // Beta tab removed from UI but code kept for future use
+      // case "beta":
+      //   return <AgentsBetaTab />
+      case "debug":
+        return isDevelopment ? <AgentsDebugTab /> : null
+      default:
+        return null
+    }
+  }
+
+  const renderTabList = () => (
+    <div className="space-y-4 px-1">
+      {/* Main tabs */}
+      <div className="space-y-1">
+        {MAIN_TABS.map((tab) => (
+          <TabButton
+            key={tab.id}
+            tab={tab}
+            isActive={activeTab === tab.id}
+            onClick={() => handleTabClick(tab.id)}
+            isNarrow={isNarrowScreen}
+          />
+        ))}
+      </div>
+
+      {/* Separator */}
+      <div className="border-t border-border/50 mx-2" />
+
+      {/* Advanced tabs */}
+      <div className="space-y-1">
+        {ADVANCED_TABS.map((tab) => (
+          <TabButton
+            key={tab.id}
+            tab={tab}
+            isActive={activeTab === tab.id}
+            onClick={() => handleTabClick(tab.id)}
+            isNarrow={isNarrowScreen}
+          />
+        ))}
+      </div>
+    </div>
+  )
+
+  if (!mounted || !portalTarget) return null
+
+  // Narrow screen: Full-screen overlay with two-screen navigation
+  if (isNarrowScreen) {
+    if (!isOpen) return null
+
+    return createPortal(
+      <>
+        {/* Full-screen settings panel */}
+        <div
+          className="fixed inset-0 z-[45] flex flex-col bg-background overflow-hidden select-none"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="agents-settings-dialog-title-narrow"
+          data-modal="agents-settings"
+          data-canvas-dialog
+          data-agents-page
+        >
+          {/* Header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+            {showContent && (
+              <button
+                onClick={() => setShowContent(false)}
+                className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/10 transition-colors"
+              >
+                <DialogIcons.Back className={DialogIconSizes.large} />
+              </button>
+            )}
+            <h2
+              id="agents-settings-dialog-title-narrow"
+              className="text-lg font-semibold flex-1"
+            >
+              {showContent ? getTabLabel(activeTab) : "Settings"}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/10 transition-colors"
+            >
+              <DialogIcons.Close className={DialogIconSizes.default} />
+              <span className="sr-only">Close</span>
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto">
+            {showContent ? (
+              <div className="bg-tl-background min-h-full">
+                {renderTabContent()}
+              </div>
+            ) : (
+              <div className="p-4">
+                {renderTabList()}
+              </div>
+            )}
+          </div>
+        </div>
+      </>,
+      portalTarget,
+    )
+  }
+
+  // Wide screen: Centered modal with sidebar
+  return createPortal(
+    <AnimatePresence mode="wait">
+      {isOpen && (
+        <>
+          {/* Custom Overlay */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 bg-black/25"
+            onClick={onClose}
+            style={{ pointerEvents: isOpen ? "auto" : "none" }}
+            data-modal="agents-settings"
+          />
+
+          {/* Settings Dialog */}
+          <div className="fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-[45]">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              style={{ willChange: "transform, opacity" }}
+              onAnimationComplete={() => {
+                // Remove will-change after animation completes to avoid blurriness
+                const element = document.querySelector('[data-modal="agents-settings"]') as HTMLElement
+                if (element) {
+                  element.style.willChange = "auto"
+                  element.style.transform = "none"
+                }
+              }}
+              className="w-[90vw] h-[80vh] max-w-[900px] p-0 flex flex-col rounded-[20px] bg-background border-none bg-clip-padding shadow-2xl overflow-hidden select-none"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="agents-settings-dialog-title"
+              data-modal="agents-settings"
+              data-canvas-dialog
+              data-agents-page
+            >
+              <h2 id="agents-settings-dialog-title" className="sr-only">
+                Settings
+              </h2>
+
+              <div className="flex h-full p-2">
+                {/* Left Sidebar - Tabs */}
+                <div className="w-52 px-1 py-5 space-y-4">
+                  <h2 className="text-lg font-semibold px-2 pb-3 text-foreground">
+                    Settings
+                  </h2>
+
+                  {/* Main Tabs */}
+                  <div className="space-y-1">
+                    {MAIN_TABS.map((tab) => (
+                      <TabButton
+                        key={tab.id}
+                        tab={tab}
+                        isActive={activeTab === tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Separator */}
+                  <div className="border-t border-border/50 mx-2" />
+
+                  {/* Advanced Tabs */}
+                  <div className="space-y-1">
+                    {ADVANCED_TABS.map((tab) => (
+                      <TabButton
+                        key={tab.id}
+                        tab={tab}
+                        isActive={activeTab === tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right Content Area */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-col relative h-full bg-tl-background rounded-xl w-full overflow-y-auto">
+                    {renderTabContent()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={onClose}
+                className="absolute appearance-none outline-none select-none top-5 right-5 rounded-full cursor-pointer flex items-center justify-center ring-offset-background focus:ring-ring bg-secondary h-7 w-7 text-foreground/70 hover:text-foreground focus:outline-hidden disabled:pointer-events-none active:scale-95 transition-all duration-200 ease-in-out z-[60] focus:outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+              >
+                <DialogIcons.Close className={DialogIconSizes.default} />
+                <span className="sr-only">Close</span>
+              </button>
+            </motion.div>
+          </div>
+        </>
+      )}
+    </AnimatePresence>,
+    portalTarget,
+  )
+}

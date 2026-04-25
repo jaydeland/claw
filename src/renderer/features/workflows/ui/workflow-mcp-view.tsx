@@ -1,0 +1,490 @@
+"use client"
+
+import { useAtomValue, useSetAtom } from "jotai"
+import { selectedWorkflowNodeAtom } from "../atoms"
+import { selectedProjectAtom } from "../../agents/atoms"
+import { mcpAuthModalOpenAtom, mcpAuthModalServerIdAtom } from "../../mcp/atoms"
+import { trpc } from "../../../lib/trpc"
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Plug, Key } from "lucide-react"
+import { cn } from "../../../lib/utils"
+import { Button } from "../../../components/ui/button"
+import type { McpServer } from "../../../../../src/main/lib/trpc/routers/mcp"
+
+/**
+ * Available Tools Section Component
+ * Queries and displays tools from an MCP server
+ * Uses session-cached tools first, falls back to spawning process
+ */
+function AvailableToolsSection({ mcpServer }: { mcpServer: McpServer }) {
+  const selectedProject = useAtomValue(selectedProjectAtom)
+
+  // Try session-cached tools first (from Claude SDK init message)
+  const {
+    data: sessionToolsData,
+    isLoading: sessionLoading,
+  } = trpc.mcp.getSessionTools.useQuery(
+    { projectPath: selectedProject?.path || "", serverId: mcpServer.id },
+    {
+      enabled: mcpServer.enabled && !!selectedProject?.path,
+      staleTime: 60000, // Cache for 1 minute
+    }
+  )
+
+  // Fall back to direct query if session cache is empty OR has no tools
+  const hasValidCachedTools = sessionToolsData?.fromCache && (sessionToolsData?.tools?.length ?? 0) > 0
+  const shouldFallback = !sessionLoading && !hasValidCachedTools
+  const {
+    data: directToolsData,
+    isLoading: directLoading,
+    error: directError,
+  } = trpc.mcp.getServerTools.useQuery(
+    { serverId: mcpServer.id, projectPath: selectedProject?.path },
+    {
+      enabled: mcpServer.enabled && shouldFallback,
+      retry: false,
+    }
+  )
+
+  // Use session tools if available and has tools, otherwise use direct query
+  const toolsLoading = sessionLoading || (shouldFallback && directLoading)
+  const toolsData = hasValidCachedTools ? sessionToolsData : directToolsData
+  const toolsError = shouldFallback ? directError : null
+  const fromCache = hasValidCachedTools || false
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h3 className="text-lg font-semibold">Available Tools</h3>
+        {fromCache && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-green-500/10 text-green-600" title="Loaded from Claude session cache">
+            cached
+          </span>
+        )}
+      </div>
+
+      {/* Loading State */}
+      {toolsLoading && (
+        <div className="bg-muted/50 rounded-md p-4 flex items-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            {shouldFallback ? "Connecting to server..." : "Loading from session..."}
+          </p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {!toolsLoading && toolsError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-md p-4">
+          <div className="flex items-start gap-2">
+            <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-2">
+              <p className="text-sm font-medium">Failed to query tools</p>
+              <p className="text-xs text-muted-foreground">
+                Could not connect to the MCP server. The server may be misconfigured or missing dependencies.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Server Disabled */}
+      {!toolsLoading && !mcpServer.enabled && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Server is disabled</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Enable this server to query its available tools.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tools List */}
+      {!toolsLoading && !toolsError && toolsData && mcpServer.enabled && (
+        <>
+          {toolsData.error ? (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{toolsData.error}</p>
+                </div>
+              </div>
+            </div>
+          ) : toolsData.tools.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Found {toolsData.tools.length} tool{toolsData.tools.length === 1 ? "" : "s"}
+              </p>
+              {toolsData.tools.map((tool) => (
+                <div key={tool.name} className="bg-muted/50 rounded-md p-3 space-y-1">
+                  <div className="font-mono text-sm font-medium">{tool.name}</div>
+                  {tool.description && (
+                    <p className="text-xs text-muted-foreground">{tool.description}</p>
+                  )}
+                  {tool.inputSchema?.properties && Object.keys(tool.inputSchema.properties).length > 0 && (
+                    <div className="text-xs text-muted-foreground mt-2">
+                      <span className="font-medium">Parameters:</span>{" "}
+                      {Object.keys(tool.inputSchema.properties).join(", ")}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-4">
+              <div className="flex items-start gap-2">
+                <Plug className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">No tools available</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This server connected successfully but did not report any tools.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * MCP server detail view
+ * Shows server configuration, status, and metadata
+ */
+export function WorkflowMcpView() {
+  const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
+  const setAuthModalOpen = useSetAtom(mcpAuthModalOpenAtom)
+  const setAuthModalServerId = useSetAtom(mcpAuthModalServerIdAtom)
+
+  // Fetch MCP servers list
+  const { data: mcpData, isLoading } = trpc.mcp.listServers.useQuery({
+    projectPath: selectedProject?.path,
+  })
+
+  // Find the selected MCP server
+  const mcpServer = mcpData?.servers.find(s => s.id === selectedNode?.id)
+
+  // Check for OAuth discovery on HTTP/SSE servers
+  const { data: oauthDiscovery } = trpc.mcp.discoverOAuth.useQuery(
+    { serverId: selectedNode?.id!, projectPath: selectedProject?.path || undefined },
+    { enabled: !!selectedNode?.id && (mcpServer?.config.type === "http" || mcpServer?.config.type === "sse") }
+  )
+
+  const utils = trpc.useUtils()
+
+  // Direct MCP OAuth mutation for discovered OAuth servers
+  const mcpOAuthMutation = trpc.mcp.startMcpOAuth.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        // Invalidate queries to refresh auth status
+        utils.mcp.listServers.invalidate()
+        utils.mcp.getServer.invalidate()
+        utils.mcp.getServerTools.invalidate()
+      }
+      // Note: result.error is handled in the UI via mutation state
+    },
+  })
+
+  // Get the error message from either mutation error or result error
+  const oauthError = mcpOAuthMutation.error?.message ||
+    (mcpOAuthMutation.data && !mcpOAuthMutation.data.success ? mcpOAuthMutation.data.error : null)
+
+  const handleConfigureAuth = () => {
+    if (selectedNode?.id) {
+      setAuthModalServerId(selectedNode.id)
+      setAuthModalOpen(true)
+    }
+  }
+
+  // Start OAuth directly for discovered servers (skip modal)
+  const handleStartOAuth = () => {
+    if (selectedNode?.id && oauthDiscovery?.supported) {
+      mcpOAuthMutation.mutate({
+        serverId: selectedNode.id,
+        projectPath: selectedProject?.path || undefined,
+      })
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!mcpServer) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center space-y-2">
+          <Plug className="h-8 w-8 text-muted-foreground/50 mx-auto" />
+          <p className="text-sm text-muted-foreground">MCP server not found</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="p-6 space-y-6 max-w-4xl">
+        {/* Server Status */}
+        <div className="space-y-3">
+          <h2 className="text-2xl font-semibold">{mcpServer.name}</h2>
+
+          <div className="flex items-center gap-4">
+            {/* Enabled Status */}
+            <div className="flex items-center gap-2">
+              {mcpServer.enabled ? (
+                <>
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="text-sm text-green-600 dark:text-green-400">Enabled</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <span className="text-sm text-red-600 dark:text-red-400">Disabled</span>
+                </>
+              )}
+            </div>
+
+            {/* Auth Status */}
+            {mcpServer.authStatus === "configured" && (
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-sm text-blue-600 dark:text-blue-400">Authenticated</span>
+              </div>
+            )}
+            {mcpServer.authStatus === "missing_credentials" && (
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-sm text-amber-600 dark:text-amber-400">Missing Credentials</span>
+              </div>
+            )}
+
+            {/* Source Badge */}
+            {mcpServer.source?.type && (
+              <span className={cn(
+                "text-xs px-2 py-1 rounded-md font-medium uppercase",
+                mcpServer.source.type === "project" && "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+                mcpServer.source.type === "user" && "bg-green-500/10 text-green-600 dark:text-green-400",
+                mcpServer.source.type === "custom" && "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+              )}>
+                {mcpServer.source.type}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Configuration */}
+        <div className="space-y-3">
+          <h3 className="text-lg font-semibold">Configuration</h3>
+
+          {/* HTTP/SSE Server: Show URL and Type */}
+          {(mcpServer.config.type === "http" || mcpServer.config.type === "sse") ? (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Type</label>
+                <div className="bg-muted/50 rounded-md p-3">
+                  <code className="text-sm font-mono select-text cursor-text uppercase">{mcpServer.config.type}</code>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">URL</label>
+                <div className="bg-muted/50 rounded-md p-3">
+                  <code className="text-sm font-mono select-text cursor-text break-all">{mcpServer.config.url}</code>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Stdio Server: Show Command */
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Command</label>
+              <div className="bg-muted/50 rounded-md p-3">
+                <code className="text-sm font-mono select-text cursor-text">{mcpServer.config.command}</code>
+              </div>
+            </div>
+          )}
+
+          {/* Arguments (only for stdio servers) */}
+          {!mcpServer.config.type && mcpServer.config.args && mcpServer.config.args.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Arguments</label>
+              <div className="bg-muted/50 rounded-md p-3 space-y-1">
+                {mcpServer.config.args.map((arg, index) => (
+                  <div key={index} className="text-sm font-mono select-text cursor-text">
+                    {arg}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Environment Variables */}
+          {mcpServer.config.env && Object.keys(mcpServer.config.env).length > 0 && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Environment Variables</label>
+              <div className="bg-muted/50 rounded-md p-3 space-y-2">
+                {Object.entries(mcpServer.config.env).map(([key, value]) => (
+                  <div key={key} className="space-y-0.5">
+                    <div className="text-xs font-medium font-mono text-muted-foreground">{key}</div>
+                    <div className="text-sm font-mono pl-4">
+                      {mcpServer.credentialEnvVars.includes(key) ? (
+                        <span className="text-amber-600 dark:text-amber-400">
+                          {value.startsWith("$") || value.includes("YOUR_") ? value : "••••••••"}
+                        </span>
+                      ) : (
+                        value
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Auto-Approve */}
+          {mcpServer.config.autoApprove && mcpServer.config.autoApprove.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Auto-Approve Tools</label>
+              <div className="bg-muted/50 rounded-md p-3 space-y-1">
+                {mcpServer.config.autoApprove.map((tool, index) => (
+                  <div key={index} className="text-sm font-mono">
+                    {tool}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Authentication Section */}
+        {/* Show for servers with detected credentials OR HTTP/SSE servers (which may need OAuth) */}
+        {(mcpServer.credentialEnvVars.length > 0 || mcpServer.config.type === "http" || mcpServer.config.type === "sse") && (
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold">Authentication</h3>
+            {mcpServer.credentialEnvVars.length > 0 ? (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm font-medium">This server requires the following credentials:</p>
+                    <div className="space-y-1">
+                      {mcpServer.credentialEnvVars.map((envVar) => (
+                        <div key={envVar} className="text-sm font-mono bg-background/50 px-2 py-1 rounded">
+                          {envVar}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleConfigureAuth}
+                  variant={mcpServer.authStatus === "missing_credentials" ? "default" : "outline"}
+                  className="w-full"
+                >
+                  <Key className="h-4 w-4 mr-2" />
+                  {mcpServer.authStatus === "missing_credentials"
+                    ? "Configure Credentials"
+                    : "Update Credentials"}
+                </Button>
+              </div>
+            ) : (
+              <div className="bg-muted/50 rounded-md p-4 space-y-3">
+                {oauthDiscovery?.supported ? (
+                  <>
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">OAuth 2.1 Supported</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          This server supports secure OAuth authentication with automatic token management.
+                        </p>
+                      </div>
+                    </div>
+                    {oauthError && (
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-md p-3">
+                        <p className="text-sm text-red-600 dark:text-red-400">
+                          {oauthError}
+                        </p>
+                      </div>
+                    )}
+                    {mcpOAuthMutation.data?.success && (
+                      <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3">
+                        <p className="text-sm text-green-600 dark:text-green-400">
+                          Successfully authenticated! Refreshing...
+                        </p>
+                      </div>
+                    )}
+                    <Button
+                      onClick={handleStartOAuth}
+                      variant="default"
+                      className="w-full"
+                      disabled={mcpOAuthMutation.isPending || mcpOAuthMutation.data?.success || mcpServer.authStatus === "configured"}
+                    >
+                      {mcpOAuthMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (mcpOAuthMutation.data?.success || mcpServer.authStatus === "configured") ? (
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                      ) : (
+                        <Key className="h-4 w-4 mr-2" />
+                      )}
+                      {mcpOAuthMutation.isPending ? "Signing in..." : (mcpOAuthMutation.data?.success || mcpServer.authStatus === "configured") ? "Authenticated" : "Sign in with OAuth"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      This HTTP server may require authentication. If tools fail to load, configure credentials below.
+                    </p>
+                    <Button
+                      onClick={handleConfigureAuth}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Key className="h-4 w-4 mr-2" />
+                      Configure Authentication
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Source Information */}
+        {mcpServer.source && (
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold">Source</h3>
+            <div className="bg-muted/50 rounded-md p-4 space-y-2">
+              <div className="grid grid-cols-[120px_1fr] gap-2 text-sm">
+                <div className="text-muted-foreground">Type:</div>
+                <div className="font-medium capitalize">{mcpServer.source.type}</div>
+
+                <div className="text-muted-foreground">Config Path:</div>
+                <div className="font-mono text-xs break-all select-text cursor-text">{mcpServer.source.path}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Available Tools */}
+        <AvailableToolsSection mcpServer={mcpServer} />
+
+        {/* Server ID */}
+        <div className="pt-4 border-t border-border/50">
+          <div className="text-xs text-muted-foreground">
+            Server ID: <span className="font-mono">{mcpServer.id}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,497 @@
+import type { ChatTransport, UIMessage } from "ai"
+import { toast } from "sonner"
+import {
+  activeProviderAtom,
+  activeConfigAtom,
+  agentsLoginModalOpenAtom,
+  extendedThinkingEnabledAtom,
+  thinkingEffortAtom,
+  historyEnabledAtom,
+  sessionInfoAtom,
+} from "../../../lib/atoms"
+import { appStore } from "../../../lib/jotai-store"
+import { trpcClient } from "../../../lib/trpc"
+import {
+  askUserQuestionResultsAtom,
+  compactingSubChatsAtom,
+  lastSelectedModelIdAtom,
+  MODEL_ID_MAP,
+  pendingAuthRetryMessageAtom,
+  pendingUserQuestionsAtom,
+} from "../atoms"
+import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import { setPendingMessageMetadataAtom } from "../stores/message-store"
+import type { ErrorCategory } from "../../../../shared/error-types"
+
+// Error categories and their user-friendly messages
+const ERROR_TOAST_CONFIG: Record<
+  ErrorCategory,
+  {
+    title: string
+    description: string
+    action?: { label: string; onClick: () => void }
+  }
+> = {
+  AUTH_FAILED_SDK: {
+    title: "Not logged in",
+    description: "Run 'claude login' in your terminal to authenticate",
+    action: {
+      label: "Copy command",
+      onClick: () => navigator.clipboard.writeText("claude login"),
+    },
+  },
+  INVALID_API_KEY_SDK: {
+    title: "Invalid API key",
+    description:
+      "Your Claude API key is invalid. Check your CLI configuration.",
+  },
+  INVALID_API_KEY: {
+    title: "Invalid API key",
+    description:
+      "Your Claude API key is invalid. Check your CLI configuration.",
+  },
+  RATE_LIMIT_SDK: {
+    title: "Session limit reached",
+    description: "You've hit the Claude Code usage limit.",
+    action: {
+      label: "View usage",
+      onClick: () =>
+        trpcClient.external.openExternal.mutate(
+          "https://claude.ai/settings/usage",
+        ),
+    },
+  },
+  RATE_LIMIT: {
+    title: "Session limit reached",
+    description: "You've hit the Claude Code usage limit.",
+    action: {
+      label: "View usage",
+      onClick: () =>
+        trpcClient.external.openExternal.mutate(
+          "https://claude.ai/settings/usage",
+        ),
+    },
+  },
+  OVERLOADED_SDK: {
+    title: "Claude is busy",
+    description:
+      "The service is overloaded. Please try again in a few moments.",
+  },
+  PROCESS_CRASH: {
+    title: "Claude crashed",
+    description:
+      "The Claude process exited unexpectedly. Try sending your message again or rollback.",
+  },
+  EXECUTABLE_NOT_FOUND: {
+    title: "Claude CLI not found",
+    description:
+      "Install Claude Code CLI: npm install -g @anthropic-ai/claude-code",
+    action: {
+      label: "Copy command",
+      onClick: () =>
+        navigator.clipboard.writeText(
+          "npm install -g @anthropic-ai/claude-code",
+        ),
+    },
+  },
+  NETWORK_ERROR: {
+    title: "Network error",
+    description: "Check your internet connection and try again.",
+  },
+  AUTH_FAILURE: {
+    title: "Authentication failed",
+    description: "Your session may have expired. Try logging in again.",
+  },
+  CONTEXT_LENGTH: {
+    title: "Conversation too long",
+    description:
+      "The conversation has exceeded the context limit. Starting a new chat is recommended.",
+  },
+  UNKNOWN: {
+    title: "Something went wrong",
+    description: "An unexpected error occurred. Please try again.",
+  },
+}
+
+type UIMessageChunk = any // Inferred from subscription
+
+type IPCChatTransportConfig = {
+  chatId: string
+  subChatId: string
+  cwd: string
+  projectPath?: string // Original project path for MCP config lookup (when using worktrees)
+  mode: "plan" | "agent" | "swarm"
+  model?: string
+  maxTokens?: number // Maximum output tokens for the response
+}
+
+// Image attachment type matching the tRPC schema
+type ImageAttachment = {
+  base64Data: string
+  mediaType: string
+  filename?: string
+}
+
+export class IPCChatTransport implements ChatTransport<UIMessage> {
+  constructor(private config: IPCChatTransportConfig) {}
+
+  async sendMessages(options: {
+    messages: UIMessage[]
+    abortSignal?: AbortSignal
+  }): Promise<ReadableStream<UIMessageChunk>> {
+    // Extract prompt and images from last user message
+    const lastUser = [...options.messages]
+      .reverse()
+      .find((m) => m.role === "user")
+    const prompt = this.extractText(lastUser)
+    const images = this.extractImages(lastUser)
+
+    // Read extended thinking setting dynamically (so toggle applies to existing chats)
+    const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
+    const thinkingEffort = appStore.get(thinkingEffortAtom)
+    const historyEnabled = appStore.get(historyEnabledAtom)
+
+    // Effort parameter: controls thinking depth when adaptive thinking is enabled
+    // Only pass when thinking is enabled and effort differs from default "high"
+    const effortValue = thinkingEnabled && thinkingEffort !== "high" ? thinkingEffort : undefined
+
+    // Read model selection dynamically (so model changes apply to existing chats)
+    const selectedModelId = appStore.get(lastSelectedModelIdAtom)
+    const activeProvider = appStore.get(activeProviderAtom)
+    // For Ollama, use the model ID directly; for Claude, map through MODEL_ID_MAP
+    const modelString = activeProvider === "ollama"
+      ? selectedModelId
+      : MODEL_ID_MAP[selectedModelId]
+
+    // For anthropic-oauth and aws-bedrock, auth is handled via env/token — no custom config needed.
+    // For ollama/custom-api, activeConfigAtom returns the properly normalized config.
+    const customConfig =
+      activeProvider === "anthropic-oauth" || activeProvider === "aws-bedrock"
+        ? undefined
+        : appStore.get(activeConfigAtom)
+
+    const currentMode =
+      useAgentSubChatStore
+        .getState()
+        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
+        ?.mode || this.config.mode
+
+    // Map swarm mode to agent for API calls (swarm is just agent mode with specialized behavior)
+    const apiMode: "agent" | "plan" = currentMode === "swarm" ? "agent" : currentMode
+
+    // Stream debug logging
+    const subId = this.config.subChatId.slice(-8)
+    let chunkCount = 0
+    let lastChunkType = ""
+    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"}`)
+
+    return new ReadableStream({
+      start: (controller) => {
+        const sub = trpcClient.claude.chat.subscribe(
+          {
+            subChatId: this.config.subChatId,
+            chatId: this.config.chatId,
+            prompt,
+            cwd: this.config.cwd,
+            projectPath: this.config.projectPath, // Original project path for MCP config lookup
+            mode: apiMode,
+            ...(this.config.maxTokens && { maxTokens: this.config.maxTokens }),
+            // Thinking configuration - use adaptive for modern models (Opus 4.6, Sonnet 4.6)
+            // When enabled, use "adaptive" which lets the model decide when/how much to think
+            // When disabled, explicitly disable thinking
+            ...(thinkingEnabled && { thinking: "adaptive" as const }),
+            ...(!thinkingEnabled && { thinking: "disabled" as const }),
+            ...(effortValue && { effort: effortValue }),
+            ...(modelString && { model: modelString }),
+            ...(customConfig && { customConfig }),
+            historyEnabled,
+            ...(images.length > 0 && { images }),
+          },
+          {
+            onData: (chunk: UIMessageChunk) => {
+              chunkCount++
+              lastChunkType = chunk.type
+
+              // DEBUG: Log ALL chunk types to find message-metadata
+              if (chunk.type.includes("meta") || chunk.type.includes("finish") || chunk.type.includes("message")) {
+                console.log(`[SD] CHUNK sub=${subId} type=${chunk.type}`, chunk)
+              }
+
+              // Handle AskUserQuestion - show question UI
+              if (chunk.type === "ask-user-question") {
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                const newMap = new Map(currentMap)
+                newMap.set(this.config.subChatId, {
+                  subChatId: this.config.subChatId,
+                  parentChatId: this.config.chatId,
+                  toolUseId: chunk.toolUseId,
+                  questions: chunk.questions,
+                })
+                appStore.set(pendingUserQuestionsAtom, newMap)
+              }
+
+
+              // Handle AskUserQuestion result - store for real-time updates
+              if (chunk.type === "ask-user-question-result") {
+                const currentResults = appStore.get(askUserQuestionResultsAtom)
+                const newResults = new Map(currentResults)
+                newResults.set(chunk.toolUseId, chunk.result)
+                appStore.set(askUserQuestionResultsAtom, newResults)
+              }
+
+              // Handle compacting status - track in atom for UI display
+              if (chunk.type === "system-Compact") {
+                const compacting = appStore.get(compactingSubChatsAtom)
+                const newCompacting = new Set(compacting)
+                if (chunk.state === "input-streaming") {
+                  // Compacting started
+                  newCompacting.add(this.config.subChatId)
+                } else {
+                  // Compacting finished (output-available)
+                  newCompacting.delete(this.config.subChatId)
+                }
+                appStore.set(compactingSubChatsAtom, newCompacting)
+              }
+
+              // Handle session init - store MCP servers, plugins, tools info
+              if (chunk.type === "session-init") {
+                console.log("[MCP] Received session-init:", {
+                  tools: chunk.tools?.length,
+                  mcpServers: chunk.mcpServers,
+                  plugins: chunk.plugins,
+                  skills: chunk.skills?.length,
+                  slashCommands: chunk.slashCommands?.length,
+                  // Debug: show all tools to check for MCP tools (format: mcp__servername__toolname)
+                  allTools: chunk.tools,
+                })
+                appStore.set(sessionInfoAtom, {
+                  tools: chunk.tools,
+                  mcpServers: chunk.mcpServers,
+                  plugins: chunk.plugins,
+                  skills: chunk.skills,
+                  slashCommands: chunk.slashCommands,
+                })
+              }
+
+              // Handle agent team events - show toast notifications
+              if (chunk.type === "teammate-idle") {
+                console.log(`[AgentTeams] Teammate idle: ${chunk.teammateName}`)
+                toast.info(`Teammate ${chunk.teammateName} is idle`, { duration: 3000 })
+              }
+              if (chunk.type === "task-completed") {
+                console.log(`[AgentTeams] Task completed: ${chunk.taskSubject}`)
+                toast.success(`Team task completed: ${chunk.taskSubject}`, { duration: 5000 })
+              }
+
+              // Handle message-metadata - store token info for Session Context display
+              // This metadata arrives before we know the AI SDK's message ID, so we store it
+              // as "pending" and associate it with the message during sync
+              if (chunk.type === "message-metadata" && chunk.messageMetadata) {
+                console.log("[IPCTransport] message-metadata chunk received:", {
+                  subChatId: this.config.subChatId,
+                  metadata: chunk.messageMetadata,
+                  inputTokens: chunk.messageMetadata.inputTokens,
+                  outputTokens: chunk.messageMetadata.outputTokens,
+                })
+                appStore.set(setPendingMessageMetadataAtom, {
+                  subChatId: this.config.subChatId,
+                  metadata: chunk.messageMetadata,
+                })
+              }
+
+              // Clear pending questions ONLY when agent has moved on
+              // Don't clear on tool-input-* chunks (still building the question input)
+              // Clear when we get tool-output-* (answer received) or text-delta (agent moved on)
+              const shouldClearOnChunk =
+                chunk.type !== "ask-user-question" &&
+                chunk.type !== "ask-user-question-result" &&
+                !chunk.type.startsWith("tool-input") && // Don't clear while input is being built
+                chunk.type !== "start" &&
+                chunk.type !== "start-step"
+
+              if (shouldClearOnChunk) {
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                if (currentMap.has(this.config.subChatId)) {
+                  const newMap = new Map(currentMap)
+                  newMap.delete(this.config.subChatId)
+                  appStore.set(pendingUserQuestionsAtom, newMap)
+                }
+              }
+
+              // Handle authentication errors - show Claude login modal only for anthropic-oauth
+              if (chunk.type === "auth-error") {
+                const activeProvider = appStore.get(activeProviderAtom)
+
+                // Only show Claude Code login modal for anthropic-oauth provider
+                if (activeProvider === "anthropic-oauth") {
+                  // Store the failed message for retry after successful auth
+                  // readyToRetry=false prevents immediate retry - modal sets it to true on OAuth success
+                  appStore.set(pendingAuthRetryMessageAtom, {
+                    subChatId: this.config.subChatId,
+                    prompt,
+                    ...(images.length > 0 && { images }),
+                    readyToRetry: false,
+                  })
+                  // Show the Claude Code login modal
+                  appStore.set(agentsLoginModalOpenAtom, true)
+                } else {
+                  // For other providers (Ollama, AWS Bedrock, Custom API),
+                  // don't show Claude login modal - error will be displayed in chat
+                  console.warn(`[ipc-chat-transport] Auth error for provider ${activeProvider}:`, chunk)
+                }
+
+                // Use controller.error() instead of controller.close() so that
+                // the SDK Chat properly resets status from "streaming" to "ready"
+                // This allows user to retry sending messages after failed auth
+                console.log(`[SD] R:AUTH_ERR sub=${subId} provider=${activeProvider}`)
+                controller.error(new Error("Authentication required"))
+                return
+              }
+
+              // Handle API errors (retryable 500 errors from backend)
+              if (chunk.type === "api-error") {
+                console.log(`[SD] R:API_ERR sub=${subId} text=${chunk.errorText?.slice(0, 100)}`)
+                // Show toast for retryable API errors
+                toast.error("Claude API Error", {
+                  description: chunk.errorText || "Claude API returned a temporary error. Please try again.",
+                  duration: 8000,
+                  action: {
+                    label: "Retry",
+                    onClick: () => {
+                      // User can manually retry by resending their message
+                      toast.info("Resend your message to retry", { duration: 3000 })
+                    },
+                  },
+                })
+              }
+
+              // Handle errors - show toast to user FIRST before anything else
+              if (chunk.type === "error") {
+                const category = (chunk.debugInfo?.category || "UNKNOWN") as ErrorCategory
+
+                // Show toast based on error category
+                const config = ERROR_TOAST_CONFIG[category]
+
+                if (config) {
+                  toast.error(config.title, {
+                    description: config.description,
+                    duration: 8000,
+                    action: config.action
+                      ? {
+                          label: config.action.label,
+                          onClick: config.action.onClick,
+                        }
+                      : undefined,
+                  })
+                } else {
+                  toast.error("Something went wrong", {
+                    description:
+                      chunk.errorText || "An unexpected error occurred",
+                    duration: 8000,
+                  })
+                }
+              }
+
+              // Try to enqueue, but don't crash if stream is already closed
+              try {
+                controller.enqueue(chunk)
+              } catch (e) {
+                // CRITICAL: Log when enqueue fails - this could explain missing chunks!
+                console.log(`[SD] R:ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`)
+              }
+
+              if (chunk.type === "finish") {
+                console.log(`[SD] R:FINISH sub=${subId} n=${chunkCount}`)
+                // Also grab metadata from finish chunk (backup source for tokens)
+                if (chunk.messageMetadata) {
+                  console.log("[IPCTransport] finish chunk has messageMetadata:", {
+                    subChatId: this.config.subChatId,
+                    metadata: chunk.messageMetadata,
+                    inputTokens: chunk.messageMetadata.inputTokens,
+                    outputTokens: chunk.messageMetadata.outputTokens,
+                  })
+                  appStore.set(setPendingMessageMetadataAtom, {
+                    subChatId: this.config.subChatId,
+                    metadata: chunk.messageMetadata,
+                  })
+                }
+                // Don't close the ReadableStream here — let onComplete handle it.
+                // In team/delegate mode, the SDK sends intermediate finish chunks
+                // between turns while teammates are still running. Closing here
+                // kills the transport before teammate messages can be delivered.
+              }
+            },
+            onError: (err: Error) => {
+              console.log(`[SD] R:ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`)
+              controller.error(err)
+            },
+            onComplete: () => {
+              console.log(`[SD] R:COMPLETE sub=${subId} n=${chunkCount} last=${lastChunkType}`)
+              // Note: Don't clear pending questions here - let active-chat.tsx handle it
+              // via the stream stop detection effect. Clearing here causes race conditions
+              // where sync effect immediately restores from messages.
+              try {
+                controller.close()
+              } catch {
+                // Already closed
+              }
+            },
+          },
+        )
+
+        // Handle abort
+        options.abortSignal?.addEventListener("abort", () => {
+          console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
+          sub.unsubscribe()
+          trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
+          try {
+            controller.close()
+          } catch {
+            // Already closed
+          }
+        })
+      },
+    })
+  }
+
+  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
+    return null // Not needed for local app
+  }
+
+  private extractText(msg: UIMessage | undefined): string {
+    if (!msg) return ""
+    if (msg.parts) {
+      return msg.parts
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join("\n")
+    }
+    return ""
+  }
+
+  /**
+   * Extract images from message parts
+   * Looks for parts with type "data-image" that have base64Data
+   */
+  private extractImages(msg: UIMessage | undefined): ImageAttachment[] {
+    if (!msg || !msg.parts) return []
+
+    const images: ImageAttachment[] = []
+
+    for (const part of msg.parts) {
+      // Check for data-image parts with base64 data
+      if (part.type === "data-image" && (part as any).data) {
+        const data = (part as any).data
+        if (data.base64Data && data.mediaType) {
+          images.push({
+            base64Data: data.base64Data,
+            mediaType: data.mediaType,
+            filename: data.filename,
+          })
+        }
+      }
+    }
+
+    return images
+  }
+}

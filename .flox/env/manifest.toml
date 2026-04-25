@@ -1,0 +1,131 @@
+schema-version = "1.11.0"
+
+
+## Include ----------------------------------------------------------
+## ... environments to create a composed environment
+## ------------------------------------------------------------------
+# [include]
+# environments = []
+
+
+## Install Packages --------------------------------------------------
+##  $ flox install gum  <- puts a package in [install] section below
+##  $ flox search gum   <- search for a package
+##  $ flox show gum     <- show all versions of a package
+## -------------------------------------------------------------------
+[install]
+bun.pkg-path = "bun"
+bun.version = "~1.2"
+bun.pkg-group = "bun-group"
+electron.pkg-path = "electron"
+electron.version = "~33.0"
+electron.pkg-group = "electron-group"
+# Python 3.11 for node-gyp (has distutils built-in)
+python311.pkg-path = "python311"
+python311.priority = 10
+# TypeScript LSP for code intelligence
+typescript.pkg-path = "nodePackages.typescript"
+typescript-language-server.pkg-path = "nodePackages.typescript-language-server"
+
+
+## Environment Variables ---------------------------------------------
+##  ... available for use in the activated environment
+##      as well as [hook], [profile] scripts and [services] below.
+## -------------------------------------------------------------------
+[vars]
+# Indicate Flox environment is active
+FLOX_ENVIRONMENT = "1"
+# Skip electron binary download (Flox provides it)
+ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
+
+
+## Activation Hook ---------------------------------------------------
+##  ... run by _bash_ shell when you run 'flox activate'.
+## -------------------------------------------------------------------
+[hook]
+on-activate = '''
+  # Wire up the Flox-provided Electron binary so electron-vite can find it.
+  # Resolved dynamically so this works on any machine regardless of Nix store hash.
+  if [ -d "$FLOX_ENV_PROJECT/node_modules/electron" ]; then
+    ELECTRON_BIN="$(which electron 2>/dev/null)"
+    if [ -n "$ELECTRON_BIN" ]; then
+      ELECTRON_APPS_DIR="$(dirname $(dirname "$ELECTRON_BIN"))/Applications"
+      echo -n "Electron.app/Contents/MacOS/Electron" > "$FLOX_ENV_PROJECT/node_modules/electron/path.txt"
+      DIST_LINK="$FLOX_ENV_PROJECT/node_modules/electron/dist"
+      if [ -L "$DIST_LINK" ] && [ "$(readlink "$DIST_LINK")" != "$ELECTRON_APPS_DIR" ]; then
+        rm "$DIST_LINK"
+      fi
+      if [ ! -e "$DIST_LINK" ]; then
+        ln -s "$ELECTRON_APPS_DIR" "$DIST_LINK"
+      fi
+    fi
+  fi
+
+  # Download Claude binary if missing (required for background session).
+  OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  ARCH="$(uname -m)"
+  [ "$ARCH" = "x86_64" ] && ARCH="x64"
+  [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] && ARCH="arm64"
+  CLAUDE_BIN="$FLOX_ENV_PROJECT/resources/bin/${OS}-${ARCH}/claude"
+  if [ ! -f "$CLAUDE_BIN" ]; then
+    echo "Claude binary not found, downloading..."
+    cd "$FLOX_ENV_PROJECT" && bun run claude:download
+  fi
+'''
+
+
+## Profile script ----------------------------------------------------
+## ... sourced by _your shell_ when you run 'flox activate'.
+## -------------------------------------------------------------------
+[profile]
+common = '''
+  # Skip electron binary download from npm (prevents duplication)
+  export ELECTRON_SKIP_BINARY_DOWNLOAD=1
+
+  # Helpful activation message
+  echo "Claw development environment activated"
+  echo "  Bun: $(bun --version)"
+  echo "  Electron: $(electron --version)"
+'''
+## Shell-specific customizations such as setting aliases go here:
+# bash = ...
+# zsh  = ...
+# fish = ...
+
+
+## Services ---------------------------------------------------------
+##  $ flox services start             <- Starts all services
+##  $ flox services status            <- Status of running services
+##  $ flox activate --start-services  <- Activates & starts all
+## ------------------------------------------------------------------
+[services]
+# myservice.command = "python3 -m http.server"
+
+
+## Build and publish your own packages ------------------------------
+##  $ flox build
+##  $ flox publish
+## ------------------------------------------------------------------
+[build]
+# [build.myproject]
+# description = "The coolest project ever"
+# version = "0.0.1"
+# command = """
+#   mkdir -p $out/bin
+#   cargo build --release
+#   cp target/release/myproject $out/bin/myproject
+# """
+
+
+## Other Environment Options -----------------------------------------
+[options]
+# Systems that environment is compatible with
+# Define systems to support (uncomment to restrict)
+# systems = [
+#   "aarch64-darwin",
+#   "aarch64-linux",
+#   "x86_64-darwin",
+#   "x86_64-linux",
+# ]
+# Uncomment to disable CUDA detection.
+# cuda-detection = false

@@ -1,0 +1,353 @@
+"use client"
+
+import { useCallback, useRef, useEffect } from "react"
+import { useSetAtom } from "jotai"
+import { trpc } from "../../../lib/trpc"
+import type { AnalysisType } from "../../../../main/lib/trpc/routers/analyzer"
+import {
+  isGeneratingAtom,
+  diagramLoadingAtom,
+  diagramErrorAtom,
+  activeAnalysisJobsAtom,
+} from "../atoms"
+import type { AnalysisProgressUpdate } from "../../../../main/lib/analysis/background-analysis-runner"
+
+interface UseAnalysisServiceOptions {
+  projectId: string
+  projectPath: string
+}
+
+interface ActiveJob {
+  id: string
+  type: AnalysisType
+  status: "running" | "completed" | "failed"
+  log?: Array<{ level: string; message: string; timestamp: string }>
+  errorMessage?: string
+  startedAt: Date
+}
+
+/**
+ * Hook for managing analysis generation via background session
+ *
+ * This uses the background Claude session with Task tool to spawn
+ * parallel analysis agents. No active chat is required - the analysis
+ * runs entirely in the background and reports progress via tRPC
+ * subscriptions.
+ */
+export function useAnalysisService({ projectId, projectPath }: UseAnalysisServiceOptions) {
+  const setIsGenerating = useSetAtom(isGeneratingAtom)
+  const setIsLoading = useSetAtom(diagramLoadingAtom)
+  const setError = useSetAtom(diagramErrorAtom)
+  const setActiveJobs = useSetAtom(activeAnalysisJobsAtom)
+
+  const utils = trpc.useUtils()
+  const activeJobIdsRef = useRef<Map<string, AnalysisType>>(new Map()) // Track jobId -> type
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Mutations for generating analysis
+  const generateViaBackgroundMutation = trpc.analyzer.generateViaBackground.useMutation()
+  const generateAllViaBackgroundMutation = trpc.analyzer.generateAllViaBackground.useMutation()
+  const cancelBackgroundMutation = trpc.analyzer.cancelBackground.useMutation()
+
+  // Check status of active jobs via polling (fallback if subscription fails)
+  const checkActiveJobsStatus = useCallback(async () => {
+    if (activeJobIdsRef.current.size === 0) return
+
+    try {
+      const activeTasks = await utils.analyzer.getActiveBackgroundAnalyses.fetch()
+
+      // Check if any of our active jobs are no longer in the active tasks
+      for (const [jobId, type] of activeJobIdsRef.current) {
+        const stillActive = activeTasks.some((task: { callId: string }) => task.callId === jobId)
+        if (!stillActive) {
+          // Job is no longer active - it must have completed or failed
+          console.log(`[useAnalysisService] Job ${jobId} no longer active, assuming complete`)
+          activeJobIdsRef.current.delete(jobId)
+
+          // Invalidate to refresh diagram data
+          utils.analyzer.get.invalidate({ projectId, type })
+          utils.analyzer.list.invalidate({ projectId })
+
+          // Update active jobs
+          setActiveJobs((prev) => {
+            const next = new Map(prev)
+            next.delete(jobId)
+            return next
+          })
+        }
+      }
+
+      // If all jobs are done, clear loading states
+      if (activeJobIdsRef.current.size === 0) {
+        setIsGenerating(false)
+        setIsLoading(false)
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+      }
+    } catch (err) {
+      console.error("[useAnalysisService] Error checking job status:", err)
+    }
+  }, [projectId, utils, setActiveJobs, setIsGenerating, setIsLoading])
+
+  // Start polling when we have active jobs
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) return // Already polling
+
+    pollingIntervalRef.current = setInterval(checkActiveJobsStatus, 3000) // Poll every 3 seconds
+  }, [checkActiveJobsStatus])
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
+
+  // Subscribe to background progress updates
+  const progressSubscription = trpc.analyzer.subscribeBackgroundProgress.useSubscription(undefined, {
+    onData: (update: AnalysisProgressUpdate) => {
+      console.log("[useAnalysisService] Received progress update:", update)
+
+      // Only handle updates for our project
+      if (!update.jobId) return
+
+      // Update active jobs map
+      setActiveJobs((prev) => {
+        const next = new Map(prev)
+        const existing = next.get(update.jobId)
+
+        if (update.status === "completed" || update.status === "failed") {
+          // Remove from active jobs when done
+          next.delete(update.jobId)
+          activeJobIdsRef.current.delete(update.jobId)
+
+          // Refresh diagram data
+          utils.analyzer.get.invalidate({ projectId, type: update.type })
+
+          // Check if all jobs are done
+          if (activeJobIdsRef.current.size === 0) {
+            setIsGenerating(false)
+            setIsLoading(false)
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+              pollingIntervalRef.current = null
+            }
+          }
+        } else {
+          // Update or add active job
+          next.set(update.jobId, {
+            id: update.jobId,
+            type: update.type,
+            status: update.status === "started" ? "running" : update.status,
+            log: update.message ? [{ level: "info", message: update.message, timestamp: new Date().toISOString() }] : [],
+            errorMessage: update.error,
+            startedAt: existing?.startedAt || new Date(),
+          })
+        }
+
+        return next
+      })
+
+      // Set error if failed
+      if (update.status === "failed" && update.error) {
+        setError(update.error)
+        setIsGenerating(false)
+        setIsLoading(false)
+      }
+    },
+    onError: (err) => {
+      console.error("[useAnalysisService] Progress subscription error:", err)
+      // Start polling as fallback when subscription fails
+      startPolling()
+    },
+  })
+
+  // Subscribe to diagram updates
+  const diagramSubscription = trpc.analyzer.subscribe.useSubscription(
+    { projectId },
+    {
+      onData: (update) => {
+        // Invalidate the specific diagram to refresh data
+        utils.analyzer.get.invalidate({ projectId, type: update.diagram.type as AnalysisType })
+      },
+      onError: (err) => {
+        console.error("[useAnalysisService] Diagram subscription error:", err)
+      },
+    }
+  )
+
+  /**
+   * Generate a single analysis type via background session
+   */
+  const generateAnalysis = useCallback(
+    async (type: AnalysisType) => {
+      if (!projectPath) {
+        setError("No project path available")
+        return null
+      }
+
+      setIsGenerating(true)
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        // Call the background analysis mutation
+        const result = await generateViaBackgroundMutation.mutateAsync({
+          projectId,
+          projectPath,
+          type,
+        })
+
+        if (!result.success || !result.job) {
+          const errorMessage = result.error || "Failed to start background analysis"
+          setError(errorMessage)
+          setIsGenerating(false)
+          setIsLoading(false)
+          return null
+        }
+
+        // Track this job
+        activeJobIdsRef.current.set(result.job.id, type)
+
+        // Add to active jobs
+        setActiveJobs((prev) => {
+          const next = new Map(prev)
+          next.set(result.job!.id, {
+            id: result.job!.id,
+            type,
+            status: "running",
+            log: [{ level: "info", message: "Starting analysis...", timestamp: new Date().toISOString() }],
+            startedAt: new Date(),
+          })
+          return next
+        })
+
+        return { jobId: result.job.id, diagramId: result.job.diagramId }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Analysis failed"
+        setError(errorMessage)
+        setIsGenerating(false)
+        setIsLoading(false)
+        return null
+      }
+    },
+    [projectId, projectPath, utils, setIsGenerating, setIsLoading, setError, setActiveJobs, generateViaBackgroundMutation]
+  )
+
+  /**
+   * Generate all 4 analysis types in parallel via background
+   */
+  const generateAll = useCallback(async () => {
+    if (!projectPath) {
+      setError("No project path available")
+      return null
+    }
+
+    setIsGenerating(true)
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      // Call the background all-analysis mutation
+      const results = await generateAllViaBackgroundMutation.mutateAsync({
+        projectId,
+        projectPath,
+      })
+
+      const successful: Array<{ type: AnalysisType; jobId: string; diagramId: string }> = []
+
+      for (const result of results) {
+        if (result.success && result.job) {
+          activeJobIdsRef.current.set(result.job.id, result.type)
+
+          setActiveJobs((prev) => {
+            const next = new Map(prev)
+            next.set(result.job!.id, {
+              id: result.job!.id,
+              type: result.type,
+              status: "running",
+              log: [{ level: "info", message: "Starting analysis...", timestamp: new Date().toISOString() }],
+              startedAt: new Date(),
+            })
+            return next
+          })
+
+          successful.push({
+            type: result.type,
+            jobId: result.job.id,
+            diagramId: result.job.diagramId,
+          })
+        } else {
+          console.error(`[useAnalysisService] Failed to start ${result.type}:`, result.error)
+        }
+      }
+
+      if (successful.length === 0) {
+        setError("Failed to start any analyses")
+        setIsGenerating(false)
+        setIsLoading(false)
+        return null
+      }
+
+      return successful
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to start analyses"
+      setError(errorMessage)
+      setIsGenerating(false)
+      setIsLoading(false)
+      return null
+    }
+  }, [projectId, projectPath, utils, setIsGenerating, setIsLoading, setError, setActiveJobs, generateAllViaBackgroundMutation])
+
+  /**
+   * Cancel an ongoing analysis
+   */
+  const cancelAnalysis = useCallback(
+    async (jobId: string) => {
+      try {
+        await cancelBackgroundMutation.mutateAsync({ jobId })
+
+        activeJobIdsRef.current.delete(jobId)
+
+        setActiveJobs((prev) => {
+          const next = new Map(prev)
+          next.delete(jobId)
+          return next
+        })
+
+        // If no more active jobs, clear loading states
+        if (activeJobIdsRef.current.size === 0) {
+          setIsGenerating(false)
+          setIsLoading(false)
+        }
+      } catch (err) {
+        console.error("[useAnalysisService] Failed to cancel analysis:", err)
+      }
+    },
+    [utils, setActiveJobs, setIsGenerating, setIsLoading, cancelBackgroundMutation]
+  )
+
+  /**
+   * Cancel all running analyses
+   */
+  const cancelAll = useCallback(async () => {
+    const jobsToCancel = Array.from(activeJobIdsRef.current.keys())
+
+    await Promise.all(jobsToCancel.map((jobId) => cancelAnalysis(jobId)))
+
+    activeJobIdsRef.current.clear()
+    setIsGenerating(false)
+    setIsLoading(false)
+  }, [cancelAnalysis, setIsGenerating, setIsLoading])
+
+  return {
+    generateAnalysis,
+    generateAll,
+    cancelAnalysis,
+    cancelAll,
+  }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `claude_code_settings` ADD COLUMN `extended_thinking_enabled` integer DEFAULT 1 NOT NULL;

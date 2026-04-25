@@ -1,0 +1,439 @@
+@import "./agents-styles.css";
+
+@source "../../../node_modules/streamdown/dist/*.js";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Layered background system for visual depth */
+    --background: 0 0% 100%;
+    /* #FFFFFF - main content */
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 99%;
+    /* #FCFCFC - subtle card lift */
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    /* #FFFFFF - floating elements */
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 228 100% 50%;
+    /* #0034FF - same for all themes */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%;
+    /* #F4F4F6 - secondary surfaces */
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 5% 94%;
+    /* #EFEFF2 - muted backgrounds */
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 5% 96%;
+    /* #F4F4F6 - accent backgrounds */
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5% 86%;
+    /* #DBDBE0 - more visible borders */
+    --input: 240 5% 86%;
+    /* #DBDBE0 - input borders */
+    --input-background: 240 5% 98%;
+    /* #FAFAFB - input fields */
+    --ring: 228 100% 50%;
+    /* Same as primary - blue focus ring */
+    --selection: 228 100% 50% / 0.25;
+    /* Text selection background - primary at 25% */
+    --radius: 0.5rem;
+    /* Plan Mode Colors */
+    --plan-mode: 33 83% 67%;
+    --plan-mode-foreground: 0 0% 8%;
+    /* Timeline/Content background - recessed areas */
+    --tl-background: 240 5% 97%;
+    /* #F7F7F9 - sidebar/recessed */
+  }
+
+  .dark {
+    /* Layered background system for visual depth */
+    --background: 0 0% 6%;
+    /* #0F0F0F - main content area */
+    --foreground: 240 4.8% 95.9%;
+    --card: 0 0% 8%;
+    /* #141414 - elevated cards */
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 10%;
+    /* #1A1A1A - floating elements */
+    --popover-foreground: 0 0% 98%;
+    --primary: 228 100% 50%;
+    /* #0034FF - same for all themes */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    /* #1F1F1F - secondary surfaces */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14%;
+    /* #242424 - muted backgrounds */
+    --muted-foreground: 240 4.4% 58%;
+    --accent: 0 0% 12%;
+    /* #1F1F1F - accent backgrounds */
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 18%;
+    /* #2E2E2E - more visible borders */
+    --input: 0 0% 18%;
+    /* #2E2E2E - input borders */
+    --input-background: 0 0% 10%;
+    /* #1A1A1A - input fields */
+    --ring: 228 100% 50%;
+    /* Same as primary - blue focus ring */
+    --selection: 228 100% 50% / 0.3;
+    /* Text selection background - primary at 30% */
+    /* Plan Mode Colors */
+    --plan-mode: 33 83% 67%;
+    --plan-mode-foreground: 0 0% 8%;
+    /* Timeline/Content background - recessed areas */
+    --tl-background: 0 0% 4%;
+    /* #0A0A0A - sidebar/recessed */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 17px;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+}
+
+/* Search highlight styles */
+.search-highlight {
+  background-color: rgb(250 204 21 / 0.35) !important;
+  color: inherit !important;
+  border-radius: 2px;
+}
+
+.search-highlight-current {
+  background-color: rgb(250 204 21 / 0.85) !important;
+  color: hsl(0 0% 5%) !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Disable text selection on UI elements */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Drag region for window */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Chroma gradient animation for special keywords */
+@keyframes chroma-slide {
+  0% {
+    background-position: 100% 0;
+  }
+  40% {
+    background-position: 0% 0;
+  }
+  45% {
+    background-position: 0% 0;
+  }
+  46% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 100% 0;
+  }
+}
+
+.chroma-text {
+  background-image: linear-gradient(
+    90deg,
+    #0a0a0a 0%,
+    #0a0a0a 30%,
+    #6366f1 42%,
+    #8b5cf6 50%,
+    #a855f7 58%,
+    #0a0a0a 70%,
+    #0a0a0a 100%
+  );
+  background-size: 300% 100%;
+  background-position: 100% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.chroma-text-animate {
+  animation: chroma-slide 2s ease-out infinite;
+}
+
+/* Dark theme chroma colors */
+.dark .chroma-text {
+  background-image: linear-gradient(
+    90deg,
+    #fafafa 0%,
+    #fafafa 30%,
+    #818cf8 42%,
+    #a78bfa 50%,
+    #c084fc 58%,
+    #fafafa 70%,
+    #fafafa 100%
+  );
+}
+
+/* Sonner Toast Styling - Google-style layout */
+[data-sonner-toaster] {
+  --normal-bg: hsl(var(--popover));
+  --normal-text: hsl(var(--popover-foreground));
+  --normal-border: hsl(var(--border));
+  --border-radius: var(--radius);
+  /* Override rich colors - all toasts should be neutral */
+  --success-bg: hsl(var(--popover));
+  --success-border: hsl(var(--border));
+  --success-text: hsl(var(--popover-foreground));
+  --info-bg: hsl(var(--popover));
+  --info-border: hsl(var(--border));
+  --info-text: hsl(var(--popover-foreground));
+  --warning-bg: hsl(var(--popover));
+  --warning-border: hsl(var(--border));
+  --warning-text: hsl(var(--popover-foreground));
+  --error-bg: hsl(var(--popover));
+  --error-border: hsl(var(--border));
+  --error-text: hsl(var(--popover-foreground));
+}
+
+[data-sonner-toast][data-styled="true"] {
+  padding: 12px 16px;
+  padding-right: 32px;
+  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Icon on the left */
+[data-sonner-toast] [data-icon] {
+  margin-top: 1px;
+  color: hsl(var(--muted-foreground));
+  width: 16px;
+  height: 16px;
+}
+
+[data-sonner-toast] [data-icon] svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Loading spinner - match icon size */
+[data-sonner-toast] .sonner-loading-wrapper {
+  --size: 16px;
+}
+
+[data-sonner-toast] .sonner-loading-bar {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Content wrapper - take remaining space */
+[data-sonner-toast] [data-content] {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Title styling */
+[data-sonner-toast] [data-title] {
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Description styling */
+[data-sonner-toast] [data-description] {
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Action button - on its own row at the bottom right */
+[data-sonner-toast][data-styled="true"] [data-button] {
+  position: absolute;
+  bottom: 12px;
+  right: 8px;
+  background: transparent !important;
+  color: hsl(var(--foreground)) !important;
+  font-weight: 500;
+  font-size: 13px;
+  padding: 4px 12px;
+  height: auto;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 6px;
+  margin: 0 !important;
+  transition: background-color 150ms ease-out, transform 150ms ease-out;
+}
+
+[data-sonner-toast][data-styled="true"] [data-button]:hover {
+  background: hsl(var(--foreground) / 0.1) !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-button]:active {
+  transform: scale(0.97);
+}
+
+/* Add bottom padding when button exists */
+[data-sonner-toast][data-styled="true"]:has([data-button]) {
+  padding-bottom: 44px;
+}
+
+/* Close button - inside toast, top right corner */
+[data-sonner-toast] [data-close-button] {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  left: unset !important;
+  transform: none !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 4px !important;
+  color: hsl(var(--muted-foreground));
+  width: 20px;
+  height: 20px;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent)) !important;
+}
+
+/* Terminal link popup */
+.xterm-link-popup {
+  font-family: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--popover-foreground));
+  position: absolute;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+}
+
+/* Heartbeat animation for logo */
+@keyframes heartbeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.animate-heartbeat {
+  animation: heartbeat 2s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* React Flow node background overrides - remove default white background and border */
+.react-flow__node-default,
+.react-flow__node-input,
+.react-flow__node-output,
+.react-flow__node-group {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* React Flow edge styling */
+.react-flow__edges {
+  pointer-events: all;
+  z-index: 1;
+  overflow: visible;
+}
+
+.react-flow__edge {
+  pointer-events: all;
+}
+
+.react-flow__edge-path {
+  stroke: hsl(var(--muted-foreground)) !important;
+  stroke-width: 2 !important;
+  fill: none !important;
+  visibility: visible !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: hsl(var(--primary)) !important;
+}
+
+/* React Flow arrow markers */
+.react-flow__arrowhead,
+.react-flow__arrowhead g,
+.react-flow__arrowhead path {
+  fill: hsl(var(--muted-foreground)) !important;
+  stroke: none !important;
+  visibility: visible !important;
+}
+
+/* React Flow marker definitions in SVG defs */
+.react-flow__marker {
+  fill: hsl(var(--muted-foreground)) !important;
+  visibility: visible !important;
+}
+
+/* Glow animation for chats waiting for user input */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 4px hsl(33 83% 67% / 0.5), 0 0 8px hsl(33 83% 67% / 0.3);
+    background-color: hsl(33 83% 67% / 0.08);
+  }
+  50% {
+    box-shadow: 0 0 12px hsl(33 83% 67% / 0.7), 0 0 24px hsl(33 83% 67% / 0.5);
+    background-color: hsl(33 83% 67% / 0.15);
+  }
+}
+
+.animate-glow {
+  animation: glow-pulse 2s ease-in-out infinite;
+  will-change: box-shadow, background-color;
+  border-radius: 0.5rem;
+}

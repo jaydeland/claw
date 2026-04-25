@@ -1,0 +1,656 @@
+import { execSync } from "node:child_process"
+import fs from "node:fs"
+import path from "node:path"
+import os from "node:os"
+import { app } from "electron"
+import { stripVTControlCharacters } from "node:util"
+import { eq } from "drizzle-orm"
+import { getDatabase, claudeCodeSettings } from "../db"
+import { decrypt } from "../aws/sso-service"
+import { getAwsCredentialsFilePath, getAwsConfigFilePath } from "../aws/credentials-file"
+
+// Cache the shell environment
+let cachedShellEnv: Record<string, string> | null = null
+
+// Delimiter for parsing env output
+const DELIMITER = "_CLAUDE_ENV_DELIMITER_"
+
+// Keys to strip (prevent auth interference)
+// CRITICAL: Include AWS credentials to prevent system SSO from leaking into app
+const STRIPPED_ENV_KEYS = [
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "CLAUDE_CODE_USE_BEDROCK",
+  "CLAUDE_CODE_USE_VERTEX",
+  // Prevent nested session detection when launched from a Claude Code terminal
+  "CLAUDECODE",
+  // AWS credentials - must be set explicitly by the app, not inherited from system
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "AWS_PROFILE",
+  "AWS_DEFAULT_PROFILE",
+  // AWS config paths - stripped so the app can set them explicitly to app-managed files
+  "AWS_SHARED_CREDENTIALS_FILE",
+  "AWS_CONFIG_FILE",
+]
+
+// Cache the bundled binary path (only compute once)
+let cachedBinaryPath: string | null = null
+let binaryPathComputed = false
+
+// Flag to prevent concurrent refresh attempts
+let isRefreshing = false
+
+// AWS Credentials interface for Bedrock
+export interface AwsCredentials {
+  accessKeyId: string
+  secretAccessKey: string
+  sessionToken?: string
+  region: string
+  profileName?: string // AWS profile name for profile mode
+}
+
+/**
+ * Get AWS credentials from database if AWS auth mode is enabled
+ * Note: This requires database access, so it's lazily imported
+ */
+export function getAwsCredentials(): AwsCredentials | null {
+  try {
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    if (!settings || settings.authMode !== "aws") {
+      return null
+    }
+
+    // CRITICAL: Check connection method - SSO takes precedence
+    const connectionMethod = settings.bedrockConnectionMethod || "profile"
+
+    // SSO mode - MUST have valid SSO credentials
+    if (connectionMethod === "sso") {
+      if (!settings.awsAccessKeyId || !settings.awsSecretAccessKey) {
+        console.warn("[claude-env] SSO mode selected but credentials not available")
+        return null
+      }
+
+      // Check expiration
+      if (settings.awsCredentialsExpiresAt && settings.awsCredentialsExpiresAt < new Date()) {
+        console.warn("[claude-env] SSO credentials expired")
+        return null
+      }
+
+      // Validate credentials exist before decrypting
+      if (!settings.awsAccessKeyId || !settings.awsSecretAccessKey) {
+        console.warn("[claude-env] AWS credentials not available")
+        return null
+      }
+
+      // Return SSO credentials with explicit precedence
+      console.log("[claude-env] Using SSO credentials (connection method: sso)")
+      return {
+        accessKeyId: decrypt(settings.awsAccessKeyId),
+        secretAccessKey: decrypt(settings.awsSecretAccessKey),
+        sessionToken: settings.awsSessionToken ? decrypt(settings.awsSessionToken) : undefined,
+        region: settings.bedrockRegion || "us-east-1",
+      }
+    }
+
+    // Profile mode - rely on AWS SDK to load from ~/.aws/
+    console.log("[claude-env] Using profile mode (connection method: profile)")
+    return {
+      accessKeyId: "", // SDK will load from profile
+      secretAccessKey: "",
+      region: settings.bedrockRegion || "us-east-1",
+      profileName: settings.awsProfileName || undefined,
+    }
+  } catch (error) {
+    console.error("[claude-env] Failed to get AWS credentials:", error)
+    return null
+  }
+}
+
+/**
+ * Result of credential refresh attempt
+ */
+export interface CredentialRefreshResult {
+  success: boolean
+  error?: string
+  expiresAt?: Date
+  connectionMethod?: "profile" | "sso" // Which mode we're in
+  requiresReauth?: boolean // True if user must re-authenticate in Settings
+}
+
+/**
+ * Ensure AWS credentials are valid, auto-refreshing if needed.
+ * Call this BEFORE buildClaudeEnv() to ensure credentials are fresh.
+ *
+ * This handles the case where SSO credentials are expired but can be refreshed
+ * using the stored SSO access token (and refresh token if needed).
+ */
+export async function ensureValidAwsCredentials(): Promise<CredentialRefreshResult> {
+  // Prevent concurrent refresh attempts
+  if (isRefreshing) {
+    console.log("[claude-env] Credential refresh already in progress, waiting...")
+    // Wait a bit and check again
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    return ensureValidAwsCredentials()
+  }
+
+  try {
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    // Not in AWS mode - nothing to refresh
+    if (!settings || settings.authMode !== "aws") {
+      return { success: true, connectionMethod: "profile" }
+    }
+
+    // Profile mode - relies on system credentials, nothing to refresh in app
+    const connectionMethod = settings.bedrockConnectionMethod || "profile"
+    if (connectionMethod === "profile") {
+      return { success: true, connectionMethod: "profile" }
+    }
+
+    // SSO mode - check if credentials need refresh
+    const now = new Date()
+    const credentialsExpired = settings.awsCredentialsExpiresAt && settings.awsCredentialsExpiresAt < now
+    const credentialsMissing = !settings.awsAccessKeyId || !settings.awsSecretAccessKey
+
+    // Credentials are valid - no refresh needed
+    if (!credentialsExpired && !credentialsMissing) {
+      return { success: true, expiresAt: settings.awsCredentialsExpiresAt || undefined, connectionMethod: "sso" }
+    }
+
+    console.log("[claude-env] SSO credentials expired or missing, attempting auto-refresh...")
+    isRefreshing = true
+
+    // Check if we have SSO access token to refresh credentials
+    if (!settings.ssoAccessToken || !settings.ssoRegion) {
+      console.warn("[claude-env] No SSO access token available for refresh")
+      return { success: false, error: "SSO session not established. Please authenticate in Settings.", connectionMethod: "sso", requiresReauth: true }
+    }
+
+    if (!settings.ssoAccountId || !settings.ssoRoleName) {
+      console.warn("[claude-env] No SSO account/role selected for refresh")
+      return { success: false, error: "No AWS account/role selected. Please configure in Settings.", connectionMethod: "sso", requiresReauth: true }
+    }
+
+    // Dynamically import AwsSsoService to avoid circular deps
+    const { AwsSsoService } = await import("../aws/sso-service")
+    const ssoService = new AwsSsoService(settings.ssoRegion)
+
+    let accessToken = settings.ssoAccessToken
+
+    // Check if SSO access token itself is expired
+    const ssoTokenExpired = settings.ssoTokenExpiresAt && settings.ssoTokenExpiresAt < now
+    if (ssoTokenExpired) {
+      console.log("[claude-env] SSO access token expired, attempting token refresh...")
+
+      if (!settings.ssoRefreshToken || !settings.ssoClientId || !settings.ssoClientSecret) {
+        console.warn("[claude-env] No refresh token available - user must re-authenticate")
+        return { success: false, error: "SSO session expired. Please re-authenticate in Settings.", connectionMethod: "sso", requiresReauth: true }
+      }
+
+      try {
+        const newToken = await ssoService.refreshToken(
+          settings.ssoClientId,
+          settings.ssoClientSecret,
+          settings.ssoRefreshToken
+        )
+
+        accessToken = newToken.accessToken
+
+        // Save refreshed SSO token
+        db.update(claudeCodeSettings)
+          .set({
+            ssoAccessToken: newToken.accessToken,
+            ssoRefreshToken: newToken.refreshToken || settings.ssoRefreshToken,
+            ssoTokenExpiresAt: newToken.expiresAt,
+          })
+          .where(eq(claudeCodeSettings.id, "default"))
+          .run()
+
+        console.log("[claude-env] SSO access token refreshed successfully")
+      } catch (tokenError: any) {
+        console.error("[claude-env] Failed to refresh SSO token:", tokenError)
+        return { success: false, error: "Failed to refresh SSO session. Please re-authenticate in Settings.", connectionMethod: "sso", requiresReauth: true }
+      }
+    }
+
+    // Now get fresh role credentials using the (possibly refreshed) access token
+    try {
+      const credentials = await ssoService.getRoleCredentials(
+        accessToken,
+        settings.ssoAccountId,
+        settings.ssoRoleName
+      )
+
+      // Save new credentials
+      db.update(claudeCodeSettings)
+        .set({
+          awsAccessKeyId: credentials.accessKeyId,
+          awsSecretAccessKey: credentials.secretAccessKey,
+          awsSessionToken: credentials.sessionToken,
+          awsCredentialsExpiresAt: credentials.expiration,
+          updatedAt: new Date(),
+        })
+        .where(eq(claudeCodeSettings.id, "default"))
+        .run()
+
+      console.log("[claude-env] AWS credentials refreshed successfully, expires:", credentials.expiration)
+      return { success: true, expiresAt: credentials.expiration, connectionMethod: "sso" }
+    } catch (credError: any) {
+      console.error("[claude-env] Failed to get role credentials:", credError)
+      return { success: false, error: `Failed to get AWS credentials: ${credError.message}`, connectionMethod: "sso", requiresReauth: true }
+    }
+  } catch (error: any) {
+    console.error("[claude-env] Unexpected error during credential refresh:", error)
+    return { success: false, error: `Credential refresh failed: ${error.message}`, connectionMethod: "sso" }
+  } finally {
+    isRefreshing = false
+  }
+}
+
+/**
+ * Get path to the bundled Claude binary.
+ * Returns the path to the native Claude executable bundled with the app.
+ * CACHED - only computes path once and logs verbose info on first call.
+ */
+export function getBundledClaudeBinaryPath(): string {
+  // Return cached path if already computed
+  if (binaryPathComputed) {
+    return cachedBinaryPath!
+  }
+
+  const isDev = !app.isPackaged
+  const platform = process.platform
+  const arch = process.arch
+
+  // Only log verbose info on first call
+  if (process.env.DEBUG_CLAUDE_BINARY) {
+    console.log("[claude-binary] ========== BUNDLED BINARY PATH ==========")
+    console.log("[claude-binary] isDev:", isDev)
+    console.log("[claude-binary] platform:", platform)
+    console.log("[claude-binary] arch:", arch)
+    console.log("[claude-binary] appPath:", app.getAppPath())
+  }
+
+  // In dev: apps/desktop/resources/bin/{platform}-{arch}/claude
+  // In production: {resourcesPath}/bin/claude
+  const resourcesPath = isDev
+    ? path.join(app.getAppPath(), "resources/bin", `${platform}-${arch}`)
+    : path.join(process.resourcesPath, "bin")
+
+  if (process.env.DEBUG_CLAUDE_BINARY) {
+    console.log("[claude-binary] resourcesPath:", resourcesPath)
+  }
+
+  const binaryName = platform === "win32" ? "claude.exe" : "claude"
+  const binaryPath = path.join(resourcesPath, binaryName)
+
+  if (process.env.DEBUG_CLAUDE_BINARY) {
+    console.log("[claude-binary] binaryPath:", binaryPath)
+  }
+
+  // Check if binary exists
+  const exists = fs.existsSync(binaryPath)
+
+  // Always log if binary doesn't exist (critical error)
+  if (!exists) {
+    console.error("[claude-binary] WARNING: Binary not found at path:", binaryPath)
+    console.error("[claude-binary] Run 'bun run claude:download' to download it")
+  } else if (process.env.DEBUG_CLAUDE_BINARY) {
+    const stats = fs.statSync(binaryPath)
+    const sizeMB = (stats.size / 1024 / 1024).toFixed(1)
+    const isExecutable = (stats.mode & fs.constants.X_OK) !== 0
+    console.log("[claude-binary] exists:", exists)
+    console.log("[claude-binary] size:", sizeMB, "MB")
+    console.log("[claude-binary] isExecutable:", isExecutable)
+    console.log("[claude-binary] ===========================================")
+  }
+
+  // Cache the result
+  cachedBinaryPath = binaryPath
+  binaryPathComputed = true
+
+  return binaryPath
+}
+
+/**
+ * Parse environment variables from shell output
+ */
+function parseEnvOutput(output: string): Record<string, string> {
+  const envSection = output.split(DELIMITER)[1]
+  if (!envSection) return {}
+
+  const env: Record<string, string> = {}
+  for (const line of stripVTControlCharacters(envSection)
+    .split("\n")
+    .filter(Boolean)) {
+    const separatorIndex = line.indexOf("=")
+    if (separatorIndex > 0) {
+      const key = line.substring(0, separatorIndex)
+      const value = line.substring(separatorIndex + 1)
+      env[key] = value
+    }
+  }
+  return env
+}
+
+/**
+ * Load full shell environment using interactive login shell.
+ * This captures PATH, HOME, and all shell profile configurations.
+ * Results are cached for the lifetime of the process.
+ */
+export function getClaudeShellEnvironment(): Record<string, string> {
+  if (cachedShellEnv !== null) {
+    return { ...cachedShellEnv }
+  }
+
+  const shell = process.env.SHELL || "/bin/zsh"
+  const command = `echo -n "${DELIMITER}"; env; echo -n "${DELIMITER}"; exit`
+
+  try {
+    const output = execSync(`${shell} -ilc '${command}'`, {
+      encoding: "utf8",
+      timeout: 5000,
+      env: {
+        // Prevent Oh My Zsh from blocking with auto-update prompts
+        DISABLE_AUTO_UPDATE: "true",
+        // Minimal env to bootstrap the shell
+        HOME: os.homedir(),
+        USER: os.userInfo().username,
+        SHELL: shell,
+      },
+    })
+
+    const env = parseEnvOutput(output)
+
+    // Strip keys that could interfere with Claude's auth resolution
+    for (const key of STRIPPED_ENV_KEYS) {
+      if (key in env) {
+        console.log(`[claude-env] Stripped ${key} from shell environment`)
+        delete env[key]
+      }
+    }
+
+    console.log(
+      `[claude-env] Loaded ${Object.keys(env).length} environment variables from shell`,
+    )
+    cachedShellEnv = env
+    return { ...env }
+  } catch (error) {
+    console.error("[claude-env] Failed to load shell environment:", error)
+
+    // Fallback: return minimal required env
+    const home = os.homedir()
+    const fallbackPath = [
+      `${home}/.local/bin`,
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+      "/usr/sbin",
+      "/sbin",
+    ].join(":")
+
+    const fallback: Record<string, string> = {
+      HOME: home,
+      USER: os.userInfo().username,
+      PATH: fallbackPath,
+      SHELL: process.env.SHELL || "/bin/zsh",
+      TERM: "xterm-256color",
+    }
+
+    console.log("[claude-env] Using fallback environment")
+    cachedShellEnv = fallback
+    return { ...fallback }
+  }
+}
+
+/**
+ * Build the complete environment for Claude SDK.
+ * Merges shell environment, process.env, and custom overrides.
+ */
+export function buildClaudeEnv(options?: {
+  ghToken?: string
+  customEnv?: Record<string, string>
+}): Record<string, string> {
+  const env: Record<string, string> = {}
+
+  // 1. Start with shell environment (has HOME, full PATH, etc.)
+  try {
+    Object.assign(env, getClaudeShellEnvironment())
+  } catch (error) {
+    console.error("[claude-env] Shell env failed, using process.env")
+  }
+
+  // 2. Overlay current process.env (preserves Electron-set vars)
+  // BUT: Don't overwrite PATH from shell env - Electron's PATH is minimal when launched from Finder
+  // AND: Skip stripped keys to prevent system AWS credentials from leaking in
+  const shellPath = env.PATH
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && !STRIPPED_ENV_KEYS.includes(key)) {
+      env[key] = value
+    }
+  }
+  // Restore shell PATH if we had one (it contains nvm, homebrew, etc.)
+  if (shellPath) {
+    env.PATH = shellPath
+  }
+
+  // 3. Ensure critical vars are present
+  if (!env.HOME) env.HOME = os.homedir()
+  if (!env.USER) env.USER = os.userInfo().username
+  if (!env.SHELL) env.SHELL = "/bin/zsh"
+  if (!env.TERM) env.TERM = "xterm-256color"
+
+  // 4. Add custom overrides
+  if (options?.ghToken) {
+    env.GH_TOKEN = options.ghToken
+  }
+  if (options?.customEnv) {
+    for (const [key, value] of Object.entries(options.customEnv)) {
+      if (value === "") {
+        delete env[key]
+      } else {
+        env[key] = value
+      }
+    }
+  }
+
+  // 6. Read settings once (used for both Bedrock and experimental features)
+  const db = getDatabase()
+  const settings = db
+    .select()
+    .from(claudeCodeSettings)
+    .where(eq(claudeCodeSettings.id, "default"))
+    .get()
+
+  // 7. AWS credentials — applied regardless of AI provider so MCP servers and
+  //    tools always have access. Bedrock-specific env vars are only set when
+  //    authMode === "aws".
+  const awsCreds = getAwsCredentials()
+  if (awsCreds) {
+    // Bedrock is the active AI provider — set provider env vars
+    env.CLAUDE_CODE_API_PROVIDER = "bedrock"
+    env.CLAUDE_CODE_USE_BEDROCK = "1"
+    env.AWS_REGION = awsCreds.region
+    env.AWS_DEFAULT_REGION = awsCreds.region
+
+    // Bedrock model defaults (use settings or fall back to defaults)
+    env.ANTHROPIC_DEFAULT_OPUS_MODEL = settings?.bedrockOpusModel || "global.anthropic.claude-opus-4-5-20251101-v1:0"
+    env.ANTHROPIC_DEFAULT_SONNET_MODEL = settings?.bedrockSonnetModel || "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"
+    env.ANTHROPIC_DEFAULT_HAIKU_MODEL = settings?.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"
+    env.MAX_MCP_OUTPUT_TOKENS = String(settings?.maxMcpOutputTokens ?? 150000)
+    env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 60000)
+  }
+
+  // Inject AWS credential env vars for both Bedrock and standalone AWS modes.
+  // SSO: point the SDK credential chain at the app-managed credentials file
+  //      (written by aws-sso router on selectProfile / refreshCredentials).
+  // Profile: set AWS_PROFILE so the SDK reads from ~/.aws as usual.
+  const standaloneSettings = awsCreds ? null : (() => {
+    try {
+      return getDatabase().select().from(claudeCodeSettings).where(eq(claudeCodeSettings.id, "default")).get() ?? null
+    } catch { return null }
+  })()
+  const connSettings = awsCreds
+    ? { method: awsCreds.profileName ? "profile" : "sso", profileName: awsCreds.profileName }
+    : standaloneSettings
+      ? { method: standaloneSettings.bedrockConnectionMethod || "profile", profileName: standaloneSettings.awsProfileName }
+      : null
+
+  if (connSettings) {
+    if (connSettings.method === "sso") {
+      // Point the AWS SDK credential chain at the app-managed file written by the SSO router.
+      // This avoids injecting raw keys as env vars and works for all SDK subprocesses.
+      env.AWS_SHARED_CREDENTIALS_FILE = getAwsCredentialsFilePath()
+      env.AWS_CONFIG_FILE = getAwsConfigFilePath()
+      console.log(`[claude-env] Using app-managed AWS credentials file: ${env.AWS_SHARED_CREDENTIALS_FILE}`)
+    } else if (connSettings.profileName) {
+      env.AWS_PROFILE = connSettings.profileName
+      console.log(`[claude-env] Using AWS profile: ${connSettings.profileName}`)
+    }
+  }
+
+  // 8. Handle Custom API / Ollama configuration (from customEnvVars in database)
+  if (settings?.authMode === "apiKey" && settings?.customEnvVars) {
+    try {
+      const customEnv = JSON.parse(settings.customEnvVars)
+
+      // Check for Ollama/Custom API config in customEnvVars
+      // These are set by syncCustomConfig tRPC endpoint from frontend
+      if (customEnv.ANTHROPIC_AUTH_TOKEN && customEnv.ANTHROPIC_BASE_URL) {
+        env.ANTHROPIC_AUTH_TOKEN = customEnv.ANTHROPIC_AUTH_TOKEN
+        env.ANTHROPIC_BASE_URL = customEnv.ANTHROPIC_BASE_URL
+
+        // Optional API key for authentication
+        if (customEnv.ANTHROPIC_API_KEY) {
+          env.ANTHROPIC_API_KEY = customEnv.ANTHROPIC_API_KEY
+        }
+
+        // Ollama-specific API key for cloud access (also stored in OLLAMA_API_KEY for reference)
+        if (customEnv.OLLAMA_API_KEY) {
+          env.OLLAMA_API_KEY = customEnv.OLLAMA_API_KEY
+        }
+
+        // Model selection for Ollama/Custom API
+        if (customEnv.ANTHROPIC_MODEL) {
+          env.ANTHROPIC_MODEL = customEnv.ANTHROPIC_MODEL
+          // Map haiku/sonnet/opus defaults to the configured model so internal binary
+          // sub-agents (agent teams) don't try to use Anthropic model names like
+          // "claude-haiku-4-5-20251001" which don't exist on custom providers
+          env.ANTHROPIC_DEFAULT_HAIKU_MODEL = customEnv.ANTHROPIC_MODEL
+          env.ANTHROPIC_DEFAULT_SONNET_MODEL = customEnv.ANTHROPIC_MODEL
+          env.ANTHROPIC_DEFAULT_OPUS_MODEL = customEnv.ANTHROPIC_MODEL
+        }
+
+        // Determine if this is Ollama mode (check by baseUrl or the "ollama" marker token)
+        const isOllamaMode = customEnv.ANTHROPIC_AUTH_TOKEN === "ollama" ||
+                             (customEnv.ANTHROPIC_BASE_URL && customEnv.ANTHROPIC_BASE_URL.includes("ollama.com"))
+        if (isOllamaMode) {
+          // For Ollama Cloud, the ANTHROPIC_AUTH_TOKEN must be the real API key, not the "ollama" marker.
+          // The binary sends ANTHROPIC_AUTH_TOKEN as Bearer token — "ollama" causes 401 on cloud endpoints.
+          const isCloudMode = customEnv.ANTHROPIC_BASE_URL && !customEnv.ANTHROPIC_BASE_URL.includes("localhost")
+          if (isCloudMode && customEnv.OLLAMA_API_KEY && env.ANTHROPIC_AUTH_TOKEN === "ollama") {
+            env.ANTHROPIC_AUTH_TOKEN = customEnv.OLLAMA_API_KEY
+            console.log("[claude-env] Ollama Cloud: swapped marker token for OLLAMA_API_KEY")
+          }
+
+          // CRITICAL: Set context window limits for Ollama
+          // Ollama defaults to only 2048 tokens - must be increased for large system prompts
+          const contextWindow = customEnv.CONTEXT_WINDOW || 189000 // Default to glm-5's 189k
+          env.OLLAMA_NUM_CTX = String(contextWindow)
+
+          // Also set SDK-side limits for MCP tools (50% of context for tools)
+          env.MAX_MCP_OUTPUT_TOKENS = String(Math.floor(contextWindow * 0.5))
+          env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 60000)
+
+          console.log("[claude-env] Using Ollama configuration:", {
+            baseUrl: customEnv.ANTHROPIC_BASE_URL,
+            mode: isCloudMode ? "cloud" : "local",
+            contextWindow,
+            hasOllamaApiKey: !!customEnv.OLLAMA_API_KEY,
+            model: customEnv.ANTHROPIC_MODEL || "not set",
+          })
+        } else {
+          // For Custom API, also set context limits
+          const contextWindow = customEnv.CONTEXT_WINDOW || 200000 // Default to 200k
+          env.MAX_MCP_OUTPUT_TOKENS = String(Math.floor(contextWindow * 0.5))
+          env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 60000)
+
+          console.log("[claude-env] Using Custom API configuration:", {
+            baseUrl: customEnv.ANTHROPIC_BASE_URL,
+            hasApiKey: !!customEnv.ANTHROPIC_API_KEY,
+            contextWindow,
+            model: customEnv.ANTHROPIC_MODEL || "not set",
+          })
+        }
+      }
+    } catch (error) {
+      console.error("[claude-env] Failed to parse customEnvVars:", error)
+    }
+  }
+
+  // 9. Agent teams - always enabled
+  env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
+
+  // 10. Mark as SDK entry
+  env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts"
+
+  return env
+}
+
+/**
+ * Clear cached shell environment (useful for testing)
+ */
+export function clearClaudeEnvCache(): void {
+  cachedShellEnv = null
+}
+
+/**
+ * Debug: Log key environment variables
+ */
+export function logClaudeEnv(
+  env: Record<string, string>,
+  prefix: string = "",
+): void {
+  console.log(`${prefix}[claude-env] HOME: ${env.HOME}`)
+  console.log(`${prefix}[claude-env] USER: ${env.USER}`)
+  console.log(
+    `${prefix}[claude-env] PATH includes homebrew: ${env.PATH?.includes("/opt/homebrew")}`,
+  )
+  console.log(
+    `${prefix}[claude-env] PATH includes /usr/local/bin: ${env.PATH?.includes("/usr/local/bin")}`,
+  )
+  console.log(
+    `${prefix}[claude-env] ANTHROPIC_AUTH_TOKEN: ${env.ANTHROPIC_AUTH_TOKEN ? "set" : "not set"}`,
+  )
+  console.log(
+    `${prefix}[claude-env] ANTHROPIC_API_KEY: ${env.ANTHROPIC_API_KEY ? "set" : "not set"}`,
+  )
+  console.log(
+    `${prefix}[claude-env] OLLAMA_API_KEY: ${env.OLLAMA_API_KEY ? "set" : "not set"}`,
+  )
+  console.log(
+    `${prefix}[claude-env] ANTHROPIC_MODEL: ${env.ANTHROPIC_MODEL || "not set"}`,
+  )
+  if (env.ANTHROPIC_AUTH_TOKEN === "ollama") {
+    console.log(`${prefix}[claude-env] Ollama mode detected`)
+  }
+  // Log token limits for Bedrock
+  if (env.CLAUDE_CODE_USE_BEDROCK) {
+    console.log(`${prefix}[claude-env] MAX_MCP_OUTPUT_TOKENS: ${env.MAX_MCP_OUTPUT_TOKENS || "not set"}`)
+    console.log(`${prefix}[claude-env] MAX_THINKING_TOKENS: ${env.MAX_THINKING_TOKENS || "not set"}`)
+  }
+}

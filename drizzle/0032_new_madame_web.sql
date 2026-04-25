@@ -1,0 +1,1 @@
+ALTER TABLE `claude_code_settings` ADD `bedrock_opus_46_model` text DEFAULT 'global.anthropic.claude-opus-4-6-20260205-v1:0';

@@ -1,0 +1,231 @@
+"use client"
+
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { ChevronRight, Sparkles } from "lucide-react"
+import { AgentToolRegistry, getToolStatus } from "./agent-tool-registry"
+import { AgentToolCall } from "./agent-tool-call"
+import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { areTaskToolPropsEqual } from "./agent-tool-utils"
+import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { cn } from "../../../lib/utils"
+
+interface AgentTaskToolProps {
+  part: any
+  nestedTools: any[]
+  chatStatus?: string
+}
+
+// Constants for rendering
+const MAX_VISIBLE_TOOLS = 5
+const TOOL_HEIGHT_PX = 24
+
+// Format elapsed time in a human-readable format
+function formatElapsedTime(ms: number): string {
+  if (ms < 1000) return ""
+  const seconds = Math.floor(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (remainingSeconds === 0) return `${minutes}m`
+  return `${minutes}m ${remainingSeconds}s`
+}
+
+export const AgentTaskTool = memo(function AgentTaskTool({
+  part,
+  nestedTools,
+  chatStatus,
+}: AgentTaskToolProps) {
+  const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
+
+  // Default: expanded
+  const [isExpanded, setIsExpanded] = useState(true)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Track elapsed time for running tasks
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const startTimeRef = useRef<number | null>(null)
+  // Track if time became inaccurate due to window being hidden
+  const [isTimeInaccurate, setIsTimeInaccurate] = useState(false)
+
+  const description = part.input?.description || ""
+
+  // Track elapsed time while task is running
+  useEffect(() => {
+    if (isPending) {
+      // Start tracking time
+      if (startTimeRef.current === null) {
+        startTimeRef.current = Date.now()
+      }
+      const interval = setInterval(() => {
+        if (startTimeRef.current !== null) {
+          setElapsedMs(Date.now() - startTimeRef.current)
+        }
+      }, 1000)
+      return () => clearInterval(interval)
+    }
+  }, [isPending])
+
+  // Detect when window visibility changes - time becomes inaccurate when hidden
+  useEffect(() => {
+    if (!isPending) return
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Window became hidden while task is running - time will be inaccurate
+        setIsTimeInaccurate(true)
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [isPending])
+
+  // Use output duration from Claude Code if available, otherwise use our tracked time
+  const outputDuration = part.output?.duration || part.output?.duration_ms
+  const displayMs = !isPending && outputDuration ? outputDuration : elapsedMs
+  // Hide time if it became inaccurate while running, but show final time from output
+  const shouldShowTime = !isPending || !isTimeInaccurate
+  const elapsedTimeDisplay = shouldShowTime ? formatElapsedTime(displayMs) : ""
+
+  // Auto-scroll to bottom when streaming and new nested tools added
+  useEffect(() => {
+    if (isPending && isExpanded && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [nestedTools.length, isPending, isExpanded])
+
+  const hasNestedTools = nestedTools.length > 0
+
+  // Memoize subtitle computation to avoid recomputation on every render
+  // Description truncation is cheap but called frequently during streaming
+  const subtitle = useMemo(() => {
+    if (description) {
+      return description.length > 60
+        ? description.slice(0, 57) + "..."
+        : description
+    }
+    return ""
+  }, [description])
+
+  // Memoize title based on pending status to avoid string allocation on every render
+  const title = useMemo(() => {
+    return isPending ? "Running Task" : "Completed Task"
+  }, [isPending])
+
+  // Memoize toggle handler to prevent creating new function on every render
+  // This is passed to onClick and re-renders are expensive during streaming
+  const handleToggleExpand = useCallback(() => {
+    setIsExpanded(prev => !prev)
+  }, [])
+
+  // Show interrupted state if task was interrupted without completing
+  if (isInterrupted && !part.output) {
+    return <AgentToolInterrupted toolName="Task" subtitle={subtitle} />
+  }
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-accent/30 overflow-hidden my-1.5">
+      {/* Header - clickable to toggle, with themed background */}
+      <div
+        onClick={handleToggleExpand}
+        className="group flex items-center justify-between py-1.5 px-3 cursor-pointer hover:bg-accent/50 transition-colors duration-150 border-b border-border/30"
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* Icon with theme-based color */}
+          <Sparkles className={cn(
+            "w-3.5 h-3.5 flex-shrink-0 transition-colors duration-200",
+            isPending ? "text-primary animate-pulse" : "text-primary/70"
+          )} />
+          <div className="text-xs flex items-center gap-1.5 min-w-0">
+            {/* Title with shimmer effect when running */}
+            {isPending ? (
+              <TextShimmer
+                as="span"
+                duration={1.2}
+                className="font-medium whitespace-nowrap flex-shrink-0"
+              >
+                {title}
+              </TextShimmer>
+            ) : (
+              <span className="font-medium whitespace-nowrap flex-shrink-0 text-foreground">
+                {title}
+              </span>
+            )}
+            {subtitle && (
+              <span className="text-muted-foreground/70 truncate">
+                {subtitle}
+              </span>
+            )}
+            {/* Show elapsed time while running or final time when done */}
+            {elapsedTimeDisplay && (
+              <span className="text-muted-foreground/50 tabular-nums flex-shrink-0">
+                {elapsedTimeDisplay}
+              </span>
+            )}
+          </div>
+        </div>
+        {/* Chevron - rotates when expanded */}
+        <ChevronRight
+          className={cn(
+            "w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 ease-out flex-shrink-0",
+            isExpanded && "rotate-90",
+          )}
+        />
+      </div>
+
+      {/* Nested tools - only show when expanded */}
+      {hasNestedTools && isExpanded && (
+        <div className="relative bg-card/30">
+          {/* Top gradient fade when streaming and has many items */}
+          <div
+            className={cn(
+              "absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-background/70 to-transparent z-10 pointer-events-none transition-opacity duration-200",
+              isPending && nestedTools.length > MAX_VISIBLE_TOOLS
+                ? "opacity-100"
+                : "opacity-0",
+            )}
+          />
+
+          {/* Scrollable container - auto-scrolls to bottom when streaming */}
+          <div
+            ref={scrollRef}
+            className={cn(
+              "px-3 py-2 space-y-1.5",
+              isPending &&
+                nestedTools.length > MAX_VISIBLE_TOOLS &&
+                "overflow-y-auto scrollbar-hide max-h-32",
+            )}
+          >
+            {nestedTools.map((nestedPart, idx) => {
+              const nestedMeta = AgentToolRegistry[nestedPart.type]
+              if (!nestedMeta) {
+                return (
+                  <div
+                    key={idx}
+                    className="text-xs text-muted-foreground py-0.5"
+                  >
+                    {nestedPart.type?.replace("tool-", "")}
+                  </div>
+                )
+              }
+              const { isPending: nestedIsPending, isError: nestedIsError } =
+                getToolStatus(nestedPart, chatStatus)
+              return (
+                <AgentToolCall
+                  key={idx}
+                  icon={nestedMeta.icon}
+                  title={nestedMeta.title(nestedPart)}
+                  subtitle={nestedMeta.subtitle?.(nestedPart)}
+                  isPending={nestedIsPending}
+                  isError={nestedIsError}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}, areTaskToolPropsEqual)

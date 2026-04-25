@@ -1,0 +1,1 @@
+ALTER TABLE `headless_claws` ADD COLUMN `purpose` text NOT NULL DEFAULT '';

@@ -1,0 +1,330 @@
+import * as fs from "fs/promises"
+import * as path from "path"
+import * as os from "os"
+import matter from "gray-matter"
+import yaml from "js-yaml"
+
+// Custom YAML parser that's more forgiving with special characters
+function parseYamlSafe(input: string): Record<string, any> {
+  try {
+    // Try standard parsing first
+    return yaml.load(input, { schema: yaml.DEFAULT_SCHEMA }) as Record<string, any>
+  } catch (err) {
+    // If that fails, try line-by-line parsing for simple key: value pairs
+    const result: Record<string, any> = {}
+    const lines = input.split('\n')
+    let currentKey: string | null = null
+    let currentValue = ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+
+      // Check if this is a key: value line
+      const colonIndex = trimmed.indexOf(':')
+      if (colonIndex > 0 && colonIndex < trimmed.length - 1) {
+        // Save previous key-value if exists
+        if (currentKey) {
+          result[currentKey] = currentValue.trim()
+        }
+
+        // Start new key-value
+        currentKey = trimmed.slice(0, colonIndex).trim()
+        currentValue = trimmed.slice(colonIndex + 1).trim()
+      } else if (currentKey && trimmed.startsWith('-')) {
+        // Array item
+        if (!Array.isArray(result[currentKey])) {
+          result[currentKey] = []
+        }
+        (result[currentKey] as string[]).push(trimmed.slice(1).trim())
+      } else if (currentKey) {
+        // Continuation of previous value
+        currentValue += ' ' + trimmed
+      }
+    }
+
+    // Save last key-value
+    if (currentKey) {
+      result[currentKey] = currentValue.trim()
+    }
+
+    return result
+  }
+}
+
+// Valid model values for agents
+export const VALID_AGENT_MODELS = ["sonnet", "opus", "haiku", "inherit"] as const
+export type AgentModel = (typeof VALID_AGENT_MODELS)[number]
+
+// Agent definition parsed from markdown file
+export interface ParsedAgent {
+  name: string
+  description: string
+  prompt: string
+  tools?: string[]
+  disallowedTools?: string[]
+  model?: AgentModel
+}
+
+// Agent with source/path metadata
+export interface FileAgent extends ParsedAgent {
+  id: string // Filename without .md (matches workflow graph)
+  source: "user" | "project" | "custom"
+  path: string
+}
+
+/**
+ * Parse agent markdown file with YAML frontmatter
+ * Format:
+ * ---
+ * name: code-reviewer
+ * description: Reviews code for quality
+ * tools: Read, Glob, Grep
+ * model: sonnet
+ * ---
+ *
+ * You are a code reviewer. When invoked...
+ */
+export function parseAgentMd(
+  content: string,
+  filename: string
+): Partial<ParsedAgent> {
+  try {
+    // Use custom YAML parser that's more forgiving
+    const { data, content: body } = matter(content, {
+      engines: {
+        yaml: { parse: parseYamlSafe }
+      }
+    })
+
+    // Parse tools - can be comma-separated string or array
+    let tools: string[] | undefined
+    if (typeof data.tools === "string") {
+      tools = data.tools
+        .split(",")
+        .map((t: string) => t.trim())
+        .filter(Boolean)
+    } else if (Array.isArray(data.tools)) {
+      tools = data.tools
+    }
+
+    // Parse disallowedTools
+    let disallowedTools: string[] | undefined
+    if (typeof data.disallowedTools === "string") {
+      disallowedTools = data.disallowedTools
+        .split(",")
+        .map((t: string) => t.trim())
+        .filter(Boolean)
+    } else if (Array.isArray(data.disallowedTools)) {
+      disallowedTools = data.disallowedTools
+    }
+
+    // Validate model
+    const model =
+      data.model && VALID_AGENT_MODELS.includes(data.model)
+        ? (data.model as AgentModel)
+        : undefined
+
+    return {
+      name:
+        typeof data.name === "string" ? data.name : filename.replace(".md", ""),
+      description: typeof data.description === "string" ? data.description : "",
+      prompt: body.trim(),
+      tools,
+      disallowedTools,
+      model,
+    }
+  } catch (err) {
+    console.error("[agents] Failed to parse markdown:", err)
+    return {}
+  }
+}
+
+/**
+ * Generate markdown content for agent file
+ */
+export function generateAgentMd(agent: {
+  name: string
+  description: string
+  prompt: string
+  tools?: string[]
+  disallowedTools?: string[]
+  model?: AgentModel
+}): string {
+  const frontmatter: string[] = []
+  frontmatter.push(`name: ${agent.name}`)
+  frontmatter.push(`description: ${agent.description}`)
+  if (agent.tools && agent.tools.length > 0) {
+    frontmatter.push(`tools: ${agent.tools.join(", ")}`)
+  }
+  if (agent.disallowedTools && agent.disallowedTools.length > 0) {
+    frontmatter.push(`disallowedTools: ${agent.disallowedTools.join(", ")}`)
+  }
+  if (agent.model && agent.model !== "inherit") {
+    frontmatter.push(`model: ${agent.model}`)
+  }
+
+  return `---\n${frontmatter.join("\n")}\n---\n\n${agent.prompt}`
+}
+
+/**
+ * Load agent definition from filesystem by name
+ * Searches in user (~/.claude/agents/) and project (.claude/agents/) directories
+ */
+export async function loadAgent(
+  name: string,
+  cwd?: string
+): Promise<ParsedAgent | null> {
+  const homeDir = os.homedir()
+  const userDir = path.join(homeDir, ".claude", "agents")
+  const projectDir = cwd ? path.join(cwd, ".claude", "agents") : null
+
+  const locations = [
+    userDir,
+    ...(projectDir ? [projectDir] : []),
+  ]
+
+  for (const dir of locations) {
+    const agentPath = path.join(dir, `${name}.md`)
+    try {
+      const content = await fs.readFile(agentPath, "utf-8")
+      const parsed = parseAgentMd(content, `${name}.md`)
+
+      if (parsed.description && parsed.prompt) {
+        return {
+          name: parsed.name || name,
+          description: parsed.description,
+          prompt: parsed.prompt,
+          tools: parsed.tools,
+          disallowedTools: parsed.disallowedTools,
+          model: parsed.model,
+        }
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+/**
+ * Scan directory for agent .md files
+ * Format: .claude/agents/agent-name.md
+ */
+export async function scanAgentsDirectory(
+  dir: string,
+  source: "user" | "project" | "custom"
+): Promise<FileAgent[]> {
+  const agents: FileAgent[] = []
+
+  try {
+    await fs.access(dir)
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+
+    for (const entry of entries) {
+      // Validate entry name for security (prevent path traversal)
+      if (
+        entry.name.includes("..") ||
+        entry.name.includes("/") ||
+        entry.name.includes("\\")
+      ) {
+        console.warn(`[agents] Skipping invalid filename: ${entry.name}`)
+        continue
+      }
+
+      // Accept .md files (Claude Code native format)
+      if (entry.isFile() && entry.name.endsWith(".md")) {
+        const agentPath = path.join(dir, entry.name)
+        try {
+          const content = await fs.readFile(agentPath, "utf-8")
+          const parsed = parseAgentMd(content, entry.name)
+
+          if (parsed.description && parsed.prompt) {
+            const agentId = entry.name.replace(".md", "")
+            agents.push({
+              id: agentId, // Filename without .md (matches workflow graph)
+              name: parsed.name || agentId,
+              description: parsed.description,
+              prompt: parsed.prompt,
+              tools: parsed.tools,
+              disallowedTools: parsed.disallowedTools,
+              model: parsed.model,
+              source,
+              path: agentPath,
+            })
+          }
+        } catch (err) {
+          console.error(`[agents] Failed to read agent ${entry.name}:`, err)
+        }
+      }
+    }
+  } catch (err) {
+    // Directory doesn't exist or not accessible
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(`[agents] Could not scan directory ${dir}:`, err)
+    }
+  }
+
+  return agents
+}
+
+// Cache for loaded agents to avoid re-reading from disk
+const agentCache = new Map<string, ParsedAgent | null>()
+
+/**
+ * Clear the agent cache (for testing/debugging)
+ */
+export function clearAgentCache() {
+  agentCache.clear()
+  console.log("[agents] Cache cleared")
+}
+
+/**
+ * Build agents Record for SDK Options
+ * This properly registers agents with the SDK so Claude can invoke them via Task tool
+ * OPTIMIZATION: Caches loaded agents to avoid re-reading from disk
+ */
+export async function buildAgentsOption(
+  agentNames: string[],
+  cwd?: string
+): Promise<
+  Record<
+    string,
+    { description: string; prompt: string; tools?: string[]; model?: AgentModel }
+  >
+> {
+  if (agentNames.length === 0) return {}
+
+  const agents: Record<
+    string,
+    { description: string; prompt: string; tools?: string[]; model?: AgentModel }
+  > = {}
+
+  for (const name of agentNames) {
+    // Create cache key including cwd to handle project-specific agents
+    const cacheKey = cwd ? `${name}:${cwd}` : name
+
+    // Check cache first
+    let agent = agentCache.get(cacheKey)
+    if (agent === undefined) {
+      // Not in cache, load from disk
+      console.log(`[agents] Cache MISS for ${name} - loading from disk`)
+      agent = await loadAgent(name, cwd)
+      agentCache.set(cacheKey, agent)
+    } else {
+      console.log(`[agents] Cache HIT for ${name}`)
+    }
+
+    if (agent) {
+      agents[name] = {
+        description: agent.description,
+        prompt: agent.prompt,
+        ...(agent.tools && { tools: agent.tools }),
+        ...(agent.model && { model: agent.model }),
+      }
+    }
+  }
+
+  return agents
+}

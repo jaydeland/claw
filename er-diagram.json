@@ -1,0 +1,426 @@
+{
+  "nodes": [
+    {
+      "id": "projects",
+      "type": "table",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "label": "projects",
+        "description": "Main project table with git integration and settings",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "name", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "path", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "createdAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "gitRemoteUrl", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "gitProvider", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "gitOwner", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "gitRepo", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "startCommands", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "mcpOverrides", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "envVars", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "skillsPath", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "agentsPath", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "chats",
+      "type": "table",
+      "position": { "x": 320, "y": 0 },
+      "data": {
+        "label": "chats",
+        "description": "Chat sessions with worktree and PR tracking",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "name", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "projectId", "type": "text", "primaryKey": false, "foreignKey": "projects.id", "nullable": false },
+          { "name": "createdAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "archivedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "worktreePath", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "branch", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "baseBranch", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "prUrl", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "prNumber", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "isTransient", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "sourceView", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "sourceContext", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "connectionType", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "connectionTarget", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "connectionName", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "subChats",
+      "type": "table",
+      "position": { "x": 640, "y": 0 },
+      "data": {
+        "label": "sub_chats",
+        "description": "Sub-chat sessions with SDK session tracking",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "name", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "chatId", "type": "text", "primaryKey": false, "foreignKey": "chats.id", "nullable": false },
+          { "name": "sessionId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "streamId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "mode", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "model", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "messages", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "createdAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "backgroundTasks",
+      "type": "table",
+      "position": { "x": 640, "y": 380 },
+      "data": {
+        "label": "background_tasks",
+        "description": "Background task tracking with SDK integration",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "subChatId", "type": "text", "primaryKey": false, "foreignKey": "subChats.id", "nullable": false },
+          { "name": "chatId", "type": "text", "primaryKey": false, "foreignKey": "chats.id", "nullable": false },
+          { "name": "toolCallId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "outputFile", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "pid", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "sdkTaskId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "sdkStatus", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "command", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "description", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "analysisDiagrams",
+      "type": "table",
+      "position": { "x": 0, "y": 380 },
+      "data": {
+        "label": "analysis_diagrams",
+        "description": "Stores generated analysis diagrams for projects",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "projectId", "type": "text", "primaryKey": false, "foreignKey": "projects.id", "nullable": false },
+          { "name": "type", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "status", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "nodes", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "edges", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "viewport", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "summary", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "stats", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "errorMessage", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "lastCommitHash", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "fileHash", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "createdAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "analysisJobs",
+      "type": "table",
+      "position": { "x": 0, "y": 750 },
+      "data": {
+        "label": "analysis_jobs",
+        "description": "Tracks in-progress analysis tasks",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "projectId", "type": "text", "primaryKey": false, "foreignKey": "projects.id", "nullable": false },
+          { "name": "diagramId", "type": "text", "primaryKey": false, "foreignKey": "analysisDiagrams.id", "nullable": false },
+          { "name": "type", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "status", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "taskCallId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "log", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "errorMessage", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "startedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "completedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "hooks",
+      "type": "table",
+      "position": { "x": 320, "y": 380 },
+      "data": {
+        "label": "hooks",
+        "description": "Lifecycle hooks for workflow automation",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "name", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "description", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "hookType", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "matcher", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "command", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "scope", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "projectId", "type": "text", "primaryKey": false, "foreignKey": "projects.id", "nullable": true },
+          { "name": "enabled", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "createdAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "claudeCodeCredentials",
+      "type": "table",
+      "position": { "x": 960, "y": 0 },
+      "data": {
+        "label": "claude_code_credentials",
+        "description": "Encrypted OAuth tokens for Claude Code",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "oauthToken", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "connectedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "userId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "claudeCodeSettings",
+      "type": "table",
+      "position": { "x": 960, "y": 240 },
+      "data": {
+        "label": "claude_code_settings",
+        "description": "Claude Code binary and environment settings",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "customBinaryPath", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "customEnvVars", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "customConfigDir", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "customWorktreeLocation", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "mcpServerSettings", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "authMode", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "apiKey", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "bedrockRegion", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "anthropicBaseUrl", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "bedrockConnectionMethod", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "awsProfileName", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoStartUrl", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoRegion", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoAccountId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoAccountName", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoRoleName", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoAccessToken", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoRefreshToken", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoTokenExpiresAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoClientId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoClientSecret", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ssoClientExpiresAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "awsAccessKeyId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "awsSecretAccessKey", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "awsSessionToken", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "awsCredentialsExpiresAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "vpnCheckEnabled", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "vpnCheckUrl", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "defaultStartCommands", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "bedrockOpusModel", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "bedrockOpus46Model", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "bedrockSonnetModel", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "bedrockHaikuModel", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "maxMcpOutputTokens", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "maxThinkingTokens", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "extendedThinkingEnabled", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "enableAgentTeams", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "maxBudgetUsd", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "anthropicBackgroundModel", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "bedrockBackgroundModel", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "ollamaBackgroundModel", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "customApiBackgroundModel", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "mcpCredentials",
+      "type": "table",
+      "position": { "x": 960, "y": 700 },
+      "data": {
+        "label": "mcp_credentials",
+        "description": "Encrypted MCP server credentials",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "credentials", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "mcpToolCache",
+      "type": "table",
+      "position": { "x": 1280, "y": 0 },
+      "data": {
+        "label": "mcp_tool_cache",
+        "description": "Caches tool counts and names for MCP servers",
+        "columns": [
+          { "name": "serverId", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "toolCount", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "toolNames", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "lastQueried", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "configHash", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "configSources",
+      "type": "table",
+      "position": { "x": 1280, "y": 200 },
+      "data": {
+        "label": "config_sources",
+        "description": "Custom configuration file paths",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "type", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "path", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "priority", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "enabled", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "createdAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "appSettings",
+      "type": "table",
+      "position": { "x": 1280, "y": 420 },
+      "data": {
+        "label": "app_settings",
+        "description": "Application-level settings and migration tracking",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "lastMigrationVersion", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "devspaceSettings",
+      "type": "table",
+      "position": { "x": 1280, "y": 560 },
+      "data": {
+        "label": "devspace_settings",
+        "description": "DevSpace integration configuration",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "reposPath", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "configSubPath", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "startCommand", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "devspaceStartedProcesses",
+      "type": "table",
+      "position": { "x": 1280, "y": 720 },
+      "data": {
+        "label": "devspace_started_processes",
+        "description": "Tracks processes started by the application",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "pid", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "serviceName", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "servicePath", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "terminalPaneId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "startedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "githubSettings",
+      "type": "table",
+      "position": { "x": 1600, "y": 0 },
+      "data": {
+        "label": "github_settings",
+        "description": "Secure GitHub credentials storage",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "encryptedToken", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "slackSettings",
+      "type": "table",
+      "position": { "x": 1600, "y": 150 },
+      "data": {
+        "label": "slack_settings",
+        "description": "Slack app credentials storage",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "encryptedAppToken", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "encryptedBotToken", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "isSocketModeEnabled", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "discordSettings",
+      "type": "table",
+      "position": { "x": 1600, "y": 320 },
+      "data": {
+        "label": "discord_settings",
+        "description": "Discord bot credentials storage",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "encryptedBotToken", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "guildId", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "guildName", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "isConnected", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "whatsappSettings",
+      "type": "table",
+      "position": { "x": 1600, "y": 500 },
+      "data": {
+        "label": "whatsapp_settings",
+        "description": "WhatsApp connection settings",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "isConnected", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "sessionPath", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    },
+    {
+      "id": "systemPrompts",
+      "type": "table",
+      "position": { "x": 1600, "y": 650 },
+      "data": {
+        "label": "system_prompts",
+        "description": "Editable system prompts for AI interactions",
+        "columns": [
+          { "name": "id", "type": "text", "primaryKey": true, "foreignKey": null, "nullable": false },
+          { "name": "key", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "name", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "description", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "content", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "category", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "isEditable", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "defaultValue", "type": "text", "primaryKey": false, "foreignKey": null, "nullable": false },
+          { "name": "createdAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true },
+          { "name": "updatedAt", "type": "integer", "primaryKey": false, "foreignKey": null, "nullable": true }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    { "id": "fk-chats-projectId", "source": "chats", "target": "projects", "sourceHandle": "projectId-right", "targetHandle": "id-top", "type": "smoothstep", "label": "projectId" },
+    { "id": "fk-subChats-chatId", "source": "subChats", "target": "chats", "sourceHandle": "chatId-right", "targetHandle": "id-top", "type": "smoothstep", "label": "chatId" },
+    { "id": "fk-backgroundTasks-subChatId", "source": "backgroundTasks", "target": "subChats", "sourceHandle": "subChatId-right", "targetHandle": "id-left", "type": "smoothstep", "label": "subChatId" },
+    { "id": "fk-backgroundTasks-chatId", "source": "backgroundTasks", "target": "chats", "sourceHandle": "chatId-left", "targetHandle": "id-bottom", "type": "smoothstep", "label": "chatId" },
+    { "id": "fk-analysisDiagrams-projectId", "source": "analysisDiagrams", "target": "projects", "sourceHandle": "projectId-right", "targetHandle": "id-bottom", "type": "smoothstep", "label": "projectId" },
+    { "id": "fk-analysisJobs-projectId", "source": "analysisJobs", "target": "projects", "sourceHandle": "projectId-right", "targetHandle": "id-left", "type": "smoothstep", "label": "projectId" },
+    { "id": "fk-analysisJobs-diagramId", "source": "analysisJobs", "target": "analysisDiagrams", "sourceHandle": "diagramId-right", "targetHandle": "id-bottom", "type": "smoothstep", "label": "diagramId" },
+    { "id": "fk-hooks-projectId", "source": "hooks", "target": "projects", "sourceHandle": "projectId-right", "targetHandle": "id-left", "type": "smoothstep", "label": "projectId" }
+  ],
+  "summary": "Database schema with 20 tables representing a chat-based IDE with project management, AI integration, and workflow automation",
+  "stats": { "tableCount": 20, "relationshipCount": 8 }
+}

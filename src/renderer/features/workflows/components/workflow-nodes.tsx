@@ -1,0 +1,873 @@
+import { useState } from "react"
+import { Handle, Position } from "reactflow"
+import { ChevronRight, Terminal, Zap, Lock, Unlock, FileEdit, BookOpen, Settings, GitFork, ListOrdered, Plus, Minus } from "lucide-react"
+
+// Permission mode badge configuration
+type PermissionMode = 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'plan'
+
+interface PermissionBadgeConfig {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  className: string
+  tooltip: string
+}
+
+const permissionBadges: Record<PermissionMode, PermissionBadgeConfig> = {
+  bypassPermissions: {
+    icon: Unlock,
+    label: "Bypass",
+    className: "bg-red-500/30 text-red-200 border-red-400/50",
+    tooltip: "Bypasses all permission checks (dangerous)",
+  },
+  acceptEdits: {
+    icon: FileEdit,
+    label: "Accept",
+    className: "bg-green-500/30 text-green-200 border-green-400/50",
+    tooltip: "Auto-accepts file edits",
+  },
+  plan: {
+    icon: BookOpen,
+    label: "Plan",
+    className: "bg-blue-500/30 text-blue-200 border-blue-400/50",
+    tooltip: "Read-only plan mode",
+  },
+  dontAsk: {
+    icon: Settings,
+    label: "Auto",
+    className: "bg-yellow-500/30 text-yellow-200 border-yellow-400/50",
+    tooltip: "Auto-approves actions without asking",
+  },
+  default: {
+    icon: Lock,
+    label: "Default",
+    className: "bg-gray-500/30 text-gray-200 border-gray-400/50",
+    tooltip: "Standard permission mode",
+  },
+}
+
+export function AgentNode({ data }: {
+  data: {
+    name: string
+    description: string
+    permissionMode?: PermissionMode
+    model?: string
+    hasHooks?: boolean
+    hasDisallowedTools?: boolean
+    preloadedSkillsCount?: number
+  }
+}) {
+  const badge = data.permissionMode ? permissionBadges[data.permissionMode] : null
+  const BadgeIcon = badge?.icon
+
+  return (
+    <div className="px-6 py-4 shadow-lg rounded-lg bg-purple-600 text-white border-2 border-purple-700 min-w-[200px]">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-purple-700"
+        style={{ top: -6 }}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-bold text-lg">{data.name}</div>
+        <div className="flex items-center gap-1">
+          {data.model && <ModelBadge model={data.model} />}
+          {badge && BadgeIcon && (
+            <div
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${badge.className}`}
+              title={badge.tooltip}
+            >
+              <BadgeIcon className="h-3 w-3" />
+              <span>{badge.label}</span>
+            </div>
+          )}
+        </div>
+      </div>
+      {data.description && (
+        <div className="text-sm opacity-80 mt-1 line-clamp-2">{data.description}</div>
+      )}
+      {/* Metadata indicators */}
+      {(data.hasHooks || data.hasDisallowedTools || (data.preloadedSkillsCount && data.preloadedSkillsCount > 0)) && (
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/20">
+          {data.hasHooks && (
+            <div className="flex items-center gap-0.5 text-[10px] opacity-70" title="Has lifecycle hooks">
+              <Clock className="h-3 w-3" />
+              <span>Hooks</span>
+            </div>
+          )}
+          {data.hasDisallowedTools && (
+            <div className="flex items-center gap-0.5 text-[10px] opacity-70" title="Has blocked tools">
+              <Ban className="h-3 w-3" />
+              <span>Blocked</span>
+            </div>
+          )}
+          {data.preloadedSkillsCount && data.preloadedSkillsCount > 0 && (
+            <div className="flex items-center gap-0.5 text-[10px] opacity-70" title={`${data.preloadedSkillsCount} preloaded skills`}>
+              <Zap className="h-3 w-3" />
+              <span>{data.preloadedSkillsCount} skills</span>
+            </div>
+          )}
+        </div>
+      )}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-purple-700"
+        style={{ bottom: -6 }}
+      />
+    </div>
+  )
+}
+
+export function ToolNode({ data }: { data: { name: string; category?: string; server?: string } }) {
+  const isMcp = data.category === "mcp"
+  const bgColor = isMcp ? "bg-pink-500" : "bg-blue-500"
+  const borderColor = isMcp ? "border-pink-600" : "border-blue-600"
+  const handleBorder = isMcp ? "border-pink-600" : "border-blue-600"
+
+  return (
+    <div className={`px-4 py-2 shadow-md rounded-md ${bgColor} text-white border ${borderColor}`}>
+      <Handle
+        type="target"
+        position={Position.Top}
+        className={`w-3 h-3 bg-white border-2 ${handleBorder}`}
+        style={{ top: -6 }}
+      />
+      <div className="font-mono text-sm">{data.name}</div>
+      {data.server && (
+        <div className="text-xs opacity-75 mt-0.5">{data.server}</div>
+      )}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className={`w-3 h-3 bg-white border-2 ${handleBorder}`}
+        style={{ bottom: -6 }}
+      />
+    </div>
+  )
+}
+
+export function SkillNode({ data }: {
+  data: {
+    name: string
+    context?: 'fork'
+    agent?: string
+    userInvocable?: boolean
+    argumentHint?: string
+    hasSupportingFiles?: boolean
+  }
+}) {
+  const hasForkContext = data.context === 'fork'
+
+  return (
+    <div className="px-4 py-2 shadow-md rounded-md bg-green-500 text-white border border-green-600">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-green-600"
+        style={{ top: -6 }}
+      />
+      <div className="flex items-center gap-2">
+        <div className="text-sm">{data.name}</div>
+        {hasForkContext && (
+          <div
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded text-xs bg-green-700/50 border border-green-400/50"
+            title="Runs in forked context (separate execution)"
+          >
+            <GitFork className="h-3 w-3" />
+            <span>Fork</span>
+          </div>
+        )}
+        {data.userInvocable && (
+          <div
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded text-xs bg-green-700/50 border border-green-400/50"
+            title="Can be invoked by user"
+          >
+            <Zap className="h-3 w-3" />
+            <span>User</span>
+          </div>
+        )}
+      </div>
+      {data.agent && (
+        <div className="text-xs opacity-75 mt-0.5">Agent: {data.agent}</div>
+      )}
+      {data.argumentHint && (
+        <div className="text-xs opacity-75 mt-0.5 italic" title={data.argumentHint}>
+          Args: {data.argumentHint.length > 30 ? data.argumentHint.slice(0, 30) + '...' : data.argumentHint}
+        </div>
+      )}
+      {data.hasSupportingFiles && (
+        <div className="flex items-center gap-0.5 text-[10px] opacity-60 mt-1" title="Has supporting files">
+          <FileText className="h-3 w-3" />
+          <span>Supporting files</span>
+        </div>
+      )}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-green-600"
+        style={{ bottom: -6 }}
+      />
+    </div>
+  )
+}
+
+export function CommandNode({ data }: { data: { name: string } }) {
+  return (
+    <div className="px-4 py-2 shadow-md rounded-md bg-orange-500 text-white border border-orange-600">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-orange-600"
+        style={{ top: -6 }}
+      />
+      <div className="text-sm">/{data.name}</div>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-orange-600"
+        style={{ bottom: -6 }}
+      />
+    </div>
+  )
+}
+
+export function McpNode({ data }: { data: { name: string } }) {
+  return (
+    <div className="px-4 py-2 shadow-md rounded-md bg-pink-500 text-white border border-pink-600">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-pink-600"
+        style={{ top: -6 }}
+      />
+      <div className="text-sm font-mono">MCP: {data.name}</div>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-pink-600"
+        style={{ bottom: -6 }}
+      />
+    </div>
+  )
+}
+
+export function ToolGroupNode({
+  data,
+}: {
+  data: { name: string; tools: string[]; category: string }
+}) {
+  const isBuiltin = data.category === "builtin"
+  const bgColor = isBuiltin ? "bg-blue-500" : "bg-pink-500"
+  const borderColor = isBuiltin ? "border-blue-600" : "border-pink-600"
+  const handleBorder = isBuiltin ? "border-blue-600" : "border-pink-600"
+
+  return (
+    <div
+      className={`${bgColor} ${borderColor} border-2 rounded-lg p-3 shadow-lg min-w-[180px] text-white`}
+    >
+      <Handle
+        type="target"
+        position={Position.Top}
+        className={`w-3 h-3 bg-white border-2 ${handleBorder}`}
+        style={{ top: -6 }}
+      />
+      <div className="font-semibold text-sm mb-2 border-b border-white/30 pb-2">{data.name}</div>
+      <div className="space-y-1 mt-2">
+        {data.tools.map((tool, idx) => (
+          <div key={idx} className="text-xs font-mono opacity-90">
+            {typeof tool === "string" ? tool : tool}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface CliAppMetadata {
+  name: string
+  commands: string[]
+}
+
+export function CliAppNode({ data }: { data: { apps: CliAppMetadata[] } }) {
+  const [expandedApp, setExpandedApp] = useState<string | null>(null)
+
+  // Defensive: ensure apps is an array and filter out invalid items
+  const validApps = (data.apps || []).filter(app => app && typeof app === 'object' && app.name)
+
+  return (
+    <div className="bg-cyan-500 border-cyan-600 border-2 rounded-lg p-3 shadow-lg min-w-[200px] max-w-[280px] text-white">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-cyan-600"
+        style={{ top: -6 }}
+      />
+      <div className="font-semibold text-sm mb-2 border-b border-white/30 pb-2 flex items-center gap-2">
+        <Terminal className="h-4 w-4" />
+        CLI Apps
+      </div>
+      <div className="space-y-2 mt-2">
+        {validApps.map((app, idx) => (
+          <div key={idx} className="group">
+            <button
+              onClick={() => setExpandedApp(expandedApp === app.name ? null : app.name)}
+              className="w-full text-left flex items-center justify-between text-sm font-mono opacity-90 hover:opacity-100 transition-opacity"
+            >
+              <span className="flex items-center gap-1">
+                <ChevronRight
+                  className={`h-3 w-3 transition-transform ${expandedApp === app.name ? 'rotate-90' : ''}`}
+                />
+                {app.name}
+              </span>
+              {app.commands.length > 0 && (
+                <span className="text-xs opacity-60">{app.commands.length}</span>
+              )}
+            </button>
+
+            {/* Expandable command examples */}
+            {expandedApp === app.name && app.commands.length > 0 && (
+              <div className="ml-4 mt-1 space-y-1 border-l border-white/20 pl-2">
+                {app.commands.map((cmd, cmdIdx) => (
+                  <div
+                    key={cmdIdx}
+                    className="text-xs font-mono opacity-70 truncate"
+                    title={cmd}
+                  >
+                    $ {cmd}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface BackgroundTaskMetadata {
+  type: string
+  description: string
+  agentName?: string
+}
+
+export function BackgroundTaskNode({ data }: { data: { tasks: BackgroundTaskMetadata[] } }) {
+  const [expandedTask, setExpandedTask] = useState<string | null>(null)
+
+  // Map task types to readable labels and icons
+  const taskLabels: Record<string, { label: string; icon: string }> = {
+    'background-agent': { label: 'Background Agent', icon: '🔄' },
+    'parallel-agents': { label: 'Parallel Execution', icon: '⚡' },
+    'async-task': { label: 'Async Task', icon: '⏳' },
+    'background-tasks': { label: 'Background Tasks', icon: '📋' },
+  }
+
+  // Defensive: ensure tasks is an array and filter out invalid items
+  const validTasks = (data.tasks || []).filter(task => task && typeof task === 'object' && task.type)
+
+  return (
+    <div className="bg-amber-500 border-amber-600 border-2 rounded-lg p-3 shadow-lg min-w-[200px] max-w-[280px] text-white">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-amber-600"
+        style={{ top: -6 }}
+      />
+      <div className="font-semibold text-sm mb-2 border-b border-white/30 pb-2 flex items-center gap-2">
+        <Zap className="h-4 w-4" />
+        Background Tasks
+      </div>
+      <div className="space-y-2 mt-2">
+        {validTasks.map((task, idx) => {
+          const taskInfo = taskLabels[task.type] || { label: task.type, icon: '📋' }
+          const isExpanded = expandedTask === `${task.type}-${idx}`
+
+          return (
+            <div key={idx} className="group">
+              <button
+                onClick={() => setExpandedTask(isExpanded ? null : `${task.type}-${idx}`)}
+                className="w-full text-left flex items-center gap-2 text-sm hover:opacity-100 opacity-90 transition-opacity"
+              >
+                <ChevronRight
+                  className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                />
+                <span>{taskInfo.icon}</span>
+                <span>{taskInfo.label}</span>
+              </button>
+
+              {/* Expandable description */}
+              {isExpanded && task.description && (
+                <div className="ml-6 mt-1 text-xs opacity-75 italic border-l border-white/20 pl-2">
+                  {task.description}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export function WorkflowStepNode({ data }: { data: { stepNumber: number; title: string; description?: string } }) {
+  return (
+    <div className="px-4 py-3 shadow-md rounded-md bg-indigo-500 text-white border border-indigo-600 min-w-[180px]">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 bg-white border-2 border-indigo-600"
+        style={{ top: -6 }}
+      />
+      <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-700 text-xs font-bold">
+          {data.stepNumber}
+        </div>
+        <div className="text-sm font-medium truncate">{data.title}</div>
+      </div>
+      {data.description && (
+        <div className="text-xs opacity-80 mt-1 line-clamp-2">{data.description}</div>
+      )}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 bg-white border-2 border-indigo-600"
+        style={{ bottom: -6 }}
+      />
+    </div>
+  )
+}
+
+// ============ EXPANDABLE NODE VARIANTS ============
+
+interface ExpandableNodeData {
+  name: string
+  description?: string
+  depth?: number
+  isTransitive?: boolean
+  isRuntime?: boolean
+  hasMoreDeps?: boolean
+  expanded?: boolean
+  onExpand?: () => void
+}
+
+export function ExpandableAgentNode({ data }: { data: ExpandableNodeData }) {
+  const [isExpanded, setIsExpanded] = useState(data.expanded ?? false)
+
+  const handleExpand = () => {
+    setIsExpanded(!isExpanded)
+    data.onExpand?.()
+  }
+
+  return (
+    <div className="relative">
+      <div className={`px-4 py-2 shadow-md rounded-md border-2 min-w-[160px] ${
+        data.isTransitive ? 'bg-purple-400' : 'bg-purple-600'
+      } text-white border-purple-700`}>
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="w-3 h-3 bg-white border-2 border-purple-700"
+          style={{ top: -6 }}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-medium truncate">{data.name}</div>
+          {data.hasMoreDeps && (
+            <button
+              onClick={handleExpand}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+              title={isExpanded ? "Collapse dependencies" : "Expand dependencies"}
+            >
+              {isExpanded ? (
+                <Minus className="h-3 w-3" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
+        {data.description && (
+          <div className="text-xs opacity-80 mt-0.5 line-clamp-1">{data.description}</div>
+        )}
+        {data.isTransitive && (
+          <div className="text-xs opacity-60 mt-0.5 italic">transitive</div>
+        )}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="w-3 h-3 bg-white border-2 border-purple-700"
+          style={{ bottom: -6 }}
+        />
+      </div>
+      {/* Dependency count badge */}
+      {data.hasMoreDeps && !isExpanded && (
+        <div className="absolute -top-2 -right-2 flex items-center justify-center w-5 h-5 rounded-full bg-purple-500 text-white text-xs font-bold shadow-sm">
+          +{data.depth || 1}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ExpandableSkillNode({ data }: { data: ExpandableNodeData }) {
+  const [isExpanded, setIsExpanded] = useState(data.expanded ?? false)
+  const hasForkContext = (data as any).context === 'fork'
+
+  const handleExpand = () => {
+    setIsExpanded(!isExpanded)
+    data.onExpand?.()
+  }
+
+  return (
+    <div className="relative">
+      <div className={`px-4 py-2 shadow-md rounded-md border-2 min-w-[160px] ${
+        data.isTransitive ? 'bg-green-400' : 'bg-green-500'
+      } text-white border-green-600`}>
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="w-3 h-3 bg-white border-2 border-green-600"
+          style={{ top: -6 }}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <div className="text-sm truncate">{data.name}</div>
+            {hasForkContext && (
+              <div
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-xs bg-green-700/50 border border-green-400/50"
+                title="Runs in forked context"
+              >
+                <GitFork className="h-3 w-3" />
+              </div>
+            )}
+          </div>
+          {data.hasMoreDeps && (
+            <button
+              onClick={handleExpand}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+              title={isExpanded ? "Collapse dependencies" : "Expand dependencies"}
+            >
+              {isExpanded ? (
+                <Minus className="h-3 w-3" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
+        {(data as any).agent && (
+          <div className="text-xs opacity-75 mt-0.5">Agent: {(data as any).agent}</div>
+        )}
+        {data.isRuntime && (
+          <div className="text-xs opacity-60 mt-0.5 italic">runtime</div>
+        )}
+        {data.isTransitive && (
+          <div className="text-xs opacity-60 mt-0.5 italic">transitive</div>
+        )}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="w-3 h-3 bg-white border-2 border-green-600"
+          style={{ bottom: -6 }}
+        />
+      </div>
+      {/* Dependency count badge */}
+      {data.hasMoreDeps && !isExpanded && (
+        <div className="absolute -top-2 -right-2 flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-xs font-bold shadow-sm">
+          +{data.depth || 1}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ExpandableCommandNode({ data }: { data: ExpandableNodeData }) {
+  const [isExpanded, setIsExpanded] = useState(data.expanded ?? false)
+
+  const handleExpand = () => {
+    setIsExpanded(!isExpanded)
+    data.onExpand?.()
+  }
+
+  return (
+    <div className="relative">
+      <div className={`px-4 py-2 shadow-md rounded-md border-2 min-w-[160px] ${
+        data.isTransitive ? 'bg-orange-400' : 'bg-orange-500'
+      } text-white border-orange-600`}>
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="w-3 h-3 bg-white border-2 border-orange-600"
+          style={{ top: -6 }}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-mono truncate">/{data.name}</div>
+          {data.hasMoreDeps && (
+            <button
+              onClick={handleExpand}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+              title={isExpanded ? "Collapse dependencies" : "Expand dependencies"}
+            >
+              {isExpanded ? (
+                <Minus className="h-3 w-3" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
+        {data.isTransitive && (
+          <div className="text-xs opacity-60 mt-0.5 italic">transitive</div>
+        )}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="w-3 h-3 bg-white border-2 border-orange-600"
+          style={{ bottom: -6 }}
+        />
+      </div>
+      {/* Dependency count badge */}
+      {data.hasMoreDeps && !isExpanded && (
+        <div className="absolute -top-2 -right-2 flex items-center justify-center w-5 h-5 rounded-full bg-orange-500 text-white text-xs font-bold shadow-sm">
+          +{data.depth || 1}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============ NEW ENHANCED NODE TYPES ============
+
+import { Cpu, FileText, Folder, FileCode, Cog, Clock, AlertTriangle, Ban } from "lucide-react"
+
+// Model badge configuration
+interface ModelConfig {
+  label: string
+  className: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+const modelConfigs: Record<string, ModelConfig> = {
+  opus: {
+    label: "Opus",
+    className: "bg-purple-500/30 text-purple-200 border-purple-400/50",
+    icon: Cpu,
+  },
+  sonnet: {
+    label: "Sonnet",
+    className: "bg-blue-500/30 text-blue-200 border-blue-400/50",
+    icon: Zap,
+  },
+  haiku: {
+    label: "Haiku",
+    className: "bg-green-500/30 text-green-200 border-green-400/50",
+    icon: Zap,
+  },
+  inherit: {
+    label: "Inherit",
+    className: "bg-gray-500/30 text-gray-200 border-gray-400/50",
+    icon: Cog,
+  },
+}
+
+/**
+ * ModelBadge - Shows the AI model used by an agent
+ * Renders as a small chip/badge that can be embedded in AgentNode
+ */
+export function ModelBadge({ model }: { model?: string }) {
+  if (!model) return null
+
+  const normalizedModel = model.toLowerCase().trim()
+  const config = modelConfigs[normalizedModel] || {
+    label: model,
+    className: "bg-gray-500/30 text-gray-200 border-gray-400/50",
+    icon: Cog,
+  }
+
+  const Icon = config.icon
+
+  return (
+    <div
+      className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${config.className}`}
+      title={`Model: ${model}`}
+    >
+      <Icon className="h-3 w-3" />
+      <span>{config.label}</span>
+    </div>
+  )
+}
+
+/**
+ * HookNode - Visualizes lifecycle hooks (PreToolUse, PostToolUse, etc.)
+ */
+interface HookNodeData {
+  hookType: 'PreToolUse' | 'PostToolUse' | 'SubagentStart' | 'SubagentStop' | 'Stop'
+  matcher?: string
+  command?: string
+}
+
+const hookConfigs: Record<HookNodeData['hookType'], { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
+  PreToolUse: {
+    label: "Pre-Tool",
+    icon: Clock,
+    color: "bg-amber-500",
+  },
+  PostToolUse: {
+    label: "Post-Tool",
+    icon: Clock,
+    color: "bg-teal-500",
+  },
+  SubagentStart: {
+    label: "Subagent Start",
+    icon: Zap,
+    color: "bg-indigo-500",
+  },
+  SubagentStop: {
+    label: "Subagent Stop",
+    icon: Ban,
+    color: "bg-rose-500",
+  },
+  Stop: {
+    label: "On Stop",
+    icon: Ban,
+    color: "bg-gray-500",
+  },
+}
+
+export function HookNode({ data }: { data: HookNodeData }) {
+  const config = hookConfigs[data.hookType]
+  const Icon = config.icon
+
+  return (
+    <div className={`px-3 py-2 shadow-md rounded-md ${config.color} text-white border border-white/20 min-w-[120px]`}>
+      <Handle
+        type="target"
+        position={Position.Top}
+        className={`w-2 h-2 bg-white border-2 border-white/50`}
+        style={{ top: -5 }}
+      />
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5" />
+        <span className="text-xs font-medium">{config.label}</span>
+      </div>
+      {data.matcher && (
+        <div className="text-[10px] opacity-75 mt-0.5 truncate max-w-[150px]" title={data.matcher}>
+          Match: {data.matcher}
+        </div>
+      )}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className={`w-2 h-2 bg-white border-2 border-white/50`}
+        style={{ bottom: -5 }}
+      />
+    </div>
+  )
+}
+
+/**
+ * SupportingFileNode - Shows supporting files in skill directories
+ * Groups by type: templates, examples, scripts, config
+ */
+interface SupportingFileData {
+  name: string
+  type: 'template' | 'example' | 'script' | 'config' | 'asset' | 'other'
+  path: string
+}
+
+const fileTypeConfigs: Record<SupportingFileData['type'], { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
+  template: {
+    label: "Template",
+    icon: FileText,
+    color: "bg-sky-500",
+  },
+  example: {
+    label: "Example",
+    icon: Folder,
+    color: "bg-emerald-500",
+  },
+  script: {
+    label: "Script",
+    icon: FileCode,
+    color: "bg-amber-500",
+  },
+  config: {
+    label: "Config",
+    icon: Cog,
+    color: "bg-slate-500",
+  },
+  asset: {
+    label: "Asset",
+    icon: FileText,
+    color: "bg-pink-500",
+  },
+  other: {
+    label: "File",
+    icon: FileText,
+    color: "bg-gray-500",
+  },
+}
+
+function getFileType(filename: string): SupportingFileData['type'] {
+  const lower = filename.toLowerCase()
+  if (lower.includes('template')) return 'template'
+  if (lower.includes('example')) return 'example'
+  if (lower.endsWith('.js') || lower.endsWith('.ts') || lower.endsWith('.py') || lower.endsWith('.sh')) return 'script'
+  if (lower.endsWith('.json') || lower.endsWith('.yaml') || lower.endsWith('.yml') || lower.includes('config')) return 'config'
+  if (lower.includes('asset') || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.svg')) return 'asset'
+  return 'other'
+}
+
+export function SupportingFileNode({ data }: { data: SupportingFileData }) {
+  const fileType = data.type || getFileType(data.name)
+  const config = fileTypeConfigs[fileType]
+  const Icon = config.icon
+
+  return (
+    <div className={`px-3 py-2 shadow-md rounded-md ${config.color} text-white border border-white/20 min-w-[140px]`}>
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-2 h-2 bg-white border-2 border-white/50"
+        style={{ left: -5 }}
+      />
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+        <div className="text-xs font-medium truncate">{data.name}</div>
+      </div>
+      <div className="text-[10px] opacity-75 mt-0.5">{config.label}</div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-2 h-2 bg-white border-2 border-white/50"
+        style={{ right: -5 }}
+      />
+    </div>
+  )
+}
+
+/**
+ * DisallowedToolsNode - Shows tools that are explicitly blocked/denied
+ */
+export function DisallowedToolsNode({ data }: { data: { tools: string[] } }) {
+  return (
+    <div className="px-3 py-2 shadow-md rounded-md bg-red-500/80 text-white border border-red-400 min-w-[160px]">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-2 h-2 bg-white border-2 border-red-300"
+        style={{ top: -5 }}
+      />
+      <div className="flex items-center gap-1.5 border-b border-white/30 pb-1.5 mb-1.5">
+        <Ban className="h-3.5 w-3.5" />
+        <span className="text-xs font-medium">Blocked Tools</span>
+      </div>
+      <div className="space-y-0.5">
+        {data.tools.map((tool, idx) => (
+          <div key={idx} className="text-xs font-mono opacity-90 line-through">
+            {tool}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

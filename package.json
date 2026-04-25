@@ -1,0 +1,260 @@
+{
+  "name": "claw-desktop",
+  "version": "0.2.3",
+  "private": true,
+  "description": "Claw - The Claude Code Wrapper",
+  "author": {
+    "name": "Claw",
+    "email": "noreply@example.com"
+  },
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "ELECTRON_BUILDER=1 electron-builder --dir",
+    "package:mac": "ELECTRON_BUILDER=1 electron-builder --mac",
+    "package:win": "ELECTRON_BUILDER=1 electron-builder --win",
+    "package:linux": "ELECTRON_BUILDER=1 electron-builder --linux",
+    "dist": "electron-builder",
+    "dist:manifest": "node scripts/generate-update-manifest.mjs",
+    "dist:cask": "node scripts/generate-homebrew-cask.mjs",
+    "dist:upload": "node scripts/upload-release.mjs",
+    "claude:download": "node scripts/download-claude-binary.mjs",
+    "claude:download:all": "node scripts/download-claude-binary.mjs --all",
+    "release": "rm -rf release && bun run claude:download && bun run gsd:fetch && bun run build && bun run package:mac && bun run dist:manifest && bun run dist:cask && ./scripts/upload-release-wrangler.sh",
+    "release:homebrew": "./scripts/update-homebrew-cask.sh",
+    "sync:public": "./scripts/sync-to-public.sh",
+    "icon:generate": "node scripts/generate-icon.mjs && node scripts/generate-windows-icon.mjs",
+    "icon:generate:mac": "node scripts/generate-icon.mjs",
+    "icon:generate:win": "node scripts/generate-windows-icon.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "gsd:fetch": "node scripts/fetch-gsd.mjs",
+    "gsd:fetch:force": "node scripts/fetch-gsd.mjs --force",
+    "ts:check": "tsgo --noEmit",
+    "rebuild": "electron-rebuild -f -w better-sqlite3,node-pty",
+    "postinstall": "node -e \"if(!process.env.VERCEL && !process.env.ELECTRON_BUILDER){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit',env:{...process.env,PYTHON:'/usr/bin/python3'}})}\""
+  },
+  "dependencies": {
+    "@ai-sdk/react": "^3.0.14",
+    "@anthropic-ai/claude-agent-sdk": "0.2.112",
+    "@aws-sdk/client-bedrock": "^3.993.0",
+    "@aws-sdk/client-sso": "^3.974.0",
+    "@aws-sdk/client-sso-oidc": "^3.974.0",
+    "@aws-sdk/client-sts": "^3.975.0",
+    "@aws-sdk/credential-provider-ini": "^3.972.9",
+    "@aws-sdk/credential-provider-sso": "^3.972.1",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@git-diff-view/react": "^0.0.35",
+    "@git-diff-view/shiki": "^0.0.36",
+    "@radix-ui/react-accordion": "^1.2.12",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
+    "@radix-ui/react-checkbox": "^1.3.3",
+    "@radix-ui/react-collapsible": "^1.1.12",
+    "@radix-ui/react-context-menu": "^2.2.16",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-hover-card": "^1.1.15",
+    "@radix-ui/react-icons": "^1.3.2",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@radix-ui/react-progress": "^1.1.8",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-switch": "^1.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "@slack/socket-mode": "^1.3.6",
+    "@slack/web-api": "^6.12.1",
+    "discord.js": "^14.25.1",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tanstack/react-query": "^5.90.10",
+    "@tanstack/react-virtual": "^3.13.18",
+    "@trpc/client": "^11.7.1",
+    "@trpc/react-query": "^11.7.1",
+    "@trpc/server": "^11.7.1",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "ai": "^6.0.14",
+    "better-sqlite3": "^12.6.2",
+    "chokidar": "^5.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "drizzle-orm": "^0.45.1",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.7.3",
+    "elkjs": "^0.11.0",
+    "gray-matter": "^4.0.3",
+    "html-to-image": "^1.11.13",
+    "jotai": "^2.11.1",
+    "lucide-react": "^0.468.0",
+    "mermaid": "^11.12.2",
+    "motion": "^11.15.0",
+    "next-themes": "^0.4.4",
+    "node-cron": "^4.2.1",
+    "pidtree": "^0.6.0",
+    "qrcode.react": "^3.1.0",
+    "react": "19.2.1",
+    "react-dom": "19.2.1",
+    "react-hotkeys-hook": "^4.6.1",
+    "react-icons": "^5.5.0",
+    "react-syntax-highlighter": "^16.1.0",
+    "reactflow": "^11.11.4",
+    "recharts": "^3.7.0",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "shiki": "^1.24.4",
+    "simple-git": "^3.28.0",
+    "sonner": "^1.7.1",
+    "streamdown": "^2.0.1",
+    "superjson": "^2.2.2",
+    "tailwind-merge": "^2.6.0",
+    "tailwindcss-animate": "^1.0.7",
+    "trpc-electron": "^0.1.2",
+    "undici": "^7.19.1",
+    "unique-names-generator": "^4.7.1",
+    "zod": "^4.0.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/glob": "^9.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.17.50",
+    "@types/node-cron": "^3.0.11",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "drizzle-kit": "^0.31.9",
+    "electron": "33.4.5",
+    "electron-builder": "^25.1.8",
+    "electron-rebuild": "^3.2.9",
+    "electron-vite": "^3.0.0",
+    "postcss": "^8.5.1",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.4.5",
+    "vite": "^6.3.4"
+  },
+  "build": {
+    "appId": "com.claw.app",
+    "productName": "Claw",
+    "npmRebuild": true,
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "drizzle",
+        "to": "migrations"
+      },
+      {
+        "from": "resources/bin/${platform}-${arch}",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/bin/VERSION",
+        "to": "bin/VERSION"
+      },
+      {
+        "from": "resources/gsd",
+        "to": "gsd",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/agents/swarm",
+        "to": "agents/swarm",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/@anthropic-ai/claude-agent-sdk/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 150,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 150,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "iconSize": 80
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icons",
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  }
+}
